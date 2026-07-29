@@ -1,0 +1,26 @@
+kind: element_type
+id: PowerSupply
+title: AC/DC power supply
+description_es: Fuente / transformador (p.ej. portero). Primario AC, secundario DC.
+qet_hint: power_supply_ac_dc
+# Solo export WireViz: una fila visual por par (no implica continuidad AC↔DC).
+wireviz_collapse:
+  - [L, "+"]
+  - [N, "-"]
+terminals:
+  L:
+    label: "230V AC L"
+    direction: in
+    role: phase
+  N:
+    label: "230V AC N"
+    direction: in
+    role: neutral
+  "+":
+    label: "12V DC +"
+    direction: out
+    role: dc_positive
+  "-":
+    label: "12V DC -"
+    direction: out
+    role: dc_negative

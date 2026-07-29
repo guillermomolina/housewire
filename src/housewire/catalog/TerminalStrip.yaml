@@ -1,0 +1,18 @@
+kind: element_type
+id: TerminalStrip
+title: Terminal strip / connector block
+description_es: >
+  Regleta o bornes de empalme en caja de derivacion.
+  Cada posicion une los conductores del mismo potencial.
+  Ampliar bornes en la instancia si la regleta tiene mas de 3 (p.ej. 6 pares).
+qet_hint: terminal_strip
+terminals:
+  "1":
+    label: "1"
+    direction: inout
+  "2":
+    label: "2"
+    direction: inout
+  "3":
+    label: "3"
+    direction: inout

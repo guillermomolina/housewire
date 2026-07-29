@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "housewire"
+version = "0.1.0"
+description = "Document home electrical installations (house/v1) and export diagrams (WireViz, physical topology, …)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Guille" }]
+keywords = ["electrical", "wiring", "house", "wireviz", "diagram"]
+dependencies = [
+    "wireviz>=0.3.2",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["build", "wheel"]
+
+[project.scripts]
+housewire = "housewire.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/local/housewire"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+housewire = ["catalog/*.yaml", "catalog/*.yml"]

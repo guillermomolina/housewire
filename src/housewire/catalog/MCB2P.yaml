@@ -1,0 +1,29 @@
+kind: element_type
+id: MCB2P
+title: Double-pole miniature circuit breaker
+description_es: >
+  Magnetotermico bipolar (2P). Aqui el Moeller C50/2 hace de IGA.
+  No es un IGP (interruptor de corte sin proteccion magnetotermica).
+qet_hint: mcb_2P
+# 1/2 neutro in/out; 3/4 fase in/out.
+# wireviz_collapse: una fila visual por polo (entrada izquierda, salida derecha).
+terminals:
+  "1":
+    label: "1"
+    direction: in
+    role: neutral
+  "2":
+    label: "2"
+    direction: out
+    role: neutral
+  "3":
+    label: "3"
+    direction: in
+    role: phase
+  "4":
+    label: "4"
+    direction: out
+    role: phase
+wireviz_collapse:
+  - [1, 2]
+  - [3, 4]

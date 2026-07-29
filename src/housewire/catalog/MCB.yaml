@@ -1,0 +1,30 @@
+kind: element_type
+id: MCB
+title: Miniature circuit breaker
+description_es: >
+  Magnetotermico (PIA / MCB). Protege contra sobrecarga y cortocircuito.
+  No es un diferencial (RCD).
+qet_hint: mcb_1P_N
+# pins 1..4. Labels = marcaje de carcasa.
+# 1/2 = fase in/out (marcaje 1 y 2); 3/4 = neutro in/out (marcaje N y N).
+# wireviz_collapse: una fila visual por polo (entrada izquierda, salida derecha).
+terminals:
+  "1":
+    label: "1"
+    direction: in
+    role: phase
+  "2":
+    label: "2"
+    direction: out
+    role: phase
+  "3":
+    label: N
+    direction: in
+    role: neutral
+  "4":
+    label: N
+    direction: out
+    role: neutral
+wireviz_collapse:
+  - [1, 2]
+  - [3, 4]

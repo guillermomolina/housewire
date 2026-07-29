@@ -1,0 +1,29 @@
+kind: element_type
+id: RCD
+title: Residual current device
+description_es: >
+  Interruptor diferencial (ID / RCD). Protege contra fugas a tierra.
+  No es un magnetotermico.
+qet_hint: rcd_2P
+# 1/2 fase in/out (sin letra en Merlin Gerin); 3/4 neutro in/out (N).
+# wireviz_collapse: una fila visual por polo (entrada izquierda, salida derecha).
+terminals:
+  "1":
+    label: ""
+    direction: in
+    role: phase
+  "2":
+    label: ""
+    direction: out
+    role: phase
+  "3":
+    label: N
+    direction: in
+    role: neutral
+  "4":
+    label: N
+    direction: out
+    role: neutral
+wireviz_collapse:
+  - [1, 2]
+  - [3, 4]

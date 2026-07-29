@@ -1,0 +1,10 @@
+kind: element_type
+id: EarthElectrode
+title: Earth electrode
+description_es: Toma de tierra / jabalina.
+qet_hint: earth_electrode
+terminals:
+  PE:
+    label: PE
+    direction: out
+    role: pe

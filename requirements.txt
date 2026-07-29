@@ -1,0 +1,3 @@
+# Dependencias de desarrollo / legacy: preferir `pip install -e .`
+# Ver pyproject.toml
+-e .

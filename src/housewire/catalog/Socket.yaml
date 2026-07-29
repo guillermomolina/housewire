@@ -1,0 +1,18 @@
+kind: element_type
+id: Socket
+title: Socket outlet
+description_es: Toma de corriente (Schuko / 2P+T).
+qet_hint: socket_schuko
+terminals:
+  L:
+    label: L
+    direction: in
+    role: phase
+  N:
+    label: N
+    direction: in
+    role: neutral
+  PE:
+    label: PE
+    direction: in
+    role: pe
