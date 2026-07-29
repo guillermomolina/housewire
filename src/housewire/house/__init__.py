@@ -176,7 +176,7 @@ def _collapse_pairs_for_wireviz(
 
 def _element_to_connector(
     element: dict[str, Any], catalog: dict[str, dict[str, Any]]
-) -> tuple[dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     type_id = element.get("type")
     if not type_id:
         raise ValueError("Elemento sin 'type'")
@@ -184,6 +184,9 @@ def _element_to_connector(
     type_def = catalog.get(type_id)
     if type_def is None:
         raise ValueError(f"Tipo de catalogo desconocido: {type_id}")
+    # wireviz_skip: true — no genera conector (p.ej. type: Location)
+    if isinstance(type_def, dict) and type_def.get("wireviz_skip"):
+        return None, None
 
     terminals = _merge_terminals(
         type_def.get("terminals") or {}, element.get("terminals")
@@ -494,6 +497,11 @@ def _convert_flat_fragment(
             raise ValueError(f"Elemento invalido: {name}")
         new_name = prefixed_name(prefix, str(name))
         connector, pin_remap = _element_to_connector(definition, catalog)
+        if connector is None:
+            # wireviz_skip (e.g. type: Location) — registrar en element_map
+            # para que las referencias locales no fallen, pero no emitir conector
+            element_map[str(name)] = new_name
+            continue
         connectors[new_name] = connector
         element_map[str(name)] = new_name
         pin_remap_by_element[new_name] = pin_remap
@@ -554,24 +562,74 @@ def _walk_locations(
     node: dict[str, Any],
     base: list[str],
 ) -> list[tuple[list[str], dict[str, Any]]]:
-    """Yield (location_parts, fragment) for nested locations trees."""
+    """Yield (location_parts, fragment) for nested locations trees.
+
+    Supports two nesting mechanisms:
+    1. locations: { Name: { elements: ... } }  — explicit location map
+    2. elements:  { Name: { type: Location, elements: ..., cables: ..., connections: ... } }
+       A Location element with nested content is equivalent to a locations entry:
+       its name becomes a path level and its content is walked recursively.
+    """
     fragments: list[tuple[list[str], dict[str, Any]]] = []
 
     direct_keys = {"elements", "cables", "connections", "conduits"}
-    if any(key in node for key in direct_keys):
-        fragment = {key: copy.deepcopy(node[key]) for key in direct_keys if key in node}
+    location_child_keys = {"elements", "cables", "connections", "conduits", "locations"}
+
+    # Separate Location elements (with nested content) from regular elements
+    raw_elements = dict(node.get("elements") or {})
+    location_elements: dict[str, dict[str, Any]] = {}
+    plain_elements: dict[str, Any] = {}
+    for name, defn in raw_elements.items():
+        if (
+            isinstance(defn, dict)
+            and defn.get("type") == "Location"
+            and any(k in defn for k in location_child_keys)
+        ):
+            location_elements[str(name)] = defn
+        else:
+            plain_elements[str(name)] = defn
+
+    # Build the fragment for this level with plain elements only
+    flat_node: dict[str, Any] = {}
+    if plain_elements:
+        flat_node["elements"] = plain_elements
+    for k in ("cables", "connections", "conduits"):
+        if k in node:
+            flat_node[k] = node[k]
+    # Also include Location elements that have NO nested content (pure metadata)
+    for name, defn in location_elements.items():
+        meta_only = {k: v for k, v in defn.items() if k not in location_child_keys}
+        if meta_only or not any(k in defn for k in {"elements", "cables", "connections"}):
+            flat_node.setdefault("elements", {})[name] = {
+                k: v for k, v in defn.items() if k not in location_child_keys
+            } or defn
+
+    if any(key in flat_node for key in direct_keys):
+        fragment = {key: copy.deepcopy(flat_node[key]) for key in direct_keys if key in flat_node}
         fragments.append((list(base), fragment))
 
-    nested = node.get("locations")
-    if nested is None:
-        return fragments
-    if not isinstance(nested, dict):
-        raise ValueError("'locations' debe ser un mapa")
+    # Walk Location elements that have nested content
+    for name, defn in location_elements.items():
+        if any(k in defn for k in {"elements", "cables", "connections"}):
+            # Build a child node: strip type/subtype/notes/etc., keep content keys
+            child: dict[str, Any] = {k: defn[k] for k in location_child_keys if k in defn}
+            # Also carry the Location metadata as a bare Location element (no nested content)
+            meta = {k: v for k, v in defn.items() if k not in location_child_keys}
+            if meta:
+                child_elements = dict(child.get("elements") or {})
+                child_elements[name] = {"type": "Location", **meta}
+                child["elements"] = child_elements
+            fragments.extend(_walk_locations(child, base + [str(name)]))
 
-    for name, child in nested.items():
-        if not isinstance(child, dict):
-            raise ValueError(f"locations.{name} debe ser un mapa")
-        fragments.extend(_walk_locations(child, base + [str(name)]))
+    # Walk explicit locations: map
+    nested = node.get("locations")
+    if nested is not None:
+        if not isinstance(nested, dict):
+            raise ValueError("'locations' debe ser un mapa")
+        for name, child in nested.items():
+            if not isinstance(child, dict):
+                raise ValueError(f"locations.{name} debe ser un mapa")
+            fragments.extend(_walk_locations(child, base + [str(name)]))
     return fragments
 
 

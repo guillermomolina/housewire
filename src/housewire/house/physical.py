@@ -34,6 +34,7 @@ class PhysNode:
     type_id: str
     cluster_id: str
     cluster_label: str
+    cluster_subtitle: str = ""
 
 
 @dataclass
@@ -82,8 +83,15 @@ def _load_house_files(
             data = yaml.safe_load(handle) or {}
         if not is_house_document(data):
             continue
+        file_parts = path_location_parts(project_path, yaml_file)
         explicit = _as_location_list(data.get("location"))
-        base = explicit if explicit else path_location_parts(project_path, yaml_file)
+        if explicit:
+            if explicit[:len(file_parts)] == file_parts:
+                base = explicit
+            else:
+                base = list(file_parts) + explicit
+        else:
+            base = list(file_parts)
         fragments = _walk_locations(data, base)
         if not fragments and any(
             key in data for key in ("elements", "cables", "connections", "conduits")
@@ -123,13 +131,27 @@ def build_physical_model(
         cluster_id = _safe_id(prefix or "raiz")
         cluster_label = _cluster_label(location_parts)
 
+        # Collect Location metadata for cluster subtitle
+        cluster_subtitle = ""
+        for _name, definition in (fragment.get("elements") or {}).items():
+            if isinstance(definition, dict) and definition.get("type") == "Location":
+                parts_sub: list[str] = []
+                if definition.get("subtype"):
+                    parts_sub.append(str(definition["subtype"]))
+                if definition.get("notes"):
+                    parts_sub.append(str(definition["notes"]).replace("\n", " "))
+                cluster_subtitle = " | ".join(parts_sub)
+                break
+
         element_map: dict[str, str] = {}
         for name, definition in (fragment.get("elements") or {}).items():
             if not isinstance(definition, dict):
                 continue
+            type_id = str(definition.get("type") or "?")
+            if type_id == "Location":
+                continue  # no physical node for Location elements
             qname = prefixed_name(prefix, str(name))
             element_map[str(name)] = qname
-            type_id = str(definition.get("type") or "?")
             label = str(definition.get("label") or name)
             extra = f"\\n{label}" if label and label != str(name) else ""
             model.nodes[qname] = PhysNode(
@@ -138,6 +160,7 @@ def build_physical_model(
                 type_id=type_id,
                 cluster_id=cluster_id,
                 cluster_label=cluster_label,
+                cluster_subtitle=cluster_subtitle,
             )
 
         cable_map: dict[str, str] = {}
@@ -229,8 +252,10 @@ def model_to_dot(model: PhysModel) -> str:
 
     for cluster_id, nodes in sorted(clusters.items(), key=lambda item: item[1][0].cluster_label):
         label = nodes[0].cluster_label.replace('"', "'")
+        subtitle = nodes[0].cluster_subtitle.replace('"', "'")
+        full_label = f"{label}\n{subtitle}" if subtitle else label
         lines.append(f"  subgraph cluster_{cluster_id} {{")
-        lines.append(f'    label="{label}";')
+        lines.append(f'    label="{full_label}";')
         lines.append("    style=rounded;")
         lines.append("    color=gray50;")
         for node in nodes:

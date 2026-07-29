@@ -1,0 +1,10 @@
+kind: element_type
+id: Location
+title: Location / Group container
+description_es: >
+  Contenedor de ubicacion (caja, habitacion, zona, etc.).
+  No genera conector WireViz ni bornes. Solo transporta metadatos
+  (subtype, notes, mount, facing, size, ...) que el diagrama fisico
+  usa para etiquetar el cluster correspondiente.
+wireviz_skip: true
+terminals: {}
