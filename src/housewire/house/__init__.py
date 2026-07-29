@@ -35,7 +35,7 @@ def prefixed_name(prefix: str, name: str) -> str:
     normalized_name = normalize_token(name)
     if not prefix:
         return normalized_name
-    return f"{prefix}_{normalized_name}"
+    return f"{prefix}__{normalized_name}"
 
 
 def is_house_document(data: object) -> bool:
@@ -586,7 +586,18 @@ def house_document_to_wireviz(
     Names are already location-prefixed; merge step must not prefix again.
     """
     explicit = _as_location_list(data.get("location"))
-    base_location = explicit if explicit else list(file_location_parts)
+    # location es relativo al path del fichero: se concatena, no sustituye.
+    # Ejemplo: fichero en Parking/ con location: [Caja derivacion 1]
+    # → base = [Parking, Caja derivacion 1]
+    if explicit:
+        # Evitar duplicar partes que ya están en file_location_parts
+        # (compatibilidad con location absoluto: si empieza con las mismas partes, no duplicar)
+        if explicit[:len(file_location_parts)] == file_location_parts:
+            base_location = explicit
+        else:
+            base_location = list(file_location_parts) + explicit
+    else:
+        base_location = list(file_location_parts)
 
     fragments = _walk_locations(data, base_location)
     # also allow top-level elements without nesting already handled by walk

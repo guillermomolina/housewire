@@ -119,7 +119,7 @@ def prefixed_name(prefix: str, name: str) -> str:
     normalized_name = normalize_token(name)
     if not prefix:
         return normalized_name
-    return f"{prefix}_{normalized_name}"
+    return f"{prefix}__{normalized_name}"
 
 
 def rename_connection_endpoint(endpoint: object, name_map: dict[str, str]) -> object:
