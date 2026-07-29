@@ -1,7 +1,7 @@
 PYTHON := .venv/bin/python
 PIP := .venv/bin/pip
 
-.PHONY: all prepare install
+.PHONY: all prepare install test
 
 install:
 	$(PYTHON) -m pip install -e .
@@ -12,3 +12,6 @@ prepare:
 	$(PYTHON) -m pip install -e .
 
 all:
+
+test:
+	$(PYTHON) -m unittest discover -s tests -v
