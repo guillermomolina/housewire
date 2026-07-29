@@ -8,3 +8,4 @@ build/
 src/housewire.egg-info/
 
 projects/
+.vscode/
