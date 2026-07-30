@@ -118,6 +118,39 @@ En la práctica del cuadro suelen ser **hilos sueltos** (fase y neutro separados
 
 No partas cada bipolar en dos `cables` solo para “ser realista”: el diagrama se vuelve ruidoso y no aporta al seguimiento L/N. Reserva el detalle físico a notas/conduits (y, más adelante, a QElectroTech si hace falta).
 
+### Convención para tramos pendientes (documentación incremental)
+
+Para poder cargar obra “incompleta” sin bloquearte:
+
+- Si un cable **entra/sale por caja** pero aún no sabes destino, crea el `cable` y su `conduit`, pero **no** añadas `connections` todavía.
+- Usa prefijo `PEND_` en id de cable mientras esté abierto.
+- Marca estado en `notes` de cable: `estado: pendiente`.
+- Describe por dónde pasa en `conduits.route` con aberturas (`W.N`, `E.S`, etc.) y texto `destino pendiente`.
+
+Ejemplo:
+
+```yaml
+cables:
+  PEND_Linea_Caja_D2_01:
+    kind: power
+    section: "1.5 mm2"
+    colors: [BN, BU]
+    notes: "estado: pendiente; entra por W.N y sale por E.S"
+
+conduits:
+  Conducto_Caja_D2_paso:
+    kind: conduit
+    contains: [PEND_Linea_Caja_D2_01]
+    route: "Caja_D2 abertura W.N ↔ Caja_D2 abertura E.S ↔ destino pendiente"
+```
+
+Al cerrar el pendiente:
+
+1. Renombra `PEND_*` a nombre definitivo (`Linea_<A>_a_<B>`).
+2. Sustituye `estado: pendiente` por una nota final (o bórrala).
+3. Añade `connections` `from/via/to` definitivas.
+4. Evita dejar ids `PEND_` en circuitos cerrados.
+
 ## Conexiones
 
 Forma compacta:
