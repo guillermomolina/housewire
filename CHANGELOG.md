@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.6.4] — 2026-07-30
+
+### Changed
+
+- Opening faces `fondo` / `tapa` renamed to English **`back`** / **`lid`**
+  (legacy tokens still recognized in physical text).
+
 ## [0.6.3] — 2026-07-30
 
 ### Added

@@ -45,7 +45,7 @@ location:
   subtype: "100x100 IP40"
   mount: ceiling
   openings:
-    B1: { face: fondo, index: 1 }
+    B1: { face: back, index: 1 }
   notes: "…"
 elements:
   Regleta_1:
@@ -125,9 +125,9 @@ location:
   type: JunctionBox   # o Panel
   subtype: "100x100 IP40"
   mount: ceiling          # ceiling | wall | floor
-  # facing: N             # solo wall: hacia dónde mira la tapa (hacia el local)
+  # facing: N             # solo wall: which way the lid faces (hacia el local)
   openings:
-    B1: { face: fondo, index: 1 }
+    B1: { face: back, index: 1 }
     B2: { face: W, index: 1 }
     B3: { face: N, index: 1 }
     B4: { face: N, index: 2 }   # segunda boca en la misma cara
@@ -135,30 +135,30 @@ location:
 ```
 
 - **Id** (`B1`…): estable; no cambia si reclasificas techo↔pared.
-- **`face`**: cara en coordenadas de edificio (`N` `S` `E` `W` `U` `D` `tapa` `fondo`).
+- **`face`**: cara en coordenadas de edificio (`N` `S` `E` `W` `U` `D` `lid` `back`).
 - **`index`**: desempate 1..n en esa cara (ver orden abajo). Opcional si solo hay una boca.
 
 Si `location.openings` está declarado, `pend` exige que entrada/salida existan
 en ese mapa. Sin `openings`, se aceptan ids libres (migración).
 
-### Orden de `index` en una cara (mirando la tapa)
+### Orden de `index` en una cara (mirando el lid)
 
 Convención única para pared / techo / suelo:
 
 - caras `N` / `S`: `index` crece de **W → E**
 - caras `E` / `W`: `index` crece de **N → S**
-- `fondo` / `tapa`: `index` 1..n en sentido horario mirando esa cara
+- `back` / `lid`: `index` 1..n en sentido horario mirando esa cara
 
 ### Montaje (`mount`)
 
-| `mount` | Tapa mira a… | `fondo` es… | Laterales N/S/E/W |
+| `mount` | Lid mira a… | `back` es… | Laterales N/S/E/W |
 |---|---|---|---|
 | `ceiling` | suelo | empotrado en el techo | perímetro en planta |
 | `wall` | el local (`facing:` cardinal) | dentro de la pared | perímetro; `U`/`D` = alto/bajo |
 | `floor` | techo | empotrado en el suelo | perímetro en planta |
 
-En **pared**, `facing` = dirección en la que mira la tapa. El id `B*` no depende
-de `mount`; solo interpreta `face`.
+En **pared**, `facing` = dirección en la que mira el lid. El id `B*` no depende
+de `mount`; `mount` solo interpreta `face`.
 
 ### Uso
 
@@ -179,7 +179,7 @@ conduits:
 - **Conducto**: tubo entre sitios (`Conducto_<A>_a_<B>`), no el id de boca.
 - **Borne** (`Regleta.1`): conexión eléctrica dentro de la caja.
 
-Legacy: ids cardinales (`W.N`, `fondo.SE`) pueden aparecer en texto antiguo; el
+Legacy: ids cardinales (`W.N`, `fondo.SE` legacy) pueden aparecer en texto antiguo; el
 diagrama físico aún los reconoce, pero el canónico es `B*`.
 
 ## Cables

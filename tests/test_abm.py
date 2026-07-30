@@ -206,7 +206,7 @@ class TestABMPendingAndConduits(unittest.TestCase):
         doc = abm.load_editable(self.yaml, self.root)
         doc["location"] = {
             "type": "Panel",
-            "openings": {"B1": {"face": "fondo"}, "B2": {"face": "D"}},
+            "openings": {"B1": {"face": "back"}, "B2": {"face": "D"}},
         }
         cable, _ = abm.add_pending_cable(doc, enter="B1", exit="B2")
         self.assertEqual(cable, "PEND_Linea_01")
@@ -300,12 +300,12 @@ class TestFormatShow(unittest.TestCase):
             "mount": "ceiling",
             "openings": {
                 "B2": {"face": "W", "index": 1},
-                "B1": {"face": "fondo", "index": 1},
+                "B1": {"face": "back", "index": 1},
             },
         }
         text = abm.format_show(doc)
         self.assertIn("openings (2):", text)
-        self.assertIn("B1  face=fondo index=1", text)
+        self.assertIn("B1  face=back index=1", text)
         self.assertIn("B2  face=W index=1", text)
         # openings not dumped twice inside location yaml
         self.assertNotIn("openings:", text.split("openings (2):")[0])

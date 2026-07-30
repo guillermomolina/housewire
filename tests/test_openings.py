@@ -14,3 +14,7 @@ class TestOpeningTokens(unittest.TestCase):
     def test_extracts_legacy_cardinals(self) -> None:
         found = _openings_from_text("abertura W.N ↔ abertura fondo.SE")
         self.assertEqual(found, ["W.N", "fondo.SE"])
+
+    def test_extracts_back_and_lid(self) -> None:
+        found = _openings_from_text("abertura back ↔ abertura lid.1")
+        self.assertEqual(found, ["back", "lid.1"])
