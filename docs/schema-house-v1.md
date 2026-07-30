@@ -6,16 +6,60 @@ Un exporter QElectroTech podrá reutilizar el mismo YAML más adelante.
 
 Edición asistida: `housewire shell <proyecto>` o subcomandos `add` / `rm` / `show` (ver README).
 
-Los tipos viven en el paquete: `src/housewire/catalog/`. Las obras van en `projects/`.
+Los tipos viven en el paquete: `src/housewire/catalog/`.
+Los YAML de una instalación viven en un **directorio/repo de obra aparte** (no en el repo del programa).
 
 ## Cabecera
 
 ```yaml
 schema: house/v1
-location: [Planta baja, Recibidor, Cuadro general]  # opcional; si falta, se infiere del path
 ```
 
+La **jerarquía de ubicaciones es el path de directorios**. No uses el campo `location:`.
+
 Sin `schema: house/v1`, el archivo se trata como WireViz legacy (como `Test/`).
+
+## Locations = directorios + index.yaml
+
+Cada ubicación (caja, cuadro, zona…) es una **carpeta**. Dentro, `index.yaml` lleva los metadatos de *esa* carpeta en `self:`:
+
+```text
+Parking/
+  index.yaml                      # self: Location (zona)
+  enchufes.yaml                   # fragmentos del mismo sitio
+  Caja derivacion 1/
+    index.yaml                    # self: Location (caja) + regletas…
+Planta baja/Recibidor/
+  index.yaml                      # Portero, etc.
+  Cuadro General/
+    index.yaml                    # IGA, MTs…
+```
+
+```yaml
+# Parking/Caja derivacion 1/index.yaml
+schema: house/v1
+self:
+  type: Location
+  subtype: "100x100 IP40"
+  notes: "mount: ceiling; abertura fondo.SE"
+elements:
+  Regleta_1:
+    type: TerminalStrip
+```
+
+- `cd` en el shell navega Locations; auto-activa `index.yaml`.
+- `show` muestra el `self:` de la Location + resumen del contenido.
+- `add location "Cuadro General"` crea carpeta + `index.yaml` con `self:`.
+- Otros YAML en la misma carpeta son fragmentos del mismo path (sin `self` ni `location:`).
+
+En el shell:
+
+```text
+cd Recibidor
+show                          # self del Recibidor
+cd "Cuadro General"
+show                          # self del Cuadro + IGA, MTs…
+```
 
 ## Elementos
 
@@ -179,29 +223,20 @@ También se acepta la lista estilo WireViz.
 - Absoluta: `/Planta baja/Recibidor/Cuadro general/MT_Luces.L`
 - Relativa: `../Salon/Caja_Luces.L`
 
-## Locations anidadas
+## Locations anidadas (inline, escape hatch)
 
-Además de subdirectorios, se puede anidar en un solo YAML:
+Lo recomendado es **siempre directorios + index.yaml**. Como escape hatch en un solo fichero aún se admite:
 
-```yaml
-schema: house/v1
-locations:
-  Planta baja:
-    Recibidor:
-      Cuadro general:
-        elements: { ... }
-        cables: { ... }
-        connections: [ ... ]
-```
+- `locations: { Nombre: { elements: … } }`
+- o un elemento `type: Location` con `elements`/`cables` anidados
 
-### Cajas de derivación = carpeta
+Prefiere no mezclarlo con el layout de obra real.
 
-Si una regleta (u otro aparato) está *dentro* de una caja, pon el YAML en un subdirectorio de esa caja. Así el nombre WireViz lleva el sitio:
+### Prefijos WireViz
 
-- `Parking/Caja derivacion 1/caja.yaml` → elemento `Regleta`
-- Prefijo: `Parking__Caja_derivacion_1_Regleta`
+El path de carpetas define el prefijo:
 
-Evita `Parking/Regleta_1` (no se ve la caja). Alternativa sin carpetas: id largo `Caja_derivacion_1_Regleta` (peor: duplicas el sitio en el nombre).
+- `Parking/Caja derivacion 1/index.yaml` → elemento `Regleta` → `Parking__Caja_derivacion_1__Regleta`
 
 ## Conduits / mangueras
 

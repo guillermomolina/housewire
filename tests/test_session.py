@@ -58,6 +58,17 @@ class TestProjectSession(unittest.TestCase):
         s.cd("..")
         self.assertIsNone(s.active_yaml)
 
+    def test_cd_auto_uses_index_yaml_over_siblings(self) -> None:
+        create_empty_house_file(self.root / "zona_a" / "otro.yaml")
+        (self.root / "zona_a" / "index.yaml").write_text(
+            "schema: house/v1\nself:\n  type: Location\nelements: {}\n",
+            encoding="utf-8",
+        )
+        s = self._session()
+        auto = s.cd("zona_a")
+        self.assertIsNotNone(auto)
+        self.assertEqual(s.active_yaml.name, "index.yaml")
+
     def test_cd_auto_uses_single_yaml(self) -> None:
         s = self._session()
         auto = s.cd("zona_a")

@@ -558,18 +558,40 @@ def _convert_flat_fragment(
     }
 
 
+def _inject_self_as_location(
+    node: dict[str, Any],
+    flat_elements: dict[str, Any],
+    base: list[str],
+) -> None:
+    """Fold top-level ``self:`` (Location metadata for this directory) into elements."""
+    self_def = node.get("self")
+    if not isinstance(self_def, dict):
+        return
+    if self_def.get("type") and self_def.get("type") != "Location":
+        raise ValueError("self.type debe ser Location")
+    name = str(base[-1]) if base else "Location"
+    entry = {"type": "Location", **{k: v for k, v in self_def.items() if k != "type"}}
+    entry["type"] = "Location"
+    flat_elements[name] = entry
+
+
 def _walk_locations(
     node: dict[str, Any],
     base: list[str],
 ) -> list[tuple[list[str], dict[str, Any]]]:
     """Yield (location_parts, fragment) for nested locations trees.
 
-    Supports two nesting mechanisms:
-    1. locations: { Name: { elements: ... } }  — explicit location map
-    2. elements:  { Name: { type: Location, elements: ..., cables: ..., connections: ... } }
-       A Location element with nested content is equivalent to a locations entry:
-       its name becomes a path level and its content is walked recursively.
+    Supports:
+    1. self: { type: Location, ... } — metadata for this directory (index.yaml)
+    2. locations: { Name: { elements: ... } }  — explicit location map
+    3. elements: { Name: { type: Location, elements: ... } } — inline nested Location
     """
+    if "location" in node and node.get("location") is not None:
+        raise ValueError(
+            "El campo 'location:' ya no se usa. "
+            "La jerarquía es el path de directorios; usa index.yaml con self:."
+        )
+
     fragments: list[tuple[list[str], dict[str, Any]]] = []
 
     direct_keys = {"elements", "cables", "connections", "conduits"}
@@ -603,6 +625,10 @@ def _walk_locations(
             flat_node.setdefault("elements", {})[name] = {
                 k: v for k, v in defn.items() if k not in location_child_keys
             } or defn
+
+    _inject_self_as_location(node, flat_node.setdefault("elements", {}), base)
+    if not flat_node.get("elements"):
+        flat_node.pop("elements", None)
 
     if any(key in flat_node for key in direct_keys):
         fragment = {key: copy.deepcopy(flat_node[key]) for key in direct_keys if key in flat_node}
@@ -642,34 +668,32 @@ def house_document_to_wireviz(
     """Convert a house/v1 document into a WireViz-compatible dict.
 
     Names are already location-prefixed; merge step must not prefix again.
+    Location path comes only from the file's directory (not from a location: field).
     """
-    explicit = _as_location_list(data.get("location"))
-    # location es relativo al path del fichero: se concatena, no sustituye.
-    # Ejemplo: fichero en Parking/ con location: [Caja derivacion 1]
-    # → base = [Parking, Caja derivacion 1]
-    if explicit:
-        # Evitar duplicar partes que ya están en file_location_parts
-        # (compatibilidad con location absoluto: si empieza con las mismas partes, no duplicar)
-        if explicit[:len(file_location_parts)] == file_location_parts:
-            base_location = explicit
-        else:
-            base_location = list(file_location_parts) + explicit
-    else:
-        base_location = list(file_location_parts)
+    if "location" in data and data.get("location") is not None:
+        raise ValueError(
+            "El campo 'location:' ya no se usa. "
+            "La jerarquía es el path de directorios; usa index.yaml con self:."
+        )
+    base_location = list(file_location_parts)
 
     fragments = _walk_locations(data, base_location)
     # also allow top-level elements without nesting already handled by walk
-    if not fragments and any(key in data for key in ("elements", "cables", "connections")):
-        fragments = [
-            (
-                base_location,
-                {
-                    key: copy.deepcopy(data[key])
-                    for key in ("elements", "cables", "connections", "conduits")
-                    if key in data
-                },
-            )
-        ]
+    if not fragments and any(
+        key in data for key in ("elements", "cables", "connections", "self")
+    ):
+        frag: dict[str, Any] = {
+            key: copy.deepcopy(data[key])
+            for key in ("elements", "cables", "connections", "conduits")
+            if key in data
+        }
+        if "self" in data and isinstance(data["self"], dict):
+            elems = dict(frag.get("elements") or {})
+            _inject_self_as_location(data, elems, base_location)
+            if elems:
+                frag["elements"] = elems
+        if frag:
+            fragments = [(base_location, frag)]
 
     merged: dict[str, Any] = {
         "connectors": {},

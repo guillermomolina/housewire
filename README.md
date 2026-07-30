@@ -1,123 +1,138 @@
 # housewire
 
-Documenta instalaciones eléctricas en YAML (`schema: house/v1`) y genera diagramas:
+Document electrical installations in YAML (`schema: house/v1`) and generate diagrams:
 
-- **WireViz** (detalle de bornes / cables)
-- **Topología física** (cajas, conductos, aberturas)
-- Futuro: QElectroTech u otros exporters
+- **WireViz** (terminals / cables)
+- **Physical topology** (boxes, conduits, openings)
+- Future: QElectroTech or other exporters
 
-El código vive en el paquete Python `housewire`. Los datos de obra van en `projects/` (no mezclados con el programa).
+This repository is the **program only**. Site/installation YAML lives in a **separate** (often private) repository or directory. Do not commit private site data into this repo.
 
-## Requisitos
+## Requirements
 
 - Python 3.10+
-- Graphviz (`dot` en el `PATH`)
+- Graphviz (`dot` on `PATH`)
 
 ```bash
 sudo pacman -S graphviz   # Arch
 ```
 
-## Instalación
+## Install
 
 ```bash
 python -m venv .venv --prompt housewire
 source .venv/bin/activate
 python -m pip install -e .
+# or: make prepare
 ```
 
-
-## Shell y ABM
-
-Modo interactivo (REPL, sin menús TUI):
+Point the CLI at any site directory (outside this repo):
 
 ```bash
-housewire shell "projects/Margalló 4A"
+export SITE="$HOME/electrical-sites/my-site"
 ```
 
-Comandos: `cd`, `ls`, `pwd`, `use <archivo.yaml>`, `show`, `pend`, `add`, `rm`, `generate`, `help`, `exit`.
-Tab completa comandos, subcomandos (`add`/`rm`) y rutas (`cd`/`use`/…).
+## Shell and ABM
 
-Captura rápida delante de una caja (cable pendiente sin destino):
+Interactive REPL (no TUI menus):
 
 ```bash
-housewire shell "projects/Margalló 4A"
-cd Parking/Caja\ derivacion\ 2   # auto-activa el YAML si solo hay uno
-pend W.N E.S                     # crea PEND_Linea_01 + Conducto_paso_01
-pend N.E S.W 2.5                 # misma cosa con sección 2.5 mm2
+housewire shell "$SITE"
 ```
 
-`add cable` usa defaults (`1.5 mm2`, `BN,BU`) si no pasas `--section` / `--colors`.
-
-Subcomandos (scripts / Makefile):
+Commands: `cd`, `ls`, `pwd`, `use`, `show`, `pend`, `add` (incl. `add location`), `rm`, `generate`, `help`, `exit`.
+Tab completes commands, subcommands, and paths. **Locations are directories** with `index.yaml` (`self:`).
 
 ```bash
-housewire generate -f "projects/Margalló 4A"
-housewire ls "projects/Margalló 4A" "Parking"
-housewire show "projects/Margalló 4A" "Planta baja/Recibidor/Cuadro general/cuadro_general.yaml"
-housewire add element "projects/Margalló 4A" "…/cuadro_general.yaml" MT_Nuevo --type MCB --subtype C10
-housewire add pend "projects/Margalló 4A" "…/caja.yaml" W.N E.S
-housewire rm element "projects/Margalló 4A" "…/cuadro_general.yaml" MT_Nuevo
+housewire shell "$SITE"
+cd "Ground floor/Hall"     # auto-use index.yaml
+show
+cd "Main panel"
+show
 ```
 
-La ruta `housewire <proyecto> -f` sigue funcionando como atajo de `generate`.
-
-## Generar un proyecto de obra
+Fast capture at a junction box (pending cable, destination unknown):
 
 ```bash
-housewire -f "projects/Margalló 4A"
-# o
-python -m housewire -f "projects/Margalló 4A"
+housewire shell "$SITE"
+cd "Garage/Junction box 2"   # auto-activates index.yaml
+pend W.N E.S                 # creates PEND_Linea_01 + Conducto_paso_01
+pend N.E S.W 2.5
 ```
 
-Salida dentro de `projects/Margalló 4A/out/`:
+`add cable` defaults to `1.5 mm2` / `BN,BU` when `--section` / `--colors` are omitted.
 
-| Ruta | Contenido |
+Non-interactive subcommands:
+
+```bash
+housewire generate -f "$SITE"
+housewire ls "$SITE" "Garage"
+housewire show "$SITE" "Ground floor/Hall/index.yaml"
+housewire add element "$SITE" "…/index.yaml" MT_New --type MCB --subtype C10
+housewire add pend "$SITE" "…/index.yaml" W.N E.S
+housewire rm element "$SITE" "…/index.yaml" MT_New
+```
+
+Legacy shortcut `housewire <site> -f` still maps to `generate`.
+
+## Generate diagrams
+
+```bash
+housewire generate -f "$SITE"
+# or
+python -m housewire -f "$SITE"
+```
+
+Output under `$SITE/out/`:
+
+| Path | Content |
 |---|---|
-| `out/<proyecto>.svg` | WireViz **total** |
-| `out/zones/<zona>.svg` | WireViz **por zona** (Parking, Cuadro_general, …) |
-| `out/physical/<zona>.svg` | Topología **física** (sin tablas de pines) |
+| `out/<site>.svg` | Full WireViz |
+| `out/zones/<zone>.svg` | WireViz per zone |
+| `out/physical/<zone>.svg` | Physical topology (no pin tables) |
 
-Por defecto se generan zonas + físico (`--zones`). Solo el total: `--no-zones`.
-
-Makefile:
+Zones + physical are on by default (`--zones`). Full merge only: `--no-zones`.
 
 ```bash
-make prepare          # venv + install editable + pytest (dev-requirements.txt)
+make prepare          # venv + editable install + pytest (dev-requirements.txt)
+make test
 ```
 
-## Estructura del repo
+## Repository layout (this repo)
 
 ```
-src/housewire/          # paquete
-  cli.py                # CLI
-  catalog/              # tipos (MCB, RCD, Socket, …)
-  house/                # schema house/v1 + exporters
-projects/               # obras (YAML de instalación)
-  Margalló 4A/
+src/housewire/          # package
+  cli.py
+  catalog/              # types (MCB, RCD, Socket, …)
+  house/                # house/v1 schema + exporters
 docs/                   # schema-house-v1.md
+tests/
 ```
+
+Site trees (private) are **not** part of this repository. A local `projects/` path is gitignored if present for convenience; prefer a separate clone/checkout for real work.
 
 ## house/v1
 
-Ver [docs/schema-house-v1.md](docs/schema-house-v1.md).
+See [docs/schema-house-v1.md](docs/schema-house-v1.md).
 
 ```yaml
 schema: house/v1
 elements:
-  MT_Luces:
+  MT_Lights:
     type: MCB
     subtype: C10
 cables:
-  Linea_X:
+  Line_X:
     kind: power
     section: "1.5 mm2"
     colors: [BN, BU]
 connections:
   - from: A.[1, 3]
-    via: Linea_X.[1, 2]
+    via: Line_X.[1, 2]
     to: B.[1, 3]
 ```
 
 ## Version
 
-La versión del paquete está en `pyproject.toml` / `housewire.__version__` (ahora **0.1.0**).
+Package version: `pyproject.toml` / `housewire.__version__` (currently **0.2.1**).
+History: [CHANGELOG.md](CHANGELOG.md).

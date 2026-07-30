@@ -204,3 +204,33 @@ class TestShellDispatcher(unittest.TestCase):
             return 0
         self._run(s, "generate", generate_fn=mock_gen)
         self.assertEqual(called, [False])
+
+    def test_add_location_via_shell(self) -> None:
+        s = self._session()
+        code = self._run(s, 'add location "Caja X" --subtype "100x100" --notes "mount: wall"')
+        self.assertEqual(code, 0)
+        self.assertTrue((self.root / "Caja X" / "index.yaml").is_file())
+        self.assertEqual(s.active_yaml.name, "index.yaml")
+        doc = abm.load_editable(s.active_path(), self.root)
+        self.assertEqual(doc["self"]["type"], "Location")
+        self.assertEqual(doc["self"]["subtype"], "100x100")
+
+    def test_show_includes_self(self) -> None:
+        from housewire.project.io import create_location_index
+        from io import StringIO
+        import sys
+
+        create_location_index(self.root / "zona_b", subtype="zona", notes="meta")
+        s = self._session()
+        self._run(s, "cd zona_b")
+        buf = StringIO()
+        old = sys.stdout
+        sys.stdout = buf
+        try:
+            code = self._run(s, "show")
+        finally:
+            sys.stdout = old
+        self.assertEqual(code, 0)
+        out = buf.getvalue()
+        self.assertIn("self (Location)", out)
+        self.assertIn("zona", out)

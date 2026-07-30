@@ -75,7 +75,7 @@ def _load_house_files(
     project_path: Path, yaml_files: list[Path]
 ) -> list[tuple[list[str], dict[str, Any]]]:
     """Yield (location_parts, fragment) for each house document piece."""
-    from housewire.house import _as_location_list, _walk_locations
+    from housewire.house import _walk_locations
 
     pieces: list[tuple[list[str], dict[str, Any]]] = []
     for yaml_file in yaml_files:
@@ -83,29 +83,25 @@ def _load_house_files(
             data = yaml.safe_load(handle) or {}
         if not is_house_document(data):
             continue
-        file_parts = path_location_parts(project_path, yaml_file)
-        explicit = _as_location_list(data.get("location"))
-        if explicit:
-            if explicit[:len(file_parts)] == file_parts:
-                base = explicit
-            else:
-                base = list(file_parts) + explicit
-        else:
-            base = list(file_parts)
+        if "location" in data and data.get("location") is not None:
+            raise ValueError(
+                f"{yaml_file}: el campo 'location:' ya no se usa. "
+                "Usa directorios + index.yaml con self:."
+            )
+        base = path_location_parts(project_path, yaml_file)
         fragments = _walk_locations(data, base)
         if not fragments and any(
-            key in data for key in ("elements", "cables", "connections", "conduits")
+            key in data for key in ("elements", "cables", "connections", "conduits", "self")
         ):
-            fragments = [
-                (
-                    base,
-                    {
-                        key: data[key]
-                        for key in ("elements", "cables", "connections", "conduits")
-                        if key in data
-                    },
-                )
-            ]
+            frag = {
+                key: data[key]
+                for key in ("elements", "cables", "connections", "conduits")
+                if key in data
+            }
+            fragments = [(base, frag)] if frag or data.get("self") else []
+            if not fragments and data.get("self"):
+                # Re-walk so self is injected
+                fragments = _walk_locations(data, base)
         pieces.extend(fragments)
     return pieces
 

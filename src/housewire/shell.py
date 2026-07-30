@@ -14,7 +14,7 @@ def run_repl(
 ) -> int:
     session = ProjectSession(project_path)
     print(f"housewire shell — {session.root}")
-    print("Escribe help para ver comandos. Tab completa comandos y rutas.")
+    print("Escribe help para ver comandos. Tab completa. Locations = directorios + index.yaml.")
     if not enable_readline_completion(session):
         print("(Sin readline: Tab completion no disponible)")
     while True:

@@ -1,0 +1,12 @@
+---
+description: Code, identifiers, and project meta must be written in English
+alwaysApply: true
+---
+
+# English for all programming
+
+- **Code language is English**: variable names, function/class names, module names, comments in source, test names, commit messages when authored by the agent, and `CHANGELOG.md` entries.
+- Do not introduce Spanish identifiers (e.g. avoid `conexion`, `regleta` as code symbols). Domain labels in *user data* (project YAML folder names, `notes`, `label`) may stay in Spanish — that is installation content, not program code.
+- User-facing CLI help/errors may remain in Spanish when the product UX is Spanish; keep those strings clearly separated from identifiers.
+- Prefer English in new/edited docstrings inside `src/` and `tests/`.
+- Chat with the user may stay in Spanish; repository programming artifacts stay in English.

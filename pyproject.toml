@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "housewire"
-version = "0.1.0"
+version = "0.2.1"
 description = "Document home electrical installations (house/v1) and export diagrams (WireViz, physical topology, …)"
 readme = "README.md"
 requires-python = ">=3.10"

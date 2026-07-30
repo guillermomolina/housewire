@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from housewire.house import is_house_document
-from housewire.project.io import load_yaml
+from housewire.project.io import INDEX_YAML, load_yaml
 from housewire.project.paths import EXCLUDED_DIR_NAMES, is_excluded_path, is_yaml
 
 
@@ -44,7 +44,7 @@ class ProjectSession:
         return candidate
 
     def cd(self, raw: str | None) -> Path | None:
-        """Cambia de directorio. Si hay un solo YAML house/v1, lo auto-activa.
+        """Cambia de directorio. Preferencia: auto-activar index.yaml.
 
         Returns the auto-used yaml path, or None.
         """
@@ -67,12 +67,17 @@ class ProjectSession:
             if is_excluded_path(child, self._excluded):
                 continue
             if child.is_dir():
-                entries.append((child.name + "/", "dir"))
+                label = child.name + "/"
+                if (child / INDEX_YAML).is_file():
+                    label += " [loc]"
+                entries.append((label, "dir"))
             elif is_yaml(child):
-                marker = ""
+                label = child.name
+                if child.name == INDEX_YAML:
+                    label += " [index]"
                 if self.active_yaml and child.resolve() == self.active_yaml.resolve():
-                    marker = " *"
-                entries.append((child.name + marker, "yaml"))
+                    label += " *"
+                entries.append((label, "yaml"))
         return entries
 
     def house_yaml_files_in_cwd(self) -> list[Path]:
@@ -90,9 +95,25 @@ class ProjectSession:
                 found.append(child)
         return found
 
+    def index_yaml_in_cwd(self) -> Path | None:
+        candidate = self.cwd_path() / INDEX_YAML
+        if not candidate.is_file():
+            return None
+        try:
+            data = load_yaml(candidate)
+        except ValueError:
+            return None
+        if is_house_document(data):
+            return candidate
+        return None
+
     def try_auto_use_yaml(self) -> Path | None:
-        """Si no hay YAML activo y hay exactamente uno house/v1 en cwd, lo activa."""
+        """Prefer index.yaml; else unique house/v1 yaml in cwd."""
         if self.active_yaml is not None:
+            return self.active_yaml
+        index = self.index_yaml_in_cwd()
+        if index is not None:
+            self.active_yaml = index
             return self.active_yaml
         candidates = self.house_yaml_files_in_cwd()
         if len(candidates) == 1:
@@ -109,10 +130,14 @@ class ProjectSession:
         candidates = self.house_yaml_files_in_cwd()
         if not candidates:
             raise ValueError(
-                "No hay YAML activo ni house/v1 en este directorio. Usa: use <archivo.yaml>"
+                "No hay YAML activo ni house/v1 en este directorio. "
+                f"Usa: use {INDEX_YAML}  o  add location <nombre>"
             )
         names = ", ".join(p.name for p in candidates)
-        raise ValueError(f"Hay varios YAML; usa: use <archivo.yaml>. Candidatos: {names}")
+        raise ValueError(
+            f"Hay varios YAML; usa: use {INDEX_YAML} (o use <archivo.yaml>). "
+            f"Candidatos: {names}"
+        )
 
     def use_yaml(self, name: str) -> Path:
         path = self.resolve_under_root(name)

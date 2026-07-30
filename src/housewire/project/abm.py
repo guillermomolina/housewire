@@ -299,6 +299,14 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
         lines.append(_yaml.safe_dump(cb, sort_keys=False, allow_unicode=True).rstrip())
         return "\n".join(lines)
 
+    self_block = doc.get("self")
+    if isinstance(self_block, dict):
+        import yaml as _yaml
+
+        lines.append("self (Location):")
+        lines.append(_yaml.safe_dump(self_block, sort_keys=False, allow_unicode=True).rstrip())
+        lines.append("")
+
     elements = doc.get("elements") or {}
     cables = doc.get("cables") or {}
     connections = doc.get("connections") or []
@@ -316,4 +324,43 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
     lines.append(f"connections ({len(connections)}):")
     for i, conn in enumerate(connections):
         lines.append(f"  [{i}] {conn}")
+    return "\n".join(lines)
+
+
+def format_show_cwd(docs: list[tuple[str, dict[str, Any]]]) -> str:
+    """Summary across all house YAML fragments in a directory."""
+    import yaml as _yaml
+
+    lines: list[str] = []
+    self_shown = False
+    all_elements: dict[str, str] = {}
+    all_cables: list[str] = []
+    all_conduits: list[str] = []
+    n_conn = 0
+    for fname, doc in docs:
+        self_block = doc.get("self")
+        if isinstance(self_block, dict) and not self_shown:
+            lines.append("self (Location):")
+            lines.append(_yaml.safe_dump(self_block, sort_keys=False, allow_unicode=True).rstrip())
+            lines.append("")
+            self_shown = True
+        for name, defn in (doc.get("elements") or {}).items():
+            t = defn.get("type", "?") if isinstance(defn, dict) else "?"
+            all_elements[str(name)] = str(t)
+        for name in doc.get("cables") or {}:
+            all_cables.append(str(name))
+        for name in doc.get("conduits") or {}:
+            all_conduits.append(str(name))
+        n_conn += len(doc.get("connections") or [])
+    lines.append(f"files: {', '.join(f for f, _ in docs)}")
+    lines.append(f"elements ({len(all_elements)}):")
+    for name in sorted(all_elements):
+        lines.append(f"  {name} ({all_elements[name]})")
+    lines.append(f"cables ({len(all_cables)}):")
+    for name in sorted(all_cables):
+        lines.append(f"  {name}")
+    lines.append(f"conduits ({len(all_conduits)}):")
+    for name in sorted(all_conduits):
+        lines.append(f"  {name}")
+    lines.append(f"connections ({n_conn})")
     return "\n".join(lines)

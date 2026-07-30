@@ -7,6 +7,8 @@ import yaml
 
 from housewire.house import HOUSE_SCHEMA, is_house_document
 
+INDEX_YAML = "index.yaml"
+
 EMPTY_HOUSE_TEMPLATE: dict[str, Any] = {
     "schema": HOUSE_SCHEMA,
     "elements": {},
@@ -52,3 +54,30 @@ def create_empty_house_file(path: Path) -> dict[str, Any]:
     }
     save_yaml(path, doc, backup=False)
     return doc
+
+
+def create_location_index(
+    dir_path: Path,
+    *,
+    subtype: str | None = None,
+    notes: str | None = None,
+) -> Path:
+    """Create directory + index.yaml with self: Location metadata."""
+    dir_path.mkdir(parents=True, exist_ok=True)
+    index_path = dir_path / INDEX_YAML
+    if index_path.exists():
+        raise FileExistsError(f"Ya existe: {index_path}")
+    self_block: dict[str, Any] = {"type": "Location"}
+    if subtype:
+        self_block["subtype"] = subtype
+    if notes:
+        self_block["notes"] = notes
+    doc: dict[str, Any] = {
+        "schema": HOUSE_SCHEMA,
+        "self": self_block,
+        "elements": {},
+        "cables": {},
+        "connections": [],
+    }
+    save_yaml(index_path, doc, backup=False)
+    return index_path
