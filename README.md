@@ -35,6 +35,7 @@ housewire shell "projects/Margalló 4A"
 ```
 
 Comandos: `cd`, `ls`, `pwd`, `use <archivo.yaml>`, `show`, `pend`, `add`, `rm`, `generate`, `help`, `exit`.
+Tab completa comandos, subcomandos (`add`/`rm`) y rutas (`cd`/`use`/…).
 
 Captura rápida delante de una caja (cable pendiente sin destino):
 

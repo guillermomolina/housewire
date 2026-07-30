@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     pass
 
 HELP_TEXT = """Comandos del shell housewire:
+  (Tab completa comandos, subcomandos add/rm y rutas de cd/use/…)
   pwd                          cwd y YAML activo
   cd [path]                    navegar (.., subcarpetas); sin args → raíz
                                (auto-use si hay un solo YAML house/v1)

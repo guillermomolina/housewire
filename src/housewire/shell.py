@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import sys
 from collections.abc import Callable
 from pathlib import Path
 
 from housewire.commands import run_shell_line
+from housewire.completion import enable_readline_completion
 from housewire.project.session import ProjectSession
 
 
@@ -14,7 +14,9 @@ def run_repl(
 ) -> int:
     session = ProjectSession(project_path)
     print(f"housewire shell — {session.root}")
-    print("Escribe help para ver comandos.")
+    print("Escribe help para ver comandos. Tab completa comandos y rutas.")
+    if not enable_readline_completion(session):
+        print("(Sin readline: Tab completion no disponible)")
     while True:
         try:
             line = input(f"housewire:{session.prompt_label()}$ ")
