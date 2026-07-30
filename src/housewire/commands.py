@@ -17,7 +17,7 @@ HELP_TEXT = """Comandos del shell housewire:
   (Tab completa comandos, subcomandos add/rm y rutas de cd/use/…)
   pwd                          cwd y YAML activo
   cd [path]                    navegar Locations (directorios); auto-use housewire.yaml
-  ls                           sublocations [loc] e housewire.yaml
+  ls                           locations (cd) y elements de esta location
   use housewire.yaml           fijar housewire.yaml activo
   show                         location: del lugar + contenido de housewire.yaml
   show --element NAME | --cable NAME
@@ -64,9 +64,20 @@ def _prompt(message: str) -> str:
 
 
 def cmd_ls(session: ProjectSession) -> int:
-    for name, kind in session.list_dir():
-        prefix = "d" if kind == "dir" else "f"
-        print(f"  [{prefix}] {name}")
+    locations = session.list_locations()
+    elements = session.list_elements()
+    if not locations and not elements:
+        print("(vacío)")
+        return 0
+    if locations:
+        print("locations:")
+        for name, place_type in locations:
+            suffix = f"  ({place_type})" if place_type else ""
+            print(f"  {name}/{suffix}")
+    if elements:
+        print("elements:")
+        for name, type_id in elements:
+            print(f"  {name}  ({type_id})")
     return 0
 
 

@@ -66,6 +66,34 @@ class TestShellDispatcher(unittest.TestCase):
         s = self._session()
         self.assertEqual(self._run(s, "ls"), 0)
 
+    def test_ls_shows_locations_and_elements(self) -> None:
+        from io import StringIO
+        import sys
+
+        s = self._session()
+        self._run(s, "cd zona_a")
+        self._run(s, "add element MT_A --type MCB --subtype C10")
+        (self.root / "zona_a" / "subloc").mkdir()
+        from housewire.project.io import create_location_index
+
+        create_location_index(self.root / "caja", type_id="JunctionBox")
+        s = self._session()
+        buf = StringIO()
+        old = sys.stdout
+        sys.stdout = buf
+        try:
+            code = self._run(s, "ls")
+        finally:
+            sys.stdout = old
+        self.assertEqual(code, 0)
+        out = buf.getvalue()
+        self.assertIn("locations:", out)
+        self.assertIn("zona_a/", out)
+        self.assertIn("caja/", out)
+        self.assertNotIn("[d]", out)
+        self.assertNotIn("[f]", out)
+        self.assertNotIn("housewire.yaml", out)
+
     def test_use_sets_active(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")

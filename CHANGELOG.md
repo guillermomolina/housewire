@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.5.1] — 2026-07-30
+
+### Changed
+
+- Shell `ls` lists **locations** (cd targets) and **elements** of the current
+  place; dropped filesystem `[d]`/`[f]` markers and `housewire.yaml` file rows.
+
 ## [0.5.0] — 2026-07-30
 
 ### Changed (breaking)

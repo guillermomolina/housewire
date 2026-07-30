@@ -60,25 +60,57 @@ class ProjectSession:
         self.active_yaml = None
         return self.try_auto_use_yaml()
 
-    def list_dir(self) -> list[tuple[str, str]]:
+    def list_locations(self) -> list[tuple[str, str | None]]:
+        """Subdirectories you can ``cd`` into: ``(name, place_type_or_None)``."""
         directory = self.cwd_path()
-        entries: list[tuple[str, str]] = []
-        for child in sorted(directory.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+        entries: list[tuple[str, str | None]] = []
+        for child in sorted(directory.iterdir(), key=lambda p: p.name.lower()):
+            if not child.is_dir():
+                continue
             if child.name in EXCLUDED_DIR_NAMES:
                 continue
             if is_excluded_path(child, self._excluded):
                 continue
-            if child.is_dir():
-                label = child.name + "/"
-                if (child / HOUSEWIRE_YAML).is_file():
-                    label += " [loc]"
-                entries.append((label, "dir"))
-            elif is_housewire_yaml(child):
-                label = child.name
-                if self.active_yaml and child.resolve() == self.active_yaml.resolve():
-                    label += " *"
-                entries.append((label, "yaml"))
+            place_type: str | None = None
+            for yaml_name in (HOUSEWIRE_YAML, "housewire.yml"):
+                meta_path = child / yaml_name
+                if not meta_path.is_file():
+                    continue
+                try:
+                    data = load_yaml(meta_path)
+                except ValueError:
+                    continue
+                if not is_house_document(data):
+                    continue
+                loc = data.get("location")
+                if isinstance(loc, dict) and loc.get("type"):
+                    place_type = str(loc["type"])
+                break
+            entries.append((child.name, place_type))
         return entries
+
+    def list_elements(self) -> list[tuple[str, str]]:
+        """Elements in the current location's housewire.yaml: ``(name, type_id)``."""
+        yaml_path = self.housewire_yaml_in_cwd()
+        if yaml_path is None:
+            return []
+        try:
+            data = load_yaml(yaml_path)
+        except ValueError:
+            return []
+        if not is_house_document(data):
+            return []
+        elements = data.get("elements") or {}
+        if not isinstance(elements, dict):
+            return []
+        rows: list[tuple[str, str]] = []
+        for name in sorted(elements, key=lambda n: str(n).lower()):
+            defn = elements[name]
+            type_id = "?"
+            if isinstance(defn, dict) and defn.get("type"):
+                type_id = str(defn["type"])
+            rows.append((str(name), type_id))
+        return rows
 
     def housewire_yaml_in_cwd(self) -> Path | None:
         for name in (HOUSEWIRE_YAML, "housewire.yml"):

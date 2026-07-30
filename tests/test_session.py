@@ -117,22 +117,26 @@ class TestProjectSession(unittest.TestCase):
         with self.assertRaises(ValueError):
             s.active_path()
 
-    def test_list_dir_contains_subdir(self) -> None:
+    def test_list_locations_contains_subdir(self) -> None:
         s = self._session()
-        names = [n for n, _ in s.list_dir()]
-        self.assertTrue(any(n.startswith("zona_a/") for n in names))
+        names = [n for n, _ in s.list_locations()]
+        self.assertIn("zona_a", names)
 
-    def test_list_dir_excludes_out(self) -> None:
+    def test_list_locations_excludes_out(self) -> None:
         s = self._session()
-        names = [n for n, _ in s.list_dir()]
-        self.assertNotIn("out/", names)
+        names = [n for n, _ in s.list_locations()]
+        self.assertNotIn("out", names)
 
-    def test_list_dir_marks_active_yaml(self) -> None:
+    def test_list_elements_from_housewire(self) -> None:
+        from housewire.project import abm
+
         s = self._session()
         s.cd("zona_a")
-        s.use_yaml("housewire.yaml")
-        names = [n for n, _ in s.list_dir()]
-        self.assertTrue(any("housewire.yaml" in n and "*" in n for n in names))
+        doc = abm.load_editable(s.active_path(), self.root)
+        abm.add_element(doc, "MT_A", type_id="MCB", subtype="C10")
+        abm.persist(doc, s.active_path(), self.root)
+        rows = s.list_elements()
+        self.assertEqual(rows, [("MT_A", "MCB")])
 
     def test_prompt_label_shows_active(self) -> None:
         s = self._session()

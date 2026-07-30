@@ -526,7 +526,7 @@ def _build_parser() -> argparse.ArgumentParser:
     sh = sub.add_parser("shell", help="REPL: cd, ls, use, add, rm, generate")
     sh.add_argument("project_path", help="Ruta del proyecto de obra")
 
-    ls_p = sub.add_parser("ls", help="Listar directorio dentro del proyecto")
+    ls_p = sub.add_parser("ls", help="Listar locations (cd) y elements")
     ls_p.add_argument("project_path")
     ls_p.add_argument("path", nargs="?", default=".", help="Ruta relativa")
 
