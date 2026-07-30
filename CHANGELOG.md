@@ -9,6 +9,30 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.3.0] — 2026-07-30
+
+### Changed (breaking)
+
+- Renamed top-level **`self:`** to **`location:`** for per-directory place metadata.
+- `location.type` is a place kind: **`Room`**, **`JunctionBox`**, **`Panel`**, **`Zone`**, **`Site`** (plus legacy **`Location`**).
+- `location:` as a path **list** remains invalid; hierarchy is still the filesystem path only.
+- `add location NAME` requires **`--type`**.
+- Catalog place types (`Room`, `JunctionBox`, `Panel`, `Zone`, `Site`) with `wireviz_skip: true`.
+
+### Migration
+
+```yaml
+# before
+self:
+  type: Location
+  subtype: "100x100 IP40"
+
+# after
+location:
+  type: JunctionBox   # or Room | Panel | Zone | Site
+  subtype: "100x100 IP40"
+```
+
 ## [0.2.2] — 2026-07-30
 
 ### Changed

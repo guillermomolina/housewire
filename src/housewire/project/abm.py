@@ -299,12 +299,15 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
         lines.append(_yaml.safe_dump(cb, sort_keys=False, allow_unicode=True).rstrip())
         return "\n".join(lines)
 
-    self_block = doc.get("self")
-    if isinstance(self_block, dict):
+    location_block = doc.get("location")
+    if isinstance(location_block, dict):
         import yaml as _yaml
 
-        lines.append("self (Location):")
-        lines.append(_yaml.safe_dump(self_block, sort_keys=False, allow_unicode=True).rstrip())
+        type_id = location_block.get("type", "?")
+        lines.append(f"location ({type_id}):")
+        lines.append(
+            _yaml.safe_dump(location_block, sort_keys=False, allow_unicode=True).rstrip()
+        )
         lines.append("")
 
     elements = doc.get("elements") or {}

@@ -1,0 +1,8 @@
+kind: place_type
+id: Site
+title: Site root
+description_es: >
+  Raiz de la instalacion / obra. Metadatos de index.yaml en la raiz del sitio.
+  No genera conector WireViz ni bornes.
+wireviz_skip: true
+terminals: {}

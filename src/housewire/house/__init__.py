@@ -11,6 +11,13 @@ import yaml
 
 HOUSE_SCHEMA = "house/v1"
 
+# Directory metadata types (index.yaml → location:). All wireviz_skip in catalog.
+PLACE_TYPES = frozenset({"Room", "JunctionBox", "Panel", "Zone", "Site", "Location"})
+
+
+def is_place_type(type_id: object) -> bool:
+    return str(type_id) in PLACE_TYPES
+
 _EXPAND_LIST_RE = re.compile(
     r"^(?P<head>.*?)\[(?P<body>[^\]]+)\]$"
 )
@@ -558,20 +565,39 @@ def _convert_flat_fragment(
     }
 
 
-def _inject_self_as_location(
+def _inject_directory_location(
     node: dict[str, Any],
     flat_elements: dict[str, Any],
     base: list[str],
 ) -> None:
-    """Fold top-level ``self:`` (Location metadata for this directory) into elements."""
-    self_def = node.get("self")
-    if not isinstance(self_def, dict):
+    """Fold top-level ``location:`` (place metadata for this directory) into elements."""
+    if "self" in node and node.get("self") is not None:
+        raise ValueError(
+            "El bloque 'self:' paso a llamarse 'location:'. "
+            "Ejemplo: location: { type: JunctionBox, subtype: '100x100' }"
+        )
+    loc = node.get("location")
+    if loc is None:
         return
-    if self_def.get("type") and self_def.get("type") != "Location":
-        raise ValueError("self.type debe ser Location")
-    name = str(base[-1]) if base else "Location"
-    entry = {"type": "Location", **{k: v for k, v in self_def.items() if k != "type"}}
-    entry["type"] = "Location"
+    if isinstance(loc, list):
+        raise ValueError(
+            "location: como lista de path ya no se usa. "
+            "La jerarquia es el path de directorios; "
+            "location: debe ser un mapa { type: Room|JunctionBox|Panel|Zone|Site, ... }."
+        )
+    if not isinstance(loc, dict):
+        raise ValueError(
+            "location: debe ser un mapa con type: Room, JunctionBox, Panel, Zone o Site"
+        )
+    type_id = loc.get("type")
+    if not type_id or not is_place_type(type_id):
+        raise ValueError(
+            "location.type debe ser uno de: "
+            + ", ".join(sorted(PLACE_TYPES - {"Location"}))
+            + " (o Location)"
+        )
+    name = str(base[-1]) if base else str(type_id)
+    entry = {**copy.deepcopy(loc), "type": str(type_id)}
     flat_elements[name] = entry
 
 
@@ -582,29 +608,23 @@ def _walk_locations(
     """Yield (location_parts, fragment) for nested locations trees.
 
     Supports:
-    1. self: { type: Location, ... } — metadata for this directory (index.yaml)
+    1. location: { type: JunctionBox, ... } — metadata for this directory (index.yaml)
     2. locations: { Name: { elements: ... } }  — explicit location map
-    3. elements: { Name: { type: Location, elements: ... } } — inline nested Location
+    3. elements: { Name: { type: Room|..., elements: ... } } — inline nested place
     """
-    if "location" in node and node.get("location") is not None:
-        raise ValueError(
-            "El campo 'location:' ya no se usa. "
-            "La jerarquía es el path de directorios; usa index.yaml con self:."
-        )
-
     fragments: list[tuple[list[str], dict[str, Any]]] = []
 
     direct_keys = {"elements", "cables", "connections", "conduits"}
     location_child_keys = {"elements", "cables", "connections", "conduits", "locations"}
 
-    # Separate Location elements (with nested content) from regular elements
+    # Separate place elements (with nested content) from regular elements
     raw_elements = dict(node.get("elements") or {})
     location_elements: dict[str, dict[str, Any]] = {}
     plain_elements: dict[str, Any] = {}
     for name, defn in raw_elements.items():
         if (
             isinstance(defn, dict)
-            and defn.get("type") == "Location"
+            and is_place_type(defn.get("type"))
             and any(k in defn for k in location_child_keys)
         ):
             location_elements[str(name)] = defn
@@ -618,7 +638,7 @@ def _walk_locations(
     for k in ("cables", "connections", "conduits"):
         if k in node:
             flat_node[k] = node[k]
-    # Also include Location elements that have NO nested content (pure metadata)
+    # Also include place elements that have NO nested content (pure metadata)
     for name, defn in location_elements.items():
         meta_only = {k: v for k, v in defn.items() if k not in location_child_keys}
         if meta_only or not any(k in defn for k in {"elements", "cables", "connections"}):
@@ -626,7 +646,7 @@ def _walk_locations(
                 k: v for k, v in defn.items() if k not in location_child_keys
             } or defn
 
-    _inject_self_as_location(node, flat_node.setdefault("elements", {}), base)
+    _inject_directory_location(node, flat_node.setdefault("elements", {}), base)
     if not flat_node.get("elements"):
         flat_node.pop("elements", None)
 
@@ -634,16 +654,16 @@ def _walk_locations(
         fragment = {key: copy.deepcopy(flat_node[key]) for key in direct_keys if key in flat_node}
         fragments.append((list(base), fragment))
 
-    # Walk Location elements that have nested content
+    # Walk place elements that have nested content
     for name, defn in location_elements.items():
         if any(k in defn for k in {"elements", "cables", "connections"}):
-            # Build a child node: strip type/subtype/notes/etc., keep content keys
             child: dict[str, Any] = {k: defn[k] for k in location_child_keys if k in defn}
-            # Also carry the Location metadata as a bare Location element (no nested content)
             meta = {k: v for k, v in defn.items() if k not in location_child_keys}
             if meta:
                 child_elements = dict(child.get("elements") or {})
-                child_elements[name] = {"type": "Location", **meta}
+                child_elements[name] = dict(meta)
+                if "type" not in child_elements[name]:
+                    child_elements[name]["type"] = defn.get("type")
                 child["elements"] = child_elements
             fragments.extend(_walk_locations(child, base + [str(name)]))
 
@@ -668,28 +688,22 @@ def house_document_to_wireviz(
     """Convert a house/v1 document into a WireViz-compatible dict.
 
     Names are already location-prefixed; merge step must not prefix again.
-    Location path comes only from the file's directory (not from a location: field).
+    Location path comes only from the file's directory.
     """
-    if "location" in data and data.get("location") is not None:
-        raise ValueError(
-            "El campo 'location:' ya no se usa. "
-            "La jerarquía es el path de directorios; usa index.yaml con self:."
-        )
     base_location = list(file_location_parts)
 
     fragments = _walk_locations(data, base_location)
-    # also allow top-level elements without nesting already handled by walk
     if not fragments and any(
-        key in data for key in ("elements", "cables", "connections", "self")
+        key in data for key in ("elements", "cables", "connections", "location")
     ):
         frag: dict[str, Any] = {
             key: copy.deepcopy(data[key])
             for key in ("elements", "cables", "connections", "conduits")
             if key in data
         }
-        if "self" in data and isinstance(data["self"], dict):
+        if isinstance(data.get("location"), dict):
             elems = dict(frag.get("elements") or {})
-            _inject_self_as_location(data, elems, base_location)
+            _inject_directory_location(data, elems, base_location)
             if elems:
                 frag["elements"] = elems
         if frag:
@@ -720,7 +734,6 @@ def house_document_to_wireviz(
                 raise ValueError(f"Colision de pin_remap house/v1: {name}")
             merged["_pin_remaps"][name] = remap
 
-    # pass through metadata/options if present
     for key in ("options", "metadata"):
         if key in data:
             merged[key] = copy.deepcopy(data[key])

@@ -209,20 +209,25 @@ class TestShellDispatcher(unittest.TestCase):
 
     def test_add_location_via_shell(self) -> None:
         s = self._session()
-        code = self._run(s, 'add location "Caja X" --subtype "100x100" --notes "mount: wall"')
+        code = self._run(
+            s,
+            'add location "Caja X" --type JunctionBox --subtype "100x100" --notes "mount: wall"',
+        )
         self.assertEqual(code, 0)
         self.assertTrue((self.root / "Caja X" / "index.yaml").is_file())
         self.assertEqual(s.active_yaml.name, "index.yaml")
         doc = abm.load_editable(s.active_path(), self.root)
-        self.assertEqual(doc["self"]["type"], "Location")
-        self.assertEqual(doc["self"]["subtype"], "100x100")
+        self.assertEqual(doc["location"]["type"], "JunctionBox")
+        self.assertEqual(doc["location"]["subtype"], "100x100")
 
-    def test_show_includes_self(self) -> None:
+    def test_show_includes_location(self) -> None:
         from housewire.project.io import create_location_index
         from io import StringIO
         import sys
 
-        create_location_index(self.root / "zona_b", subtype="zona", notes="meta")
+        create_location_index(
+            self.root / "zona_b", type_id="Zone", subtype="zona", notes="meta"
+        )
         s = self._session()
         self._run(s, "cd zona_b")
         buf = StringIO()
@@ -234,5 +239,5 @@ class TestShellDispatcher(unittest.TestCase):
             sys.stdout = old
         self.assertEqual(code, 0)
         out = buf.getvalue()
-        self.assertIn("self (Location)", out)
+        self.assertIn("location (Zone)", out)
         self.assertIn("zona", out)

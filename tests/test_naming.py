@@ -49,7 +49,7 @@ class TestNamingConvention(unittest.TestCase):
             self.assertNotIn("_1_Regleta", name, f"Separador _ simple encontrado en: {name}")
             self.assertNotIn("_1_Linea", name, f"Separador _ simple encontrado en: {name}")
 
-    def test_location_field_rejected(self) -> None:
+    def test_location_path_list_rejected(self) -> None:
         doc = _yaml.safe_load(
             "schema: house/v1\n"
             "location: [Caja derivacion 1]\n"
@@ -62,8 +62,9 @@ class TestNamingConvention(unittest.TestCase):
                 doc, catalog=load_catalog(), file_location_parts=["Parking"]
             )
         self.assertIn("location:", str(ctx.exception))
+        self.assertIn("lista", str(ctx.exception).lower())
 
     def test_path_only_determines_prefix(self) -> None:
-        """El path del fichero manda; no hay location: en el YAML."""
+        """El path del fichero manda; location: es metadatos, no jerarquia."""
         connectors, _ = self._wv_names(["Parking", "Caja derivacion 1"])
         self.assertIn("Parking__Caja_derivacion_1__Regleta", connectors)

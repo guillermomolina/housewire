@@ -5,7 +5,7 @@ from typing import Any
 
 import yaml
 
-from housewire.house import HOUSE_SCHEMA, is_house_document
+from housewire.house import HOUSE_SCHEMA, PLACE_TYPES, is_house_document, is_place_type
 
 INDEX_YAML = "index.yaml"
 
@@ -59,22 +59,29 @@ def create_empty_house_file(path: Path) -> dict[str, Any]:
 def create_location_index(
     dir_path: Path,
     *,
+    type_id: str,
     subtype: str | None = None,
     notes: str | None = None,
 ) -> Path:
-    """Create directory + index.yaml with self: Location metadata."""
+    """Create directory + index.yaml with ``location:`` place metadata."""
+    if not is_place_type(type_id):
+        raise ValueError(
+            "type debe ser uno de: "
+            + ", ".join(sorted(PLACE_TYPES - {"Location"}))
+            + " (o Location)"
+        )
     dir_path.mkdir(parents=True, exist_ok=True)
     index_path = dir_path / INDEX_YAML
     if index_path.exists():
         raise FileExistsError(f"Ya existe: {index_path}")
-    self_block: dict[str, Any] = {"type": "Location"}
+    location_block: dict[str, Any] = {"type": str(type_id)}
     if subtype:
-        self_block["subtype"] = subtype
+        location_block["subtype"] = subtype
     if notes:
-        self_block["notes"] = notes
+        location_block["notes"] = notes
     doc: dict[str, Any] = {
         "schema": HOUSE_SCHEMA,
-        "self": self_block,
+        "location": location_block,
         "elements": {},
         "cables": {},
         "connections": [],

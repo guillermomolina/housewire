@@ -1,10 +1,9 @@
-kind: element_type
+kind: place_type
 id: Location
-title: Location / Group container
+title: Generic place (legacy / inline)
 description_es: >
-  Contenedor de ubicacion (caja, habitacion, zona, etc.).
-  No genera conector WireViz ni bornes. Solo transporta metadatos
-  (subtype, notes, mount, facing, size, ...) que el diagrama fisico
-  usa para etiquetar el cluster correspondiente.
+  Contenedor generico de ubicacion. Preferir Room, JunctionBox, Panel, Zone o Site
+  en index.yaml (bloque location:). Se mantiene para anidacion inline ocasional.
+  No genera conector WireViz ni bornes.
 wireviz_skip: true
 terminals: {}

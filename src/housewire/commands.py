@@ -19,12 +19,12 @@ HELP_TEXT = """Comandos del shell housewire:
   cd [path]                    navegar Locations (directorios); auto-use index.yaml
   ls                           sublocations [loc] e index.yaml
   use index.yaml               fijar index.yaml activo
-  show                         self: de la Location + contenido de index.yaml
+  show                         location: del lugar + contenido de index.yaml
   show --element NAME | --cable NAME
   pend [<enter> <exit>] [section] [--colors C1,C2] [--notes ...]
                                cable pendiente + conduit (atajo de add pend)
-  add location NAME [--subtype ...] [--notes ...]
-                               crear carpeta Location + index.yaml con self:
+  add location NAME --type T [--subtype ...] [--notes ...]
+                               crear carpeta + index.yaml (T=Room|JunctionBox|Panel|Zone|Site)
   add element NAME --type T [--subtype ...] [--label ...] [--manufacturer ...] [--model ...] [--notes ...]
   add cable NAME [--section S] [--colors C1,C2] [--kind power] [--notes ...]
                                defaults: section=1.5 mm2, colors=BN,BU
@@ -159,12 +159,13 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
     if kind == "location":
         p = argparse.ArgumentParser(prog="add location", add_help=False)
         p.add_argument("name")
+        p.add_argument("--type", dest="type_id", required=True)
         p.add_argument("--subtype")
         p.add_argument("--notes")
         args = p.parse_args(rest)
         target = session.resolve_under_root(args.name)
         index_path = create_location_index(
-            target, subtype=args.subtype, notes=args.notes
+            target, type_id=args.type_id, subtype=args.subtype, notes=args.notes
         )
         session.cwd = target.relative_to(session.root)
         session.active_yaml = index_path

@@ -15,19 +15,22 @@ Los YAML de una instalación viven en un **directorio/repo de obra aparte** (no 
 schema: house/v1
 ```
 
-La **jerarquía de ubicaciones es el path de directorios**. No uses el campo `location:`.
+La **jerarquía de ubicaciones es el path de directorios**.
+El bloque top-level **`location:`** es metadatos del directorio actual
+(`type: Room|JunctionBox|Panel|Zone|Site`, `subtype`, `notes`, …),
+no una lista de path.
 
 Sin `schema: house/v1`, el archivo se trata como WireViz legacy (como `Test/`).
 
 ## Locations = directories + index.yaml
 
-Each location (box, panel, zone…) is a **directory** with a single **`index.yaml`**:
+Each place (room, junction box, panel, zone…) is a **directory** with a single **`index.yaml`**:
 
 ```text
 Garage/
-  index.yaml                 # self: + sockets, lights, …
+  index.yaml                 # location: + sockets, lights, …
   Junction box 1/
-    index.yaml               # self: + terminal strips…
+    index.yaml               # location: + terminal strips…
 Ground floor/Hall/
   index.yaml
   Main panel/
@@ -37,8 +40,8 @@ Ground floor/Hall/
 ```yaml
 # Garage/Junction box 1/index.yaml
 schema: house/v1
-self:
-  type: Location
+location:
+  type: JunctionBox
   subtype: "100x100 IP40"
   notes: "mount: ceiling; abertura fondo.SE"
 elements:
@@ -46,10 +49,21 @@ elements:
     type: TerminalStrip
 ```
 
+Place types (catalog, `wireviz_skip`):
+
+| type | Meaning |
+|------|---------|
+| `Room` | Habitación / estancia |
+| `JunctionBox` | Caja de derivación |
+| `Panel` | Cuadro eléctrico |
+| `Zone` | Zona / planta / parking |
+| `Site` | Raíz de la instalación |
+| `Location` | Genérico (legacy / inline) |
+
 - One directory → one `index.yaml` (no sibling fragment YAMLs).
-- Grow by adding a **subdirectory** Location, not another file beside `index.yaml`.
-- `cd` auto-activates `index.yaml`; `show` prints `self:` + that file’s content.
-- `add location "Main panel"` creates the folder and `index.yaml` with `self:`.
+- Grow by adding a **subdirectory** place, not another file beside `index.yaml`.
+- `cd` auto-activates `index.yaml`; `show` prints `location:` + that file’s content.
+- `add location "Main panel" --type Panel` creates the folder and `index.yaml`.
 
 ## Elementos
 
@@ -218,7 +232,7 @@ También se acepta la lista estilo WireViz.
 Lo recomendado es **siempre directorios + index.yaml**. Como escape hatch en un solo fichero aún se admite:
 
 - `locations: { Nombre: { elements: … } }`
-- o un elemento `type: Location` con `elements`/`cables` anidados
+- o un elemento `type: JunctionBox` / `Room` / `Location` con `elements`/`cables` anidados
 
 Prefiere no mezclarlo con el layout de obra real.
 

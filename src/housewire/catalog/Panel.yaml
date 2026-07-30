@@ -1,0 +1,8 @@
+kind: place_type
+id: Panel
+title: Electrical panel
+description_es: >
+  Cuadro electrico / cuadro general. Metadatos de la carpeta (index.yaml → location:).
+  No genera conector WireViz ni bornes.
+wireviz_skip: true
+terminals: {}

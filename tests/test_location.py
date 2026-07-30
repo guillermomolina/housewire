@@ -1,4 +1,4 @@
-"""Tests de Location: self: en index.yaml, wireviz_skip, físico, anidación inline."""
+"""Tests for place metadata: location: in index.yaml, wireviz_skip, physical, inline."""
 from __future__ import annotations
 
 import tempfile
@@ -12,14 +12,14 @@ from housewire.project import abm
 from housewire.project.io import create_empty_house_file, create_location_index
 
 
-class TestSelfLocation(unittest.TestCase):
-    """self: en index.yaml aporta metadatos Location del directorio."""
+class TestDirectoryLocation(unittest.TestCase):
+    """location: in index.yaml supplies place metadata for the directory."""
 
-    def test_self_not_in_wireviz_connectors(self) -> None:
+    def test_location_not_in_wireviz_connectors(self) -> None:
         doc = _yaml.safe_load(
             "schema: house/v1\n"
-            "self:\n"
-            "  type: Location\n"
+            "location:\n"
+            "  type: JunctionBox\n"
             "  subtype: '100x100 IP40'\n"
             "  notes: 'mount: ceiling'\n"
             "elements:\n"
@@ -30,10 +30,13 @@ class TestSelfLocation(unittest.TestCase):
             doc, catalog=load_catalog(), file_location_parts=["Parking", "Caja 1"]
         )
         names = list(wv["connectors"])
-        self.assertTrue(any(n.endswith("__Regleta") or n == "Parking__Caja_1__Regleta" for n in names), names)
+        self.assertTrue(
+            any(n.endswith("__Regleta") or n == "Parking__Caja_1__Regleta" for n in names),
+            names,
+        )
         self.assertEqual(len(names), 1, names)
 
-    def test_physical_subtitle_from_self(self) -> None:
+    def test_physical_subtitle_from_location(self) -> None:
         from housewire.house.physical import build_physical_model
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -42,8 +45,8 @@ class TestSelfLocation(unittest.TestCase):
             caja.mkdir(parents=True)
             (caja / "index.yaml").write_text(
                 "schema: house/v1\n"
-                "self:\n"
-                "  type: Location\n"
+                "location:\n"
+                "  type: JunctionBox\n"
                 "  subtype: '100x100 IP40'\n"
                 "  notes: 'mount: ceiling'\n"
                 "elements:\n"
@@ -53,21 +56,45 @@ class TestSelfLocation(unittest.TestCase):
             )
             model = build_physical_model(root, [caja / "index.yaml"])
             subtitles = {n.cluster_subtitle for n in model.nodes.values()}
+            self.assertTrue(any("JunctionBox" in s for s in subtitles), subtitles)
             self.assertTrue(any("100x100" in s for s in subtitles), subtitles)
             self.assertTrue(any("ceiling" in s for s in subtitles), subtitles)
 
     def test_create_location_index(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "Cuadro General"
-            index = create_location_index(target, subtype="Cuadro", notes="IGA")
+            index = create_location_index(
+                target, type_id="Panel", subtype="Cuadro", notes="IGA"
+            )
             self.assertTrue(index.is_file())
             doc = _yaml.safe_load(index.read_text(encoding="utf-8"))
-            self.assertEqual(doc["self"]["type"], "Location")
-            self.assertEqual(doc["self"]["subtype"], "Cuadro")
+            self.assertEqual(doc["location"]["type"], "Panel")
+            self.assertEqual(doc["location"]["subtype"], "Cuadro")
+
+    def test_self_block_rejected(self) -> None:
+        doc = _yaml.safe_load(
+            "schema: house/v1\n"
+            "self:\n"
+            "  type: Location\n"
+            "elements:\n"
+            "  Regleta:\n"
+            "    type: TerminalStrip\n"
+        )
+        with self.assertRaises(ValueError) as ctx:
+            house_document_to_wireviz(
+                doc, catalog=load_catalog(), file_location_parts=["Parking"]
+            )
+        self.assertIn("location:", str(ctx.exception))
+
+    def test_place_types_in_catalog(self) -> None:
+        catalog = load_catalog()
+        for type_id in ("Room", "JunctionBox", "Panel", "Zone", "Site", "Location"):
+            self.assertIn(type_id, catalog)
+            self.assertTrue(catalog[type_id].get("wireviz_skip"))
 
 
 class TestLocationElementLegacyInline(unittest.TestCase):
-    """type: Location anidado inline sigue funcionando (escape hatch)."""
+    """Inline place types with nested content still work (escape hatch)."""
 
     def _wv(self, doc_yaml: str, file_parts: list[str]) -> dict:
         doc = _yaml.safe_load(doc_yaml)
@@ -81,7 +108,7 @@ class TestLocationElementLegacyInline(unittest.TestCase):
 schema: house/v1
 elements:
   Caja_1:
-    type: Location
+    type: JunctionBox
     elements:
       Regleta:
         type: TerminalStrip
@@ -96,7 +123,7 @@ elements:
 schema: house/v1
 elements:
   Caja_1:
-    type: Location
+    type: JunctionBox
     subtype: "100x100 IP40"
     notes: "mount: ceiling"
     elements:
@@ -109,7 +136,7 @@ elements:
         self.assertTrue(sublevel)
         self.assertIn("Caja_1", sublevel[0].get("elements") or {})
 
-    def test_abm_add_location_element(self) -> None:
+    def test_abm_add_place_element(self) -> None:
         tmp = tempfile.TemporaryDirectory()
         root = Path(tmp.name)
         yaml_path = root / "test.yaml"
@@ -118,14 +145,9 @@ elements:
         abm.add_element(
             doc,
             "MiCaja",
-            type_id="Location",
+            type_id="JunctionBox",
             subtype="100x100 IP40",
             notes="mount: ceiling",
         )
-        self.assertEqual(doc["elements"]["MiCaja"]["type"], "Location")
+        self.assertEqual(doc["elements"]["MiCaja"]["type"], "JunctionBox")
         tmp.cleanup()
-
-    def test_location_in_catalog(self) -> None:
-        catalog = load_catalog()
-        self.assertIn("Location", catalog)
-        self.assertTrue(catalog["Location"].get("wireviz_skip"))

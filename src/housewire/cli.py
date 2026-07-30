@@ -581,9 +581,15 @@ def _build_parser() -> argparse.ArgumentParser:
     add_cn.add_argument("--via", dest="via_ref", required=True)
     add_cn.add_argument("--to", dest="to_ref", required=True)
 
-    add_loc = add_sub.add_parser("location", help="Create Location directory + index.yaml")
+    add_loc = add_sub.add_parser("location", help="Create place directory + index.yaml")
     add_loc.add_argument("project_path")
     add_loc.add_argument("name")
+    add_loc.add_argument(
+        "--type",
+        dest="type_id",
+        required=True,
+        help="Room, JunctionBox, Panel, Zone, Site (or Location)",
+    )
     add_loc.add_argument("--subtype")
     add_loc.add_argument("--notes")
 
@@ -656,7 +662,10 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
 
             target = (project_path / args.name).resolve()
             index_path = create_location_index(
-                target, subtype=args.subtype, notes=args.notes
+                target,
+                type_id=args.type_id,
+                subtype=args.subtype,
+                notes=args.notes,
             )
             print(f"OK {index_path.relative_to(project_path)}")
             return 0

@@ -83,24 +83,22 @@ def _load_house_files(
             data = yaml.safe_load(handle) or {}
         if not is_house_document(data):
             continue
-        if "location" in data and data.get("location") is not None:
-            raise ValueError(
-                f"{yaml_file}: el campo 'location:' ya no se usa. "
-                "Usa directorios + index.yaml con self:."
-            )
         base = path_location_parts(project_path, yaml_file)
-        fragments = _walk_locations(data, base)
+        try:
+            fragments = _walk_locations(data, base)
+        except ValueError as exc:
+            raise ValueError(f"{yaml_file}: {exc}") from exc
         if not fragments and any(
-            key in data for key in ("elements", "cables", "connections", "conduits", "self")
+            key in data
+            for key in ("elements", "cables", "connections", "conduits", "location")
         ):
             frag = {
                 key: data[key]
                 for key in ("elements", "cables", "connections", "conduits")
                 if key in data
             }
-            fragments = [(base, frag)] if frag or data.get("self") else []
-            if not fragments and data.get("self"):
-                # Re-walk so self is injected
+            fragments = [(base, frag)] if frag or isinstance(data.get("location"), dict) else []
+            if not fragments and isinstance(data.get("location"), dict):
                 fragments = _walk_locations(data, base)
         pieces.extend(fragments)
     return pieces
@@ -117,6 +115,7 @@ def build_physical_model(
         _normalize_local_element_ref,
         _parse_via_wires,
         _split_element_terminal,
+        is_place_type,
     )
 
     model = PhysModel(title=title or project_path.name)
@@ -127,11 +126,11 @@ def build_physical_model(
         cluster_id = _safe_id(prefix or "raiz")
         cluster_label = _cluster_label(location_parts)
 
-        # Collect Location metadata for cluster subtitle
+        # Collect place metadata (location:) for cluster subtitle
         cluster_subtitle = ""
         for _name, definition in (fragment.get("elements") or {}).items():
-            if isinstance(definition, dict) and definition.get("type") == "Location":
-                parts_sub: list[str] = []
+            if isinstance(definition, dict) and is_place_type(definition.get("type")):
+                parts_sub: list[str] = [str(definition.get("type"))]
                 if definition.get("subtype"):
                     parts_sub.append(str(definition["subtype"]))
                 if definition.get("notes"):
@@ -144,8 +143,8 @@ def build_physical_model(
             if not isinstance(definition, dict):
                 continue
             type_id = str(definition.get("type") or "?")
-            if type_id == "Location":
-                continue  # no physical node for Location elements
+            if is_place_type(type_id):
+                continue  # no physical node for place types
             qname = prefixed_name(prefix, str(name))
             element_map[str(name)] = qname
             label = str(definition.get("label") or name)
