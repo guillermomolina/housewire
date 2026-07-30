@@ -3,8 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from housewire.house import is_house_document
-from housewire.project.io import INDEX_YAML, load_yaml
-from housewire.project.paths import EXCLUDED_DIR_NAMES, is_excluded_path, is_index_yaml, is_yaml
+from housewire.project.io import HOUSEWIRE_YAML, load_yaml
+from housewire.project.paths import (
+    EXCLUDED_DIR_NAMES,
+    is_excluded_path,
+    is_housewire_yaml,
+    is_yaml,
+)
 
 
 class ProjectSession:
@@ -32,7 +37,7 @@ class ProjectSession:
 
     def resolve_under_root(self, raw: str) -> Path:
         raw = raw.strip()
-        if not raw or raw == ".":
+        if raw == "" or raw == ".":
             return self.cwd_path()
         candidate = (self.cwd_path() / raw).resolve()
         try:
@@ -44,7 +49,7 @@ class ProjectSession:
         return candidate
 
     def cd(self, raw: str | None) -> Path | None:
-        """Change directory and auto-activate index.yaml when present."""
+        """Change directory and auto-activate housewire.yaml when present."""
         if raw is None or raw.strip() == "":
             self.cwd = Path(".")
         else:
@@ -65,18 +70,18 @@ class ProjectSession:
                 continue
             if child.is_dir():
                 label = child.name + "/"
-                if (child / INDEX_YAML).is_file():
+                if (child / HOUSEWIRE_YAML).is_file():
                     label += " [loc]"
                 entries.append((label, "dir"))
-            elif is_index_yaml(child):
+            elif is_housewire_yaml(child):
                 label = child.name
                 if self.active_yaml and child.resolve() == self.active_yaml.resolve():
                     label += " *"
                 entries.append((label, "yaml"))
         return entries
 
-    def index_yaml_in_cwd(self) -> Path | None:
-        for name in (INDEX_YAML, "index.yml"):
+    def housewire_yaml_in_cwd(self) -> Path | None:
+        for name in (HOUSEWIRE_YAML, "housewire.yml"):
             candidate = self.cwd_path() / name
             if not candidate.is_file():
                 continue
@@ -91,9 +96,9 @@ class ProjectSession:
     def try_auto_use_yaml(self) -> Path | None:
         if self.active_yaml is not None:
             return self.active_yaml
-        index = self.index_yaml_in_cwd()
-        if index is not None:
-            self.active_yaml = index
+        found = self.housewire_yaml_in_cwd()
+        if found is not None:
+            self.active_yaml = found
             return self.active_yaml
         return None
 
@@ -104,17 +109,17 @@ class ProjectSession:
         if auto is not None:
             return auto
         raise ValueError(
-            f"No hay {INDEX_YAML} en este directorio. "
-            f"Usa: add location <nombre>  o crea {INDEX_YAML}"
+            f"No hay {HOUSEWIRE_YAML} en este directorio. "
+            f"Usa: add location <nombre>  o crea {HOUSEWIRE_YAML}"
         )
 
     def use_yaml(self, name: str) -> Path:
         path = self.resolve_under_root(name)
         if not path.is_file() or not is_yaml(path):
             raise FileNotFoundError(f"No es un archivo YAML: {name}")
-        if not is_index_yaml(path):
+        if not is_housewire_yaml(path):
             raise ValueError(
-                f"Solo se edita {INDEX_YAML} (un fichero por Location). "
+                f"Solo se edita {HOUSEWIRE_YAML} (un fichero por Location). "
                 f"Recibido: {path.name}"
             )
         self.active_yaml = path

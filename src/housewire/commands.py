@@ -16,24 +16,24 @@ if TYPE_CHECKING:
 HELP_TEXT = """Comandos del shell housewire:
   (Tab completa comandos, subcomandos add/rm y rutas de cd/use/…)
   pwd                          cwd y YAML activo
-  cd [path]                    navegar Locations (directorios); auto-use index.yaml
-  ls                           sublocations [loc] e index.yaml
-  use index.yaml               fijar index.yaml activo
-  show                         location: del lugar + contenido de index.yaml
+  cd [path]                    navegar Locations (directorios); auto-use housewire.yaml
+  ls                           sublocations [loc] e housewire.yaml
+  use housewire.yaml           fijar housewire.yaml activo
+  show                         location: del lugar + contenido de housewire.yaml
   show --element NAME | --cable NAME
   pend [<enter> <exit>] [section] [--colors C1,C2] [--notes ...]
                                cable pendiente + conduit (atajo de add pend)
   add location NAME --type T [--subtype ...] [--notes ...]
-                               crear carpeta + index.yaml (T=Room|JunctionBox|Panel|Zone|Site)
+                               crear carpeta + housewire.yaml (T=Room|JunctionBox|Panel|Zone|House)
   add element NAME --type T [--subtype ...] [--label ...] [--manufacturer ...] [--model ...] [--notes ...]
   add cable NAME [--section S] [--colors C1,C2] [--kind power] [--notes ...]
                                defaults: section=1.5 mm2, colors=BN,BU
   add pend [<enter> <exit>] [section] [--colors ...] [--notes ...]
   add connection --from F --via V --to T
-  add dir <path>                 mkdir -p (sin index; preferible add location)
+  add dir <path>                 mkdir -p (sin housewire.yaml; preferible add location)
   rm element|cable NAME
   rm connection <índice>
-  rm file index.yaml
+  rm file housewire.yaml
   rm dir <path>                  solo si está vacío
   generate [-f]                generar diagramas (como housewire generate)
   help

@@ -11,3 +11,4 @@ alwaysApply: true
 - In docs and examples, use generic placeholders only (`$SITE`, `/path/to/site`, `my-site`, `Garage`, `Main panel`).
 - A local `projects/` directory may exist for convenience and is gitignored; do not document it as part of the public project layout, and do not link the private site repo from here.
 - When migrating layouts or testing generate, operate on the external site path the user provides; do not assume a `projects/…` tree is publishable with housewire.
+- After each completed change requested by the user, **commit and push both** the program repo and the site repo when both have related changes (do not leave either side uncommitted).

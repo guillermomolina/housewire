@@ -17,28 +17,28 @@ schema: house/v1
 
 La **jerarquía de ubicaciones es el path de directorios**.
 El bloque top-level **`location:`** es metadatos del directorio actual
-(`type: Room|JunctionBox|Panel|Zone|Site`, `subtype`, `notes`, …),
+(`type: Room|JunctionBox|Panel|Zone|House`, `subtype`, `notes`, …),
 no una lista de path.
 
 Sin `schema: house/v1`, el archivo se trata como WireViz legacy (como `Test/`).
 
-## Locations = directories + index.yaml
+## Locations = directories + housewire.yaml
 
-Each place (room, junction box, panel, zone…) is a **directory** with a single **`index.yaml`**:
+Each place (room, junction box, panel, zone…) is a **directory** with a single **`housewire.yaml`**:
 
 ```text
 Garage/
-  index.yaml                 # location: + sockets, lights, …
+  housewire.yaml                 # location: + sockets, lights, …
   Junction box 1/
-    index.yaml               # location: + terminal strips…
+    housewire.yaml               # location: + terminal strips…
 Ground floor/Hall/
-  index.yaml
+  housewire.yaml
   Main panel/
-    index.yaml
+    housewire.yaml
 ```
 
 ```yaml
-# Garage/Junction box 1/index.yaml
+# Garage/Junction box 1/housewire.yaml
 schema: house/v1
 location:
   type: JunctionBox
@@ -57,13 +57,17 @@ Place types (catalog, `wireviz_skip`):
 | `JunctionBox` | Caja de derivación |
 | `Panel` | Cuadro eléctrico |
 | `Zone` | Zona / planta / parking |
-| `Site` | Raíz de la instalación |
+| `House` | Casa / vivienda (no implica ser la raíz del árbol) |
 | `Location` | Genérico (legacy / inline) |
 
-- One directory → one `index.yaml` (no sibling fragment YAMLs).
-- Grow by adding a **subdirectory** place, not another file beside `index.yaml`.
-- `cd` auto-activates `index.yaml`; `show` prints `location:` + that file’s content.
-- `add location "Main panel" --type Panel` creates the folder and `index.yaml`.
+La **raíz del árbol** es el directorio que pasas a `housewire` (`project_path`),
+no un `location.type` concreto. Puedes apuntar a un subárbol o montar carpetas
+por encima (p.ej. `Building/…/House/…`) sin cambiar tipos.
+
+- One directory → one `housewire.yaml` (no sibling fragment YAMLs).
+- Grow by adding a **subdirectory** place, not another file beside `housewire.yaml`.
+- `cd` auto-activates `housewire.yaml`; `show` prints `location:` + that file’s content.
+- `add location "Main panel" --type Panel` creates the folder and `housewire.yaml`.
 
 ## Elementos
 
@@ -223,7 +227,7 @@ También se acepta la lista estilo WireViz.
 
 ### Referencias entre niveles
 
-Las conexiones de un `index.yaml` **solo pueden referir elementos de esa location
+Las conexiones de un `housewire.yaml` **solo pueden referir elementos de esa location
 y de sus sublocations** (paths relativos al directorio actual).
 
 - Local: `MT_Luces.L`
@@ -239,7 +243,7 @@ El `via` debe ser un cable **definido en la misma location** que la conexión.
 
 ## Locations anidadas (inline, escape hatch)
 
-Lo recomendado es **siempre directorios + index.yaml**. Como escape hatch en un solo fichero aún se admite:
+Lo recomendado es **siempre directorios + housewire.yaml**. Como escape hatch en un solo fichero aún se admite:
 
 - `locations: { Nombre: { elements: … } }`
 - o un elemento `type: JunctionBox` / `Room` / `Location` con `elements`/`cables` anidados
@@ -250,7 +254,7 @@ Prefiere no mezclarlo con el layout de obra real.
 
 El path de carpetas define el prefijo:
 
-- `Parking/Caja derivacion 1/index.yaml` → elemento `Regleta` → `Parking__Caja_derivacion_1__Regleta`
+- `Parking/Caja derivacion 1/housewire.yaml` → elemento `Regleta` → `Parking__Caja_derivacion_1__Regleta`
 
 ## Conduits / mangueras
 

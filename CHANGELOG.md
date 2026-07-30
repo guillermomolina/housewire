@@ -9,6 +9,26 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.5.0] — 2026-07-30
+
+### Changed (breaking)
+
+- Per-directory file renamed from **`index.yaml`** to **`housewire.yaml`**
+  (also accepts `housewire.yml`).
+- Place type **`Site`** renamed to **`House`** (dwelling; not a privileged root).
+- Zone diagrams group by **top-level directory** under `project_path` (no
+  hard-coded site layout). Root-level YAMLs form a zone named after the project
+  directory. Remap by pointing `project_path` at another subtree or wrapping
+  folders above.
+
+### Migration
+
+```bash
+# in each location directory
+mv index.yaml housewire.yaml
+# if you used type: Site → type: House (optional; any place type may sit at root)
+```
+
 ## [0.4.0] — 2026-07-30
 
 ### Changed (breaking)

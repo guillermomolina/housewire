@@ -2,7 +2,7 @@ kind: place_type
 id: Room
 title: Room
 description_es: >
-  Habitacion o estancia. Metadatos de la carpeta (index.yaml → location:).
+  Habitacion o estancia. Metadatos de la carpeta (housewire.yaml → location:).
   No genera conector WireViz ni bornes.
 wireviz_skip: true
 terminals: {}

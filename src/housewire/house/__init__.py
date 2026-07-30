@@ -11,8 +11,8 @@ import yaml
 
 HOUSE_SCHEMA = "house/v1"
 
-# Directory metadata types (index.yaml → location:). All wireviz_skip in catalog.
-PLACE_TYPES = frozenset({"Room", "JunctionBox", "Panel", "Zone", "Site", "Location"})
+# Directory metadata types (housewire.yaml → location:). All wireviz_skip in catalog.
+PLACE_TYPES = frozenset({"Room", "JunctionBox", "Panel", "Zone", "House", "Location"})
 
 
 def is_place_type(type_id: object) -> bool:
@@ -652,11 +652,11 @@ def _inject_directory_location(
         raise ValueError(
             "location: como lista de path ya no se usa. "
             "La jerarquia es el path de directorios; "
-            "location: debe ser un mapa { type: Room|JunctionBox|Panel|Zone|Site, ... }."
+            "location: debe ser un mapa { type: Room|JunctionBox|Panel|Zone|House, ... }."
         )
     if not isinstance(loc, dict):
         raise ValueError(
-            "location: debe ser un mapa con type: Room, JunctionBox, Panel, Zone o Site"
+            "location: debe ser un mapa con type: Room, JunctionBox, Panel, Zone o House"
         )
     type_id = loc.get("type")
     if not type_id or not is_place_type(type_id):
@@ -677,7 +677,7 @@ def _walk_locations(
     """Yield (location_parts, fragment) for nested locations trees.
 
     Supports:
-    1. location: { type: JunctionBox, ... } — metadata for this directory (index.yaml)
+    1. location: { type: JunctionBox, ... } — metadata for this directory (housewire.yaml)
     2. locations: { Name: { elements: ... } }  — explicit location map
     3. elements: { Name: { type: Room|..., elements: ... } } — inline nested place
     """

@@ -1,4 +1,4 @@
-"""Tests for place metadata: location: in index.yaml, wireviz_skip, physical, inline."""
+"""Tests for place metadata: location: in housewire.yaml, wireviz_skip, physical, inline."""
 from __future__ import annotations
 
 import tempfile
@@ -13,7 +13,7 @@ from housewire.project.io import create_empty_house_file, create_location_index
 
 
 class TestDirectoryLocation(unittest.TestCase):
-    """location: in index.yaml supplies place metadata for the directory."""
+    """location: in housewire.yaml supplies place metadata for the directory."""
 
     def test_location_not_in_wireviz_connectors(self) -> None:
         doc = _yaml.safe_load(
@@ -43,7 +43,7 @@ class TestDirectoryLocation(unittest.TestCase):
             root = Path(tmp)
             caja = root / "Parking" / "Caja derivacion 1"
             caja.mkdir(parents=True)
-            (caja / "index.yaml").write_text(
+            (caja / "housewire.yaml").write_text(
                 "schema: house/v1\n"
                 "location:\n"
                 "  type: JunctionBox\n"
@@ -54,7 +54,7 @@ class TestDirectoryLocation(unittest.TestCase):
                 "    type: TerminalStrip\n",
                 encoding="utf-8",
             )
-            model = build_physical_model(root, [caja / "index.yaml"])
+            model = build_physical_model(root, [caja / "housewire.yaml"])
             subtitles = {n.cluster_subtitle for n in model.nodes.values()}
             self.assertTrue(any("JunctionBox" in s for s in subtitles), subtitles)
             self.assertTrue(any("100x100" in s for s in subtitles), subtitles)
@@ -88,7 +88,7 @@ class TestDirectoryLocation(unittest.TestCase):
 
     def test_place_types_in_catalog(self) -> None:
         catalog = load_catalog()
-        for type_id in ("Room", "JunctionBox", "Panel", "Zone", "Site", "Location"):
+        for type_id in ("Room", "JunctionBox", "Panel", "Zone", "House", "Location"):
             self.assertIn(type_id, catalog)
             self.assertTrue(catalog[type_id].get("wireviz_skip"))
 

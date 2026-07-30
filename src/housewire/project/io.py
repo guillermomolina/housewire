@@ -7,7 +7,7 @@ import yaml
 
 from housewire.house import HOUSE_SCHEMA, PLACE_TYPES, is_house_document, is_place_type
 
-INDEX_YAML = "index.yaml"
+HOUSEWIRE_YAML = "housewire.yaml"
 
 EMPTY_HOUSE_TEMPLATE: dict[str, Any] = {
     "schema": HOUSE_SCHEMA,
@@ -63,7 +63,7 @@ def create_location_index(
     subtype: str | None = None,
     notes: str | None = None,
 ) -> Path:
-    """Create directory + index.yaml with ``location:`` place metadata."""
+    """Create directory + housewire.yaml with ``location:`` place metadata."""
     if not is_place_type(type_id):
         raise ValueError(
             "type debe ser uno de: "
@@ -71,9 +71,9 @@ def create_location_index(
             + " (o Location)"
         )
     dir_path.mkdir(parents=True, exist_ok=True)
-    index_path = dir_path / INDEX_YAML
-    if index_path.exists():
-        raise FileExistsError(f"Ya existe: {index_path}")
+    yaml_path = dir_path / HOUSEWIRE_YAML
+    if yaml_path.exists():
+        raise FileExistsError(f"Ya existe: {yaml_path}")
     location_block: dict[str, Any] = {"type": str(type_id)}
     if subtype:
         location_block["subtype"] = subtype
@@ -86,5 +86,5 @@ def create_location_index(
         "cables": {},
         "connections": [],
     }
-    save_yaml(index_path, doc, backup=False)
-    return index_path
+    save_yaml(yaml_path, doc, backup=False)
+    return yaml_path

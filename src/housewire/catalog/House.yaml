@@ -1,0 +1,9 @@
+kind: place_type
+id: House
+title: House / dwelling
+description_es: >
+  Casa o vivienda. Es un tipo de lugar como Room o Zone; no implica ser la raiz
+  del arbol. La jerarquia la marca el path de carpetas (puedes montar otra
+  location por encima). Metadatos de housewire.yaml. No genera conector WireViz.
+wireviz_skip: true
+terminals: {}

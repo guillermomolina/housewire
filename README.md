@@ -41,11 +41,11 @@ housewire shell "$SITE"
 ```
 
 Commands: `cd`, `ls`, `pwd`, `use`, `show`, `pend`, `add` (incl. `add location`), `rm`, `generate`, `help`, `exit`.
-Tab completes commands, subcommands, and paths. **Places are directories** with a single `index.yaml` (`location:` with a place type). `add location NAME --type JunctionBox` creates that directory and file.
+Tab completes commands, subcommands, and paths. **Places are directories** with a single `housewire.yaml` (`location:` with a place type). `add location NAME --type JunctionBox` creates that directory and file.
 
 ```bash
 housewire shell "$SITE"
-cd "Ground floor/Hall"     # auto-use index.yaml
+cd "Ground floor/Hall"     # auto-use housewire.yaml
 show
 cd "Main panel"
 show
@@ -55,7 +55,7 @@ Fast capture at a junction box (pending cable, destination unknown):
 
 ```bash
 housewire shell "$SITE"
-cd "Garage/Junction box 2"   # auto-activates index.yaml
+cd "Garage/Junction box 2"   # auto-activates housewire.yaml
 pend W.N E.S                 # creates PEND_Linea_01 + Conducto_paso_01
 pend N.E S.W 2.5
 ```
@@ -67,10 +67,10 @@ Non-interactive subcommands:
 ```bash
 housewire generate -f "$SITE"
 housewire ls "$SITE" "Garage"
-housewire show "$SITE" "Ground floor/Hall/index.yaml"
-housewire add element "$SITE" "…/index.yaml" MT_New --type MCB --subtype C10
-housewire add pend "$SITE" "…/index.yaml" W.N E.S
-housewire rm element "$SITE" "…/index.yaml" MT_New
+housewire show "$SITE" "Ground floor/Hall/housewire.yaml"
+housewire add element "$SITE" "…/housewire.yaml" MT_New --type MCB --subtype C10
+housewire add pend "$SITE" "…/housewire.yaml" W.N E.S
+housewire rm element "$SITE" "…/housewire.yaml" MT_New
 ```
 
 Legacy shortcut `housewire <site> -f` still maps to `generate`.

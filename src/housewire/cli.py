@@ -367,24 +367,19 @@ def ensure_overwrite_allowed(
 
 
 def discover_zones(project_path: Path, all_files: list[Path]) -> dict[str, list[Path]]:
-    """Map zone name -> index.yaml files.
+    """Group housewire.yaml files by top-level path under the project root.
 
-    v1 zones:
-      Parking — anything under Parking/
-      Cuadro_general — Planta baja/** + root index.yaml (supply / earth)
+    No place type or site layout is assumed: each first-level directory is a
+    zone; files directly in the project root form a zone named after the
+    project directory. Point ``project_path`` at any subtree to remap scope.
     """
-    zones: dict[str, list[Path]] = {"Parking": [], "Cuadro_general": []}
+    zones: dict[str, list[Path]] = {}
     for path in all_files:
         rel = path.relative_to(project_path)
         parts = rel.parts
-        if parts[0] == "Parking":
-            zones["Parking"].append(path)
-        elif parts[0] == "Planta baja":
-            zones["Cuadro_general"].append(path)
-        elif len(parts) == 1:
-            # Site root index.yaml (external supply, earth electrode, …)
-            zones["Cuadro_general"].append(path)
-    return {name: files for name, files in zones.items() if files}
+        zone_name = project_path.name if len(parts) == 1 else parts[0]
+        zones.setdefault(zone_name, []).append(path)
+    return zones
 
 
 def write_and_render_wireviz(
@@ -581,14 +576,14 @@ def _build_parser() -> argparse.ArgumentParser:
     add_cn.add_argument("--via", dest="via_ref", required=True)
     add_cn.add_argument("--to", dest="to_ref", required=True)
 
-    add_loc = add_sub.add_parser("location", help="Create place directory + index.yaml")
+    add_loc = add_sub.add_parser("location", help="Create place directory + housewire.yaml")
     add_loc.add_argument("project_path")
     add_loc.add_argument("name")
     add_loc.add_argument(
         "--type",
         dest="type_id",
         required=True,
-        help="Room, JunctionBox, Panel, Zone, Site (or Location)",
+        help="Room, JunctionBox, Panel, Zone, House (or Location)",
     )
     add_loc.add_argument("--subtype")
     add_loc.add_argument("--notes")

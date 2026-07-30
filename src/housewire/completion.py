@@ -165,9 +165,9 @@ def complete_path(
         elif child.is_file() and is_yaml(child):
             if dirs_only:
                 continue
-            from housewire.project.paths import is_index_yaml
+            from housewire.project.paths import is_housewire_yaml
 
-            if not is_index_yaml(child):
+            if not is_housewire_yaml(child):
                 continue
             if not child.name.startswith(name_prefix):
                 continue

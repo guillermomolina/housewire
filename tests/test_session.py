@@ -19,7 +19,7 @@ class TestProjectSession(unittest.TestCase):
         (self.root / "zona_a").mkdir()
         (self.root / "zona_a" / "sub").mkdir()
         (self.root / "out").mkdir()
-        self.yaml = self.root / "zona_a" / "index.yaml"
+        self.yaml = self.root / "zona_a" / "housewire.yaml"
         create_empty_house_file(self.yaml)
 
     def tearDown(self) -> None:
@@ -53,7 +53,7 @@ class TestProjectSession(unittest.TestCase):
     def test_cd_resets_active_yaml(self) -> None:
         s = self._session()
         s.cd("zona_a")
-        s.use_yaml("index.yaml")
+        s.use_yaml("housewire.yaml")
         self.assertIsNotNone(s.active_yaml)
         s.cd("..")
         self.assertIsNone(s.active_yaml)
@@ -62,21 +62,21 @@ class TestProjectSession(unittest.TestCase):
         s = self._session()
         auto = s.cd("zona_a")
         self.assertIsNotNone(auto)
-        self.assertEqual(s.active_yaml.name, "index.yaml")
+        self.assertEqual(s.active_yaml.name, "housewire.yaml")
 
     def test_cd_ignores_non_index_siblings(self) -> None:
         create_empty_house_file(self.root / "zona_a" / "otro.yaml")
         s = self._session()
         auto = s.cd("zona_a")
         self.assertIsNotNone(auto)
-        self.assertEqual(s.active_yaml.name, "index.yaml")
+        self.assertEqual(s.active_yaml.name, "housewire.yaml")
 
     def test_ensure_active_yaml_auto(self) -> None:
         s = self._session()
         s.cd("zona_a")
         s.active_yaml = None
         path = s.ensure_active_yaml()
-        self.assertEqual(path.name, "index.yaml")
+        self.assertEqual(path.name, "housewire.yaml")
 
     def test_use_non_index_raises(self) -> None:
         create_empty_house_file(self.root / "zona_a" / "otro.yaml")
@@ -103,9 +103,9 @@ class TestProjectSession(unittest.TestCase):
     def test_use_yaml_sets_active(self) -> None:
         s = self._session()
         s.cd("zona_a")
-        s.use_yaml("index.yaml")
+        s.use_yaml("housewire.yaml")
         self.assertIsNotNone(s.active_yaml)
-        self.assertEqual(s.active_yaml.name, "index.yaml")
+        self.assertEqual(s.active_yaml.name, "housewire.yaml")
 
     def test_use_yaml_nonexistent_raises(self) -> None:
         s = self._session()
@@ -130,13 +130,13 @@ class TestProjectSession(unittest.TestCase):
     def test_list_dir_marks_active_yaml(self) -> None:
         s = self._session()
         s.cd("zona_a")
-        s.use_yaml("index.yaml")
+        s.use_yaml("housewire.yaml")
         names = [n for n, _ in s.list_dir()]
-        self.assertTrue(any("index.yaml" in n and "*" in n for n in names))
+        self.assertTrue(any("housewire.yaml" in n and "*" in n for n in names))
 
     def test_prompt_label_shows_active(self) -> None:
         s = self._session()
         s.cd("zona_a")
-        s.use_yaml("index.yaml")
+        s.use_yaml("housewire.yaml")
         label = s.prompt_label()
-        self.assertIn("index.yaml", label)
+        self.assertIn("housewire.yaml", label)

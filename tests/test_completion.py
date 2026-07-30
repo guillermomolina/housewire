@@ -70,7 +70,7 @@ class TestShellCompletion(unittest.TestCase):
         s.cd("Parking")
         create_empty_house_file(self.root / "Parking" / "fragment.yaml")
         hits = complete_candidates(s, "use ", "", begidx=4)
-        self.assertTrue(any("index.yaml" in h for h in hits), hits)
+        self.assertTrue(any("housewire.yaml" in h for h in hits), hits)
         self.assertFalse(any("fragment.yaml" in h for h in hits), hits)
 
     def test_enable_readline_returns_bool(self) -> None:

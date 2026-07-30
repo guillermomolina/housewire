@@ -2,7 +2,7 @@ kind: place_type
 id: JunctionBox
 title: Junction box
 description_es: >
-  Caja de derivacion. Metadatos de la carpeta (index.yaml → location:).
+  Caja de derivacion. Metadatos de la carpeta (housewire.yaml → location:).
   No genera conector WireViz ni bornes.
 wireviz_skip: true
 terminals: {}
