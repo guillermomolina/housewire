@@ -18,7 +18,7 @@ class TestShellDispatcher(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         (self.root / "zona_a").mkdir()
-        self.yaml = self.root / "zona_a" / "doc.yaml"
+        self.yaml = self.root / "zona_a" / "index.yaml"
         create_empty_house_file(self.yaml)
 
     def tearDown(self) -> None:
@@ -69,13 +69,13 @@ class TestShellDispatcher(unittest.TestCase):
     def test_use_sets_active(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
-        self._run(s, "use doc.yaml")
+        self._run(s, "use index.yaml")
         self.assertIsNotNone(s.active_yaml)
 
     def test_add_element_via_shell(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
-        self._run(s, "use doc.yaml")
+        self._run(s, "use index.yaml")
         code = self._run(s, "add element MT_Nuevo --type MCB --subtype C10")
         self.assertEqual(code, 0)
         doc = abm.load_editable(s.active_path(), self.root)
@@ -84,7 +84,7 @@ class TestShellDispatcher(unittest.TestCase):
     def test_rm_element_via_shell(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
-        self._run(s, "use doc.yaml")
+        self._run(s, "use index.yaml")
         self._run(s, "add element MT_Nuevo --type MCB --subtype C10")
         code = self._run(s, "rm element MT_Nuevo")
         self.assertEqual(code, 0)
@@ -94,7 +94,7 @@ class TestShellDispatcher(unittest.TestCase):
     def test_add_cable_via_shell(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
-        self._run(s, "use doc.yaml")
+        self._run(s, "use index.yaml")
         code = self._run(s, "add cable Linea_X --section '1.5 mm2' --colors BN,BU")
         self.assertEqual(code, 0)
         doc = abm.load_editable(s.active_path(), self.root)
@@ -130,7 +130,7 @@ class TestShellDispatcher(unittest.TestCase):
         s = self._session()
         self._run(s, "cd zona_a")
         self.assertIsNotNone(s.active_yaml)
-        self.assertEqual(s.active_yaml.name, "doc.yaml")
+        self.assertEqual(s.active_yaml.name, "index.yaml")
 
     def test_pend_wizard_prompts(self) -> None:
         from unittest.mock import patch
@@ -150,25 +150,27 @@ class TestShellDispatcher(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue((self.root / "nueva_zona").is_dir())
 
-    def test_add_file_creates_yaml_and_activates(self) -> None:
-        s = self._session()
-        code = self._run(s, "add file nueva.yaml")
-        self.assertEqual(code, 0)
-        self.assertTrue((self.root / "nueva.yaml").exists())
-        self.assertIsNotNone(s.active_yaml)
+    def test_rm_file_removes_index(self) -> None:
+        from housewire.project.io import create_empty_house_file
 
-    def test_rm_file_removes_yaml(self) -> None:
         s = self._session()
-        self._run(s, "add file temporal.yaml")
-        code = self._run(s, "rm file temporal.yaml")
+        create_empty_house_file(self.root / "solo" / "index.yaml") if False else None
+        (self.root / "tmp_loc").mkdir()
+        create_empty_house_file(self.root / "tmp_loc" / "index.yaml")
+        self._run(s, "cd tmp_loc")
+        code = self._run(s, "rm file index.yaml")
         self.assertEqual(code, 0)
-        self.assertFalse((self.root / "temporal.yaml").exists())
+        self.assertFalse((self.root / "tmp_loc" / "index.yaml").exists())
 
     def test_rm_file_clears_active_if_active(self) -> None:
+        from housewire.project.io import create_empty_house_file
+
+        (self.root / "tmp_loc2").mkdir()
+        create_empty_house_file(self.root / "tmp_loc2" / "index.yaml")
         s = self._session()
-        self._run(s, "add file temporal.yaml")
+        self._run(s, "cd tmp_loc2")
         self.assertIsNotNone(s.active_yaml)
-        self._run(s, "rm file temporal.yaml")
+        self._run(s, "rm file index.yaml")
         self.assertIsNone(s.active_yaml)
 
     def test_add_element_without_active_yaml_returns_error(self) -> None:

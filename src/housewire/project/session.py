@@ -4,7 +4,7 @@ from pathlib import Path
 
 from housewire.house import is_house_document
 from housewire.project.io import INDEX_YAML, load_yaml
-from housewire.project.paths import EXCLUDED_DIR_NAMES, is_excluded_path, is_yaml
+from housewire.project.paths import EXCLUDED_DIR_NAMES, is_excluded_path, is_index_yaml, is_yaml
 
 
 class ProjectSession:
@@ -44,10 +44,7 @@ class ProjectSession:
         return candidate
 
     def cd(self, raw: str | None) -> Path | None:
-        """Cambia de directorio. Preferencia: auto-activar index.yaml.
-
-        Returns the auto-used yaml path, or None.
-        """
+        """Change directory and auto-activate index.yaml when present."""
         if raw is None or raw.strip() == "":
             self.cwd = Path(".")
         else:
@@ -71,53 +68,32 @@ class ProjectSession:
                 if (child / INDEX_YAML).is_file():
                     label += " [loc]"
                 entries.append((label, "dir"))
-            elif is_yaml(child):
+            elif is_index_yaml(child):
                 label = child.name
-                if child.name == INDEX_YAML:
-                    label += " [index]"
                 if self.active_yaml and child.resolve() == self.active_yaml.resolve():
                     label += " *"
                 entries.append((label, "yaml"))
         return entries
 
-    def house_yaml_files_in_cwd(self) -> list[Path]:
-        found: list[Path] = []
-        for child in sorted(self.cwd_path().iterdir()):
-            if not child.is_file() or not is_yaml(child):
-                continue
-            if is_excluded_path(child, self._excluded):
+    def index_yaml_in_cwd(self) -> Path | None:
+        for name in (INDEX_YAML, "index.yml"):
+            candidate = self.cwd_path() / name
+            if not candidate.is_file():
                 continue
             try:
-                data = load_yaml(child)
+                data = load_yaml(candidate)
             except ValueError:
                 continue
             if is_house_document(data):
-                found.append(child)
-        return found
-
-    def index_yaml_in_cwd(self) -> Path | None:
-        candidate = self.cwd_path() / INDEX_YAML
-        if not candidate.is_file():
-            return None
-        try:
-            data = load_yaml(candidate)
-        except ValueError:
-            return None
-        if is_house_document(data):
-            return candidate
+                return candidate
         return None
 
     def try_auto_use_yaml(self) -> Path | None:
-        """Prefer index.yaml; else unique house/v1 yaml in cwd."""
         if self.active_yaml is not None:
             return self.active_yaml
         index = self.index_yaml_in_cwd()
         if index is not None:
             self.active_yaml = index
-            return self.active_yaml
-        candidates = self.house_yaml_files_in_cwd()
-        if len(candidates) == 1:
-            self.active_yaml = candidates[0]
             return self.active_yaml
         return None
 
@@ -127,22 +103,20 @@ class ProjectSession:
         auto = self.try_auto_use_yaml()
         if auto is not None:
             return auto
-        candidates = self.house_yaml_files_in_cwd()
-        if not candidates:
-            raise ValueError(
-                "No hay YAML activo ni house/v1 en este directorio. "
-                f"Usa: use {INDEX_YAML}  o  add location <nombre>"
-            )
-        names = ", ".join(p.name for p in candidates)
         raise ValueError(
-            f"Hay varios YAML; usa: use {INDEX_YAML} (o use <archivo.yaml>). "
-            f"Candidatos: {names}"
+            f"No hay {INDEX_YAML} en este directorio. "
+            f"Usa: add location <nombre>  o crea {INDEX_YAML}"
         )
 
     def use_yaml(self, name: str) -> Path:
         path = self.resolve_under_root(name)
         if not path.is_file() or not is_yaml(path):
             raise FileNotFoundError(f"No es un archivo YAML: {name}")
+        if not is_index_yaml(path):
+            raise ValueError(
+                f"Solo se edita {INDEX_YAML} (un fichero por Location). "
+                f"Recibido: {path.name}"
+            )
         self.active_yaml = path
         return path
 

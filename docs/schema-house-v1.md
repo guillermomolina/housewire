@@ -19,24 +19,23 @@ La **jerarquía de ubicaciones es el path de directorios**. No uses el campo `lo
 
 Sin `schema: house/v1`, el archivo se trata como WireViz legacy (como `Test/`).
 
-## Locations = directorios + index.yaml
+## Locations = directories + index.yaml
 
-Cada ubicación (caja, cuadro, zona…) es una **carpeta**. Dentro, `index.yaml` lleva los metadatos de *esa* carpeta en `self:`:
+Each location (box, panel, zone…) is a **directory** with a single **`index.yaml`**:
 
 ```text
-Parking/
-  index.yaml                      # self: Location (zona)
-  enchufes.yaml                   # fragmentos del mismo sitio
-  Caja derivacion 1/
-    index.yaml                    # self: Location (caja) + regletas…
-Planta baja/Recibidor/
-  index.yaml                      # Portero, etc.
-  Cuadro General/
-    index.yaml                    # IGA, MTs…
+Garage/
+  index.yaml                 # self: + sockets, lights, …
+  Junction box 1/
+    index.yaml               # self: + terminal strips…
+Ground floor/Hall/
+  index.yaml
+  Main panel/
+    index.yaml
 ```
 
 ```yaml
-# Parking/Caja derivacion 1/index.yaml
+# Garage/Junction box 1/index.yaml
 schema: house/v1
 self:
   type: Location
@@ -47,19 +46,10 @@ elements:
     type: TerminalStrip
 ```
 
-- `cd` en el shell navega Locations; auto-activa `index.yaml`.
-- `show` muestra el `self:` de la Location + resumen del contenido.
-- `add location "Cuadro General"` crea carpeta + `index.yaml` con `self:`.
-- Otros YAML en la misma carpeta son fragmentos del mismo path (sin `self` ni `location:`).
-
-En el shell:
-
-```text
-cd Recibidor
-show                          # self del Recibidor
-cd "Cuadro General"
-show                          # self del Cuadro + IGA, MTs…
-```
+- One directory → one `index.yaml` (no sibling fragment YAMLs).
+- Grow by adding a **subdirectory** Location, not another file beside `index.yaml`.
+- `cd` auto-activates `index.yaml`; `show` prints `self:` + that file’s content.
+- `add location "Main panel"` creates the folder and `index.yaml` with `self:`.
 
 ## Elementos
 

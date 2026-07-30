@@ -19,7 +19,6 @@ from housewire.house import (
 from housewire.commands import cmd_ls, show_file
 from housewire.house.physical import export_physical_zone
 from housewire.project import abm
-from housewire.project.io import create_empty_house_file
 from housewire.project.paths import (
     YAML_EXTENSIONS,
     collect_yaml_from_directory,
@@ -368,11 +367,11 @@ def ensure_overwrite_allowed(
 
 
 def discover_zones(project_path: Path, all_files: list[Path]) -> dict[str, list[Path]]:
-    """Map zone name -> yaml files.
+    """Map zone name -> index.yaml files.
 
     v1 zones:
       Parking — anything under Parking/
-      Cuadro_general — Planta baja/Recibidor/** + root entradas_externas.yaml
+      Cuadro_general — Planta baja/** + root index.yaml (supply / earth)
     """
     zones: dict[str, list[Path]] = {"Parking": [], "Cuadro_general": []}
     for path in all_files:
@@ -382,7 +381,8 @@ def discover_zones(project_path: Path, all_files: list[Path]) -> dict[str, list[
             zones["Parking"].append(path)
         elif parts[0] == "Planta baja":
             zones["Cuadro_general"].append(path)
-        elif len(parts) == 1 and path.name.startswith("entradas_externas"):
+        elif len(parts) == 1:
+            # Site root index.yaml (external supply, earth electrode, …)
             zones["Cuadro_general"].append(path)
     return {name: files for name, files in zones.items() if files}
 
@@ -581,10 +581,11 @@ def _build_parser() -> argparse.ArgumentParser:
     add_cn.add_argument("--via", dest="via_ref", required=True)
     add_cn.add_argument("--to", dest="to_ref", required=True)
 
-    add_f = add_sub.add_parser("file")
-    add_f.add_argument("project_path")
-    add_f.add_argument("dir_path", help="Directorio relativo donde crear el YAML")
-    add_f.add_argument("filename")
+    add_loc = add_sub.add_parser("location", help="Create Location directory + index.yaml")
+    add_loc.add_argument("project_path")
+    add_loc.add_argument("name")
+    add_loc.add_argument("--subtype")
+    add_loc.add_argument("--notes")
 
     add_d = add_sub.add_parser("dir")
     add_d.add_argument("project_path")
@@ -650,10 +651,14 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
         )
     if cmd == "add":
         project_path = Path(args.project_path).resolve()
-        if args.add_kind == "file":
-            target = (project_path / args.dir_path / args.filename).resolve()
-            create_empty_house_file(target)
-            print(f"Creado: {target.relative_to(project_path)}")
+        if args.add_kind == "location":
+            from housewire.project.io import create_location_index
+
+            target = (project_path / args.name).resolve()
+            index_path = create_location_index(
+                target, subtype=args.subtype, notes=args.notes
+            )
+            print(f"OK {index_path.relative_to(project_path)}")
             return 0
         if args.add_kind == "dir":
             target = (project_path / args.dir_path).resolve()

@@ -19,7 +19,7 @@ class TestProjectSession(unittest.TestCase):
         (self.root / "zona_a").mkdir()
         (self.root / "zona_a" / "sub").mkdir()
         (self.root / "out").mkdir()
-        self.yaml = self.root / "zona_a" / "doc.yaml"
+        self.yaml = self.root / "zona_a" / "index.yaml"
         create_empty_house_file(self.yaml)
 
     def tearDown(self) -> None:
@@ -53,42 +53,37 @@ class TestProjectSession(unittest.TestCase):
     def test_cd_resets_active_yaml(self) -> None:
         s = self._session()
         s.cd("zona_a")
-        s.use_yaml("doc.yaml")
+        s.use_yaml("index.yaml")
         self.assertIsNotNone(s.active_yaml)
         s.cd("..")
         self.assertIsNone(s.active_yaml)
 
-    def test_cd_auto_uses_index_yaml_over_siblings(self) -> None:
-        create_empty_house_file(self.root / "zona_a" / "otro.yaml")
-        (self.root / "zona_a" / "index.yaml").write_text(
-            "schema: house/v1\nself:\n  type: Location\nelements: {}\n",
-            encoding="utf-8",
-        )
+    def test_cd_auto_uses_index_yaml(self) -> None:
         s = self._session()
         auto = s.cd("zona_a")
         self.assertIsNotNone(auto)
         self.assertEqual(s.active_yaml.name, "index.yaml")
 
-    def test_cd_auto_uses_single_yaml(self) -> None:
-        s = self._session()
-        auto = s.cd("zona_a")
-        self.assertIsNotNone(auto)
-        self.assertEqual(s.active_yaml.name, "doc.yaml")
-
-    def test_cd_no_auto_use_when_multiple_yaml(self) -> None:
+    def test_cd_ignores_non_index_siblings(self) -> None:
         create_empty_house_file(self.root / "zona_a" / "otro.yaml")
         s = self._session()
         auto = s.cd("zona_a")
-        self.assertIsNone(auto)
-        self.assertIsNone(s.active_yaml)
+        self.assertIsNotNone(auto)
+        self.assertEqual(s.active_yaml.name, "index.yaml")
 
     def test_ensure_active_yaml_auto(self) -> None:
         s = self._session()
         s.cd("zona_a")
-        # clear after auto from cd to test ensure
         s.active_yaml = None
         path = s.ensure_active_yaml()
-        self.assertEqual(path.name, "doc.yaml")
+        self.assertEqual(path.name, "index.yaml")
+
+    def test_use_non_index_raises(self) -> None:
+        create_empty_house_file(self.root / "zona_a" / "otro.yaml")
+        s = self._session()
+        s.cd("zona_a")
+        with self.assertRaises(ValueError):
+            s.use_yaml("otro.yaml")
 
     def test_cd_outside_root_raises(self) -> None:
         s = self._session()
@@ -108,9 +103,9 @@ class TestProjectSession(unittest.TestCase):
     def test_use_yaml_sets_active(self) -> None:
         s = self._session()
         s.cd("zona_a")
-        s.use_yaml("doc.yaml")
+        s.use_yaml("index.yaml")
         self.assertIsNotNone(s.active_yaml)
-        self.assertEqual(s.active_yaml.name, "doc.yaml")
+        self.assertEqual(s.active_yaml.name, "index.yaml")
 
     def test_use_yaml_nonexistent_raises(self) -> None:
         s = self._session()
@@ -125,7 +120,7 @@ class TestProjectSession(unittest.TestCase):
     def test_list_dir_contains_subdir(self) -> None:
         s = self._session()
         names = [n for n, _ in s.list_dir()]
-        self.assertIn("zona_a/", names)
+        self.assertTrue(any(n.startswith("zona_a/") for n in names))
 
     def test_list_dir_excludes_out(self) -> None:
         s = self._session()
@@ -135,13 +130,13 @@ class TestProjectSession(unittest.TestCase):
     def test_list_dir_marks_active_yaml(self) -> None:
         s = self._session()
         s.cd("zona_a")
-        s.use_yaml("doc.yaml")
+        s.use_yaml("index.yaml")
         names = [n for n, _ in s.list_dir()]
-        self.assertTrue(any("doc.yaml" in n and "*" in n for n in names))
+        self.assertTrue(any("index.yaml" in n and "*" in n for n in names))
 
     def test_prompt_label_shows_active(self) -> None:
         s = self._session()
         s.cd("zona_a")
-        s.use_yaml("doc.yaml")
+        s.use_yaml("index.yaml")
         label = s.prompt_label()
-        self.assertIn("doc.yaml", label)
+        self.assertIn("index.yaml", label)

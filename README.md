@@ -41,7 +41,7 @@ housewire shell "$SITE"
 ```
 
 Commands: `cd`, `ls`, `pwd`, `use`, `show`, `pend`, `add` (incl. `add location`), `rm`, `generate`, `help`, `exit`.
-Tab completes commands, subcommands, and paths. **Locations are directories** with `index.yaml` (`self:`).
+Tab completes commands, subcommands, and paths. **Locations are directories** with a single `index.yaml` (`self:`). `add location NAME` creates that directory and file.
 
 ```bash
 housewire shell "$SITE"
@@ -134,5 +134,5 @@ connections:
 
 ## Version
 
-Package version: `pyproject.toml` / `housewire.__version__` (currently **0.2.1**).
+Package version: `pyproject.toml` / `housewire.__version__` (currently **0.2.2**).
 History: [CHANGELOG.md](CHANGELOG.md).

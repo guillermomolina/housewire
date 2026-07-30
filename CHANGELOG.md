@@ -9,6 +9,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.2.2] — 2026-07-30
+
+### Changed
+
+- **One `index.yaml` per Location directory.** Generate/collect only `index.yaml` / `index.yml`; sibling fragment YAMLs are ignored.
+- Shell `use` accepts only `index.yaml`; removed `add file` (use `add location` instead).
+- Docs: no multi-file-per-directory layout.
+
+### Added
+
+- Confirmation that `add location` creates the directory and `index.yaml` with `self:`.
+
 ## [0.2.1] — 2026-07-30
 
 ### Changed
@@ -55,7 +67,8 @@ First usable package and site shell.
 
 - Before 0.2.0, some layouts used a parent `type: Location` stub plus sibling `location:`; that pattern is invalid now.
 
-[Unreleased]: https://github.com/local/housewire/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/local/housewire/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/local/housewire/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/local/housewire/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/local/housewire/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/local/housewire/releases/tag/v0.1.0

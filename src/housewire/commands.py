@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from housewire.project import abm
-from housewire.project.io import INDEX_YAML, create_empty_house_file, create_location_index, load_yaml
+from housewire.project.io import create_location_index
 from housewire.project.session import ProjectSession
 
 if TYPE_CHECKING:
@@ -17,9 +17,9 @@ HELP_TEXT = """Comandos del shell housewire:
   (Tab completa comandos, subcomandos add/rm y rutas de cd/use/…)
   pwd                          cwd y YAML activo
   cd [path]                    navegar Locations (directorios); auto-use index.yaml
-  ls                           sublocations [loc] e index.yaml [index]
-  use <file.yaml>                fijar YAML activo (preferible index.yaml)
-  show                         self: de la Location + resumen del sitio
+  ls                           sublocations [loc] e index.yaml
+  use index.yaml               fijar index.yaml activo
+  show                         self: de la Location + contenido de index.yaml
   show --element NAME | --cable NAME
   pend [<enter> <exit>] [section] [--colors C1,C2] [--notes ...]
                                cable pendiente + conduit (atajo de add pend)
@@ -30,11 +30,10 @@ HELP_TEXT = """Comandos del shell housewire:
                                defaults: section=1.5 mm2, colors=BN,BU
   add pend [<enter> <exit>] [section] [--colors ...] [--notes ...]
   add connection --from F --via V --to T
-  add file <name.yaml>           crear YAML house/v1 en cwd (fragmento)
-  add dir <path>                 mkdir -p bajo el proyecto
+  add dir <path>                 mkdir -p (sin index; preferible add location)
   rm element|cable NAME
   rm connection <índice>
-  rm file <name.yaml>
+  rm file index.yaml
   rm dir <path>                  solo si está vacío
   generate [-f]                generar diagramas (como housewire generate)
   help
@@ -45,7 +44,7 @@ HELP_TEXT = """Comandos del shell housewire:
 def _parse_add_args(argv: list[str]) -> tuple[str, list[str]]:
     if not argv:
         raise ValueError(
-            "add requiere subcomando: location, element, cable, pend, connection, file, dir"
+            "add requiere subcomando: location, element, cable, pend, connection, dir"
         )
     return argv[0], argv[1:]
 
@@ -84,31 +83,9 @@ def cmd_show(session: ProjectSession, argv: list[str]) -> int:
     parser.add_argument("--cable", dest="cable")
     args, _ = parser.parse_known_args(argv)
 
-    if args.element or args.cable:
-        path = session.ensure_active_yaml()
-        doc = abm.load_editable(path, session.root)
-        print(abm.format_show(doc, element=args.element, cable=args.cable))
-        return 0
-
-    # Resumen de Location: preferir todos los YAML del cwd
-    files = session.house_yaml_files_in_cwd()
-    if not files:
-        path = session.ensure_active_yaml()
-        doc = abm.load_editable(path, session.root)
-        print(abm.format_show(doc))
-        return 0
-
-    # Asegurar activo (index si existe)
-    session.try_auto_use_yaml()
-    docs: list[tuple[str, dict]] = []
-    for path in files:
-        docs.append((path.name, load_yaml(path)))
-    # Preferir mostrar self del index primero: ordenar index al inicio
-    docs.sort(key=lambda item: (0 if item[0] == INDEX_YAML else 1, item[0]))
-    if len(docs) == 1:
-        print(abm.format_show(docs[0][1]))
-    else:
-        print(abm.format_show_cwd(docs))
+    path = session.ensure_active_yaml()
+    doc = abm.load_editable(path, session.root)
+    print(abm.format_show(doc, element=args.element, cable=args.cable))
     return 0
 
 
@@ -192,14 +169,6 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
         session.cwd = target.relative_to(session.root)
         session.active_yaml = index_path
         print(f"Location creada: {index_path.relative_to(session.root)}")
-        return 0
-    if kind == "file":
-        if not rest:
-            raise ValueError("add file requiere nombre.yaml")
-        path = session.resolve_under_root(rest[0])
-        create_empty_house_file(path)
-        session.active_yaml = path
-        print(f"Creado y activo: {path.relative_to(session.root)}")
         return 0
     if kind == "pend":
         return cmd_pend(session, rest)

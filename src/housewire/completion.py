@@ -25,7 +25,7 @@ SHELL_COMMANDS = (
     "quit",
 )
 
-ADD_SUBCOMMANDS = ("location", "element", "cable", "pend", "connection", "file", "dir")
+ADD_SUBCOMMANDS = ("location", "element", "cable", "pend", "connection", "dir")
 RM_SUBCOMMANDS = ("element", "cable", "connection", "file", "dir")
 
 
@@ -165,13 +165,15 @@ def complete_path(
         elif child.is_file() and is_yaml(child):
             if dirs_only:
                 continue
-            # Prefer index.yaml in listings when completing use
+            from housewire.project.paths import is_index_yaml
+
+            if not is_index_yaml(child):
+                continue
             if not child.name.startswith(name_prefix):
                 continue
             candidate = prefix + child.name
             matches.append(_quote_if_needed(candidate))
-    # Put index.yaml first when present
-    matches.sort(key=lambda m: (0 if m.rstrip("'\"/").endswith("index.yaml") else 1, m.lower()))
+    matches.sort(key=lambda m: m.lower())
     return matches
 
 

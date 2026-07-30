@@ -4,10 +4,15 @@ from pathlib import Path
 
 YAML_EXTENSIONS = (".yaml", ".yml")
 EXCLUDED_DIR_NAMES = {".venv", "__pycache__", ".git", "out"}
+INDEX_NAMES = frozenset({"index.yaml", "index.yml"})
 
 
 def is_yaml(path: Path) -> bool:
     return path.suffix.lower() in YAML_EXTENSIONS
+
+
+def is_index_yaml(path: Path) -> bool:
+    return path.name.lower() in INDEX_NAMES
 
 
 def is_excluded_path(path: Path, excluded_dirs: set[Path] | None = None) -> bool:
@@ -19,10 +24,11 @@ def is_excluded_path(path: Path, excluded_dirs: set[Path] | None = None) -> bool
 
 
 def collect_yaml_from_directory(directory: Path, excluded_dirs: set[Path]) -> list[Path]:
+    """Collect only index.yaml / index.yml under the site tree (one file per location)."""
     return sorted(
         path.resolve()
         for path in directory.rglob("*")
         if path.is_file()
-        and is_yaml(path)
+        and is_index_yaml(path)
         and not is_excluded_path(path, excluded_dirs)
     )
