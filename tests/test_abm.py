@@ -292,3 +292,20 @@ class TestFormatShow(unittest.TestCase):
         doc = abm.load_editable(self.yaml, self.root)
         with self.assertRaises(ValueError):
             abm.format_show(doc, cable="NO_EXISTE")
+
+    def test_show_lists_openings(self) -> None:
+        doc = abm.load_editable(self.yaml, self.root)
+        doc["location"] = {
+            "type": "JunctionBox",
+            "mount": "ceiling",
+            "openings": {
+                "B2": {"face": "W", "index": 1},
+                "B1": {"face": "fondo", "index": 1},
+            },
+        }
+        text = abm.format_show(doc)
+        self.assertIn("openings (2):", text)
+        self.assertIn("B1  face=fondo index=1", text)
+        self.assertIn("B2  face=W index=1", text)
+        # openings not dumped twice inside location yaml
+        self.assertNotIn("openings:", text.split("openings (2):")[0])

@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.6.3] — 2026-07-30
+
+### Added
+
+- Shell `show` lists `openings` as their own section (`B1 face=… index=…`).
+
 ## [0.6.2] — 2026-07-30
 
 ### Changed

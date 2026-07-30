@@ -334,10 +334,30 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
 
         type_id = location_block.get("type", "?")
         lines.append(f"location ({type_id}):")
-        lines.append(
-            _yaml.safe_dump(location_block, sort_keys=False, allow_unicode=True).rstrip()
-        )
+        meta = {k: v for k, v in location_block.items() if k != "openings"}
+        lines.append(_yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).rstrip())
         lines.append("")
+
+        openings = location_block.get("openings")
+        if isinstance(openings, dict) and openings:
+            lines.append(f"openings ({len(openings)}):")
+            for name in sorted(openings, key=lambda n: str(n)):
+                defn = openings[name]
+                if isinstance(defn, dict):
+                    bits: list[str] = []
+                    if defn.get("face") is not None:
+                        bits.append(f"face={defn['face']}")
+                    if defn.get("index") is not None:
+                        bits.append(f"index={defn['index']}")
+                    for key, value in defn.items():
+                        if key in {"face", "index"}:
+                            continue
+                        bits.append(f"{key}={value}")
+                    extra = ("  " + " ".join(bits)) if bits else ""
+                    lines.append(f"  {name}{extra}")
+                else:
+                    lines.append(f"  {name}  ({defn})")
+            lines.append("")
 
     elements = doc.get("elements") or {}
     cables = doc.get("cables") or {}
