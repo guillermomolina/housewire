@@ -1,0 +1,4 @@
+# Dependencias de desarrollo (tests, packaging, etc.)
+# Uso: pip install -r dev-requirements.txt
+-e .
+pytest>=8.0

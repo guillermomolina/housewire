@@ -34,7 +34,18 @@ Modo interactivo (REPL, sin menús TUI):
 housewire shell "projects/Margalló 4A"
 ```
 
-Comandos: `cd`, `ls`, `pwd`, `use <archivo.yaml>`, `show`, `add`, `rm`, `generate`, `help`, `exit`.
+Comandos: `cd`, `ls`, `pwd`, `use <archivo.yaml>`, `show`, `pend`, `add`, `rm`, `generate`, `help`, `exit`.
+
+Captura rápida delante de una caja (cable pendiente sin destino):
+
+```bash
+housewire shell "projects/Margalló 4A"
+cd Parking/Caja\ derivacion\ 2   # auto-activa el YAML si solo hay uno
+pend W.N E.S                     # crea PEND_Linea_01 + Conducto_paso_01
+pend N.E S.W 2.5                 # misma cosa con sección 2.5 mm2
+```
+
+`add cable` usa defaults (`1.5 mm2`, `BN,BU`) si no pasas `--section` / `--colors`.
 
 Subcomandos (scripts / Makefile):
 
@@ -43,6 +54,7 @@ housewire generate -f "projects/Margalló 4A"
 housewire ls "projects/Margalló 4A" "Parking"
 housewire show "projects/Margalló 4A" "Planta baja/Recibidor/Cuadro general/cuadro_general.yaml"
 housewire add element "projects/Margalló 4A" "…/cuadro_general.yaml" MT_Nuevo --type MCB --subtype C10
+housewire add pend "projects/Margalló 4A" "…/caja.yaml" W.N E.S
 housewire rm element "projects/Margalló 4A" "…/cuadro_general.yaml" MT_Nuevo
 ```
 
@@ -69,7 +81,7 @@ Por defecto se generan zonas + físico (`--zones`). Solo el total: `--no-zones`.
 Makefile:
 
 ```bash
-make prepare          # venv + install editable
+make prepare          # venv + install editable + pytest (dev-requirements.txt)
 ```
 
 ## Estructura del repo

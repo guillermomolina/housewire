@@ -559,10 +559,20 @@ def _build_parser() -> argparse.ArgumentParser:
     add_cb.add_argument("project_path")
     add_cb.add_argument("yaml_path")
     add_cb.add_argument("name")
-    add_cb.add_argument("--section", required=True)
-    add_cb.add_argument("--colors", required=True, help="BN,BU,GNYE")
+    add_cb.add_argument("--section", default=None, help="default: 1.5 mm2")
+    add_cb.add_argument("--colors", default=None, help="default: BN,BU")
     add_cb.add_argument("--kind", default="power")
     add_cb.add_argument("--notes")
+
+    add_pend = add_sub.add_parser("pend", help="Cable pendiente + conduit de paso")
+    add_pend.add_argument("project_path")
+    add_pend.add_argument("yaml_path")
+    add_pend.add_argument("enter", help="Abertura entrada, p.ej. W.N")
+    add_pend.add_argument("exit", help="Abertura salida, p.ej. E.S")
+    add_pend.add_argument("section", nargs="?", default=None, help="p.ej. 1.5 o 2.5 mm2")
+    add_pend.add_argument("--colors", default=None, help="default: BN,BU")
+    add_pend.add_argument("--kind", default="power")
+    add_pend.add_argument("--notes")
 
     add_cn = add_sub.add_parser("connection")
     add_cn.add_argument("project_path")
@@ -669,9 +679,22 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
                 args.name,
                 kind=args.kind,
                 section=args.section,
-                colors=_colors_list(args.colors),
+                colors=_colors_list(args.colors) if args.colors else None,
                 notes=args.notes,
             )
+        elif args.add_kind == "pend":
+            cable_name, conduit_name = abm.add_pending_cable(
+                doc,
+                enter=args.enter,
+                exit=args.exit,
+                section=args.section,
+                colors=_colors_list(args.colors) if args.colors else None,
+                kind=args.kind,
+                notes=args.notes,
+            )
+            abm.persist(doc, yaml_path, project_path)
+            print(f"OK {cable_name} + {conduit_name}")
+            return 0
         elif args.add_kind == "connection":
             abm.add_connection(
                 doc,

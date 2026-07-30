@@ -158,6 +158,16 @@ class TestABMCables(unittest.TestCase):
         self.assertIn("L1", doc["cables"])
         self.assertEqual(doc["cables"]["L1"]["colors"], ["BN", "BU"])
 
+    def test_add_cable_defaults(self) -> None:
+        doc = abm.load_editable(self.yaml, self.root)
+        abm.add_cable(doc, "L_def")
+        self.assertEqual(doc["cables"]["L_def"]["section"], "1.5 mm2")
+        self.assertEqual(doc["cables"]["L_def"]["colors"], ["BN", "BU"])
+
+    def test_normalize_section_bare_number(self) -> None:
+        self.assertEqual(abm.normalize_section("2.5"), "2.5 mm2")
+        self.assertEqual(abm.normalize_section("1.5 mm2"), "1.5 mm2")
+
     def test_add_cable_with_notes(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
         abm.add_cable(doc, "L2", section="2.5 mm2", colors=["BN"], notes="hilos sueltos")
@@ -193,6 +203,52 @@ class TestABMCables(unittest.TestCase):
         abm.add_connection(doc, from_ref="A.1", via_ref="L1.1", to_ref="B.1")
         with self.assertRaises(ValueError):
             abm.rm_cable(doc, "L1")
+
+
+# ---------------------------------------------------------------------------
+# abm – pending cables / conduits
+# ---------------------------------------------------------------------------
+
+class TestABMPendingAndConduits(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp, self.root, self.yaml = make_project()
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_add_pending_cable_creates_cable_and_conduit(self) -> None:
+        doc = abm.load_editable(self.yaml, self.root)
+        cable, conduit = abm.add_pending_cable(doc, enter="W.N", exit="E.S")
+        self.assertEqual(cable, "PEND_Linea_01")
+        self.assertEqual(conduit, "Conducto_paso_01")
+        self.assertIn(cable, doc["cables"])
+        self.assertIn(conduit, doc["conduits"])
+        self.assertIn("estado: pendiente", doc["cables"][cable]["notes"])
+        self.assertIn("W.N", doc["cables"][cable]["notes"])
+        self.assertEqual(doc["conduits"][conduit]["contains"], [cable])
+        self.assertIn("abertura W.N", doc["conduits"][conduit]["route"])
+        self.assertIn("destino pendiente", doc["conduits"][conduit]["route"])
+        self.assertEqual(doc.get("connections") or [], [])
+
+    def test_pending_cable_numbering_increments(self) -> None:
+        doc = abm.load_editable(self.yaml, self.root)
+        c1, _ = abm.add_pending_cable(doc, enter="W.N", exit="E.S")
+        c2, d2 = abm.add_pending_cable(doc, enter="N.E", exit="S.W", section="2.5")
+        self.assertEqual(c1, "PEND_Linea_01")
+        self.assertEqual(c2, "PEND_Linea_02")
+        self.assertEqual(d2, "Conducto_paso_02")
+        self.assertEqual(doc["cables"][c2]["section"], "2.5 mm2")
+
+    def test_add_conduit_unknown_cable_raises(self) -> None:
+        doc = abm.load_editable(self.yaml, self.root)
+        with self.assertRaises(ValueError):
+            abm.add_conduit(doc, "C1", contains=["NO_EXISTE"])
+
+    def test_rm_cable_referenced_in_conduit_raises(self) -> None:
+        doc = abm.load_editable(self.yaml, self.root)
+        cable, _ = abm.add_pending_cable(doc, enter="W.N", exit="E.S")
+        with self.assertRaises(ValueError):
+            abm.rm_cable(doc, cable)
 
 
 # ---------------------------------------------------------------------------
@@ -328,6 +384,27 @@ class TestProjectSession(unittest.TestCase):
         self.assertIsNotNone(s.active_yaml)
         s.cd("..")
         self.assertIsNone(s.active_yaml)
+
+    def test_cd_auto_uses_single_yaml(self) -> None:
+        s = self._session()
+        auto = s.cd("zona_a")
+        self.assertIsNotNone(auto)
+        self.assertEqual(s.active_yaml.name, "doc.yaml")
+
+    def test_cd_no_auto_use_when_multiple_yaml(self) -> None:
+        create_empty_house_file(self.root / "zona_a" / "otro.yaml")
+        s = self._session()
+        auto = s.cd("zona_a")
+        self.assertIsNone(auto)
+        self.assertIsNone(s.active_yaml)
+
+    def test_ensure_active_yaml_auto(self) -> None:
+        s = self._session()
+        s.cd("zona_a")
+        # clear after auto from cd to test ensure
+        s.active_yaml = None
+        path = s.ensure_active_yaml()
+        self.assertEqual(path.name, "doc.yaml")
 
     def test_cd_outside_root_raises(self) -> None:
         s = self._session()
@@ -476,6 +553,50 @@ class TestShellDispatcher(unittest.TestCase):
         self.assertEqual(code, 0)
         doc = abm.load_editable(s.active_path(), self.root)
         self.assertIn("Linea_X", doc["cables"])
+
+    def test_add_cable_defaults_via_shell(self) -> None:
+        s = self._session()
+        self._run(s, "cd zona_a")
+        code = self._run(s, "add cable Linea_Y")
+        self.assertEqual(code, 0)
+        doc = abm.load_editable(s.active_path(), self.root)
+        self.assertEqual(doc["cables"]["Linea_Y"]["section"], "1.5 mm2")
+        self.assertEqual(doc["cables"]["Linea_Y"]["colors"], ["BN", "BU"])
+
+    def test_pend_via_shell(self) -> None:
+        s = self._session()
+        self._run(s, "cd zona_a")
+        code = self._run(s, "pend W.N E.S")
+        self.assertEqual(code, 0)
+        doc = abm.load_editable(s.active_path(), self.root)
+        self.assertIn("PEND_Linea_01", doc["cables"])
+        self.assertIn("Conducto_paso_01", doc["conduits"])
+
+    def test_pend_with_section_via_shell(self) -> None:
+        s = self._session()
+        self._run(s, "cd zona_a")
+        code = self._run(s, "pend N.E S.W 2.5")
+        self.assertEqual(code, 0)
+        doc = abm.load_editable(s.active_path(), self.root)
+        self.assertEqual(doc["cables"]["PEND_Linea_01"]["section"], "2.5 mm2")
+
+    def test_cd_auto_use_message_path(self) -> None:
+        s = self._session()
+        self._run(s, "cd zona_a")
+        self.assertIsNotNone(s.active_yaml)
+        self.assertEqual(s.active_yaml.name, "doc.yaml")
+
+    def test_pend_wizard_prompts(self) -> None:
+        from unittest.mock import patch
+
+        s = self._session()
+        self._run(s, "cd zona_a")
+        with patch("housewire.commands._prompt", side_effect=["W.N", "E.S"]):
+            code = self._run(s, "pend")
+        self.assertEqual(code, 0)
+        doc = abm.load_editable(s.active_path(), self.root)
+        self.assertIn("PEND_Linea_01", doc["cables"])
+        self.assertIn("W.N", doc["cables"]["PEND_Linea_01"]["notes"])
 
     def test_add_dir_creates_directory(self) -> None:
         s = self._session()

@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["build", "wheel"]
+dev = ["build", "wheel", "pytest>=8.0"]
 
 [project.scripts]
 housewire = "housewire.cli:main"

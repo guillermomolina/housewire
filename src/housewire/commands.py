@@ -16,11 +16,16 @@ if TYPE_CHECKING:
 HELP_TEXT = """Comandos del shell housewire:
   pwd                          cwd y YAML activo
   cd [path]                    navegar (.., subcarpetas); sin args → raíz
+                               (auto-use si hay un solo YAML house/v1)
   ls                           listar directorio actual
   use <file.yaml>                fijar YAML activo (house/v1)
   show [element NAME | cable NAME]
+  pend [<enter> <exit>] [section] [--colors C1,C2] [--notes ...]
+                               cable pendiente + conduit (atajo de add pend)
   add element NAME --type T [--subtype ...] [--label ...] [--manufacturer ...] [--model ...] [--notes ...]
-  add cable NAME --section S --colors C1,C2 [--kind power] [--notes ...]
+  add cable NAME [--section S] [--colors C1,C2] [--kind power] [--notes ...]
+                               defaults: section=1.5 mm2, colors=BN,BU
+  add pend [<enter> <exit>] [section] [--colors ...] [--notes ...]
   add connection --from F --via V --to T
   add file <name.yaml>           crear YAML house/v1 en cwd
   add dir <path>                 mkdir -p bajo el proyecto
@@ -36,7 +41,9 @@ HELP_TEXT = """Comandos del shell housewire:
 
 def _parse_add_args(argv: list[str]) -> tuple[str, list[str]]:
     if not argv:
-        raise ValueError("add requiere subcomando: element, cable, connection, file, dir")
+        raise ValueError(
+            "add requiere subcomando: element, cable, pend, connection, file, dir"
+        )
     return argv[0], argv[1:]
 
 
@@ -48,6 +55,10 @@ def _parse_rm_args(argv: list[str]) -> tuple[str, list[str]]:
 
 def _colors_list(raw: str) -> list[str]:
     return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def _prompt(message: str) -> str:
+    return input(message).strip()
 
 
 def cmd_ls(session: ProjectSession) -> int:
@@ -69,15 +80,11 @@ def cmd_show(session: ProjectSession, argv: list[str]) -> int:
     parser.add_argument("--element", dest="element")
     parser.add_argument("--cable", dest="cable")
     args, _ = parser.parse_known_args(argv)
-    if session.active_yaml and not args.element and not args.cable and not argv:
-        doc = abm.load_editable(session.active_yaml, session.root)
+    path = session.ensure_active_yaml()
+    if not args.element and not args.cable and not argv:
+        doc = abm.load_editable(path, session.root)
         print(abm.format_show(doc))
         return 0
-    if not session.active_yaml and not args.element and not args.cable:
-        raise ValueError("show requiere YAML activo (use) o --element/--cable con ruta via subcomando")
-    path = session.active_path() if session.active_yaml else None
-    if path is None:
-        raise ValueError("usa use <archivo.yaml> antes de show")
     doc = abm.load_editable(path, session.root)
     print(abm.format_show(doc, element=args.element, cable=args.cable))
     return 0
@@ -87,6 +94,57 @@ def show_file(project_path: Path, yaml_rel: Path, *, element: str | None, cable:
     path = (project_path / yaml_rel).resolve()
     doc = abm.load_editable(path, project_path)
     print(abm.format_show(doc, element=element, cable=cable))
+    return 0
+
+
+def _parse_pend_args(rest: list[str]) -> argparse.Namespace:
+    p = argparse.ArgumentParser(prog="pend", add_help=False)
+    p.add_argument("positional", nargs="*")
+    p.add_argument("--colors")
+    p.add_argument("--kind", default="power")
+    p.add_argument("--notes")
+    return p.parse_args(rest)
+
+
+def _resolve_pend_openings(positional: list[str]) -> tuple[str, str, str | None]:
+    """Return (enter, exit, section_or_none) from positional args or wizard."""
+    enter: str | None = None
+    exit_op: str | None = None
+    section: str | None = None
+    if len(positional) >= 2:
+        enter, exit_op = positional[0], positional[1]
+        if len(positional) >= 3:
+            section = positional[2]
+    elif len(positional) == 1:
+        raise ValueError(
+            "pend requiere dos aberturas (entrada y salida), p.ej.: pend W.N E.S"
+        )
+    if not enter:
+        enter = _prompt("Abertura entrada (p.ej. W.N): ")
+    if not exit_op:
+        exit_op = _prompt("Abertura salida (p.ej. E.S): ")
+    if not enter or not exit_op:
+        raise ValueError("Aberturas entrada y salida son obligatorias")
+    return enter, exit_op, section
+
+
+def cmd_pend(session: ProjectSession, argv: list[str]) -> int:
+    args = _parse_pend_args(argv)
+    enter, exit_op, section = _resolve_pend_openings(list(args.positional))
+    colors = _colors_list(args.colors) if args.colors else None
+    path = session.ensure_active_yaml()
+    doc = abm.load_editable(path, session.root)
+    cable_name, conduit_name = abm.add_pending_cable(
+        doc,
+        enter=enter,
+        exit=exit_op,
+        section=section,
+        colors=colors,
+        kind=args.kind,
+        notes=args.notes,
+    )
+    abm.persist(doc, path, session.root)
+    print(f"Pendiente {cable_name} + {conduit_name} (entra {enter} → sale {exit_op}).")
     return 0
 
 
@@ -107,7 +165,9 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
         session.active_yaml = path
         print(f"Creado y activo: {path.relative_to(session.root)}")
         return 0
-    path = session.active_path()
+    if kind == "pend":
+        return cmd_pend(session, rest)
+    path = session.ensure_active_yaml()
     doc = abm.load_editable(path, session.root)
     if kind == "element":
         p = argparse.ArgumentParser(prog="add element", add_help=False)
@@ -135,8 +195,8 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
     if kind == "cable":
         p = argparse.ArgumentParser(prog="add cable", add_help=False)
         p.add_argument("name")
-        p.add_argument("--section", required=True)
-        p.add_argument("--colors", required=True)
+        p.add_argument("--section", default=None)
+        p.add_argument("--colors", default=None)
         p.add_argument("--kind", default="power")
         p.add_argument("--notes")
         args = p.parse_args(rest)
@@ -145,7 +205,7 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
             args.name,
             kind=args.kind,
             section=args.section,
-            colors=_colors_list(args.colors),
+            colors=_colors_list(args.colors) if args.colors else None,
             notes=args.notes,
         )
         abm.persist(doc, path, session.root)
@@ -186,7 +246,7 @@ def cmd_rm(session: ProjectSession, argv: list[str]) -> int:
         target.unlink()
         print(f"Borrado: {target.relative_to(session.root)}")
         return 0
-    path = session.active_path()
+    path = session.ensure_active_yaml()
     doc = abm.load_editable(path, session.root)
     if kind == "element":
         if not rest:
@@ -234,7 +294,9 @@ def run_shell_line(session: ProjectSession, line: str, *, generate_fn) -> int | 
         if cmd == "ls":
             return cmd_ls(session)
         if cmd == "cd":
-            session.cd(args[0] if args else None)
+            auto = session.cd(args[0] if args else None)
+            if auto is not None:
+                print(f"Activo (auto): {auto.relative_to(session.root)}")
             return 0
         if cmd == "use":
             if not args:
@@ -244,6 +306,8 @@ def run_shell_line(session: ProjectSession, line: str, *, generate_fn) -> int | 
             return 0
         if cmd == "show":
             return cmd_show(session, args)
+        if cmd == "pend":
+            return cmd_pend(session, args)
         if cmd == "add":
             return cmd_add(session, args)
         if cmd == "rm":

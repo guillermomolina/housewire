@@ -127,21 +127,30 @@ Para poder cargar obra “incompleta” sin bloquearte:
 - Marca estado en `notes` de cable: `estado: pendiente`.
 - Describe por dónde pasa en `conduits.route` con aberturas (`W.N`, `E.S`, etc.) y texto `destino pendiente`.
 
-Ejemplo:
+Desde el shell (recomendado en obra):
+
+```text
+cd Parking/Caja derivacion 2
+pend W.N E.S          # defaults 1.5 mm2 / BN,BU
+pend N.E S.W 2.5      # sección distinta
+pend                  # pregunta aberturas por stdin
+```
+
+Ejemplo YAML resultante:
 
 ```yaml
 cables:
-  PEND_Linea_Caja_D2_01:
+  PEND_Linea_01:
     kind: power
     section: "1.5 mm2"
     colors: [BN, BU]
     notes: "estado: pendiente; entra por W.N y sale por E.S"
 
 conduits:
-  Conducto_Caja_D2_paso:
+  Conducto_paso_01:
     kind: conduit
-    contains: [PEND_Linea_Caja_D2_01]
-    route: "Caja_D2 abertura W.N ↔ Caja_D2 abertura E.S ↔ destino pendiente"
+    contains: [PEND_Linea_01]
+    route: "abertura W.N ↔ abertura E.S ↔ destino pendiente"
 ```
 
 Al cerrar el pendiente:
