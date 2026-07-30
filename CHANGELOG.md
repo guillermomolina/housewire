@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.5.3] — 2026-07-30
+
+### Changed
+
+- Shell prompt is path-only (`project/cwd`); dropped the redundant
+  `[…/housewire.yaml]` suffix and the “Activo (auto)” line on `cd`.
+
 ## [0.5.2] — 2026-07-30
 
 ### Changed

@@ -140,9 +140,11 @@ class TestProjectSession(unittest.TestCase):
         rows = s.list_elements()
         self.assertEqual(rows, [("MT_A", "MCB")])
 
-    def test_prompt_label_shows_active(self) -> None:
+    def test_prompt_label_is_path_only(self) -> None:
         s = self._session()
         s.cd("zona_a")
         s.use_yaml("housewire.yaml")
         label = s.prompt_label()
-        self.assertIn("housewire.yaml", label)
+        self.assertIn("zona_a", label)
+        self.assertNotIn("housewire.yaml", label)
+        self.assertNotIn("[", label)

@@ -23,14 +23,7 @@ class ProjectSession:
 
     def prompt_label(self) -> str:
         rel = "." if str(self.cwd) == "." else str(self.cwd)
-        base = f"{self.root.name}/{rel}"
-        if self.active_yaml is not None:
-            try:
-                active_rel = self.active_yaml.relative_to(self.root)
-            except ValueError:
-                active_rel = self.active_yaml
-            return f"{base} [{active_rel}]"
-        return base
+        return f"{self.root.name}/{rel}"
 
     def cwd_path(self) -> Path:
         return (self.root / self.cwd).resolve()

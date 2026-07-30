@@ -311,10 +311,8 @@ def run_shell_line(session: ProjectSession, line: str, *, generate_fn) -> int | 
         if cmd == "ls":
             return cmd_ls(session)
         if cmd == "cd":
-            auto = session.cd(args[0] if args else None)
-            if auto is not None:
-                print(f"Activo (auto): {auto.relative_to(session.root)}")
-            elif session.housewire_yaml_in_cwd() is None and str(session.cwd) != ".":
+            session.cd(args[0] if args else None)
+            if session.housewire_yaml_in_cwd() is None and str(session.cwd) != ".":
                 print(
                     f"Aviso: no hay {HOUSEWIRE_YAML} aquí (no es una location). "
                     f"cd a una location o: add location …",
