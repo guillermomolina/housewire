@@ -61,7 +61,7 @@ class ProjectSession:
         return self.try_auto_use_yaml()
 
     def list_locations(self) -> list[tuple[str, str | None]]:
-        """Subdirectories you can ``cd`` into: ``(name, place_type_or_None)``."""
+        """Child locations (dirs with housewire.yaml): ``(name, place_type_or_None)``."""
         directory = self.cwd_path()
         entries: list[tuple[str, str | None]] = []
         for child in sorted(directory.iterdir(), key=lambda p: p.name.lower()):
@@ -72,6 +72,7 @@ class ProjectSession:
             if is_excluded_path(child, self._excluded):
                 continue
             place_type: str | None = None
+            has_housewire = False
             for yaml_name in (HOUSEWIRE_YAML, "housewire.yml"):
                 meta_path = child / yaml_name
                 if not meta_path.is_file():
@@ -82,10 +83,13 @@ class ProjectSession:
                     continue
                 if not is_house_document(data):
                     continue
+                has_housewire = True
                 loc = data.get("location")
                 if isinstance(loc, dict) and loc.get("type"):
                     place_type = str(loc["type"])
                 break
+            if not has_housewire:
+                continue
             entries.append((child.name, place_type))
         return entries
 

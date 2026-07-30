@@ -122,10 +122,12 @@ class TestProjectSession(unittest.TestCase):
         names = [n for n, _ in s.list_locations()]
         self.assertIn("zona_a", names)
 
-    def test_list_locations_excludes_out(self) -> None:
+    def test_list_locations_skips_dirs_without_housewire(self) -> None:
         s = self._session()
+        (self.root / "solo_carpeta").mkdir()
         names = [n for n, _ in s.list_locations()]
-        self.assertNotIn("out", names)
+        self.assertNotIn("solo_carpeta", names)
+        self.assertIn("zona_a", names)
 
     def test_list_elements_from_housewire(self) -> None:
         from housewire.project import abm

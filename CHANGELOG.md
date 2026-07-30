@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.5.2] — 2026-07-30
+
+### Changed
+
+- Shell `ls` lists only child directories that have **`housewire.yaml`** (real
+  locations). Bare path folders are skipped; `cd` into one prints a warning.
+
 ## [0.5.1] — 2026-07-30
 
 ### Changed

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from housewire.project import abm
-from housewire.project.io import create_location_index
+from housewire.project.io import HOUSEWIRE_YAML, create_location_index
 from housewire.project.session import ProjectSession
 
 if TYPE_CHECKING:
@@ -314,6 +314,12 @@ def run_shell_line(session: ProjectSession, line: str, *, generate_fn) -> int | 
             auto = session.cd(args[0] if args else None)
             if auto is not None:
                 print(f"Activo (auto): {auto.relative_to(session.root)}")
+            elif session.housewire_yaml_in_cwd() is None and str(session.cwd) != ".":
+                print(
+                    f"Aviso: no hay {HOUSEWIRE_YAML} aquí (no es una location). "
+                    f"cd a una location o: add location …",
+                    file=sys.stderr,
+                )
             return 0
         if cmd == "use":
             if not args:
