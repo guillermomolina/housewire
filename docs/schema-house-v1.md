@@ -223,9 +223,19 @@ También se acepta la lista estilo WireViz.
 
 ### Referencias entre niveles
 
+Las conexiones de un `index.yaml` **solo pueden referir elementos de esa location
+y de sus sublocations** (paths relativos al directorio actual).
+
 - Local: `MT_Luces.L`
-- Absoluta: `/Planta baja/Recibidor/Cuadro general/MT_Luces.L`
-- Relativa: `../Salon/Caja_Luces.L`
+- Sublocation: `Cuadro General/Fuente_portero.+` o `./Cuadro General/Fuente_portero.+`
+- Absoluta **dentro del mismo árbol**: `/Parking/Caja 1/Regleta.1` (desde `Parking/`)
+
+No permitido (hay que subir la conexión al ancestro común):
+
+- `../Salon/Caja_Luces.L` (sale hacia arriba)
+- `/Parking/Caja 2/Regleta.1` declarado en `Parking/Caja 1/` (hermano)
+
+El `via` debe ser un cable **definido en la misma location** que la conexión.
 
 ## Locations anidadas (inline, escape hatch)
 

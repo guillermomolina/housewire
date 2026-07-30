@@ -297,39 +297,80 @@ def _split_element_terminal(ref: str) -> tuple[str, str]:
     return element, terminal
 
 
+def _norm_location_parts(parts: list[str]) -> list[str]:
+    return [normalize_token(part) for part in parts]
+
+
+def _location_contains(base: list[str], target: list[str]) -> bool:
+    """True if ``target`` is ``base`` or a descendant (token-normalized)."""
+    base_n = _norm_location_parts(base)
+    target_n = _norm_location_parts(target)
+    return len(target_n) >= len(base_n) and target_n[: len(base_n)] == base_n
+
+
+def _parse_element_path(
+    raw_name: str,
+    *,
+    current_location: list[str],
+) -> tuple[list[str], str]:
+    """Return ``(location_parts, element_name)`` for a connection element ref.
+
+    Allowed forms (scoped to the declaring location and its sublocations):
+    - local: ``Regleta``
+    - child-relative: ``Caja 2/Regleta`` or ``./Caja 2/Regleta``
+    - absolute under this tree: ``/Parking/Caja 2/Regleta`` (same subtree only)
+
+    ``../`` (leaving this location upward) is rejected.
+    """
+    name = raw_name.strip()
+    if not name:
+        raise ValueError("Referencia de elemento vacia")
+    parts_probe = [part for part in name.replace("\\", "/").split("/") if part]
+    if ".." in parts_probe or name.startswith("../") or name == "..":
+        raise ValueError(
+            f"Referencia fuera de esta location (../ no permitido): {raw_name}. "
+            "Define la conexion en un ancestro comun."
+        )
+    if name.startswith("/"):
+        parts = [part for part in name.strip("/").split("/") if part]
+        if not parts:
+            raise ValueError(f"Referencia absoluta invalida: {raw_name}")
+        return parts[:-1], parts[-1]
+    if name.startswith("./"):
+        name = name[2:]
+    if "/" in name:
+        parts = [part for part in name.split("/") if part]
+        if len(parts) < 2:
+            raise ValueError(f"Referencia relativa invalida: {raw_name}")
+        return list(current_location) + parts[:-1], parts[-1]
+    return list(current_location), name
+
+
+def _assert_ref_in_location_tree(raw_name: str, *, current_location: list[str]) -> None:
+    location, _element = _parse_element_path(
+        raw_name, current_location=current_location
+    )
+    if not _location_contains(current_location, location):
+        here = "/".join(current_location) if current_location else "/"
+        raise ValueError(
+            f"Referencia fuera del arbol de esta location: {raw_name}. "
+            f"Solo se permiten esta location y sublocations (actual: {here}). "
+            "Define la conexion mas arriba."
+        )
+
+
 def _resolve_element_name(
     raw_name: str,
     *,
     current_location: list[str],
     local_prefix: str,
 ) -> str:
-    name = raw_name.strip()
-    if name.startswith("/"):
-        parts = [part for part in name.strip("/").split("/") if part]
-        if len(parts) < 1:
-            raise ValueError(f"Referencia absoluta invalida: {raw_name}")
-        element = parts[-1]
-        location = parts[:-1]
-        return prefixed_name(location_prefix(location), element)
+    _assert_ref_in_location_tree(raw_name, current_location=current_location)
+    location, element = _parse_element_path(
+        raw_name, current_location=current_location
+    )
+    return prefixed_name(location_prefix(location), element)
 
-    if name.startswith("../") or name.startswith("./"):
-        location = list(current_location)
-        rest = name
-        while rest.startswith("../"):
-            if not location:
-                raise ValueError(f"Referencia relativa fuera de raiz: {raw_name}")
-            location.pop()
-            rest = rest[3:]
-        if rest.startswith("./"):
-            rest = rest[2:]
-        parts = [part for part in rest.split("/") if part]
-        if not parts:
-            raise ValueError(f"Referencia relativa invalida: {raw_name}")
-        element = parts[-1]
-        location.extend(parts[:-1])
-        return prefixed_name(location_prefix(location), element)
-
-    return prefixed_name(local_prefix, name)
 
 def _normalize_local_element_ref(
     raw_name: str,
@@ -339,17 +380,28 @@ def _normalize_local_element_ref(
     local_map: dict[str, str],
 ) -> str:
     name = raw_name.strip()
-    if name.startswith("/") or name.startswith("../") or name.startswith("./"):
+    if (
+        name.startswith("/")
+        or name.startswith("../")
+        or name.startswith("./")
+        or "/" in name
+    ):
         return _resolve_element_name(
             name, current_location=current_location, local_prefix=local_prefix
         )
-    # local short name
+    # local short name — always in scope
     if name in local_map:
         return local_map[name]
     return prefixed_name(local_prefix, name)
 
 
-def _parse_via_wires(via_token: str, cable_local_map: dict[str, str], local_prefix: str) -> tuple[str, list[Any]]:
+def _parse_via_wires(
+    via_token: str,
+    cable_local_map: dict[str, str],
+    local_prefix: str,
+    *,
+    current_location: list[str],
+) -> tuple[str, list[Any]]:
     expanded = _expand_endpoint_token(via_token)
     cable_names: list[str] = []
     wire_ids: list[Any] = []
@@ -359,20 +411,32 @@ def _parse_via_wires(via_token: str, cable_local_map: dict[str, str], local_pref
             cable_names.append(cable)
             wire_ids.append(_wireviz_pin(wire) if not isinstance(wire, int) else wire)
         else:
-            # bare cable name with implicit wires from sibling expansion already done
             cable_names.append(item)
             wire_ids.append(None)
 
     if len(set(cable_names)) != 1:
         raise ValueError(f"via mezcla varios cables: {via_token}")
     cable_raw = cable_names[0]
-    if cable_raw.startswith("/") or cable_raw.startswith("../") or cable_raw.startswith("./"):
-        # unusual but allow absolute cable refs as already-qualified names
-        cable_name = _resolve_element_name(
-            cable_raw, current_location=[], local_prefix=local_prefix
+    if (
+        cable_raw.startswith("/")
+        or cable_raw.startswith("../")
+        or cable_raw.startswith("./")
+        or "/" in cable_raw
+    ):
+        _assert_ref_in_location_tree(cable_raw, current_location=current_location)
+        location, element = _parse_element_path(
+            cable_raw, current_location=current_location
         )
+        if _norm_location_parts(location) != _norm_location_parts(current_location):
+            raise ValueError(
+                f"via debe referir un cable de esta location (no de una sublocation): "
+                f"{via_token}"
+            )
+        cable_name = prefixed_name(location_prefix(location), element)
     else:
-        cable_name = cable_local_map.get(cable_raw, prefixed_name(local_prefix, cable_raw))
+        cable_name = cable_local_map.get(
+            cable_raw, prefixed_name(local_prefix, cable_raw)
+        )
 
     if all(wire is None for wire in wire_ids):
         raise ValueError(f"via sin indices de hilo: {via_token}")
@@ -399,7 +463,12 @@ def _connection_dict_to_wireviz(
 
     from_pairs = [_split_element_terminal(token) for token in from_tokens]
     to_pairs = [_split_element_terminal(token) for token in to_tokens]
-    cable_name, wire_ids = _parse_via_wires(via_token, cable_map, local_prefix)
+    cable_name, wire_ids = _parse_via_wires(
+        via_token,
+        cable_map,
+        local_prefix,
+        current_location=current_location,
+    )
 
     if not (len(from_pairs) == len(to_pairs) == len(wire_ids)):
         raise ValueError(

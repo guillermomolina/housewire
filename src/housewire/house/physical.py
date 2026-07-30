@@ -200,7 +200,10 @@ def build_physical_model(
                     local_map=element_map,
                 )
                 cable_name, _wires = _parse_via_wires(
-                    str(conn["via"]), cable_map, prefix
+                    str(conn["via"]),
+                    cable_map,
+                    prefix,
+                    current_location=location_parts,
                 )
             except (ValueError, KeyError, IndexError):
                 continue
