@@ -15,6 +15,34 @@ DEFAULT_CABLE_SECTION = "1.5 mm2"
 DEFAULT_CABLE_COLORS = ["BN", "BU"]
 
 
+def declared_openings(doc: dict[str, Any]) -> set[str] | None:
+    """Return opening ids if ``location.openings`` is declared, else ``None``."""
+    loc = doc.get("location")
+    if not isinstance(loc, dict):
+        return None
+    openings = loc.get("openings")
+    if openings is None:
+        return None
+    if not isinstance(openings, dict):
+        raise ValueError("location.openings debe ser un mapa { B1: { face: … }, … }")
+    return {str(name) for name in openings}
+
+
+def require_opening_ids(doc: dict[str, Any], *opening_ids: str) -> None:
+    """If openings are declared, each id must exist in ``location.openings``."""
+    declared = declared_openings(doc)
+    if declared is None:
+        return
+    missing = [oid for oid in opening_ids if oid not in declared]
+    if missing:
+        known = ", ".join(sorted(declared)) or "(ninguna)"
+        raise ValueError(
+            "Abertura(s) no declarada(s) en location.openings: "
+            + ", ".join(missing)
+            + f". Declaradas: {known}"
+        )
+
+
 def _ensure_maps(doc: dict[str, Any]) -> None:
     doc.setdefault("elements", {})
     doc.setdefault("cables", {})
@@ -231,6 +259,7 @@ def add_pending_cable(
     exit_s = str(exit).strip()
     if not enter_s or not exit_s:
         raise ValueError("enter y exit (aberturas) son obligatorios")
+    require_opening_ids(doc, enter_s, exit_s)
     cable_name = next_pend_cable_name(doc)
     suffix = cable_name.rsplit("_", 1)[-1]
     conduit_name = f"Conducto_paso_{suffix}"

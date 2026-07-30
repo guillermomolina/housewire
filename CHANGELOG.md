@@ -9,6 +9,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.6.0] — 2026-07-30
+
+### Changed (breaking)
+
+- Junction box openings use **local ids** (`B1`, `B2`, …) declared in
+  `location.openings` with optional `face` / `index` and `mount` / `facing`.
+- `pend` validates opening ids when `openings` is declared.
+- Physical diagram recognizes `abertura B*`; legacy cardinals (`W.N`, …) still
+  parse from old text.
+- Docs and README use `B*` instead of `W.N` / `E.S`.
+
 ## [0.5.3] — 2026-07-30
 
 ### Changed

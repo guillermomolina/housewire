@@ -140,7 +140,7 @@ class TestShellDispatcher(unittest.TestCase):
     def test_pend_via_shell(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
-        code = self._run(s, "pend W.N E.S")
+        code = self._run(s, "pend B1 B2")
         self.assertEqual(code, 0)
         doc = abm.load_editable(s.active_path(), self.root)
         self.assertIn("PEND_Linea_01", doc["cables"])
@@ -149,7 +149,7 @@ class TestShellDispatcher(unittest.TestCase):
     def test_pend_with_section_via_shell(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
-        code = self._run(s, "pend N.E S.W 2.5")
+        code = self._run(s, "pend B1 B2 2.5")
         self.assertEqual(code, 0)
         doc = abm.load_editable(s.active_path(), self.root)
         self.assertEqual(doc["cables"]["PEND_Linea_01"]["section"], "2.5 mm2")
@@ -165,12 +165,12 @@ class TestShellDispatcher(unittest.TestCase):
 
         s = self._session()
         self._run(s, "cd zona_a")
-        with patch("housewire.commands._prompt", side_effect=["W.N", "E.S"]):
+        with patch("housewire.commands._prompt", side_effect=["B1", "B2"]):
             code = self._run(s, "pend")
         self.assertEqual(code, 0)
         doc = abm.load_editable(s.active_path(), self.root)
         self.assertIn("PEND_Linea_01", doc["cables"])
-        self.assertIn("W.N", doc["cables"]["PEND_Linea_01"]["notes"])
+        self.assertIn("B1", doc["cables"]["PEND_Linea_01"]["notes"])
 
     def test_add_dir_creates_directory(self) -> None:
         s = self._session()

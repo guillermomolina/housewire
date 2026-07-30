@@ -151,22 +151,22 @@ class TestABMPendingAndConduits(unittest.TestCase):
 
     def test_add_pending_cable_creates_cable_and_conduit(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
-        cable, conduit = abm.add_pending_cable(doc, enter="W.N", exit="E.S")
+        cable, conduit = abm.add_pending_cable(doc, enter="B1", exit="B2")
         self.assertEqual(cable, "PEND_Linea_01")
         self.assertEqual(conduit, "Conducto_paso_01")
         self.assertIn(cable, doc["cables"])
         self.assertIn(conduit, doc["conduits"])
         self.assertIn("estado: pendiente", doc["cables"][cable]["notes"])
-        self.assertIn("W.N", doc["cables"][cable]["notes"])
+        self.assertIn("B1", doc["cables"][cable]["notes"])
         self.assertEqual(doc["conduits"][conduit]["contains"], [cable])
-        self.assertIn("abertura W.N", doc["conduits"][conduit]["route"])
+        self.assertIn("abertura B1", doc["conduits"][conduit]["route"])
         self.assertIn("destino pendiente", doc["conduits"][conduit]["route"])
         self.assertEqual(doc.get("connections") or [], [])
 
     def test_pending_cable_numbering_increments(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
-        c1, _ = abm.add_pending_cable(doc, enter="W.N", exit="E.S")
-        c2, d2 = abm.add_pending_cable(doc, enter="N.E", exit="S.W", section="2.5")
+        c1, _ = abm.add_pending_cable(doc, enter="B1", exit="B2")
+        c2, d2 = abm.add_pending_cable(doc, enter="B1", exit="B2", section="2.5")
         self.assertEqual(c1, "PEND_Linea_01")
         self.assertEqual(c2, "PEND_Linea_02")
         self.assertEqual(d2, "Conducto_paso_02")
@@ -179,9 +179,28 @@ class TestABMPendingAndConduits(unittest.TestCase):
 
     def test_rm_cable_referenced_in_conduit_raises(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
-        cable, _ = abm.add_pending_cable(doc, enter="W.N", exit="E.S")
+        cable, _ = abm.add_pending_cable(doc, enter="B1", exit="B2")
         with self.assertRaises(ValueError):
             abm.rm_cable(doc, cable)
+
+    def test_pending_rejects_undeclared_opening(self) -> None:
+        doc = abm.load_editable(self.yaml, self.root)
+        doc["location"] = {
+            "type": "JunctionBox",
+            "openings": {"B1": {"face": "N"}, "B2": {"face": "S"}},
+        }
+        with self.assertRaises(ValueError) as ctx:
+            abm.add_pending_cable(doc, enter="B1", exit="B9")
+        self.assertIn("B9", str(ctx.exception))
+
+    def test_pending_ok_with_declared_openings(self) -> None:
+        doc = abm.load_editable(self.yaml, self.root)
+        doc["location"] = {
+            "type": "JunctionBox",
+            "openings": {"B1": {"face": "N"}, "B2": {"face": "S"}},
+        }
+        cable, _ = abm.add_pending_cable(doc, enter="B1", exit="B2")
+        self.assertEqual(cable, "PEND_Linea_01")
 
 # ---------------------------------------------------------------------------
 # abm – connections

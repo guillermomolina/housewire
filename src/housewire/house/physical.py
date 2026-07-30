@@ -22,7 +22,7 @@ from housewire.house import (
 )
 
 _OPENING_RE = re.compile(
-    r"abertura\s+([NSEWUDfondo]+(?:\.[A-Za-z0-9]+)?)",
+    r"abertura\s+(B\d+|[NSEWUD](?:\.[A-Za-z0-9]+)?|fondo(?:\.[A-Za-z0-9]+)?|tapa(?:\.[A-Za-z0-9]+)?)",
     re.IGNORECASE,
 )
 

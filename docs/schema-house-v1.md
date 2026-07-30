@@ -43,7 +43,10 @@ schema: house/v1
 location:
   type: JunctionBox
   subtype: "100x100 IP40"
-  notes: "mount: ceiling; abertura fondo.SE"
+  mount: ceiling
+  openings:
+    B1: { face: fondo, index: 1 }
+  notes: "…"
 elements:
   Regleta_1:
     type: TerminalStrip
@@ -110,43 +113,74 @@ En el catálogo, `wireviz_collapse` (análogo a `qet_hint`) empareja bornes para
 
 ## Aberturas de cajas de derivación
 
-Los agujeros/pasatubos de una caja **no son bornes eléctricos**: se documentan en `conduits.route` y/o `cables.notes`. El cableado eléctrico va a la regleta (`TerminalStrip`) u otro elemento dentro de la caja.
+Los agujeros/pasatubos de una caja **no son bornes eléctricos**. Su **identidad**
+es un id local de la caja (`B1`, `B2`, …), declarado en `location.openings`.
+`pend` / `conduits.route` / `cables.notes` citan ese id (`abertura B1`), no un
+cardinal compuesto tipo `W.N`.
 
-### Identificador: `<cara>[.<desempate>]`
+### Declaración en la JunctionBox
 
-Siempre en **coordenadas del edificio** (N/S/E/W), nunca “izquierda/derecha mirando la tapa” (eso cambia según montaje).
+```yaml
+location:
+  type: JunctionBox
+  subtype: "100x100 IP40"
+  mount: ceiling          # ceiling | wall | floor
+  # facing: N             # solo wall: hacia dónde mira la tapa (hacia el local)
+  openings:
+    B1: { face: fondo, index: 1 }
+    B2: { face: W, index: 1 }
+    B3: { face: N, index: 1 }
+    B4: { face: N, index: 2 }   # segunda boca en la misma cara
+  notes: "…"
+```
 
-| Código | Significado |
-|---|---|
-| `N` `S` `E` `W` | Cara lateral en planta |
-| `U` | Arriba (hacia el cielo / borde superior en pared) |
-| `D` | Abajo (hacia el suelo / borde inferior en pared) |
-| `tapa` | Cara de la tapa (acceso) |
-| `fondo` | Cara empotrada (opuesta a la tapa) |
+- **Id** (`B1`…): estable; no cambia si reclasificas techo↔pared.
+- **`face`**: cara en coordenadas de edificio (`N` `S` `E` `W` `U` `D` `tapa` `fondo`).
+- **`index`**: desempate 1..n en esa cara (ver orden abajo). Opcional si solo hay una boca.
 
-**Desempate** si hay varios agujeros en la misma cara: el más cercano a otra dirección, p.ej. `W.N` = cara oeste, agujero más al norte; `W.S` = cara oeste, más al sur. Alternativa: `.1` `.2` numerados de N→S (o de E→W), aclarado en `notes` de la caja.
+Si `location.openings` está declarado, `pend` exige que entrada/salida existan
+en ese mapa. Sin `openings`, se aceptan ids libres (migración).
 
-Ejemplos Parking: cadena C1–C4 en techo sale por `N.E` y entra por `S.E`; C3 enchufes por `E.S` y `N.W`. C5 es la unica en pared (`mount: wall`).
+### Orden de `index` en una cara (mirando la tapa)
 
-### Montaje (`mount`) — cambia qué es `tapa` / `fondo`
+Convención única para pared / techo / suelo:
 
-Indicar en `notes` del YAML de la caja o del conduit:
+- caras `N` / `S`: `index` crece de **W → E**
+- caras `E` / `W`: `index` crece de **N → S**
+- `fondo` / `tapa`: `index` 1..n en sentido horario mirando esa cara
+
+### Montaje (`mount`)
 
 | `mount` | Tapa mira a… | `fondo` es… | Laterales N/S/E/W |
 |---|---|---|---|
-| `ceiling` | suelo (miras hacia arriba para abrir) | empotrado en el techo | perímetro de la caja en planta |
-| `wall` | el local (indicar **hacia qué cardinal mira la tapa**, p.ej. `facing: E`) | dentro de la pared | perímetro; `U`/`D` = alto/bajo en esa pared |
-| `floor` | techo (tapa en el suelo) | empotrado en el suelo | perímetro en planta |
+| `ceiling` | suelo | empotrado en el techo | perímetro en planta |
+| `wall` | el local (`facing:` cardinal) | dentro de la pared | perímetro; `U`/`D` = alto/bajo |
+| `floor` | techo | empotrado en el suelo | perímetro en planta |
 
-En **pared**, sin `facing` las caras se confunden: `facing` = dirección en la que mira la tapa (hacia el local). Ejemplo: caja en pared sur con `facing: N` → `U` es hacia el techo; `E`/`W` siguen siendo este/oeste del edificio.
+En **pared**, `facing` = dirección en la que mira la tapa. El id `B*` no depende
+de `mount`; solo interpreta `face`.
+
+### Uso
+
+```text
+pend B1 B3
+```
+
+```yaml
+conduits:
+  Conducto_a_Caja_2:
+    route: "abertura B3 ↔ Caja derivacion 2 abertura B1"
+    contains: [Linea_a_Caja_derivacion_2]
+```
 
 ### Qué no mezclar
 
-- **Abertura** (`W.N`): geometría de la caja (agujero/pasatubo). Va en `route` / `notes`, no como nombre del conducto si se puede evitar.
-- **Conducto** (`Conducto_Cuadro_general_a_Caja_derivacion_1`): tubo/manguera entre sitios. Nombrar por extremos (`Conducto_<A>_a_<B>`), no Entrada/Salida ni solo el id de abertura. El sentido eléctrico lo llevan los cables (`Linea_A_a_B`).
-- En `route` usar `↔` (o “entre”) y citar la abertura en cada extremo cuando se sepa (`… ↔ Caja_1 abertura W.N ↔ Enchufe_1`).
-- **Contenido de caja**: lo que está *dentro* de una caja de derivación vive en el YAML de esa caja (p.ej. `Regleta_1` en `caja_derivacion_1.yaml`) y se deja explícito en `notes` (“Dentro de Caja_derivacion_1”).
-- **Borne** (`Regleta_1.1`): conexión eléctrica dentro de la caja.
+- **Abertura** (`B1`): geometría local de la caja. Va en `route` / `notes`.
+- **Conducto**: tubo entre sitios (`Conducto_<A>_a_<B>`), no el id de boca.
+- **Borne** (`Regleta.1`): conexión eléctrica dentro de la caja.
+
+Legacy: ids cardinales (`W.N`, `fondo.SE`) pueden aparecer en texto antiguo; el
+diagrama físico aún los reconoce, pero el canónico es `B*`.
 
 ## Cables
 
@@ -177,14 +211,14 @@ Para poder cargar obra “incompleta” sin bloquearte:
 - Si un cable **entra/sale por caja** pero aún no sabes destino, crea el `cable` y su `conduit`, pero **no** añadas `connections` todavía.
 - Usa prefijo `PEND_` en id de cable mientras esté abierto.
 - Marca estado en `notes` de cable: `estado: pendiente`.
-- Describe por dónde pasa en `conduits.route` con aberturas (`W.N`, `E.S`, etc.) y texto `destino pendiente`.
+- Describe por dónde pasa en `conduits.route` con aberturas (`B1`, `B2`, …) y texto `destino pendiente`.
 
 Desde el shell (recomendado en obra):
 
 ```text
 cd Parking/Caja derivacion 2
-pend W.N E.S          # defaults 1.5 mm2 / BN,BU
-pend N.E S.W 2.5      # sección distinta
+pend B1 B2            # defaults 1.5 mm2 / BN,BU
+pend B1 B2 2.5        # sección distinta
 pend                  # pregunta aberturas por stdin
 ```
 
@@ -196,13 +230,13 @@ cables:
     kind: power
     section: "1.5 mm2"
     colors: [BN, BU]
-    notes: "estado: pendiente; entra por W.N y sale por E.S"
+    notes: "estado: pendiente; entra por B1 y sale por B2"
 
 conduits:
   Conducto_paso_01:
     kind: conduit
     contains: [PEND_Linea_01]
-    route: "abertura W.N ↔ abertura E.S ↔ destino pendiente"
+    route: "abertura B1 ↔ abertura B2 ↔ destino pendiente"
 ```
 
 Al cerrar el pendiente:

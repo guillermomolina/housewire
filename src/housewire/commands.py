@@ -127,12 +127,12 @@ def _resolve_pend_openings(positional: list[str]) -> tuple[str, str, str | None]
             section = positional[2]
     elif len(positional) == 1:
         raise ValueError(
-            "pend requiere dos aberturas (entrada y salida), p.ej.: pend W.N E.S"
+            "pend requiere dos aberturas (entrada y salida), p.ej.: pend B1 B2"
         )
     if not enter:
-        enter = _prompt("Abertura entrada (p.ej. W.N): ")
+        enter = _prompt("Abertura entrada (p.ej. B1): ")
     if not exit_op:
-        exit_op = _prompt("Abertura salida (p.ej. E.S): ")
+        exit_op = _prompt("Abertura salida (p.ej. B2): ")
     if not enter or not exit_op:
         raise ValueError("Aberturas entrada y salida son obligatorias")
     return enter, exit_op, section
