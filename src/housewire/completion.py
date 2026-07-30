@@ -20,6 +20,7 @@ SHELL_COMMANDS = (
     "add",
     "rm",
     "generate",
+    "version",
     "help",
     "exit",
     "quit",

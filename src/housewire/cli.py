@@ -18,6 +18,7 @@ from housewire.house import (
 )
 from housewire.commands import cmd_ls, show_file
 from housewire.house.physical import export_physical_zone
+from housewire import __version__
 from housewire.project import abm
 from housewire.project.paths import (
     YAML_EXTENSIONS,
@@ -31,7 +32,7 @@ from housewire.shell import run_repl
 OUTPUT_SUFFIXES = (".html", ".png", ".svg", ".bom.tsv", ".yaml")
 PACKAGE_ROOT = Path(__file__).resolve().parent
 EXCLUDED_DIR_NAMES = {".venv", "__pycache__", ".git", "out"}
-KNOWN_SUBCOMMANDS = frozenset({"generate", "shell", "ls", "show", "add", "rm"})
+KNOWN_SUBCOMMANDS = frozenset({"generate", "shell", "ls", "show", "add", "rm", "version"})
 
 
 def run_wireviz(input_file: Path, output_dir: Path) -> None:
@@ -518,6 +519,12 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="housewire",
         description="housewire: diagramas, shell y ABM de instalaciones house/v1.",
     )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"housewire {__version__}",
+    )
     sub = parser.add_subparsers(dest="command")
 
     gen = sub.add_parser("generate", help="Fusionar YAML y generar diagramas")
@@ -525,6 +532,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sh = sub.add_parser("shell", help="REPL: cd, ls, use, add, rm, generate")
     sh.add_argument("project_path", help="Ruta del proyecto de obra")
+
+    sub.add_parser("version", help="Mostrar version de housewire")
 
     ls_p = sub.add_parser("ls", help="Listar locations (cd) y elements")
     ls_p.add_argument("project_path")
@@ -627,6 +636,9 @@ def _colors_list(raw: str) -> list[str]:
 
 def _dispatch_subcommand(args: argparse.Namespace) -> int:
     cmd = args.command
+    if cmd == "version":
+        print(f"housewire {__version__}")
+        return 0
     if cmd == "generate":
         project_path = Path(args.project_path).resolve()
         do_zones = args.zones and not args.no_zones

@@ -36,6 +36,7 @@ HELP_TEXT = """Comandos del shell housewire:
   rm file housewire.yaml
   rm dir <path>                  solo si está vacío
   generate [-f]                generar diagramas (como housewire generate)
+  version                      version del programa
   help
   exit | quit
 """
@@ -305,6 +306,11 @@ def run_shell_line(session: ProjectSession, line: str, *, generate_fn) -> int | 
             return -1
         if cmd == "help":
             print(HELP_TEXT.rstrip())
+            return 0
+        if cmd == "version":
+            from housewire import __version__
+
+            print(f"housewire {__version__}")
             return 0
         if cmd == "pwd":
             return cmd_pwd(session)

@@ -38,6 +38,22 @@ class TestShellDispatcher(unittest.TestCase):
         s = self._session()
         self.assertIsNone(self._run(s, ""))
 
+    def test_version_prints_package_version(self) -> None:
+        from io import StringIO
+        import sys
+        from housewire import __version__
+
+        s = self._session()
+        buf = StringIO()
+        old = sys.stdout
+        sys.stdout = buf
+        try:
+            code = self._run(s, "version")
+        finally:
+            sys.stdout = old
+        self.assertEqual(code, 0)
+        self.assertIn(__version__, buf.getvalue())
+
     def test_exit_returns_minus_one(self) -> None:
         s = self._session()
         self.assertEqual(self._run(s, "exit"), -1)

@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.6.1] — 2026-07-30
+
+### Added
+
+- `housewire --version` / `-V`, subcommand `housewire version`, and shell
+  command `version`.
+
 ## [0.6.0] — 2026-07-30
 
 ### Changed (breaking)
