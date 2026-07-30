@@ -58,7 +58,7 @@ Place types (catalog, `wireviz_skip`):
 |------|---------|
 | `Room` | Habitación / estancia |
 | `JunctionBox` | Caja de derivación |
-| `Panel` | Cuadro eléctrico |
+| `Panel` | Cuadro eléctrico (también puede declarar `openings`) |
 | `Zone` | Zona / planta / parking |
 | `House` | Casa / vivienda (no implica ser la raíz del árbol) |
 | `Location` | Genérico (legacy / inline) |
@@ -111,18 +111,18 @@ En el catálogo, `wireviz_collapse` (análogo a `qet_hint`) empareja bornes para
 
 **IGA vs IGP:** el Moeller C50/2 del cuadro es un **magnetotermico** usado como **IGA** (automatico). Un **IGP** seria un interruptor de corte sin curva C/proteccion; no es lo que hay en la foto.
 
-## Aberturas de cajas de derivación
+## Aberturas (JunctionBox y Panel)
 
-Los agujeros/pasatubos de una caja **no son bornes eléctricos**. Su **identidad**
-es un id local de la caja (`B1`, `B2`, …), declarado en `location.openings`.
-`pend` / `conduits.route` / `cables.notes` citan ese id (`abertura B1`), no un
-cardinal compuesto tipo `W.N`.
+Los agujeros/pasatubos de una **JunctionBox** o un **Panel** **no son bornes
+eléctricos**. Su **identidad** es un id local (`B1`, `B2`, …), declarado en
+`location.openings`. `pend` / `conduits.route` / `cables.notes` citan ese id
+(`abertura B1`), no un cardinal compuesto tipo `W.N`.
 
-### Declaración en la JunctionBox
+### Declaración
 
 ```yaml
 location:
-  type: JunctionBox
+  type: JunctionBox   # o Panel
   subtype: "100x100 IP40"
   mount: ceiling          # ceiling | wall | floor
   # facing: N             # solo wall: hacia dónde mira la tapa (hacia el local)
@@ -175,7 +175,7 @@ conduits:
 
 ### Qué no mezclar
 
-- **Abertura** (`B1`): geometría local de la caja. Va en `route` / `notes`.
+- **Abertura** (`B1`): geometría local de la JunctionBox/Panel. Va en `route` / `notes`.
 - **Conducto**: tubo entre sitios (`Conducto_<A>_a_<B>`), no el id de boca.
 - **Borne** (`Regleta.1`): conexión eléctrica dentro de la caja.
 

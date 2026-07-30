@@ -202,6 +202,15 @@ class TestABMPendingAndConduits(unittest.TestCase):
         cable, _ = abm.add_pending_cable(doc, enter="B1", exit="B2")
         self.assertEqual(cable, "PEND_Linea_01")
 
+    def test_pending_ok_with_panel_openings(self) -> None:
+        doc = abm.load_editable(self.yaml, self.root)
+        doc["location"] = {
+            "type": "Panel",
+            "openings": {"B1": {"face": "fondo"}, "B2": {"face": "D"}},
+        }
+        cable, _ = abm.add_pending_cable(doc, enter="B1", exit="B2")
+        self.assertEqual(cable, "PEND_Linea_01")
+
 # ---------------------------------------------------------------------------
 # abm – connections
 # ---------------------------------------------------------------------------
