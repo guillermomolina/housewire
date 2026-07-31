@@ -9,14 +9,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.15.0] — 2026-07-31
+
+### Removed
+
+- Conduit free-text **`route`** (require structured **`from` / `to`**).
+- Place type **`Zone`** (use **`Floor`**).
+
 ## [0.14.0] — 2026-07-31
 
 ### Changed
 
 - Clear **two-layer** model: physical = locations ↔ conduits; electrical =
   elements ↔ cables/connections.
-- Conduits use structured **`from` / `to`** (`LocationRef.OpeningId`); legacy
-  `route` text still loads. `pend` writes `.N1` / `.S1` endpoints.
+- Conduits use structured **`from` / `to`** (`LocationRef.OpeningId`).
+  `pend` writes `.N1` / `.S1` endpoints.
 - Physical export draws **conduit edges between locations** (not connection
   edges between elements).
 
@@ -28,7 +35,7 @@ _Changes not yet released in a tagged version._
 
 ### Changed
 
-- Prefer **`Floor`** over **`Zone`** (`Zone` remains as a legacy place type).
+- Prefer **`Floor`** for building levels.
 - `generate` scopes to the given directory (CLI path or shell current location);
   dropped `--zones` / `--no-zones` and `out/zones/` multi-cut. Output is always
   WireViz + physical under `<scope>/out/`.

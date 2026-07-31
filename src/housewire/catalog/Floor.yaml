@@ -3,7 +3,7 @@ id: Floor
 title: Floor / level
 description_es: >
   Planta o nivel del edificio (planta baja, -1/parking, planta 1, …).
-  Usar label para el nombre humano (Planta baja, Parking). Preferir Floor
-  frente al legacy Zone. No genera conector WireViz ni bornes.
+  Usar label para el nombre humano (Planta baja, Parking).
+  No genera conector WireViz ni bornes.
 wireviz_skip: true
 terminals: {}

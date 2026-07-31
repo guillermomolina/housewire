@@ -180,7 +180,9 @@ class TestABMPendingAndConduits(unittest.TestCase):
     def test_add_conduit_unknown_cable_raises(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
         with self.assertRaises(ValueError):
-            abm.add_conduit(doc, "C1", contains=["NO_EXISTE"])
+            abm.add_conduit(
+                doc, "C1", contains=["NO_EXISTE"], from_ref=".N1", to_ref=".S1"
+            )
 
     def test_rm_cable_referenced_in_conduit_raises(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)

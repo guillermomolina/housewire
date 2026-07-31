@@ -117,10 +117,9 @@ Place types (catalog, `wireviz_skip`):
 | `JunctionBox` | Caja de derivación |
 | `DeviceBox` | Caja de mecanismo (enchufe/interruptor; 1-/2-/3-gang) |
 | `Panel` | Cuadro eléctrico (también puede declarar `openings`) |
-| `Floor` | Planta / nivel (planta baja, parking, …); preferir frente a `Zone` |
-| `Zone` | Legacy (alias de Floor) |
+| `Floor` | Planta / nivel (planta baja, parking, …) |
 | `House` | Casa / vivienda (no implica ser la raíz del árbol) |
-| `Location` | Genérico (legacy / inline) |
+| `Location` | Genérico / inline ocasional |
 
 La **raíz del árbol** es el directorio que pasas a `housewire` (`project_path`),
 no un `location.type` concreto. Puedes apuntar a un subárbol o montar carpetas
@@ -328,7 +327,8 @@ Para poder cargar obra “incompleta” sin bloquearte:
 - Si un cable **entra/sale por caja** pero aún no sabes destino, crea el `cable` y su `conduit`, pero **no** añadas `connections` todavía.
 - Usa prefijo `PEND_` en id de cable mientras esté abierto.
 - Marca estado en `notes` de cable: `estado: pendiente`.
-- Describe por dónde pasa en `conduits.route` con aberturas (`N1`, `B1-1`, …) y texto `destino pendiente`.
+- Describe por dónde pasa en `conduits.from` / `conduits.to` con aberturas
+  (`N1`, `B1-1`, …); el destino pendiente puede ser `.S1` u otro place.
 
 Desde el shell (recomendado en obra):
 
@@ -427,10 +427,8 @@ conduits:
 ```
 
 - `from` / `to` = `LocationRef.OpeningId` (p.ej. `Caja_derivacion_4.W2`,
-  `Parking/Caja_derivacion_4.B2-1`, o `.N1` = place actual).
-- Legacy: `route: "A abertura X ↔ B abertura Y"` todavía se carga si faltan `from`/`to`.
-- Catalog: `catalog/Conduit.yaml`. Legacy `kind: conduit` + `type: M20` still
-  loads as `type: Conduit` / `subtype: M20`.
+  `Parking/Caja_derivacion_4.B2-1`, o `.N1` = place actual). Obligatorios.
+- Catalog: `catalog/Conduit.yaml`.
 
 Las `connections` (capa eléctrica) siguen yendo a los cables. El conduit se
 anota en los cables contenidos al exportar a WireViz; el diagrama **físico**

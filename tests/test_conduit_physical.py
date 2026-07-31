@@ -7,7 +7,6 @@ from pathlib import Path
 
 from housewire.house.conduit_ref import (
     conduit_endpoints,
-    parse_legacy_route,
     resolve_location_ref,
     split_conduit_endpoint,
 )
@@ -25,21 +24,11 @@ class TestConduitEndpoints(unittest.TestCase):
         )
         self.assertEqual(split_conduit_endpoint(".N1"), (".", "N1"))
 
-    def test_legacy_route(self) -> None:
-        ends = parse_legacy_route(
-            "Caja_derivacion_4 abertura W2 ↔ Enchufe_1 abertura N1"
-        )
-        self.assertEqual(ends, ("Caja_derivacion_4.W2", "Enchufe_1.N1"))
-
-    def test_conduit_endpoints_prefers_from_to(self) -> None:
-        ends = conduit_endpoints(
-            {
-                "from": "A.N1",
-                "to": "B.S1",
-                "route": "ignored abertura X ↔ ignored abertura Y",
-            }
-        )
+    def test_conduit_endpoints_require_from_to(self) -> None:
+        ends = conduit_endpoints({"from": "A.N1", "to": "B.S1"})
         self.assertEqual(ends, ("A.N1", "B.S1"))
+        with self.assertRaises(ValueError):
+            conduit_endpoints({"contains": ["X"]})
 
     def test_resolve_sibling_under_current(self) -> None:
         known = {("Parking",), ("Parking", "Caja_derivacion_4"), ("Parking", "Enchufe_1")}
@@ -103,33 +92,7 @@ class TestPhysicalConduits(unittest.TestCase):
             self.assertIn("Conducto_1", edge.label)
             self.assertIn("W2", edge.label)
             self.assertIn("N1", edge.label)
-            # Location nodes, not element names
             titles = {n.title for n in model.nodes.values()}
             self.assertTrue(any("Caja 4" in t or "Caja_4" in t for t in titles), titles)
             self.assertFalse(any("Regleta" in t for t in titles), titles)
             self.assertFalse(any("Socket" in t for t in titles), titles)
-
-    def test_legacy_route_still_builds_edge(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            create_location_index(root, type_id="House")
-            a = root / "Box_A"
-            b = root / "Box_B"
-            create_location_index(a, type_id="JunctionBox")
-            create_location_index(b, type_id="JunctionBox")
-            root_yaml = root / "housewire.yaml"
-            doc = abm.load_editable(root_yaml, root)
-            abm.add_cable(doc, "Linea_1", section="1.5", colors=["BN"])
-            abm.add_conduit(
-                doc,
-                "Conducto_legacy",
-                contains=["Linea_1"],
-                route="Box_A abertura N1 ↔ Box_B abertura S1",
-            )
-            abm.persist(doc, root_yaml, root)
-            model = build_physical_model(
-                root,
-                [root_yaml, a / "housewire.yaml", b / "housewire.yaml"],
-            )
-            self.assertEqual(len(model.edges), 1)
-            self.assertIn("N1", model.edges[0].label)

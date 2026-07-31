@@ -2,21 +2,10 @@
 
 Canonical form: ``LocationRef.OpeningId`` (e.g. ``Caja_derivacion_4.W2``,
 ``Parking/Caja_derivacion_4.B2-1``, ``.N1`` for the current place).
-
-Legacy free-text ``route`` still parses when ``from``/``to`` are absent.
 """
 from __future__ import annotations
 
-import re
 from typing import Any
-
-# LocationRef.OpeningId — opening is the part after the last '.'
-_LEGACY_ROUTE_RE = re.compile(
-    r"(?P<a_loc>.+?)\s+abertura\s+(?P<a_op>\S+)"
-    r"\s*[↔]+\s*"
-    r"(?P<b_loc>.+?)\s+abertura\s+(?P<b_op>\S+)",
-    re.IGNORECASE,
-)
 
 
 def split_conduit_endpoint(ref: str) -> tuple[str, str]:
@@ -45,36 +34,15 @@ def format_conduit_endpoint(location_ref: str, opening: str) -> str:
     return f"{loc}.{str(opening).strip()}"
 
 
-def parse_legacy_route(route: str) -> tuple[str, str] | None:
-    """Parse ``A abertura X ↔ B abertura Y`` into structured from/to strings.
-
-    Returns ``(from_ref, to_ref)`` as ``LocationRef.OpeningId``, or None.
-    """
-    text = str(route or "").strip()
-    if not text:
-        return None
-    match = _LEGACY_ROUTE_RE.search(text)
-    if not match:
-        return None
-    a_loc = match.group("a_loc").strip()
-    b_loc = match.group("b_loc").strip()
-    a_op = match.group("a_op").strip()
-    b_op = match.group("b_op").strip()
-    return (
-        format_conduit_endpoint(a_loc, a_op),
-        format_conduit_endpoint(b_loc, b_op),
-    )
-
-
-def conduit_endpoints(conduit: dict[str, Any]) -> tuple[str, str] | None:
-    """Return canonical ``(from_ref, to_ref)`` from structured fields or legacy route."""
+def conduit_endpoints(conduit: dict[str, Any]) -> tuple[str, str]:
+    """Return ``(from_ref, to_ref)``; both fields are required."""
     from_ref = conduit.get("from")
     to_ref = conduit.get("to")
-    if from_ref is not None and to_ref is not None:
-        return str(from_ref).strip(), str(to_ref).strip()
-    if from_ref is not None or to_ref is not None:
-        raise ValueError("conduit requiere from y to juntos (o solo route legacy)")
-    return parse_legacy_route(str(conduit.get("route") or ""))
+    if from_ref is None or to_ref is None:
+        raise ValueError(
+            "conduit requiere from y to (LocationRef.OpeningId, p.ej. Caja.W2)"
+        )
+    return str(from_ref).strip(), str(to_ref).strip()
 
 
 def resolve_location_ref(
@@ -108,14 +76,12 @@ def resolve_location_ref(
     matches = [loc for loc in known if loc and loc[-1] == leaf]
     if len(parts) == 1 and len(matches) == 1:
         return matches[0]
-    # Suffix match: Planta_baja/Recibidor/Cuadro_General vs Cuadro_General
-    suffix_matches = [loc for loc in known if len(loc) >= len(parts) and loc[-len(parts) :] == parts]
+    suffix_matches = [
+        loc for loc in known if len(loc) >= len(parts) and loc[-len(parts) :] == parts
+    ]
     if len(suffix_matches) == 1:
         return suffix_matches[0]
 
-    # Unknown external / not yet in known set: keep as absolute-looking path
-    if parts in known or under_current:
-        pass
     return under_current if current_parts else parts
 
 

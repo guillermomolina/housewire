@@ -1,6 +1,6 @@
 kind: place_type
 id: Location
-title: Generic place (legacy / inline)
+title: Generic place (inline / catch-all)
 description_es: >
   Contenedor generico de ubicacion. Preferir Room, JunctionBox, DeviceBox, Panel,
   Floor o House en housewire.yaml (campos en la raiz del YAML). Se mantiene para

@@ -255,9 +255,8 @@ def add_conduit(
     name: str,
     *,
     contains: list[str],
-    from_ref: str | None = None,
-    to_ref: str | None = None,
-    route: str | None = None,
+    from_ref: str,
+    to_ref: str,
     type_id: str = DEFAULT_CONDUIT_TYPE,
     subtype: str | None = DEFAULT_CONDUIT_SUBTYPE,
     label: str | None = None,
@@ -276,10 +275,10 @@ def add_conduit(
     for cable_ref in contains:
         if str(cable_ref) not in cables:
             raise ValueError(f"Conduit referencia cable inexistente: {cable_ref}")
-    if (from_ref is None) ^ (to_ref is None):
-        raise ValueError("conduit requiere from y to juntos (o route legacy)")
-    if from_ref is None and to_ref is None and not route:
-        raise ValueError("conduit requiere from/to o route")
+    from housewire.house.conduit_ref import split_conduit_endpoint
+
+    split_conduit_endpoint(from_ref)
+    split_conduit_endpoint(to_ref)
     # Legacy: kind was always "conduit"; type_id used to mean physical size.
     resolved_type = type_id
     resolved_subtype = subtype
@@ -287,19 +286,12 @@ def add_conduit(
         resolved_subtype = kind
     entry: dict[str, Any] = {
         "type": resolved_type,
+        "from": str(from_ref).strip(),
+        "to": str(to_ref).strip(),
         "contains": [str(c) for c in contains],
     }
     if resolved_subtype is not None:
         entry["subtype"] = resolved_subtype
-    if from_ref is not None and to_ref is not None:
-        from housewire.house.conduit_ref import split_conduit_endpoint
-
-        split_conduit_endpoint(from_ref)
-        split_conduit_endpoint(to_ref)
-        entry["from"] = str(from_ref).strip()
-        entry["to"] = str(to_ref).strip()
-    if route:
-        entry["route"] = route
     if label:
         entry["label"] = label
     if notes:
@@ -459,8 +451,6 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
         ends = ""
         if cd.get("from") is not None and cd.get("to") is not None:
             ends = f": {cd['from']} → {cd['to']}"
-        elif cd.get("route"):
-            ends = f": route={cd['route']}"
         contains = cd.get("contains") or []
         contains_s = f" [{', '.join(str(c) for c in contains)}]" if contains else ""
         lines.append(f"  {name} ({suffix}){ends}{contains_s}")

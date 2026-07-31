@@ -19,7 +19,6 @@ PLACE_TYPES = frozenset(
         "DeviceBox",
         "Panel",
         "Floor",
-        "Zone",  # legacy alias of Floor
         "House",
         "Location",
     }
@@ -284,7 +283,7 @@ def expand_conduit(
     out: dict[str, Any] = {"type": resolved_type}
     if subtype is not None:
         out["subtype"] = str(subtype)
-    for key in ("contains", "route", "from", "to", "label", "notes"):
+    for key in ("contains", "from", "to", "label", "notes"):
         if key in raw and raw[key] is not None:
             out[key] = copy.deepcopy(raw[key])
         elif key in defaults:
@@ -777,8 +776,6 @@ def _annotate_conduits(
             note_bits.append(f"label={expanded['label']}")
         if expanded.get("from") is not None and expanded.get("to") is not None:
             note_bits.append(f"from={expanded['from']} to={expanded['to']}")
-        elif expanded.get("route"):
-            note_bits.append(f"route={expanded['route']}")
         if expanded.get("notes"):
             note_bits.append(str(expanded["notes"]))
         annotation = " — ".join(note_bits)

@@ -200,8 +200,6 @@ def build_physical_model(
                 ends = conduit_endpoints(conduit)
             except ValueError:
                 continue
-            if ends is None:
-                continue
             from_ref, to_ref = ends
             try:
                 from_loc_ref, from_op = split_conduit_endpoint(from_ref)
