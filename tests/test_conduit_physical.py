@@ -1,6 +1,7 @@
 """Tests for conduit LocationRef.OpeningId endpoints and physical edges."""
 from __future__ import annotations
 
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,7 +11,7 @@ from housewire.house.conduit_ref import (
     resolve_location_ref,
     split_conduit_endpoint,
 )
-from housewire.house.physical import build_physical_model
+from housewire.house.physical import build_physical_model, model_to_dot
 from housewire.project.io import create_location_index
 from housewire.project import abm
 
@@ -49,19 +50,7 @@ class TestConduitEndpoints(unittest.TestCase):
         )
 
 
-class TestGeoOrderEdge(unittest.TestCase):
-    def test_ns_puts_northern_node_first(self) -> None:
-        from housewire.house.physical import _geo_order_edge
-
-        # YAML order: C3.N → C2.S  ⇒  C2 is north of C3
-        tail, head, tp, hp = _geo_order_edge("C3", "C2", "n", "s")
-        self.assertEqual((tail, head, tp, hp), ("C2", "C3", "s", "n"))
-
-    def test_already_north_first(self) -> None:
-        from housewire.house.physical import _geo_order_edge
-
-        tail, head, tp, hp = _geo_order_edge("C2", "C3", "s", "n")
-        self.assertEqual((tail, head, tp, hp), ("C2", "C3", "s", "n"))
+class TestPhysicalConduits(unittest.TestCase):
     def test_edges_from_conduits_not_connections(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -110,22 +99,13 @@ class TestGeoOrderEdge(unittest.TestCase):
             self.assertFalse(any("Regleta" in t for t in titles), titles)
             self.assertFalse(any("Socket" in t for t in titles), titles)
 
-            from housewire.house.physical import model_to_dot
-            import re
-
             dot = model_to_dot(model)
             self.assertIn("subgraph cluster_Parking {", dot)
-            # Leaves are nodes inside the parent cluster, not nested twin clusters.
             self.assertNotIn("subgraph cluster_Parking_Caja_4", dot, dot)
             self.assertIn("Parking_Caja_4 [", dot, dot)
             self.assertIn("Parking_Enchufe_1 [", dot, dot)
-            # Container Parking has no duplicate node (not an edge endpoint).
             self.assertIsNone(re.search(r"(?m)^\s+Parking \[", dot), dot)
-            self.assertIn("rankdir=TB", dot)
-            # Ports present; geo-order may swap endpoints for north-up.
-            self.assertTrue(
-                "Parking_Caja_4:w -> Parking_Enchufe_1:n" in dot
-                or "Parking_Enchufe_1:n -> Parking_Caja_4:w" in dot,
-                dot,
-            )
+            # Side ports (border), not center
+            self.assertIn("Parking_Caja_4:w -> Parking_Enchufe_1:n", dot, dot)
             self.assertIn("dir=none", dot)
+            self.assertIn("splines=true", dot)

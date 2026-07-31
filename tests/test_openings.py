@@ -12,8 +12,8 @@ class TestOpeningIds(unittest.TestCase):
         self.assertEqual(op.opening_compass_port("S2"), "s")
         self.assertEqual(op.opening_compass_port("E1"), "e")
         self.assertEqual(op.opening_compass_port("W2"), "w")
-        self.assertEqual(op.opening_compass_port("B2-1"), "_")
-        self.assertEqual(op.opening_compass_port("F1-1"), "_")
+        self.assertEqual(op.opening_compass_port("B2-1"), None)
+        self.assertEqual(op.opening_compass_port("F1-1"), None)
 
     def test_invalid_id(self) -> None:
         with self.assertRaises(ValueError):

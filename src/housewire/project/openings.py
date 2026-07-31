@@ -131,14 +131,15 @@ def normalize_opening_id(opening_id: str) -> str:
 def opening_compass_port(opening_id: str) -> str | None:
     """Graphviz compass port for an opening id (``n``/``s``/``e``/``w``).
 
-    Side faces map directly. Front/back (``F``/``B``) use center (``_``).
+    Side faces map directly. Front/back (``F``/``B``) return None (default
+    border clip — avoid center port ``_`` which draws into the node).
     Returns None if the id cannot be parsed.
     """
     try:
         face, _a, _b = parse_opening_id(opening_id)
     except ValueError:
         return None
-    return {"N": "n", "S": "s", "E": "e", "W": "w", "F": "_", "B": "_"}.get(face)
+    return {"N": "n", "S": "s", "E": "e", "W": "w"}.get(face)
 
 
 def opening_fits_grid(opening_id: str, grid: dict[str, tuple[int, int]]) -> bool:

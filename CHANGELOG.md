@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.16.4] — 2026-07-31
+
+### Changed
+
+- Physical layout: drop north-up geo-ordering; Graphviz places boxes freely.
+- Edges use side ports + normal splines (not ortho) so lines clip at the
+  node border instead of diving into the center.
+
 ## [0.16.3] — 2026-07-31
 
 ### Fixed
