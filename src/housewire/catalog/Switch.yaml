@@ -2,11 +2,9 @@ kind: element_type
 id: Switch
 title: Switch
 description_es: >
-  Interruptor de mecanismo (luz / carga). Corta o conecta la fase hacia la
-  carga. Subtypes tipicos: unipolar, bipolar, crossover (conmutador),
-  intermediate (cruzamiento).
+  Interruptor de mecanismo (luz / carga). Subtypes: unipolar (1↔2),
+  crossover / conmutador (C comun + bornes 1 y 2), intermediate (cruzamiento).
 qet_hint: switch
-# Bornes 1→2 = recorrido de fase (entrada / salida conmutada).
 terminals:
   "1":
     label: "1"
@@ -20,3 +18,43 @@ wireviz_collapse:
   - [1, 2]
 defaults:
   subtype: unipolar
+subtypes:
+  unipolar:
+    title: Single-pole (1-way)
+  crossover:
+    title: 3-way / conmutador
+    # C = punto comun; 1 y 2 = bornes de conmutacion (travellers).
+    terminals:
+      C:
+        label: C
+        direction: inout
+        role: phase
+      "1":
+        label: "1"
+        direction: inout
+        role: phase
+      "2":
+        label: "2"
+        direction: inout
+        role: phase
+    wireviz_collapse: []
+  intermediate:
+    title: Intermediate / cruzamiento
+    terminals:
+      "1":
+        label: "1"
+        direction: inout
+        role: phase
+      "2":
+        label: "2"
+        direction: inout
+        role: phase
+      "3":
+        label: "3"
+        direction: inout
+        role: phase
+      "4":
+        label: "4"
+        direction: inout
+        role: phase
+    wireviz_collapse: []

@@ -413,20 +413,32 @@ def _element_to_connector(
         raise ValueError(
             f"type: {type_id} belongs to cables:/conduits:, not to elements:"
         )
-    # wireviz_skip: true — no genera conector (p.ej. type: Location)
+    # wireviz_skip: true — no WireViz connector (e.g. place types)
     if isinstance(type_def, dict) and type_def.get("wireviz_skip"):
         return None, None
 
-    terminals = _merge_terminals(
-        type_def.get("terminals") or {}, element.get("terminals")
-    )
+    subtype = element.get("subtype")
+    if subtype is None and isinstance(type_def.get("defaults"), dict):
+        subtype = type_def["defaults"].get("subtype")
+    type_terminals = type_def.get("terminals") or {}
+    type_collapse = type_def.get("wireviz_collapse")
+    subtypes = type_def.get("subtypes") if isinstance(type_def, dict) else None
+    if isinstance(subtypes, dict) and subtype is not None:
+        sub = subtypes.get(str(subtype))
+        if isinstance(sub, dict):
+            if sub.get("terminals") is not None:
+                type_terminals = sub.get("terminals") or {}
+            if "wireviz_collapse" in sub:
+                type_collapse = sub.get("wireviz_collapse")
+
+    terminals = _merge_terminals(type_terminals, element.get("terminals"))
     if not terminals:
         raise ValueError(f"Type {type_id} does not define terminals")
 
     pairs_raw = element.get("wireviz_collapse")
     if pairs_raw is None:
-        pairs_raw = type_def.get("wireviz_collapse")
-    # Compat: antiguo nombre "loops" (confundible con loops nativos de WireViz).
+        pairs_raw = type_collapse
+    # Compat: old name "loops" (easy to confuse with native WireViz loops).
     if pairs_raw is None:
         pairs_raw = element.get("loops")
     if pairs_raw is None:
@@ -439,7 +451,7 @@ def _element_to_connector(
         "pins": pins,
         "pinlabels": pinlabels,
     }
-    # No exportar pares a WireViz como loops: generan arcos raros en un solo lado.
+    # Do not export pairs to WireViz as loops: they draw odd one-sided arcs.
     if element.get("subtype") is not None:
         connector["subtype"] = element["subtype"]
     elif type_def.get("defaults", {}).get("subtype") is not None:

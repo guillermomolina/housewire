@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.17.2] — 2026-07-31
+
+### Added
+
+- ``Switch`` subtypes ``crossover`` (conmutador: C+1+2) and ``intermediate``;
+  element catalog may override ``terminals`` / ``wireviz_collapse`` per subtype.
+
 ## [0.17.1] — 2026-07-31
 
 ### Fixed
