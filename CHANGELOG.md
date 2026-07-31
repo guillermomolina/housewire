@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.16.8] — 2026-07-31
+
+### Added
+
+- Shell / CLI: ``add conduit NAME --from A.Op --to B.Op --contains C1[,C2…]``.
+
 ## [0.16.7] — 2026-07-31
 
 ### Fixed

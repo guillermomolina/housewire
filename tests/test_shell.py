@@ -148,14 +148,23 @@ class TestShellDispatcher(unittest.TestCase):
         _path, doc = s.ensure_doc()
         self.assertIn("Linea_X", doc["cables"])
 
-    def test_add_cable_defaults_via_shell(self) -> None:
+    def test_add_conduit_via_shell(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
-        code = self._run(s, "add cable Linea_Y")
+        self._run(s, "add cable Linea_Z --section 1.5 --colors BN,BU")
+        code = self._run(
+            s,
+            "add conduit Conducto_Z --from .N1 --to Caja_derivacion_2.S1 "
+            "--contains Linea_Z --notes 'paso'",
+        )
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
-        self.assertEqual(doc["cables"]["Linea_Y"]["section"], "1.5 mm2")
-        self.assertEqual(doc["cables"]["Linea_Y"]["colors"], ["BN", "BU"])
+        cd = doc["conduits"]["Conducto_Z"]
+        self.assertEqual(cd["from"], ".N1")
+        self.assertEqual(cd["to"], "Caja_derivacion_2.S1")
+        self.assertEqual(cd["contains"], ["Linea_Z"])
+        self.assertEqual(cd["subtype"], "tube")
+        self.assertEqual(cd["notes"], "paso")
 
     def test_pend_via_shell(self) -> None:
         s = self._session()

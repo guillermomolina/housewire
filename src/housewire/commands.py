@@ -32,6 +32,9 @@ HELP_TEXT = """Comandos del shell housewire:
   add cable NAME [--section S] [--colors C1,C2] [--subtype power] [--label ...] [--notes ...]
                                (--kind es alias legacy de --subtype)
                                defaults: section=1.5 mm2, colors=BN,BU
+  add conduit NAME --from A.Op --to B.Op --contains C1[,C2…]
+                               [--subtype tube] [--label ...] [--notes ...]
+                               (capa fisica: locations ↔ aberturas)
   add pend [<enter> <exit>] [section] [--colors ...] [--notes ...]
   add connection --from F --via V --to T
                                (capa electrica: elements ↔ cable)
@@ -53,7 +56,7 @@ HELP_TEXT = """Comandos del shell housewire:
 def _parse_add_args(argv: list[str]) -> tuple[str, list[str]]:
     if not argv:
         raise ValueError(
-            "add requiere subcomando: location, element, cable, pend, connection, dir"
+            "add requiere subcomando: location, element, cable, conduit, pend, connection, dir"
         )
     return argv[0], argv[1:]
 
@@ -65,6 +68,10 @@ def _parse_rm_args(argv: list[str]) -> tuple[str, list[str]]:
 
 
 def _colors_list(raw: str) -> list[str]:
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def _csv_list(raw: str) -> list[str]:
     return [part.strip() for part in raw.split(",") if part.strip()]
 
 
@@ -342,6 +349,36 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
         )
         session.mark_dirty(path)
         print(f"Cable {args.name} añadido.")
+        return 0
+    if kind == "conduit":
+        p = argparse.ArgumentParser(prog="add conduit", add_help=False)
+        p.add_argument("name")
+        p.add_argument("--from", dest="from_ref", required=True, help="LocationRef.OpeningId")
+        p.add_argument("--to", dest="to_ref", required=True, help="LocationRef.OpeningId")
+        p.add_argument(
+            "--contains",
+            required=True,
+            help="Cable ids en este YAML, separados por coma",
+        )
+        p.add_argument("--subtype", default=abm.DEFAULT_CONDUIT_SUBTYPE)
+        p.add_argument("--label")
+        p.add_argument("--notes")
+        args = p.parse_args(rest)
+        contains = _csv_list(args.contains)
+        if not contains:
+            raise ValueError("--contains no puede estar vacio")
+        abm.add_conduit(
+            place,
+            args.name,
+            contains=contains,
+            from_ref=args.from_ref,
+            to_ref=args.to_ref,
+            subtype=args.subtype,
+            label=args.label,
+            notes=args.notes,
+        )
+        session.mark_dirty(path)
+        print(f"Conduit {args.name} añadido.")
         return 0
     if kind == "connection":
         p = argparse.ArgumentParser(prog="add connection", add_help=False)

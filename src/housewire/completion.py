@@ -28,7 +28,7 @@ SHELL_COMMANDS = (
     "quit",
 )
 
-ADD_SUBCOMMANDS = ("location", "element", "cable", "pend", "connection", "dir")
+ADD_SUBCOMMANDS = ("location", "element", "cable", "conduit", "pend", "connection", "dir")
 RM_SUBCOMMANDS = ("element", "cable", "connection", "file", "dir")
 
 

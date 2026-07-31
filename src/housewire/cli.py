@@ -548,6 +548,21 @@ def _build_parser() -> argparse.ArgumentParser:
     add_cn.add_argument("--via", dest="via_ref", required=True)
     add_cn.add_argument("--to", dest="to_ref", required=True)
 
+    add_cd = add_sub.add_parser("conduit", help="Tubo entre aberturas (capa fisica)")
+    add_cd.add_argument("project_path")
+    add_cd.add_argument("yaml_path")
+    add_cd.add_argument("name")
+    add_cd.add_argument("--from", dest="from_ref", required=True, help="LocationRef.OpeningId")
+    add_cd.add_argument("--to", dest="to_ref", required=True, help="LocationRef.OpeningId")
+    add_cd.add_argument(
+        "--contains",
+        required=True,
+        help="Cable ids en este YAML, separados por coma",
+    )
+    add_cd.add_argument("--subtype", default=None, help="default: tube")
+    add_cd.add_argument("--label")
+    add_cd.add_argument("--notes")
+
     add_loc = add_sub.add_parser(
         "location", help="Create place (outline dir, or inline with --inline)"
     )
@@ -722,6 +737,22 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
                 via_ref=args.via_ref,
                 to_ref=args.to_ref,
             )
+        elif args.add_kind == "conduit":
+            contains = _colors_list(args.contains)
+            if not contains:
+                raise ValueError("--contains no puede estar vacio")
+            abm.add_conduit(
+                doc,
+                args.name,
+                contains=contains,
+                from_ref=args.from_ref,
+                to_ref=args.to_ref,
+                subtype=args.subtype or abm.DEFAULT_CONDUIT_SUBTYPE,
+                label=args.label,
+                notes=args.notes,
+            )
+        else:
+            raise ValueError(f"add desconocido: {args.add_kind}")
         abm.persist(doc, yaml_path, project_path)
         print("OK")
         return 0
