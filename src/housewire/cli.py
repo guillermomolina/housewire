@@ -589,7 +589,9 @@ def _build_parser() -> argparse.ArgumentParser:
     add_cn.add_argument("--via", dest="via_ref", required=True)
     add_cn.add_argument("--to", dest="to_ref", required=True)
 
-    add_loc = add_sub.add_parser("location", help="Create place directory + housewire.yaml")
+    add_loc = add_sub.add_parser(
+        "location", help="Create place (outline dir, or inline with --inline)"
+    )
     add_loc.add_argument("project_path")
     add_loc.add_argument("name")
     add_loc.add_argument(
@@ -601,6 +603,17 @@ def _build_parser() -> argparse.ArgumentParser:
     add_loc.add_argument("--subtype")
     add_loc.add_argument("--notes")
     add_loc.add_argument("--label", help="Human-readable name (default: derived if name has spaces)")
+    add_loc.add_argument(
+        "--inline",
+        action="store_true",
+        help="Create under elements: of --yaml (required with --inline)",
+    )
+    add_loc.add_argument(
+        "--yaml",
+        dest="yaml_path",
+        default=None,
+        help="Host housewire.yaml for --inline (relative to project)",
+    )
 
     add_d = add_sub.add_parser("dir")
     add_d.add_argument("project_path")
@@ -671,10 +684,27 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
         project_path = Path(args.project_path).resolve()
         if args.add_kind == "location":
             from housewire.house import location_id_from_name
-            from housewire.project.io import create_location_index
+            from housewire.project.io import create_inline_location, create_location_index
 
             raw = Path(args.name)
             leaf_id, auto_label = location_id_from_name(raw.name)
+            label = args.label or auto_label
+            if args.inline:
+                if not args.yaml_path:
+                    raise ValueError("add location --inline requiere --yaml PATH")
+                yaml_path = (project_path / args.yaml_path).resolve()
+                doc = abm.load_editable(yaml_path, project_path)
+                create_inline_location(
+                    doc,
+                    leaf_id,
+                    type_id=args.type_id,
+                    subtype=args.subtype,
+                    notes=args.notes,
+                    label=label,
+                )
+                abm.persist(doc, yaml_path, project_path)
+                print(f"OK inline {leaf_id} in {yaml_path.relative_to(project_path)}")
+                return 0
             rel = raw.parent / leaf_id if str(raw.parent) not in (".", "") else Path(leaf_id)
             target = (project_path / rel).resolve()
             index_path = create_location_index(
@@ -682,7 +712,7 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
                 type_id=args.type_id,
                 subtype=args.subtype,
                 notes=args.notes,
-                label=args.label or auto_label,
+                label=label,
             )
             print(f"OK {index_path.relative_to(project_path)}")
             return 0

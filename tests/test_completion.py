@@ -63,6 +63,22 @@ class TestShellCompletion(unittest.TestCase):
         hits = complete_candidates(s, "cd Parking/", "Parking/", begidx=3)
         self.assertTrue(any("Caja" in h for h in hits), f"expected Caja… in {hits}")
 
+    def test_complete_cd_includes_inline(self) -> None:
+        from housewire.completion import complete_candidates
+        from housewire.project.io import create_inline_location, load_yaml
+        import yaml as _yaml
+
+        parking = self.root / "Parking" / "housewire.yaml"
+        doc = load_yaml(parking)
+        create_inline_location(doc, "Caja_in", type_id="JunctionBox")
+        parking.write_text(
+            _yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8"
+        )
+        s = self._session()
+        s.cd("Parking")
+        hits = complete_candidates(s, "cd ", "", begidx=3)
+        self.assertTrue(any("Caja_in" in h for h in hits), hits)
+
     def test_complete_use_index_only(self) -> None:
         from housewire.completion import complete_candidates
 

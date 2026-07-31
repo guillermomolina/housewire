@@ -86,8 +86,8 @@ def complete_candidates(
     if cmd == "cd" and (
         (len(tokens) == 1 and starting_new) or (len(tokens) == 2 and not starting_new)
     ):
-        want_path, dirs_only = True, True
-    elif cmd == "use" and (
+        return complete_location_path(session, text)
+    if cmd == "use" and (
         (len(tokens) == 1 and starting_new) or (len(tokens) == 2 and not starting_new)
     ):
         want_path, yaml_only = True, True
@@ -104,11 +104,53 @@ def complete_candidates(
         dirs_only = tokens[1] == "dir"
         yaml_only = tokens[0] == "rm" and tokens[1] == "file"
 
+    # Path args (filesystem) for use / add dir / rm dir|file
     if want_path:
-        # With '/' not in delims, ``text`` is the full path argument so far.
         return complete_path(session, text, dirs_only=dirs_only, yaml_only=yaml_only)
 
     return []
+
+
+def complete_location_path(session: ProjectSession, partial: str) -> list[str]:
+    """Tab-complete logical location paths (outline + inline)."""
+    partial = partial or ""
+    unquoted = partial
+    if unquoted.startswith(("'", '"')):
+        quote = unquoted[0]
+        if unquoted.endswith(quote) and len(unquoted) >= 2:
+            unquoted = unquoted[1:-1]
+        else:
+            unquoted = unquoted[1:]
+
+    if unquoted.endswith("/") or unquoted == "":
+        rel_dir = unquoted.rstrip("/")
+        name_prefix = ""
+        prefix = f"{rel_dir}/" if rel_dir else ""
+    else:
+        path = Path(unquoted)
+        parent = path.parent
+        rel_dir = "" if str(parent) == "." else str(parent).replace("\\", "/")
+        name_prefix = path.name
+        prefix = (rel_dir.rstrip("/") + "/") if rel_dir else ""
+
+    if rel_dir:
+        parent_parts = [p for p in Path(rel_dir).parts if p not in ("", ".")]
+    else:
+        parent_parts = list(session.logical_parts)
+
+    try:
+        cursor = session._resolve_logical(parent_parts)
+        children = session._list_children(cursor.yaml_path, cursor.inline_parts)
+    except (ValueError, FileNotFoundError, OSError):
+        return []
+
+    matches: list[str] = []
+    for child in children:
+        if not child.name.startswith(name_prefix):
+            continue
+        matches.append(_quote_if_needed(prefix + child.name + "/"))
+    matches.sort(key=lambda m: m.lower())
+    return matches
 
 
 def complete_path(

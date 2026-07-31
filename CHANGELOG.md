@@ -9,6 +9,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.10.0] — 2026-07-31
+
+### Changed
+
+- Shell `cd` / `ls` / `pwd` navigate the **logical location tree** (outline
+  directories and inline places under `elements:`), not raw filesystem dirs.
+- `ls` lists place-typed children as locations; non-place devices as elements.
+- `add location` defaults to outline when the current place is outline, inline
+  when already inside an inline place; `--inline` / `--dir` override
+  (`--dir` under inline is rejected). Same id as both dir and inline is an error.
+- Edits (`show`, `add element`/`cable`/…) apply to the current place node.
+
 ## [0.9.0] — 2026-07-31
 
 ### Changed

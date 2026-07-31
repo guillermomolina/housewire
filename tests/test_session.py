@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from housewire.project.io import create_empty_house_file
+from housewire.project.io import create_empty_house_file, create_location_index
 
 
 # ---------------------------------------------------------------------------
@@ -39,8 +39,9 @@ class TestProjectSession(unittest.TestCase):
         self.assertEqual(s.cwd, Path("zona_a"))
 
     def test_cd_dotdot(self) -> None:
+        create_location_index(self.root / "zona_a" / "caja", type_id="JunctionBox")
         s = self._session()
-        s.cd("zona_a/sub")
+        s.cd("zona_a/caja")
         s.cd("..")
         self.assertEqual(s.cwd, Path("zona_a"))
 
@@ -56,6 +57,7 @@ class TestProjectSession(unittest.TestCase):
         s.use_yaml("housewire.yaml")
         self.assertIsNotNone(s.active_yaml)
         s.cd("..")
+        # Root has no housewire.yaml in this fixture
         self.assertIsNone(s.active_yaml)
 
     def test_cd_auto_uses_index_yaml(self) -> None:
@@ -88,16 +90,16 @@ class TestProjectSession(unittest.TestCase):
     def test_cd_outside_root_raises(self) -> None:
         s = self._session()
         with self.assertRaises(ValueError):
-            s.cd("../../etc")
+            s.cd("..")
 
     def test_cd_excluded_dir_raises(self) -> None:
         s = self._session()
-        with self.assertRaises(ValueError):
+        with self.assertRaises(FileNotFoundError):
             s.cd("out")
 
     def test_cd_nonexistent_raises(self) -> None:
         s = self._session()
-        with self.assertRaises(NotADirectoryError):
+        with self.assertRaises(FileNotFoundError):
             s.cd("no_existe")
 
     def test_use_yaml_sets_active(self) -> None:

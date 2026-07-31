@@ -56,6 +56,44 @@ def create_empty_house_file(path: Path) -> dict[str, Any]:
     return doc
 
 
+def create_inline_location(
+    parent_place: dict[str, Any],
+    name: str,
+    *,
+    type_id: str,
+    subtype: str | None = None,
+    notes: str | None = None,
+    label: str | None = None,
+) -> dict[str, Any]:
+    """Create an inline place under ``parent_place['elements'][name]``."""
+    if not is_place_type(type_id):
+        raise ValueError(
+            "type debe ser uno de: "
+            + ", ".join(sorted(PLACE_TYPES - {"Location"}))
+            + " (o Location)"
+        )
+    parent_place.setdefault("elements", {})
+    elements = parent_place["elements"]
+    if not isinstance(elements, dict):
+        raise ValueError("elements debe ser un mapa")
+    if name in elements:
+        raise ValueError(f"Ya existe el elemento/location: {name}")
+    entry: dict[str, Any] = {
+        "type": str(type_id),
+        "elements": {},
+        "cables": {},
+        "connections": [],
+    }
+    if label:
+        entry["label"] = label
+    if subtype:
+        entry["subtype"] = subtype
+    if notes:
+        entry["notes"] = notes
+    elements[name] = entry
+    return entry
+
+
 def create_location_index(
     dir_path: Path,
     *,

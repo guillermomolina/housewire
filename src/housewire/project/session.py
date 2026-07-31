@@ -1,8 +1,11 @@
+"""Interactive project session: logical location navigation (outline + inline)."""
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Literal
 
-from housewire.house import is_house_document
+from housewire.house import is_house_document, is_place_type, place_meta_from_mapping
 from housewire.project.io import HOUSEWIRE_YAML, load_yaml
 from housewire.project.paths import (
     EXCLUDED_DIR_NAMES,
@@ -11,24 +14,280 @@ from housewire.project.paths import (
     is_yaml,
 )
 
+StorageKind = Literal["dir", "inline"]
+
+
+@dataclass(frozen=True)
+class LocationChild:
+    """A navigable child location under the current place."""
+
+    name: str
+    place_type: str | None
+    storage: StorageKind
+
+
+@dataclass
+class LocationCursor:
+    """Resolved view of the current logical location.
+
+    ``yaml_path`` is the outline ``housewire.yaml`` that stores this place.
+    ``inline_parts`` is the path inside that document's ``elements`` tree
+    (empty ⇒ the YAML root *is* the current place).
+    ``logical_parts`` is the full path from the project root (outline and inline).
+    """
+
+    yaml_path: Path | None
+    inline_parts: list[str] = field(default_factory=list)
+    logical_parts: list[str] = field(default_factory=list)
+
+    @property
+    def is_inline(self) -> bool:
+        return bool(self.inline_parts)
+
+    @property
+    def storage(self) -> StorageKind:
+        return "inline" if self.inline_parts else "dir"
+
+
+def _housewire_in_dir(directory: Path) -> Path | None:
+    for name in (HOUSEWIRE_YAML, "housewire.yml"):
+        candidate = directory / name
+        if not candidate.is_file():
+            continue
+        try:
+            data = load_yaml(candidate)
+        except ValueError:
+            continue
+        if is_house_document(data):
+            return candidate
+    return None
+
+
+def _load_doc(path: Path) -> dict[str, Any] | None:
+    try:
+        data = load_yaml(path)
+    except ValueError:
+        return None
+    if not is_house_document(data):
+        return None
+    return data
+
+
+def place_node_at(doc: dict[str, Any], inline_parts: list[str]) -> dict[str, Any]:
+    """Return the place mapping at ``inline_parts`` inside ``doc`` (doc root if empty)."""
+    node: dict[str, Any] = doc
+    for part in inline_parts:
+        elements = node.get("elements") or {}
+        if not isinstance(elements, dict) or part not in elements:
+            raise ValueError(f"Location inline inexistente: {'/'.join(inline_parts)}")
+        child = elements[part]
+        if not isinstance(child, dict) or not is_place_type(child.get("type")):
+            raise ValueError(f"No es una location (place type): {part}")
+        node = child
+    return node
+
+
+def _inline_children(node: dict[str, Any]) -> list[LocationChild]:
+    elements = node.get("elements") or {}
+    if not isinstance(elements, dict):
+        return []
+    rows: list[LocationChild] = []
+    for name in sorted(elements, key=lambda n: str(n).lower()):
+        defn = elements[name]
+        if not isinstance(defn, dict):
+            continue
+        type_id = defn.get("type")
+        if not is_place_type(type_id):
+            continue
+        rows.append(LocationChild(str(name), str(type_id), "inline"))
+    return rows
+
+
+def _outline_children(directory: Path, *, excluded: set[Path]) -> list[LocationChild]:
+    rows: list[LocationChild] = []
+    if not directory.is_dir():
+        return rows
+    for child in sorted(directory.iterdir(), key=lambda p: p.name.lower()):
+        if not child.is_dir():
+            continue
+        if child.name in EXCLUDED_DIR_NAMES:
+            continue
+        if is_excluded_path(child, excluded):
+            continue
+        meta_path = _housewire_in_dir(child)
+        if meta_path is None:
+            continue
+        data = _load_doc(meta_path)
+        place_type: str | None = None
+        if data is not None:
+            meta = place_meta_from_mapping(data)
+            if meta is not None and meta.get("type"):
+                place_type = str(meta["type"])
+        rows.append(LocationChild(child.name, place_type, "dir"))
+    return rows
+
 
 class ProjectSession:
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
         if not self.root.is_dir():
             raise NotADirectoryError(f"No es un directorio de proyecto: {self.root}")
-        self.cwd = Path(".")
-        self.active_yaml: Path | None = None
         self._excluded = {(self.root / "out").resolve()}
+        # Logical path from project root (location ids, outline or inline).
+        self.logical_parts: list[str] = []
+        self.active_yaml: Path | None = None
+        self._sync_from_logical()
+
+    # --- compatibility aliases ---
+
+    @property
+    def cwd(self) -> Path:
+        """Logical location path as a Path (not always a real directory)."""
+        if not self.logical_parts:
+            return Path(".")
+        return Path(*self.logical_parts)
+
+    @cwd.setter
+    def cwd(self, value: Path | str) -> None:
+        raw = Path(value)
+        if str(raw) in (".", ""):
+            self.logical_parts = []
+        else:
+            self.logical_parts = list(raw.parts)
+        self._sync_from_logical()
 
     def prompt_label(self) -> str:
-        rel = "." if str(self.cwd) == "." else str(self.cwd)
+        rel = "." if not self.logical_parts else "/".join(self.logical_parts)
         return f"{self.root.name}/{rel}"
 
     def cwd_path(self) -> Path:
-        return (self.root / self.cwd).resolve()
+        """Filesystem directory of the nearest outline place (hosting yaml's parent)."""
+        cursor = self.cursor()
+        if cursor.yaml_path is not None:
+            return cursor.yaml_path.parent
+        return self.root
+
+    def cursor(self) -> LocationCursor:
+        return self._resolve_logical(self.logical_parts)
+
+    def _sync_from_logical(self) -> None:
+        cursor = self._resolve_logical(self.logical_parts)
+        self.active_yaml = cursor.yaml_path
+
+    def _resolve_logical(self, parts: list[str]) -> LocationCursor:
+        yaml_path = _housewire_in_dir(self.root)
+        inline_parts: list[str] = []
+        walked: list[str] = []
+        for part in parts:
+            child = self._child_at(yaml_path, inline_parts, part)
+            if child is None:
+                raise FileNotFoundError(
+                    f"Location inexistente: {'/'.join(walked + [part]) or part}"
+                )
+            walked.append(part)
+            if child.storage == "dir":
+                if inline_parts:
+                    raise ValueError(
+                        f"Location outline {part!r} no puede colgar de un place inline "
+                        f"({'/'.join(walked)}). Usa solo hijos inline aquí."
+                    )
+                host_dir = (yaml_path.parent if yaml_path else self.root) / part
+                next_yaml = _housewire_in_dir(host_dir)
+                if next_yaml is None:
+                    raise FileNotFoundError(f"Location sin {HOUSEWIRE_YAML}: {part}")
+                yaml_path = next_yaml
+                inline_parts = []
+            else:
+                if yaml_path is None:
+                    raise ValueError(
+                        f"Location inline {part!r} requiere {HOUSEWIRE_YAML} en el ancestro"
+                    )
+                inline_parts = [*inline_parts, part]
+        return LocationCursor(
+            yaml_path=yaml_path,
+            inline_parts=list(inline_parts),
+            logical_parts=list(parts),
+        )
+
+    def _child_at(
+        self,
+        yaml_path: Path | None,
+        inline_parts: list[str],
+        name: str,
+    ) -> LocationChild | None:
+        children = self._list_children(yaml_path, inline_parts)
+        hits = [c for c in children if c.name == name]
+        if not hits:
+            return None
+        if len(hits) > 1:
+            kinds = ", ".join(sorted({c.storage for c in hits}))
+            raise ValueError(
+                f"Location ambigua {name!r}: existe como {kinds}. "
+                "No mezcles el mismo id en carpeta y en elements."
+            )
+        return hits[0]
+
+    def _list_children(
+        self, yaml_path: Path | None, inline_parts: list[str]
+    ) -> list[LocationChild]:
+        outline: list[LocationChild] = []
+        inline: list[LocationChild] = []
+        if not inline_parts:
+            host_dir = yaml_path.parent if yaml_path is not None else self.root
+            outline = _outline_children(host_dir, excluded=self._excluded)
+        if yaml_path is not None:
+            doc = _load_doc(yaml_path)
+            if doc is not None:
+                node = place_node_at(doc, inline_parts)
+                inline = _inline_children(node)
+        # Detect collisions between outline and inline names.
+        outline_names = {c.name for c in outline}
+        for child in inline:
+            if child.name in outline_names:
+                raise ValueError(
+                    f"Location ambigua {child.name!r}: existe como dir e inline. "
+                    "No mezcles el mismo id en carpeta y en elements."
+                )
+        return sorted(outline + inline, key=lambda c: c.name.lower())
+
+    def list_locations(self) -> list[tuple[str, str | None]]:
+        """Child locations: ``(name, place_type_or_None)`` (outline + inline)."""
+        cursor = self.cursor()
+        return [(c.name, c.place_type) for c in self._list_children(cursor.yaml_path, cursor.inline_parts)]
+
+    def list_location_children(self) -> list[LocationChild]:
+        cursor = self.cursor()
+        return self._list_children(cursor.yaml_path, cursor.inline_parts)
+
+    def list_elements(self) -> list[tuple[str, str]]:
+        """Non-place elements in the current location: ``(name, type_id)``."""
+        cursor = self.cursor()
+        if cursor.yaml_path is None:
+            return []
+        doc = _load_doc(cursor.yaml_path)
+        if doc is None:
+            return []
+        node = place_node_at(doc, cursor.inline_parts)
+        elements = node.get("elements") or {}
+        if not isinstance(elements, dict):
+            return []
+        rows: list[tuple[str, str]] = []
+        for name in sorted(elements, key=lambda n: str(n).lower()):
+            defn = elements[name]
+            if not isinstance(defn, dict):
+                continue
+            type_id = defn.get("type")
+            if is_place_type(type_id):
+                continue
+            rows.append((str(name), str(type_id) if type_id else "?"))
+        return rows
+
+    def place_node(self, doc: dict[str, Any]) -> dict[str, Any]:
+        """Map the loaded hosting document to the current place node."""
+        return place_node_at(doc, self.cursor().inline_parts)
 
     def resolve_under_root(self, raw: str) -> Path:
+        """Resolve a filesystem path relative to the nearest outline directory."""
         raw = raw.strip()
         if raw == "" or raw == ".":
             return self.cwd_path()
@@ -42,105 +301,61 @@ class ProjectSession:
         return candidate
 
     def cd(self, raw: str | None) -> Path | None:
-        """Change directory and auto-activate housewire.yaml when present."""
+        """Change logical location (outline dir or inline place) and sync active yaml."""
         if raw is None or raw.strip() == "":
-            self.cwd = Path(".")
+            self.logical_parts = []
+            self._sync_from_logical()
+            return self.active_yaml
+
+        text = raw.strip()
+        # Absolute-from-root if starts with /
+        if text.startswith("/"):
+            start: list[str] = []
+            rest = text.lstrip("/")
         else:
-            target = self.resolve_under_root(raw)
-            if not target.is_dir():
-                raise NotADirectoryError(f"No es un directorio: {raw}")
-            self.cwd = target.relative_to(self.root)
-        self.active_yaml = None
-        return self.try_auto_use_yaml()
+            start = list(self.logical_parts)
+            rest = text
 
-    def list_locations(self) -> list[tuple[str, str | None]]:
-        """Child locations (dirs with housewire.yaml): ``(name, place_type_or_None)``."""
-        directory = self.cwd_path()
-        entries: list[tuple[str, str | None]] = []
-        for child in sorted(directory.iterdir(), key=lambda p: p.name.lower()):
-            if not child.is_dir():
-                continue
-            if child.name in EXCLUDED_DIR_NAMES:
-                continue
-            if is_excluded_path(child, self._excluded):
-                continue
-            place_type: str | None = None
-            has_housewire = False
-            for yaml_name in (HOUSEWIRE_YAML, "housewire.yml"):
-                meta_path = child / yaml_name
-                if not meta_path.is_file():
+        parts = start
+        if rest:
+            for segment in Path(rest).parts:
+                if segment in ("", "."):
                     continue
-                try:
-                    data = load_yaml(meta_path)
-                except ValueError:
+                if segment == "..":
+                    if not parts:
+                        raise ValueError("Ya estas en la raiz del proyecto")
+                    parts = parts[:-1]
                     continue
-                if not is_house_document(data):
-                    continue
-                from housewire.house import place_meta_from_mapping
+                # Validate step exists (also detects collisions).
+                cursor = self._resolve_logical(parts)
+                child = self._child_at(cursor.yaml_path, cursor.inline_parts, segment)
+                if child is None:
+                    raise FileNotFoundError(
+                        f"Location inexistente: {'/'.join(parts + [segment])}"
+                    )
+                parts = parts + [segment]
 
-                has_housewire = True
-                meta = place_meta_from_mapping(data)
-                if meta is not None and meta.get("type"):
-                    place_type = str(meta["type"])
-                break
-            if not has_housewire:
-                continue
-            entries.append((child.name, place_type))
-        return entries
-
-    def list_elements(self) -> list[tuple[str, str]]:
-        """Elements in the current location's housewire.yaml: ``(name, type_id)``."""
-        yaml_path = self.housewire_yaml_in_cwd()
-        if yaml_path is None:
-            return []
-        try:
-            data = load_yaml(yaml_path)
-        except ValueError:
-            return []
-        if not is_house_document(data):
-            return []
-        elements = data.get("elements") or {}
-        if not isinstance(elements, dict):
-            return []
-        rows: list[tuple[str, str]] = []
-        for name in sorted(elements, key=lambda n: str(n).lower()):
-            defn = elements[name]
-            type_id = "?"
-            if isinstance(defn, dict) and defn.get("type"):
-                type_id = str(defn["type"])
-            rows.append((str(name), type_id))
-        return rows
+        # Full resolve to validate the final path.
+        self._resolve_logical(parts)
+        self.logical_parts = parts
+        self._sync_from_logical()
+        return self.active_yaml
 
     def housewire_yaml_in_cwd(self) -> Path | None:
-        for name in (HOUSEWIRE_YAML, "housewire.yml"):
-            candidate = self.cwd_path() / name
-            if not candidate.is_file():
-                continue
-            try:
-                data = load_yaml(candidate)
-            except ValueError:
-                continue
-            if is_house_document(data):
-                return candidate
-        return None
+        return self.cursor().yaml_path
 
     def try_auto_use_yaml(self) -> Path | None:
-        if self.active_yaml is not None:
-            return self.active_yaml
         found = self.housewire_yaml_in_cwd()
-        if found is not None:
-            self.active_yaml = found
-            return self.active_yaml
-        return None
+        self.active_yaml = found
+        return found
 
     def ensure_active_yaml(self) -> Path:
-        if self.active_yaml is not None:
-            return self.active_yaml
-        auto = self.try_auto_use_yaml()
-        if auto is not None:
-            return auto
+        path = self.cursor().yaml_path
+        if path is not None:
+            self.active_yaml = path
+            return path
         raise ValueError(
-            f"No hay {HOUSEWIRE_YAML} en este directorio. "
+            f"No hay {HOUSEWIRE_YAML} en esta location. "
             f"Usa: add location <nombre>  o crea {HOUSEWIRE_YAML}"
         )
 
@@ -152,6 +367,13 @@ class ProjectSession:
             raise ValueError(
                 f"Solo se edita {HOUSEWIRE_YAML} (un fichero por Location). "
                 f"Recibido: {path.name}"
+            )
+        # use only allowed when it matches the hosting yaml of current cursor
+        cursor = self.cursor()
+        if cursor.yaml_path is not None and path.resolve() != cursor.yaml_path.resolve():
+            raise ValueError(
+                f"use solo activa el {HOUSEWIRE_YAML} de la location actual "
+                f"({cursor.yaml_path.relative_to(self.root)})"
             )
         self.active_yaml = path
         return path

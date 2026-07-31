@@ -64,7 +64,9 @@ Legacy: bloque `location: { type: … }` aún se lee; preferir campos en la raiz
 
 Sin `schema: house/v1`, el archivo se trata como WireViz legacy (como `Test/`).
 
-## Locations = directories + housewire.yaml
+## Locations = árbol lógico (outline y/o inline)
+
+**Outline** (recomendado en obra):
 
 ```text
 Garage/
@@ -72,6 +74,14 @@ Garage/
   Junction_box_1/
     housewire.yaml               # type: JunctionBox + regletas…
 ```
+
+**Inline** (escape hatch / monolito): place anidado en `elements:` del YAML ancestro.
+
+El shell (`cd` / `ls` / `pwd`) navega el **árbol de locations**, no el filesystem a ciegas:
+hijos outline (carpeta + `housewire.yaml`) e hijos inline (`type` place) aparecen juntos en
+`locations:`. Los devices (Socket, MCB, …) van en `elements:`.
+
+Mezcla permitida; **prohibido** el mismo id como carpeta y como key inline a la vez.
 
 Place types (catalog, `wireviz_skip`):
 
@@ -88,10 +98,10 @@ La **raíz del árbol** es el directorio que pasas a `housewire` (`project_path`
 no un `location.type` concreto. Puedes apuntar a un subárbol o montar carpetas
 por encima (p.ej. `Building/…/House/…`) sin cambiar tipos.
 
-- One directory → one `housewire.yaml` (no sibling fragment YAMLs).
-- Grow by adding a **subdirectory** place, not another file beside `housewire.yaml`.
-- `cd` auto-activates `housewire.yaml`; `show` prints place fields + + that file’s content.
-- `add location "Main panel" --type Panel` creates the folder and `housewire.yaml`.
+- One outline directory → one `housewire.yaml` (no sibling fragment YAMLs).
+- `cd` entra en outline o inline; `show` / `add element` actúan sobre el place actual.
+- `add location NAME --type T` → outline si el place actual es outline; inline si ya estás
+  inline. Fuerza con `--inline` / `--dir` (`--dir` bajo inline no está permitido).
 
 ## Elementos
 
