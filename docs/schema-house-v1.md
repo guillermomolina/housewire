@@ -17,8 +17,48 @@ schema: house/v1
 
 La **jerarquía de ubicaciones es el path de directorios**.
 El bloque top-level **`location:`** es metadatos del directorio actual
-(`type: Room|JunctionBox|Panel|Zone|House`, `subtype`, `notes`, …),
+(`type: Room|JunctionBox|Panel|Zone|House`, `subtype`, `label`, `notes`, …),
 no una lista de path.
+
+### Ids técnicos vs `label`
+
+Misma regla para **carpetas**, **elementos**, **cables** e **locations anidadas**
+en un solo YAML:
+
+| Rol | Qué es el id | Display |
+|---|---|---|
+| Location (carpeta) | nombre del directorio | `location.label` opcional |
+| Location inline | clave en `elements:` / `locations:` | `label` en ese mapa |
+| Elemento / cable | clave YAML | `label` opcional |
+
+- **Id**: preferir `[A-Za-z0-9_]+` (p.ej. `Caja_derivacion_4`, `Regleta_1`).
+  Sin espacios. Es lo que va en conexiones: `Caja_derivacion_4/Regleta_1.1`.
+- **`label`**: texto humano para diagramas / UI (`Caja derivación 4`).
+- `add location "Caja derivacion 6" --type JunctionBox` crea carpeta
+  `Caja_derivacion_6/` con `location.label: Caja derivacion 6`.
+
+Válido en **árbol de carpetas** o **YAML anidado**:
+
+```yaml
+# Inline (un solo fichero)
+elements:
+  Caja_derivacion_1:
+    type: JunctionBox
+    label: "Caja derivación 1"
+    mount: ceiling
+    openings: [N1]
+    elements:
+      Regleta_1:
+        type: TerminalStrip
+        label: "Regleta 3 pares"
+```
+
+```text
+# Carpetas (equivalente)
+Parking/
+  Caja_derivacion_1/
+    housewire.yaml    # location: { type: JunctionBox, label: "…", … }
+```
 
 Sin `schema: house/v1`, el archivo se trata como WireViz legacy (como `Test/`).
 
@@ -29,19 +69,20 @@ Each place (room, junction box, panel, zone…) is a **directory** with a single
 ```text
 Garage/
   housewire.yaml                 # location: + sockets, lights, …
-  Junction box 1/
+  Junction_box_1/
     housewire.yaml               # location: + terminal strips…
-Ground floor/Hall/
-  housewire.yaml
-  Main panel/
+  Ground_floor/Hall/
     housewire.yaml
+    Main_panel/
+      housewire.yaml
 ```
 
 ```yaml
-# Garage/Junction box 1/housewire.yaml
+# Garage/Junction_box_1/housewire.yaml
 schema: house/v1
 location:
   type: JunctionBox
+  label: "Junction box 1"
   subtype: "100x100 IP40"
   mount: ceiling
   opening_grid:
@@ -53,6 +94,7 @@ location:
 elements:
   Regleta_1:
     type: TerminalStrip
+    label: "Regleta 3 pares"
 ```
 
 Place types (catalog, `wireviz_skip`):

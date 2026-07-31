@@ -23,8 +23,9 @@ HELP_TEXT = """Comandos del shell housewire:
   show --element NAME | --cable NAME
   pend [<enter> <exit>] [section] [--colors C1,C2] [--notes ...]
                                cable pendiente + conduit (atajo de add pend)
-  add location NAME --type T [--subtype ...] [--notes ...]
+  add location NAME --type T [--subtype ...] [--label ...] [--notes ...]
                                crear carpeta + housewire.yaml (T=Room|JunctionBox|Panel|Zone|House)
+                               NAME con espacios → id tecnico + label automatico
   add element NAME --type T [--subtype ...] [--label ...] [--manufacturer ...] [--model ...] [--notes ...]
   add cable NAME [--section S] [--colors C1,C2] [--kind power] [--notes ...]
                                defaults: section=1.5 mm2, colors=BN,BU
@@ -169,15 +170,27 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
         print(f"Creado: {target.relative_to(session.root)}")
         return 0
     if kind == "location":
+        from pathlib import Path as _Path
+
+        from housewire.house import location_id_from_name
+
         p = argparse.ArgumentParser(prog="add location", add_help=False)
         p.add_argument("name")
         p.add_argument("--type", dest="type_id", required=True)
         p.add_argument("--subtype")
         p.add_argument("--notes")
+        p.add_argument("--label")
         args = p.parse_args(rest)
-        target = session.resolve_under_root(args.name)
+        raw = _Path(args.name)
+        leaf_id, auto_label = location_id_from_name(raw.name)
+        rel = raw.parent / leaf_id if str(raw.parent) not in (".", "") else _Path(leaf_id)
+        target = session.resolve_under_root(str(rel))
         index_path = create_location_index(
-            target, type_id=args.type_id, subtype=args.subtype, notes=args.notes
+            target,
+            type_id=args.type_id,
+            subtype=args.subtype,
+            notes=args.notes,
+            label=args.label or auto_label,
         )
         session.cwd = target.relative_to(session.root)
         session.active_yaml = index_path

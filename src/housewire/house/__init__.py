@@ -33,6 +33,25 @@ def normalize_token(value: str) -> str:
     return cleaned or "sin_nombre"
 
 
+def is_technical_id(value: str) -> bool:
+    """True if ``value`` is already a safe location/element id (no spaces)."""
+    return bool(value) and value == normalize_token(value)
+
+
+def location_id_from_name(raw_name: str) -> tuple[str, str | None]:
+    """Return ``(technical_id, label_or_none)`` for a location leaf name.
+
+    If ``raw_name`` is already a technical id, label is ``None``.
+    Otherwise id is ``normalize_token(raw_name)`` and label is the original text.
+    """
+    name = raw_name.strip()
+    if not name:
+        raise ValueError("nombre de location vacio")
+    if is_technical_id(name):
+        return name, None
+    return normalize_token(name), name
+
+
 def location_prefix(parts: list[str]) -> str:
     tokens = [normalize_token(part) for part in parts if part]
     return "__".join(token for token in tokens if token)
@@ -707,6 +726,8 @@ def _walk_locations(
     for k in ("cables", "connections", "conduits"):
         if k in node:
             flat_node[k] = node[k]
+    if isinstance(node.get("location"), dict):
+        flat_node["location"] = copy.deepcopy(node["location"])
     # Also include place elements that have NO nested content (pure metadata)
     for name, defn in location_elements.items():
         meta_only = {k: v for k, v in defn.items() if k not in location_child_keys}
@@ -719,10 +740,13 @@ def _walk_locations(
     if not flat_node.get("elements"):
         flat_node.pop("elements", None)
 
-    if any(key in flat_node for key in direct_keys):
-        fragment = {key: copy.deepcopy(flat_node[key]) for key in direct_keys if key in flat_node}
+    if any(key in flat_node for key in (*direct_keys, "location")):
+        fragment = {
+            key: copy.deepcopy(flat_node[key])
+            for key in (*direct_keys, "location")
+            if key in flat_node
+        }
         fragments.append((list(base), fragment))
-
     # Walk place elements that have nested content
     for name, defn in location_elements.items():
         if any(k in defn for k in {"elements", "cables", "connections"}):

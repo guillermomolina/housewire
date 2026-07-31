@@ -47,8 +47,30 @@ class PhysModel:
     title: str = ""
 
 
-def _cluster_label(parts: list[str]) -> str:
-    return " / ".join(parts) if parts else "(raiz)"
+def _cluster_label(parts: list[str], *, leaf_label: str | None = None) -> str:
+    if not parts:
+        return "raiz"
+    display = list(parts)
+    if leaf_label:
+        display[-1] = leaf_label
+    return " / ".join(display)
+
+
+def _leaf_place_meta(fragment: dict[str, Any], location_parts: list[str]) -> dict[str, Any]:
+    """Return place metadata dict for this fragment (directory or inline)."""
+    loc = fragment.get("location")
+    if isinstance(loc, dict) and loc.get("type"):
+        return loc
+    leaf = location_parts[-1] if location_parts else None
+    for name, definition in (fragment.get("elements") or {}).items():
+        if not isinstance(definition, dict):
+            continue
+        from housewire.house import is_place_type
+
+        if is_place_type(definition.get("type")):
+            if leaf is None or str(name) == str(leaf):
+                return definition
+    return {}
 
 
 def _safe_id(value: str) -> str:
@@ -120,19 +142,32 @@ def build_physical_model(
     for location_parts, fragment in _load_house_files(project_path, yaml_files):
         prefix = location_prefix(location_parts)
         cluster_id = _safe_id(prefix or "raiz")
-        cluster_label = _cluster_label(location_parts)
 
-        # Collect place metadata (location:) for cluster subtitle
+        place_meta = _leaf_place_meta(fragment, location_parts)
+        leaf_label = None
+        if place_meta.get("label"):
+            leaf_label = str(place_meta["label"])
+        cluster_label = _cluster_label(location_parts, leaf_label=leaf_label)
+
+        # Place metadata (directory location: or inline place) → cluster subtitle
         cluster_subtitle = ""
-        for _name, definition in (fragment.get("elements") or {}).items():
-            if isinstance(definition, dict) and is_place_type(definition.get("type")):
-                parts_sub: list[str] = [str(definition.get("type"))]
-                if definition.get("subtype"):
-                    parts_sub.append(str(definition["subtype"]))
-                if definition.get("notes"):
-                    parts_sub.append(str(definition["notes"]).replace("\n", " "))
-                cluster_subtitle = " | ".join(parts_sub)
-                break
+        if place_meta.get("type"):
+            parts_sub: list[str] = [str(place_meta.get("type"))]
+            if place_meta.get("subtype"):
+                parts_sub.append(str(place_meta["subtype"]))
+            if place_meta.get("notes"):
+                parts_sub.append(str(place_meta["notes"]).replace("\n", " "))
+            cluster_subtitle = " | ".join(parts_sub)
+        else:
+            for _name, definition in (fragment.get("elements") or {}).items():
+                if isinstance(definition, dict) and is_place_type(definition.get("type")):
+                    parts_sub = [str(definition.get("type"))]
+                    if definition.get("subtype"):
+                        parts_sub.append(str(definition["subtype"]))
+                    if definition.get("notes"):
+                        parts_sub.append(str(definition["notes"]).replace("\n", " "))
+                    cluster_subtitle = " | ".join(parts_sub)
+                    break
 
         element_map: dict[str, str] = {}
         for name, definition in (fragment.get("elements") or {}).items():

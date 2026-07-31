@@ -62,8 +62,13 @@ def create_location_index(
     type_id: str,
     subtype: str | None = None,
     notes: str | None = None,
+    label: str | None = None,
 ) -> Path:
-    """Create directory + housewire.yaml with ``location:`` place metadata."""
+    """Create directory + housewire.yaml with ``location:`` place metadata.
+
+    ``dir_path.name`` is the technical location id (prefer ``[A-Za-z0-9_]+``).
+    Optional ``label`` is the human-readable name for diagrams / UI.
+    """
     if not is_place_type(type_id):
         raise ValueError(
             "type debe ser uno de: "
@@ -75,6 +80,8 @@ def create_location_index(
     if yaml_path.exists():
         raise FileExistsError(f"Ya existe: {yaml_path}")
     location_block: dict[str, Any] = {"type": str(type_id)}
+    if label:
+        location_block["label"] = label
     if subtype:
         location_block["subtype"] = subtype
     if notes:

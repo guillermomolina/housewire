@@ -9,6 +9,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.7.2] — 2026-07-31
+
+### Changed
+
+- Location / element **ids** are technical (`Caja_derivacion_4`); optional
+  **`label`** is the human name. Applies to directory trees and inline nested
+  locations in one YAML.
+- `add location` with spaces creates a normalized folder id and sets
+  `location.label` automatically (override with `--label`).
+- Physical cluster title uses `location.label` when present.
+
 ## [0.7.1] — 2026-07-31
 
 ### Changed

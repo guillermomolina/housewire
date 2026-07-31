@@ -596,6 +596,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     add_loc.add_argument("--subtype")
     add_loc.add_argument("--notes")
+    add_loc.add_argument("--label", help="Human-readable name (default: derived if name has spaces)")
 
     add_d = add_sub.add_parser("dir")
     add_d.add_argument("project_path")
@@ -665,14 +666,19 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
     if cmd == "add":
         project_path = Path(args.project_path).resolve()
         if args.add_kind == "location":
+            from housewire.house import location_id_from_name
             from housewire.project.io import create_location_index
 
-            target = (project_path / args.name).resolve()
+            raw = Path(args.name)
+            leaf_id, auto_label = location_id_from_name(raw.name)
+            rel = raw.parent / leaf_id if str(raw.parent) not in (".", "") else Path(leaf_id)
+            target = (project_path / rel).resolve()
             index_path = create_location_index(
                 target,
                 type_id=args.type_id,
                 subtype=args.subtype,
                 notes=args.notes,
+                label=args.label or auto_label,
             )
             print(f"OK {index_path.relative_to(project_path)}")
             return 0

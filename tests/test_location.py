@@ -41,12 +41,13 @@ class TestDirectoryLocation(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            caja = root / "Parking" / "Caja derivacion 1"
+            caja = root / "Parking" / "Caja_derivacion_1"
             caja.mkdir(parents=True)
             (caja / "housewire.yaml").write_text(
                 "schema: house/v1\n"
                 "location:\n"
                 "  type: JunctionBox\n"
+                "  label: 'Caja derivacion 1'\n"
                 "  subtype: '100x100 IP40'\n"
                 "  notes: 'mount: ceiling'\n"
                 "elements:\n"
@@ -56,20 +57,45 @@ class TestDirectoryLocation(unittest.TestCase):
             )
             model = build_physical_model(root, [caja / "housewire.yaml"])
             subtitles = {n.cluster_subtitle for n in model.nodes.values()}
+            labels = {n.cluster_label for n in model.nodes.values()}
             self.assertTrue(any("JunctionBox" in s for s in subtitles), subtitles)
             self.assertTrue(any("100x100" in s for s in subtitles), subtitles)
             self.assertTrue(any("ceiling" in s for s in subtitles), subtitles)
+            self.assertTrue(
+                any("Caja derivacion 1" in lab for lab in labels),
+                labels,
+            )
 
     def test_create_location_index(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "Cuadro General"
+            target = Path(tmp) / "Cuadro_General"
             index = create_location_index(
-                target, type_id="Panel", subtype="Cuadro", notes="IGA"
+                target,
+                type_id="Panel",
+                subtype="Cuadro",
+                notes="IGA",
+                label="Cuadro General",
             )
             self.assertTrue(index.is_file())
             doc = _yaml.safe_load(index.read_text(encoding="utf-8"))
             self.assertEqual(doc["location"]["type"], "Panel")
             self.assertEqual(doc["location"]["subtype"], "Cuadro")
+            self.assertEqual(doc["location"]["label"], "Cuadro General")
+
+    def test_create_location_normalizes_spaced_name(self) -> None:
+        from housewire.house import location_id_from_name
+
+        loc_id, label = location_id_from_name("Caja derivacion 6")
+        self.assertEqual(loc_id, "Caja_derivacion_6")
+        self.assertEqual(label, "Caja derivacion 6")
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / loc_id
+            index = create_location_index(
+                target, type_id="JunctionBox", label=label
+            )
+            doc = _yaml.safe_load(index.read_text(encoding="utf-8"))
+            self.assertEqual(doc["location"]["label"], "Caja derivacion 6")
+            self.assertEqual(target.name, "Caja_derivacion_6")
 
     def test_self_block_rejected(self) -> None:
         doc = _yaml.safe_load(

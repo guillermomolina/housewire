@@ -258,11 +258,12 @@ class TestShellDispatcher(unittest.TestCase):
             'add location "Caja X" --type JunctionBox --subtype "100x100" --notes "mount: wall"',
         )
         self.assertEqual(code, 0)
-        self.assertTrue((self.root / "Caja X" / "housewire.yaml").is_file())
+        self.assertTrue((self.root / "Caja_X" / "housewire.yaml").is_file())
         self.assertEqual(s.active_yaml.name, "housewire.yaml")
         doc = abm.load_editable(s.active_path(), self.root)
         self.assertEqual(doc["location"]["type"], "JunctionBox")
         self.assertEqual(doc["location"]["subtype"], "100x100")
+        self.assertEqual(doc["location"]["label"], "Caja X")
 
     def test_show_includes_location(self) -> None:
         from housewire.project.io import create_location_index
