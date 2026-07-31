@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.16.3] — 2026-07-31
+
+### Fixed
+
+- Physical layout orients conduit edges north-up (northern box above) so N-S
+  chains (e.g. Caja 2↔3) stay short instead of looping; undirected ortho edges.
+
 ## [0.16.2] — 2026-07-31
 
 ### Changed

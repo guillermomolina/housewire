@@ -49,7 +49,19 @@ class TestConduitEndpoints(unittest.TestCase):
         )
 
 
-class TestPhysicalConduits(unittest.TestCase):
+class TestGeoOrderEdge(unittest.TestCase):
+    def test_ns_puts_northern_node_first(self) -> None:
+        from housewire.house.physical import _geo_order_edge
+
+        # YAML order: C3.N → C2.S  ⇒  C2 is north of C3
+        tail, head, tp, hp = _geo_order_edge("C3", "C2", "n", "s")
+        self.assertEqual((tail, head, tp, hp), ("C2", "C3", "s", "n"))
+
+    def test_already_north_first(self) -> None:
+        from housewire.house.physical import _geo_order_edge
+
+        tail, head, tp, hp = _geo_order_edge("C2", "C3", "s", "n")
+        self.assertEqual((tail, head, tp, hp), ("C2", "C3", "s", "n"))
     def test_edges_from_conduits_not_connections(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -109,6 +121,11 @@ class TestPhysicalConduits(unittest.TestCase):
             self.assertIn("Parking_Enchufe_1 [", dot, dot)
             # Container Parking has no duplicate node (not an edge endpoint).
             self.assertIsNone(re.search(r"(?m)^\s+Parking \[", dot), dot)
-            # Compass ports: leave W of Caja_4, enter N of Enchufe_1
-            self.assertIn("Parking_Caja_4:w -> Parking_Enchufe_1:n", dot, dot)
             self.assertIn("rankdir=TB", dot)
+            # Ports present; geo-order may swap endpoints for north-up.
+            self.assertTrue(
+                "Parking_Caja_4:w -> Parking_Enchufe_1:n" in dot
+                or "Parking_Enchufe_1:n -> Parking_Caja_4:w" in dot,
+                dot,
+            )
+            self.assertIn("dir=none", dot)

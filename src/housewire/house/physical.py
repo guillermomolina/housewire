@@ -273,6 +273,52 @@ def build_physical_model(
     return model
 
 
+def _geo_order_edge(
+    a_key: str,
+    b_key: str,
+    a_port: str | None,
+    b_port: str | None,
+) -> tuple[str, str, str | None, str | None]:
+    """Order endpoints so the northern (else western) node is the Graphviz tail.
+
+    With ``rankdir=TB``, the tail is drawn above the head (page north = up).
+    A port faces toward the neighbor: ``n`` means the other box is to the north.
+    """
+    # Positive ⇒ a should sit above b.
+    score = 0
+    if a_port == "s":
+        score += 1
+    if a_port == "n":
+        score -= 1
+    if b_port == "n":
+        score += 1
+    if b_port == "s":
+        score -= 1
+    if score < 0:
+        return b_key, a_key, b_port, a_port
+    if score > 0:
+        return a_key, b_key, a_port, b_port
+
+    # Tie / no N-S signal: prefer western node as tail (left).
+    we = 0
+    if a_port == "e":
+        we += 1
+    if a_port == "w":
+        we -= 1
+    if b_port == "w":
+        we += 1
+    if b_port == "e":
+        we -= 1
+    if we < 0:
+        return b_key, a_key, b_port, a_port
+    return a_key, b_key, a_port, b_port
+
+
+def _edge_is_north_south(a_port: str | None, b_port: str | None) -> bool:
+    """True when the conduit joins opposite N/S faces (a short vertical hop)."""
+    return {a_port, b_port} == {"n", "s"}
+
+
 def _immediate_children(
     parent: tuple[str, ...], all_parts: set[tuple[str, ...]]
 ) -> list[tuple[str, ...]]:
@@ -347,13 +393,15 @@ def _emit_location(
 def model_to_dot(model: PhysModel) -> str:
     lines: list[str] = [
         "digraph physical {",
-        # TB: page north at top; edge ports pin N/S/E/W to box sides.
+        # TB: page north at top. Edges are geo-ordered (northern node = tail).
         "  rankdir=TB;",
         "  compound=true;",
-        "  splines=true;",
+        "  splines=ortho;",
+        "  nodesep=0.6;",
+        "  ranksep=0.7;",
         "  graph [fontname=Arial, fontsize=12, pad=0.3];",
         "  node [fontname=Arial, fontsize=10, shape=box, style=rounded];",
-        "  edge [fontname=Arial, fontsize=8];",
+        "  edge [fontname=Arial, fontsize=8, dir=none];",
     ]
     if model.title:
         lines.append(f'  labelloc="t"; label="{model.title}";')
@@ -369,16 +417,25 @@ def model_to_dot(model: PhysModel) -> str:
 
     seen: set[tuple[str, str, str, str | None, str | None]] = set()
     for edge in model.edges:
-        src = model.nodes[edge.src].node_id
-        dst = model.nodes[edge.dst].node_id
-        key = (src, dst, edge.label, edge.src_port, edge.dst_port)
+        tail_key, head_key, tail_port, head_port = _geo_order_edge(
+            edge.src, edge.dst, edge.src_port, edge.dst_port
+        )
+        tail = model.nodes[tail_key].node_id
+        head = model.nodes[head_key].node_id
+        key = (tail, head, edge.label, tail_port, head_port)
         if key in seen:
             continue
         seen.add(key)
         label = edge.label.replace('"', "'")
-        src_ep = f"{src}:{edge.src_port}" if edge.src_port else src
-        dst_ep = f"{dst}:{edge.dst_port}" if edge.dst_port else dst
-        lines.append(f'  {src_ep} -> {dst_ep} [label="{label}"];')
+        tail_ep = f"{tail}:{tail_port}" if tail_port else tail
+        head_ep = f"{head}:{head_port}" if head_port else head
+        attrs = [f'label="{label}"']
+        if _edge_is_north_south(tail_port, head_port):
+            attrs.append("weight=10")
+        else:
+            # Don't let W/E (or mixed) links invert the N-S stack.
+            attrs.append("constraint=false")
+        lines.append(f'  {tail_ep} -> {head_ep} [{", ".join(attrs)}];')
 
     lines.append("}")
     return "\n".join(lines) + "\n"
