@@ -15,86 +15,62 @@ Los YAML de una instalación viven en un **directorio/repo de obra aparte** (no 
 schema: house/v1
 ```
 
-La **jerarquía de ubicaciones es el path de directorios**.
-El bloque top-level **`location:`** es metadatos del directorio actual
-(`type: Room|JunctionBox|Panel|Zone|House`, `subtype`, `label`, `notes`, …),
-no una lista de path.
+La **jerarquía** es el path de directorios (o keys anidadas en un YAML).
+El fichero `housewire.yaml` **es el objeto place**: mismos campos que un hijo
+en `elements` (`type`, `label`, `mount`, `openings`, …), más `schema: house/v1`.
 
 ### Ids técnicos vs `label`
 
-Misma regla para **carpetas**, **elementos**, **cables** e **locations anidadas**
-en un solo YAML:
-
 | Rol | Qué es el id | Display |
 |---|---|---|
-| Location (carpeta) | nombre del directorio | `location.label` opcional |
-| Location inline | clave en `elements:` / `locations:` | `label` en ese mapa |
+| Place (carpeta) | nombre del directorio | `label` opcional en la raiz |
+| Place inline | clave en `elements:` | `label` en ese mapa |
 | Elemento / cable | clave YAML | `label` opcional |
 
-- **Id**: preferir `[A-Za-z0-9_]+` (p.ej. `Caja_derivacion_4`, `Regleta_1`).
-  Sin espacios. Es lo que va en conexiones: `Caja_derivacion_4/Regleta_1.1`.
-- **`label`**: texto humano para diagramas / UI (`Caja derivación 4`).
-- `add location "Caja derivacion 6" --type JunctionBox` crea carpeta
-  `Caja_derivacion_6/` con `location.label: Caja derivacion 6`.
+- **Id**: `[A-Za-z0-9_]+` (p.ej. `Caja_derivacion_4`). Sin espacios. Va en conexiones.
+- **`label`**: texto humano. `add location "Caja derivacion 6"` → carpeta
+  `Caja_derivacion_6/` con `label: Caja derivacion 6`.
 
-Válido en **árbol de carpetas** o **YAML anidado**:
+Misma forma en carpeta o anidado:
 
 ```yaml
-# Inline (un solo fichero)
+# Garage/Junction_box_1/housewire.yaml  (el fichero ES el place)
+schema: house/v1
+type: JunctionBox
+label: "Junction box 1"
+subtype: "100x100 IP40"
+mount: ceiling
+opening_grid: { NS: 2, WE: 2, B: 1 }
+openings: [B1-1, N1]
 elements:
-  Caja_derivacion_1:
+  Regleta_1:
+    type: TerminalStrip
+    label: "Regleta 3 pares"
+```
+
+```yaml
+# Inline equivalente dentro de otro place
+elements:
+  Junction_box_1:
     type: JunctionBox
-    label: "Caja derivación 1"
-    mount: ceiling
-    openings: [N1]
+    label: "Junction box 1"
+    openings: [B1-1, N1]
     elements:
       Regleta_1:
         type: TerminalStrip
-        label: "Regleta 3 pares"
 ```
 
-```text
-# Carpetas (equivalente)
-Parking/
-  Caja_derivacion_1/
-    housewire.yaml    # location: { type: JunctionBox, label: "…", … }
-```
+Legacy: bloque `location: { type: … }` aún se lee; preferir campos en la raiz.
 
 Sin `schema: house/v1`, el archivo se trata como WireViz legacy (como `Test/`).
 
 ## Locations = directories + housewire.yaml
 
-Each place (room, junction box, panel, zone…) is a **directory** with a single **`housewire.yaml`**:
-
 ```text
 Garage/
-  housewire.yaml                 # location: + sockets, lights, …
+  housewire.yaml                 # type: Zone + sockets…
   Junction_box_1/
-    housewire.yaml               # location: + terminal strips…
-  Ground_floor/Hall/
-    housewire.yaml
-    Main_panel/
-      housewire.yaml
-```
-
-```yaml
-# Garage/Junction_box_1/housewire.yaml
-schema: house/v1
-location:
-  type: JunctionBox
-  label: "Junction box 1"
-  subtype: "100x100 IP40"
-  mount: ceiling
-  opening_grid:
-    NS: 2
-    WE: 2
-    B: 1
-  openings: [B1-1, N1]
-  notes: "…"
-elements:
-  Regleta_1:
-    type: TerminalStrip
-    label: "Regleta 3 pares"
+    housewire.yaml               # type: JunctionBox + regletas…
 ```
 
 Place types (catalog, `wireviz_skip`):
@@ -114,7 +90,7 @@ por encima (p.ej. `Building/…/House/…`) sin cambiar tipos.
 
 - One directory → one `housewire.yaml` (no sibling fragment YAMLs).
 - Grow by adding a **subdirectory** place, not another file beside `housewire.yaml`.
-- `cd` auto-activates `housewire.yaml`; `show` prints `location:` + that file’s content.
+- `cd` auto-activates `housewire.yaml`; `show` prints place fields + + that file’s content.
 - `add location "Main panel" --type Panel` creates the folder and `housewire.yaml`.
 
 ## Elementos
@@ -180,16 +156,15 @@ la caja, no en el norte geográfico.
 | Fondo `B` / tapa `F` | `B1-1`, `F2-3`, … | 1.er índice N→S, 2.º W→E |
 
 ```yaml
-location:
-  type: JunctionBox
-  subtype: "100x100 IP40"
-  mount: ceiling          # ceiling | wall | floor
-  # facing: N             # wall: hacia dónde mira F (hacia el local)
-  opening_grid:
-    NS: 3                 # ≡ N: 3x1 y S: 3x1 (entero = 1 fila)
-    WE: 2                 # ≡ W y E (orden W→E, como NS)
-    B: 2                  # ≡ B: 2x1 → B1-1, B1-2
-  openings: [B1-1, W1, N1]
+type: JunctionBox
+subtype: "100x100 IP40"
+mount: ceiling          # ceiling | wall | floor
+# facing: N             # wall: hacia dónde mira F (hacia el local)
+opening_grid:
+  NS: 3                 # ≡ N: 3x1 y S: 3x1 (entero = 1 fila)
+  WE: 2                 # ≡ W y E (orden W→E, como NS)
+  B: 2                  # ≡ B: 2x1 → B1-1, B1-2
+openings: [B1-1, W1, N1]
 ```
 
 - **`openings`**: lista de bocas **usadas** (sin objetos vacíos).

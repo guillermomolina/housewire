@@ -41,7 +41,7 @@ housewire shell "$SITE"
 ```
 
 Commands: `cd`, `ls`, `pwd`, `use`, `show`, `pend`, `add` (incl. `add location`), `rm`, `generate`, `help`, `exit`.
-Tab completes commands, subcommands, and paths. **Places are directories** with a single `housewire.yaml` (`location:` with a place type). `add location NAME --type JunctionBox` creates that directory and file.
+Tab completes commands, subcommands, and paths. **Places are directories** with a single `housewire.yaml` (root `type:` place). `add location NAME --type JunctionBox` creates that directory and file.
 
 ```bash
 housewire shell "$SITE"

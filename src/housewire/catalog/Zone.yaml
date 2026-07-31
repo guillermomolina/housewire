@@ -3,6 +3,6 @@ id: Zone
 title: Zone
 description_es: >
   Zona amplia (parking, planta, area tecnica). Metadatos de la carpeta
-  (housewire.yaml → location:). No genera conector WireViz ni bornes.
+  (housewire.yaml root (type/label/…)). No genera conector WireViz ni bornes.
 wireviz_skip: true
 terminals: {}

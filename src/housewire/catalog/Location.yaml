@@ -3,7 +3,7 @@ id: Location
 title: Generic place (legacy / inline)
 description_es: >
   Contenedor generico de ubicacion. Preferir Room, JunctionBox, Panel, Zone o House
-  en housewire.yaml (bloque location:). Se mantiene para anidacion inline ocasional.
+  en housewire.yaml (campos en la raiz del YAML). Se mantiene para anidacion inline ocasional.
   No genera conector WireViz ni bornes.
 wireviz_skip: true
 terminals: {}

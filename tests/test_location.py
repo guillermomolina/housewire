@@ -1,4 +1,4 @@
-"""Tests for place metadata: location: in housewire.yaml, wireviz_skip, physical, inline."""
+"""Tests for place metadata at YAML root, wireviz_skip, physical, inline."""
 from __future__ import annotations
 
 import tempfile
@@ -13,15 +13,14 @@ from housewire.project.io import create_empty_house_file, create_location_index
 
 
 class TestDirectoryLocation(unittest.TestCase):
-    """location: in housewire.yaml supplies place metadata for the directory."""
+    """Root place fields in housewire.yaml supply metadata for the directory."""
 
     def test_location_not_in_wireviz_connectors(self) -> None:
         doc = _yaml.safe_load(
             "schema: house/v1\n"
-            "location:\n"
-            "  type: JunctionBox\n"
-            "  subtype: '100x100 IP40'\n"
-            "  notes: 'mount: ceiling'\n"
+            "type: JunctionBox\n"
+            "subtype: '100x100 IP40'\n"
+            "notes: 'mount: ceiling'\n"
             "elements:\n"
             "  Regleta:\n"
             "    type: TerminalStrip\n"
@@ -45,11 +44,10 @@ class TestDirectoryLocation(unittest.TestCase):
             caja.mkdir(parents=True)
             (caja / "housewire.yaml").write_text(
                 "schema: house/v1\n"
-                "location:\n"
-                "  type: JunctionBox\n"
-                "  label: 'Caja derivacion 1'\n"
-                "  subtype: '100x100 IP40'\n"
-                "  notes: 'mount: ceiling'\n"
+                "type: JunctionBox\n"
+                "label: 'Caja derivacion 1'\n"
+                "subtype: '100x100 IP40'\n"
+                "notes: 'mount: ceiling'\n"
                 "elements:\n"
                 "  Regleta:\n"
                 "    type: TerminalStrip\n",
@@ -78,9 +76,9 @@ class TestDirectoryLocation(unittest.TestCase):
             )
             self.assertTrue(index.is_file())
             doc = _yaml.safe_load(index.read_text(encoding="utf-8"))
-            self.assertEqual(doc["location"]["type"], "Panel")
-            self.assertEqual(doc["location"]["subtype"], "Cuadro")
-            self.assertEqual(doc["location"]["label"], "Cuadro General")
+            self.assertEqual(doc["type"], "Panel")
+            self.assertEqual(doc["subtype"], "Cuadro")
+            self.assertEqual(doc["label"], "Cuadro General")
 
     def test_create_location_normalizes_spaced_name(self) -> None:
         from housewire.house import location_id_from_name
@@ -94,7 +92,7 @@ class TestDirectoryLocation(unittest.TestCase):
                 target, type_id="JunctionBox", label=label
             )
             doc = _yaml.safe_load(index.read_text(encoding="utf-8"))
-            self.assertEqual(doc["location"]["label"], "Caja derivacion 6")
+            self.assertEqual(doc["label"], "Caja derivacion 6")
             self.assertEqual(target.name, "Caja_derivacion_6")
 
     def test_self_block_rejected(self) -> None:
@@ -110,7 +108,7 @@ class TestDirectoryLocation(unittest.TestCase):
             house_document_to_wireviz(
                 doc, catalog=load_catalog(), file_location_parts=["Parking"]
             )
-        self.assertIn("location:", str(ctx.exception))
+        self.assertTrue("self" in str(ctx.exception).lower() or "raiz" in str(ctx.exception).lower())
 
     def test_place_types_in_catalog(self) -> None:
         catalog = load_catalog()

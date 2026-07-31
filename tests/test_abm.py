@@ -185,29 +185,29 @@ class TestABMPendingAndConduits(unittest.TestCase):
 
     def test_pending_rejects_undeclared_opening(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
-        doc["location"] = {
+        doc.update({
             "type": "JunctionBox",
             "openings": ["N1", "S1"],
-        }
+        })
         with self.assertRaises(ValueError) as ctx:
             abm.add_pending_cable(doc, enter="N1", exit="N9")
         self.assertIn("N9", str(ctx.exception))
 
     def test_pending_ok_with_declared_openings(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
-        doc["location"] = {
+        doc.update({
             "type": "JunctionBox",
             "openings": ["N1", "S1"],
-        }
+        })
         cable, _ = abm.add_pending_cable(doc, enter="N1", exit="S1")
         self.assertEqual(cable, "PEND_Linea_01")
 
     def test_pending_ok_with_panel_openings(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
-        doc["location"] = {
+        doc.update({
             "type": "Panel",
             "openings": ["B1-1", "N1"],
-        }
+        })
         cable, _ = abm.add_pending_cable(doc, enter="B1-1", exit="N1")
         self.assertEqual(cable, "PEND_Linea_01")
 
@@ -295,16 +295,17 @@ class TestFormatShow(unittest.TestCase):
 
     def test_show_lists_openings(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
-        doc["location"] = {
+        doc.update({
             "type": "JunctionBox",
             "mount": "ceiling",
             "opening_grid": {"NS": 2, "B": 1},
             "openings": ["B1-1", "W1"],
-        }
+        })
         text = abm.format_show(doc)
         self.assertIn("openings (2):", text)
         self.assertIn("B1-1", text)
         self.assertIn("W1", text)
         self.assertIn("opening_grid:", text)
+        self.assertIn("place (JunctionBox):", text)
         # openings not dumped twice inside location yaml
         self.assertNotIn("openings:", text.split("openings (2):")[0])

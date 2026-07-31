@@ -19,7 +19,7 @@ HELP_TEXT = """Comandos del shell housewire:
   cd [path]                    navegar Locations (directorios); auto-use housewire.yaml
   ls                           locations (cd) y elements de esta location
   use housewire.yaml           fijar housewire.yaml activo
-  show                         location: del lugar + contenido de housewire.yaml
+  show                         place (type/label) + del lugar + contenido de housewire.yaml
   show --element NAME | --cable NAME
   pend [<enter> <exit>] [section] [--colors C1,C2] [--notes ...]
                                cable pendiente + conduit (atajo de add pend)

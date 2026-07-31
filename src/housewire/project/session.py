@@ -76,10 +76,12 @@ class ProjectSession:
                     continue
                 if not is_house_document(data):
                     continue
+                from housewire.house import place_meta_from_mapping
+
                 has_housewire = True
-                loc = data.get("location")
-                if isinstance(loc, dict) and loc.get("type"):
-                    place_type = str(loc["type"])
+                meta = place_meta_from_mapping(data)
+                if meta is not None and meta.get("type"):
+                    place_type = str(meta["type"])
                 break
             if not has_housewire:
                 continue

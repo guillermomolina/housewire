@@ -58,9 +58,11 @@ def _cluster_label(parts: list[str], *, leaf_label: str | None = None) -> str:
 
 def _leaf_place_meta(fragment: dict[str, Any], location_parts: list[str]) -> dict[str, Any]:
     """Return place metadata dict for this fragment (directory or inline)."""
-    loc = fragment.get("location")
-    if isinstance(loc, dict) and loc.get("type"):
-        return loc
+    from housewire.house import place_meta_from_mapping
+
+    meta = place_meta_from_mapping(fragment)
+    if meta is not None:
+        return meta
     leaf = location_parts[-1] if location_parts else None
     for name, definition in (fragment.get("elements") or {}).items():
         if not isinstance(definition, dict):
@@ -106,17 +108,26 @@ def _load_house_files(
             fragments = _walk_locations(data, base)
         except ValueError as exc:
             raise ValueError(f"{yaml_file}: {exc}") from exc
-        if not fragments and any(
-            key in data
-            for key in ("elements", "cables", "connections", "conduits", "location")
+        if not fragments and (
+            any(
+                key in data
+                for key in ("elements", "cables", "connections", "conduits")
+            )
+            or data.get("type")
+            or isinstance(data.get("location"), dict)
         ):
+            from housewire.house import place_meta_from_mapping
+
             frag = {
                 key: data[key]
                 for key in ("elements", "cables", "connections", "conduits")
                 if key in data
             }
-            fragments = [(base, frag)] if frag or isinstance(data.get("location"), dict) else []
-            if not fragments and isinstance(data.get("location"), dict):
+            meta = place_meta_from_mapping(data)
+            if meta is not None:
+                frag.update(meta)
+            fragments = [(base, frag)] if frag else []
+            if not fragments:
                 fragments = _walk_locations(data, base)
         pieces.extend(fragments)
     return pieces

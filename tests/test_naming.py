@@ -65,6 +65,6 @@ class TestNamingConvention(unittest.TestCase):
         self.assertIn("lista", str(ctx.exception).lower())
 
     def test_path_only_determines_prefix(self) -> None:
-        """El path del fichero manda; location: es metadatos, no jerarquia."""
+        """File path sets hierarchy; root place fields are metadata only."""
         connectors, _ = self._wv_names(["Parking", "Caja derivacion 1"])
         self.assertIn("Parking__Caja_derivacion_1__Regleta", connectors)

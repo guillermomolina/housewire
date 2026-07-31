@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from housewire.house import load_catalog
+from housewire.house import load_catalog, place_meta_from_mapping
 from housewire.project.io import load_yaml, require_house_document, save_yaml
 from housewire.project.openings import (
     declared_opening_ids,
@@ -21,18 +21,18 @@ DEFAULT_CABLE_COLORS = ["BN", "BU"]
 
 
 def declared_openings(doc: dict[str, Any]) -> set[str] | None:
-    """Return opening ids if ``location.openings`` is declared, else ``None``."""
-    loc = doc.get("location")
-    if not isinstance(loc, dict):
+    """Return opening ids if place openings are declared, else ``None``."""
+    meta = place_meta_from_mapping(doc)
+    if meta is None:
         return None
-    return declared_opening_ids(loc.get("openings"))
+    return declared_opening_ids(meta.get("openings"))
 
 
 def require_opening_ids(doc: dict[str, Any], *opening_ids: str) -> None:
-    """If openings are declared, each id must exist in ``location.openings``."""
-    loc = doc.get("location")
-    if isinstance(loc, dict):
-        validate_location_openings(loc)
+    """If openings are declared, each id must exist on this place."""
+    meta = place_meta_from_mapping(doc)
+    if meta is not None:
+        validate_location_openings(meta)
     declared = declared_openings(doc)
     if declared is None:
         return
@@ -41,7 +41,7 @@ def require_opening_ids(doc: dict[str, Any], *opening_ids: str) -> None:
     if missing:
         known = ", ".join(sorted(declared)) or "(ninguna)"
         raise ValueError(
-            "Abertura(s) no declarada(s) en location.openings: "
+            "Abertura(s) no declarada(s) en openings: "
             + ", ".join(missing)
             + f". Declaradas: {known}"
         )
@@ -332,17 +332,17 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
         lines.append(_yaml.safe_dump(cb, sort_keys=False, allow_unicode=True).rstrip())
         return "\n".join(lines)
 
-    location_block = doc.get("location")
-    if isinstance(location_block, dict):
+    place = place_meta_from_mapping(doc)
+    if place is not None:
         import yaml as _yaml
 
-        type_id = location_block.get("type", "?")
-        lines.append(f"location ({type_id}):")
-        meta = {k: v for k, v in location_block.items() if k != "openings"}
+        type_id = place.get("type", "?")
+        lines.append(f"place ({type_id}):")
+        meta = {k: v for k, v in place.items() if k != "openings"}
         lines.append(_yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).rstrip())
         lines.append("")
 
-        openings = location_block.get("openings")
+        openings = place.get("openings")
         if isinstance(openings, list) and openings:
             lines.append(f"openings ({len(openings)}):")
             for name in openings:

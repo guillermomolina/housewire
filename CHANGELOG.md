@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.8.0] — 2026-07-31
+
+### Changed
+
+- Breaking: the `housewire.yaml` **root is the place object** (`type`, `label`,
+  `openings`, …). Nested places in `elements` use the same shape.
+- Legacy nested `location: { … }` still loads; prefer root fields.
+
 ## [0.7.2] — 2026-07-31
 
 ### Changed
