@@ -27,17 +27,16 @@ HELP_TEXT = """Comandos del shell housewire:
                                [--inline | --dir]
                                T=Room|JunctionBox|DeviceBox|Panel|Floor|House
                                default: outline si estás en outline; inline si estás inline
+                               outline (carpeta) → escribe disco ya; inline → dirty (save)
                                NAME con espacios → id tecnico + label automatico
-  add element NAME --type T [--subtype ...] [--label ...] [--manufacturer ...] [--model ...] [--notes ...]
-  add cable NAME [--section S] [--colors C1,C2] [--subtype power] [--label ...] [--notes ...]
-                               (--kind es alias legacy de --subtype)
-                               defaults: section=1.5 mm2, colors=BN,BU
+  add element NAME --type T …  (memoria → save)
+  add cable NAME …             (memoria → save)
   add conduit NAME --from A.Op --to B.Op --contains C1[,C2…]
-                               [--subtype tube] [--label ...] [--notes ...]
-                               (capa fisica: locations ↔ aberturas)
-  add pend [<enter> <exit>] [section] [--colors ...] [--notes ...]
+                               [--subtype tube] [--label ...] [--notes …]
+                               (memoria → save; capa fisica)
+  add pend …
   add connection --from F --via V --to T
-                               (capa electrica: elements ↔ cable)
+                               (memoria → save; capa electrica)
   add dir <path>                 mkdir -p (sin housewire.yaml; preferible add location)
   rm element|cable NAME
   rm connection <índice>
@@ -276,7 +275,7 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
             )
             session.mark_dirty(path)
             session.cd(leaf_id)
-            print(f"Location inline creada: {'/'.join(session.logical_parts)}")
+            print(f"Location inline creada: {'/'.join(session.logical_parts)} (en memoria → save)")
             return 0
 
         rel = raw.parent / leaf_id if str(raw.parent) not in (".", "") else _Path(leaf_id)
@@ -299,7 +298,10 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
         session.logical_parts = list(session.logical_parts) + list(rel.parts)
         session._sync_from_logical()
         session.active_yaml = index_path
-        print(f"Location creada: {index_path.relative_to(session.root)}")
+        print(
+            f"Location creada en disco: {index_path.relative_to(session.root)} "
+            f"(no hace falta save)"
+        )
         return 0
     if kind == "pend":
         return cmd_pend(session, rest)

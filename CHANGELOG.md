@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.16.9] — 2026-07-31
+
+### Fixed
+
+- Shell messaging: outline ``add location`` writes to disk immediately (no
+  ``save``); clarify banner vs in-memory edits (element/cable/conduit/…).
+
 ## [0.16.8] — 2026-07-31
 
 ### Added
