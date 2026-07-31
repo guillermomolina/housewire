@@ -327,7 +327,7 @@ class ProjectSession:
 
     def prompt_label(self) -> str:
         rel = "." if not self.logical_parts else "/".join(self.logical_parts)
-        dirty = "*" if self.is_dirty() else ""
+        dirty = "*" if self.dirty_paths() else ""
         return f"{self.root.name}/{rel}{dirty}"
 
     def cwd_path(self) -> Path:

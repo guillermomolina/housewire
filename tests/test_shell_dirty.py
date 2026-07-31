@@ -59,39 +59,36 @@ class TestShellDirtyBuffer(unittest.TestCase):
         self._run(s, "add element MT_A --type MCB --subtype C10")
         self.assertTrue(s.prompt_label().endswith("*"))
 
-    def test_discard_on_cd_to_other_yaml(self) -> None:
+    def test_cd_keeps_dirty_buffers_in_memory(self) -> None:
         create_location_index(self.root / "zona_b", type_id="Floor")
         s = self._session()
         self._run(s, "cd zona_a")
         self._run(s, "add element MT_A --type MCB --subtype C10")
-        self.answers = ["d"]  # discard
+        zona_a_yaml = (self.root / "zona_a" / "housewire.yaml").resolve()
+        self.assertTrue(s.is_dirty(zona_a_yaml))
         code = self._run(s, "cd /zona_b")
         self.assertEqual(code, 0)
         self.assertEqual(s.logical_parts, ["zona_b"])
+        self.assertTrue(s.is_dirty(zona_a_yaml))
+        self.assertIn("*", s.prompt_label())
         disk = load_yaml(self.root / "zona_a" / "housewire.yaml")
         self.assertNotIn("MT_A", disk.get("elements") or {})
+        code = self._run(s, "save")
+        self.assertEqual(code, 0)
+        self.assertFalse(s.is_dirty(zona_a_yaml))
+        disk2 = load_yaml(self.root / "zona_a" / "housewire.yaml")
+        self.assertIn("MT_A", disk2["elements"])
 
-    def test_save_on_cd_to_other_yaml(self) -> None:
+    def test_cd_away_from_dirty_does_not_prompt(self) -> None:
         create_location_index(self.root / "zona_b", type_id="Floor")
         s = self._session()
         self._run(s, "cd zona_a")
         self._run(s, "add element MT_A --type MCB --subtype C10")
-        self.answers = ["g"]  # save
+        # No answers queued — would fail if cd prompted
         code = self._run(s, "cd /zona_b")
         self.assertEqual(code, 0)
-        disk = load_yaml(self.root / "zona_a" / "housewire.yaml")
-        self.assertIn("MT_A", disk["elements"])
-
-    def test_cancel_cd_keeps_location(self) -> None:
-        create_location_index(self.root / "zona_b", type_id="Floor")
-        s = self._session()
-        self._run(s, "cd zona_a")
-        self._run(s, "add element MT_A --type MCB --subtype C10")
-        self.answers = ["c"]
-        code = self._run(s, "cd /zona_b")
-        self.assertEqual(code, 0)
-        self.assertEqual(s.logical_parts, ["zona_a"])
-        self.assertTrue(s.is_dirty())
+        self.assertEqual(s.logical_parts, ["zona_b"])
+        self.assertTrue(s.is_dirty((self.root / "zona_a" / "housewire.yaml").resolve()))
 
     def test_request_leave_save(self) -> None:
         from housewire.commands import request_leave
@@ -150,24 +147,32 @@ class TestShellDirtyBuffer(unittest.TestCase):
         names = [c.name for c in s.list_location_children()]
         # We're inside Caja_1; children of empty box
         self.assertEqual(names, [])
-        self.answers = ["g"]  # save when leaving dirty outline yaml
         code = self._run(s, "cd ..")
         self.assertEqual(code, 0)
         self.assertEqual(s.logical_parts, ["zona_a"])
-        self.assertTrue(disk_path.is_file())
-        self.assertFalse(s.is_dirty(disk_path))
+        # Still only in memory after cd
+        self.assertFalse(disk_path.is_file())
+        self.assertTrue(s.is_dirty(disk_path.resolve()))
         child_names = [c.name for c in s.list_location_children()]
         self.assertIn("Caja_1", child_names)
+        code = self._run(s, "save")
+        self.assertEqual(code, 0)
+        self.assertTrue(disk_path.is_file())
+        self.assertFalse(s.is_dirty(disk_path.resolve()))
 
-    def test_discard_outline_location_leaves_no_disk(self) -> None:
+    def test_discard_outline_location_on_leave(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
         self._run(s, "add location Caja_tmp --type JunctionBox")
         disk_path = self.root / "zona_a" / "Caja_tmp" / "housewire.yaml"
         self.assertFalse(disk_path.is_file())
-        self.answers = ["d"]
         code = self._run(s, "cd ..")
         self.assertEqual(code, 0)
+        self.assertIn("Caja_tmp", [c.name for c in s.list_location_children()])
+        from housewire.commands import request_leave
+
+        self.answers = ["d"]  # discard staged outline on exit
+        self.assertTrue(request_leave(s))
         self.assertFalse(disk_path.is_file())
         self.assertFalse(disk_path.parent.is_dir())
         child_names = [c.name for c in s.list_location_children()]
@@ -231,10 +236,6 @@ class TestShellDirtyBuffer(unittest.TestCase):
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
         self.assertEqual(doc.get("notes"), "back to parking")
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 if __name__ == "__main__":

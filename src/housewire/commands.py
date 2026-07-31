@@ -15,8 +15,9 @@ if TYPE_CHECKING:
 
 HELP_TEXT = """housewire shell commands:
   (Tab completes commands, add/rm subcommands, and cd/use/… paths)
-  pwd                          logical location path and host YAML (* = dirty)
-  cd [path]                    navigate locations (outline folder or inline place)
+  pwd                          logical location path and host YAML (* = any dirty buffer)
+  cd [path]                    navigate locations (outline folder or inline place);
+                               dirty YAML stay in memory (no save prompt on cd)
   ls                           child locations (outline+inline) and elements (non-place)
   use housewire.yaml           set active housewire.yaml for the current location
   show                         current place: electrical layer + physical layer
@@ -47,13 +48,13 @@ HELP_TEXT = """housewire shell commands:
   rm connection <index>
   rm file housewire.yaml
   rm dir <path>                  only if empty
-  save [--force]                 write dirty YAML to disk (validate)
-  reload                         discard buffer and re-read from disk
+  save [--force]                 write all dirty YAML to disk (validate)
+  reload                         discard current buffer and re-read from disk
   generate [-f]                save dirty and generate the tree for cwd
                                physical=locations↔conduits; WireViz=elements↔cables
   version                      program version
   help
-  exit | quit                  warns if there are unsaved changes
+  exit | quit                  prompts to save/discard each dirty YAML
   (multi-line)                 end the line with \\ and continue on the next
 """
 
@@ -508,14 +509,8 @@ def cmd_rm(session: ProjectSession, argv: list[str]) -> int:
 
 def cmd_cd(session: ProjectSession, argv: list[str]) -> int:
     raw = argv[0] if argv else None
-    current = session.cursor()
-    preview = session.preview_cd(raw)
-    cur_yaml = current.yaml_path.resolve() if current.yaml_path else None
-    new_yaml = preview.yaml_path.resolve() if preview.yaml_path else None
-    if cur_yaml is not None and cur_yaml != new_yaml and session.is_dirty(cur_yaml):
-        if not _confirm_unsaved(session, [cur_yaml]):
-            print("cd cancelled.")
-            return 0
+    # Dirty buffers stay in memory across YAML boundaries; save/discard on exit
+    # or explicit ``save`` / ``reload``.
     session.cd(raw)
     if session.housewire_yaml_in_cwd() is None and str(session.cwd) != ".":
         print(

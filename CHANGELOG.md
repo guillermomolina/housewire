@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.17.4] — 2026-07-31
+
+### Changed
+
+- Shell ``cd`` no longer prompts to save/discard when leaving a dirty YAML; buffers
+  stay in memory across locations. ``save`` writes all dirty files; ``exit`` still
+  asks per dirty document. Prompt ``*`` means any dirty buffer in the session.
+
 ## [0.17.3] — 2026-07-31
 
 ### Added
