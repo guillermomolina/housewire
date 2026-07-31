@@ -40,7 +40,7 @@ Interactive REPL (no TUI menus):
 housewire shell "$SITE"
 ```
 
-Commands: `cd`, `ls`, `pwd`, `use`, `show`, `pend`, `add` (incl. `add location`), `rm`, `generate`, `help`, `exit`.
+Commands: `cd`, `ls`, `pwd`, `use`, `show`, `pend`, `add` (incl. `add location`, recipes), `rm`, `generate`, `help`, `exit`.
 Tab completes commands, subcommands, and paths. **Places are directories** with a single `housewire.yaml` (root `type:` place). `add location NAME --type JunctionBox` creates that directory and file.
 
 ```bash
@@ -49,6 +49,16 @@ cd "Ground floor/Hall"     # auto-use housewire.yaml
 show
 cd "Main panel"
 show
+```
+
+Recipes (run from the **parent** floor/room where cables live):
+
+```bash
+cd Garage
+add socket Outlet_5 --from Junction_2.N1 --strip Regleta
+add lamp Lamp_3 --from Junction_3.S1 --strip Regleta --pins 6,5,2
+add feed Linea_A_a_B --from Junction_4.E1 --to Junction_3.N1 \
+  --from-pin Regleta_2.1 --to-pin Regleta.1 --colors BK
 ```
 
 Fast capture at a junction box (pending cable, destination unknown):

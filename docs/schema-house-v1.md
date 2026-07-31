@@ -392,6 +392,28 @@ In panels these are often **loose singles**. Record construction in:
 Do not split every bipolar into two `cables` only to look “physical”: diagrams get
 noisy without helping L/N tracing.
 
+### Capture recipes
+
+Run from the **parent** place (floor/room) that owns `cables` / `conduits` /
+`connections`. Recipes create the destination place (outline by default) plus
+wiring in the current YAML.
+
+```text
+cd Garage
+add socket Outlet_5 --from Junction_2.N1 --strip Regleta
+# → DeviceBox Outlet_5 + Socket; Linea_a_Outlet_5 (GY,GNYE,BU);
+#   Conducto_a_Outlet_5; Junction_2/Regleta.[3,2,1] → Outlet_5/Socket.[L,PE,N]
+
+add lamp Lamp_3 --from Junction_3.S1 --strip Regleta --pins 6,5,2
+# → LightPoint + Luminaire; BN,GNYE,BU → Luminaire.[1,2,3]
+
+add feed Linea_A_a_B --from Junction_4.E1 --to Junction_3.N1 \
+  --from-pin Regleta_2.1 --to-pin Regleta.1 --colors BK
+```
+
+Overrides: `--pins`, `--colors`, `--section`, `--to-opening`, `--inline` /
+`--dir`, `--label`, `--notes`. Socket strip default pins are `3,2,1` (L, PE, N).
+
 ### Pending runs (incremental capture)
 
 When a cable enters/leaves a box but the far end is unknown:

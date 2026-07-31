@@ -9,6 +9,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.18.0] — 2026-07-31
+
+### Added
+
+- Capture recipes in the shell: ``add socket``, ``add lamp``, and ``add feed``
+  create place+element (socket/lamp) plus cable, conduit, and connection with
+  sensible defaults (Schuko from strip ``[3,2,1]→[L,PE,N]``; LightPoint
+  luminaire; strip-to-strip feed).
+
 ## [0.17.6] — 2026-07-31
 
 ### Changed
