@@ -6,6 +6,11 @@ from typing import Any
 
 from housewire.house import load_catalog
 from housewire.project.io import load_yaml, require_house_document, save_yaml
+from housewire.project.openings import (
+    declared_opening_ids,
+    normalize_opening_id,
+    validate_location_openings,
+)
 from housewire.project.validate import validate_house_document
 
 _ELEMENT_REF_RE = re.compile(r"(?:^|[./\[])([A-Za-z_][A-Za-z0-9_]*)")
@@ -20,20 +25,19 @@ def declared_openings(doc: dict[str, Any]) -> set[str] | None:
     loc = doc.get("location")
     if not isinstance(loc, dict):
         return None
-    openings = loc.get("openings")
-    if openings is None:
-        return None
-    if not isinstance(openings, dict):
-        raise ValueError("location.openings debe ser un mapa { B1: { face: … }, … }")
-    return {str(name) for name in openings}
+    return declared_opening_ids(loc.get("openings"))
 
 
 def require_opening_ids(doc: dict[str, Any], *opening_ids: str) -> None:
     """If openings are declared, each id must exist in ``location.openings``."""
+    loc = doc.get("location")
+    if isinstance(loc, dict):
+        validate_location_openings(loc)
     declared = declared_openings(doc)
     if declared is None:
         return
-    missing = [oid for oid in opening_ids if oid not in declared]
+    normalized = [normalize_opening_id(oid) for oid in opening_ids]
+    missing = [oid for oid in normalized if oid not in declared]
     if missing:
         known = ", ".join(sorted(declared)) or "(ninguna)"
         raise ValueError(
@@ -339,24 +343,15 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
         lines.append("")
 
         openings = location_block.get("openings")
-        if isinstance(openings, dict) and openings:
+        if isinstance(openings, list) and openings:
+            lines.append(f"openings ({len(openings)}):")
+            for name in openings:
+                lines.append(f"  {name}")
+            lines.append("")
+        elif isinstance(openings, dict) and openings:
             lines.append(f"openings ({len(openings)}):")
             for name in sorted(openings, key=lambda n: str(n)):
-                defn = openings[name]
-                if isinstance(defn, dict):
-                    bits: list[str] = []
-                    if defn.get("face") is not None:
-                        bits.append(f"face={defn['face']}")
-                    if defn.get("index") is not None:
-                        bits.append(f"index={defn['index']}")
-                    for key, value in defn.items():
-                        if key in {"face", "index"}:
-                            continue
-                        bits.append(f"{key}={value}")
-                    extra = ("  " + " ".join(bits)) if bits else ""
-                    lines.append(f"  {name}{extra}")
-                else:
-                    lines.append(f"  {name}  ({defn})")
+                lines.append(f"  {name}  (legacy map — migra a lista)")
             lines.append("")
 
     elements = doc.get("elements") or {}

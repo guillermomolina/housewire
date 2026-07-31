@@ -9,6 +9,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.7.0] — 2026-07-31
+
+### Changed
+
+- Opening ids are local to the box (poker frame looking at **`F`**):
+  contour `N1`/`S2`/…, back/front `B1-1`/`F2-3` (row N→S, col W→E).
+- `location.openings` is a **list** of those ids (no `{B1: {face:…}}` map).
+- Optional `location.opening_grid` with per-face / `NS`/`EW` specs; bare
+  int means one row (`3` ≡ `3x1`).
+- Faces **`F`/`B`** replace `lid`/`back` in the canonical vocabulary
+  (legacy tokens still parsed in physical route text).
+
 ## [0.6.4] — 2026-07-30
 
 ### Changed

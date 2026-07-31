@@ -4,7 +4,6 @@ Not WireViz: no pin tables. Graphviz clusters by location folder.
 """
 from __future__ import annotations
 
-import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -21,10 +20,7 @@ from housewire.house import (
     prefixed_name,
 )
 
-_OPENING_RE = re.compile(
-    r"abertura\s+(B\d+|[NSEWUD](?:\.[A-Za-z0-9]+)?|(?:back|lid|fondo|tapa)(?:\.[A-Za-z0-9]+)?)",
-    re.IGNORECASE,
-)
+from housewire.project.openings import OPENING_TOKEN_RE as _OPENING_RE
 
 
 @dataclass

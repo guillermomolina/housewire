@@ -3,7 +3,7 @@ id: Panel
 title: Electrical panel
 description_es: >
   Cuadro electrico / cuadro general. Metadatos de la carpeta (housewire.yaml → location:).
-  Declarar bocas en location.openings (B1, B2, …) con face/index opcionales,
+  Declarar bocas en location.openings como lista de ids locales (N1, B1-1, …),
   igual que JunctionBox. No genera conector WireViz ni bornes.
 wireviz_skip: true
 terminals: {}

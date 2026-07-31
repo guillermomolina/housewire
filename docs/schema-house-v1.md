@@ -44,8 +44,11 @@ location:
   type: JunctionBox
   subtype: "100x100 IP40"
   mount: ceiling
-  openings:
-    B1: { face: back, index: 1 }
+  opening_grid:
+    NS: 2
+    EW: 2
+    B: 1
+  openings: [B1-1, N1]
   notes: "…"
 elements:
   Regleta_1:
@@ -113,74 +116,77 @@ En el catálogo, `wireviz_collapse` (análogo a `qet_hint`) empareja bornes para
 
 ## Aberturas (JunctionBox y Panel)
 
-Los agujeros/pasatubos de una **JunctionBox** o un **Panel** **no son bornes
-eléctricos**. Su **identidad** es un id local (`B1`, `B2`, …), declarado en
-`location.openings`. `pend` / `conduits.route` / `cables.notes` citan ese id
-(`abertura B1`), no un cardinal compuesto tipo `W.N`.
+Los agujeros/pasatubos **no son bornes eléctricos**. Se identifican en el
+**marco local de la caja** (como el poker): mirando la tapa (`F`).
 
-### Declaración
+```text
+        N
+    W   F   E
+        S
+         ↓
+         B   (fondo / empotrado)
+```
+
+`mount` + `facing` anclan ese marco al edificio. Al escribir bocas piensas en
+la caja, no en el norte geográfico.
+
+### Ids
+
+| Cara | Id | Orden |
+|---|---|---|
+| Contorno `N`/`S`/`E`/`W` | `N1`, `W2`, … | `N`/`S`: W→E · `E`/`W`: N→S |
+| Fondo `B` / tapa `F` | `B1-1`, `F2-3`, … | 1.er índice N→S, 2.º W→E |
 
 ```yaml
 location:
-  type: JunctionBox   # o Panel
+  type: JunctionBox
   subtype: "100x100 IP40"
   mount: ceiling          # ceiling | wall | floor
-  # facing: N             # solo wall: which way the lid faces (hacia el local)
-  openings:
-    B1: { face: back, index: 1 }
-    B2: { face: W, index: 1 }
-    B3: { face: N, index: 1 }
-    B4: { face: N, index: 2 }   # segunda boca en la misma cara
-  notes: "…"
+  # facing: N             # wall: hacia dónde mira F (hacia el local)
+  opening_grid:
+    NS: 3                 # ≡ N: 3x1 y S: 3x1 (entero = 1 fila)
+    EW: 2
+    B: 2                  # ≡ B: 2x1 → B1-1, B1-2
+  openings: [B1-1, W1, N1]
 ```
 
-- **Id** (`B1`…): estable; no cambia si reclasificas techo↔pared.
-- **`face`**: cara en coordenadas de edificio (`N` `S` `E` `W` `U` `D` `lid` `back`).
-- **`index`**: desempate 1..n en esa cara (ver orden abajo). Opcional si solo hay una boca.
+- **`openings`**: lista de bocas **usadas** (sin objetos vacíos).
+- **`opening_grid`**: plantilla opcional por cara. Claves: `N` `S` `E` `W` `F` `B`,
+  o pares `NS` / `EW`. Un entero `3` = `3x1`. `3x2` = 3 columnas (W→E) × 2 filas (N→S).
+  Una cara omitida = sin rejilla conocida. Cara explícita pisa al par.
 
-Si `location.openings` está declarado, `pend` exige que entrada/salida existan
-en ese mapa. Sin `openings`, se aceptan ids libres (migración).
+Si `openings` está declarado, `pend` exige que entrada/salida existan en la lista.
+Si además hay `opening_grid`, cada id debe caber en la rejilla de su cara.
 
-### Orden de `index` en una cara (mirando el lid)
+### Montaje
 
-Convención única para pared / techo / suelo:
-
-- caras `N` / `S`: `index` crece de **W → E**
-- caras `E` / `W`: `index` crece de **N → S**
-- `back` / `lid`: `index` 1..n en sentido horario mirando esa cara
-
-### Montaje (`mount`)
-
-| `mount` | Lid mira a… | `back` es… | Laterales N/S/E/W |
+| `mount` | `F` mira a… | `B` es… | Contorno local N/S/E/W |
 |---|---|---|---|
-| `ceiling` | suelo | empotrado en el techo | perímetro en planta |
-| `wall` | el local (`facing:` cardinal) | dentro de la pared | perímetro; `U`/`D` = alto/bajo |
-| `floor` | techo | empotrado en el suelo | perímetro en planta |
-
-En **pared**, `facing` = dirección en la que mira el lid. El id `B*` no depende
-de `mount`; `mount` solo interpreta `face`.
+| `ceiling` | suelo | empotrado en el techo | perímetro (poker al mirar F desde abajo) |
+| `wall` | el local (`facing:`) | dentro de la pared | N local = borde “arriba” de la vista de F |
+| `floor` | techo | empotrado en el suelo | perímetro al mirar F |
 
 ### Uso
 
 ```text
-pend B1 B3
+pend N1 S1
 ```
 
 ```yaml
 conduits:
   Conducto_a_Caja_2:
-    route: "abertura B3 ↔ Caja derivacion 2 abertura B1"
+    route: "abertura N1 ↔ Caja derivacion 2 abertura S1"
     contains: [Linea_a_Caja_derivacion_2]
 ```
 
 ### Qué no mezclar
 
-- **Abertura** (`B1`): geometría local de la JunctionBox/Panel. Va en `route` / `notes`.
-- **Conducto**: tubo entre sitios (`Conducto_<A>_a_<B>`), no el id de boca.
+- **Abertura** (`N1`, `B1-1`): geometría local. Va en `route` / `notes`.
+- **Conducto**: tubo entre sitios (`Conducto_<A>_a_<B>`).
 - **Borne** (`Regleta.1`): conexión eléctrica dentro de la caja.
 
-Legacy: ids cardinales (`W.N`, `fondo.SE` legacy) pueden aparecer en texto antiguo; el
-diagrama físico aún los reconoce, pero el canónico es `B*`.
+Legacy: ids opacos `B1`/`B2`, cardinales compuestos (`W.N`) y `back`/`lid`/`fondo`/`tapa`
+pueden aparecer en texto antiguo; el canónico es `N1` / `B1-1`.
 
 ## Cables
 
@@ -211,14 +217,14 @@ Para poder cargar obra “incompleta” sin bloquearte:
 - Si un cable **entra/sale por caja** pero aún no sabes destino, crea el `cable` y su `conduit`, pero **no** añadas `connections` todavía.
 - Usa prefijo `PEND_` en id de cable mientras esté abierto.
 - Marca estado en `notes` de cable: `estado: pendiente`.
-- Describe por dónde pasa en `conduits.route` con aberturas (`B1`, `B2`, …) y texto `destino pendiente`.
+- Describe por dónde pasa en `conduits.route` con aberturas (`N1`, `B1-1`, …) y texto `destino pendiente`.
 
 Desde el shell (recomendado en obra):
 
 ```text
 cd Parking/Caja derivacion 2
-pend B1 B2            # defaults 1.5 mm2 / BN,BU
-pend B1 B2 2.5        # sección distinta
+pend N1 S1            # defaults 1.5 mm2 / BN,BU
+pend N1 S1 2.5        # sección distinta
 pend                  # pregunta aberturas por stdin
 ```
 
@@ -230,13 +236,13 @@ cables:
     kind: power
     section: "1.5 mm2"
     colors: [BN, BU]
-    notes: "estado: pendiente; entra por B1 y sale por B2"
+    notes: "estado: pendiente; entra por N1 y sale por S1"
 
 conduits:
   Conducto_paso_01:
     kind: conduit
     contains: [PEND_Linea_01]
-    route: "abertura B1 ↔ abertura B2 ↔ destino pendiente"
+    route: "abertura N1 ↔ abertura S1 ↔ destino pendiente"
 ```
 
 Al cerrar el pendiente:

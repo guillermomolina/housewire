@@ -56,8 +56,8 @@ Fast capture at a junction box (pending cable, destination unknown):
 ```bash
 housewire shell "$SITE"
 cd "Garage/Junction box 2"   # auto-activates housewire.yaml
-pend B1 B2                 # creates PEND_Linea_01 + Conducto_paso_01
-pend B1 B2 2.5
+pend N1 S1                 # creates PEND_Linea_01 + Conducto_paso_01
+pend N1 S1 2.5
 ```
 
 `add cable` defaults to `1.5 mm2` / `BN,BU` when `--section` / `--colors` are omitted.
@@ -69,7 +69,7 @@ housewire generate -f "$SITE"
 housewire ls "$SITE" "Garage"
 housewire show "$SITE" "Ground floor/Hall/housewire.yaml"
 housewire add element "$SITE" "…/housewire.yaml" MT_New --type MCB --subtype C10
-housewire add pend "$SITE" "…/housewire.yaml" B1 B2
+housewire add pend "$SITE" "…/housewire.yaml" N1 S1
 housewire rm element "$SITE" "…/housewire.yaml" MT_New
 ```
 
