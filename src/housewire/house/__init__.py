@@ -12,7 +12,9 @@ import yaml
 HOUSE_SCHEMA = "house/v1"
 
 # Directory / inline place types (wireviz_skip in catalog).
-PLACE_TYPES = frozenset({"Room", "JunctionBox", "Panel", "Zone", "House", "Location"})
+PLACE_TYPES = frozenset(
+    {"Room", "JunctionBox", "DeviceBox", "Panel", "Zone", "House", "Location"}
+)
 
 # Catalog kinds for cables: / conduits: (not usable as elements).
 CABLE_CATALOG_KIND = "cable_type"

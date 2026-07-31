@@ -25,6 +25,7 @@ HELP_TEXT = """Comandos del shell housewire:
                                cable pendiente + conduit (atajo de add pend)
   add location NAME --type T [--subtype ...] [--label ...] [--notes ...]
                                [--inline | --dir]
+                               T=Room|JunctionBox|DeviceBox|Panel|Zone|House
                                default: outline si estás en outline; inline si estás inline
                                NAME con espacios → id tecnico + label automatico
   add element NAME --type T [--subtype ...] [--label ...] [--manufacturer ...] [--model ...] [--notes ...]

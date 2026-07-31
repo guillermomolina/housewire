@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.12.0] — 2026-07-31
+
+### Added
+
+- Place type **`DeviceBox`** for mechanism boxes (socket/switch; 1-/2-/3-gang).
+- Optional place field **`install`**: `surface` | `flush` (docs).
+- Docs: hanging luminaires terminate at the device element (no DeviceBox).
+
 ## [0.11.0] — 2026-07-31
 
 ### Changed

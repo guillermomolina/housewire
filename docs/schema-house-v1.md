@@ -89,6 +89,7 @@ Place types (catalog, `wireviz_skip`):
 |------|---------|
 | `Room` | Habitación / estancia |
 | `JunctionBox` | Caja de derivación |
+| `DeviceBox` | Caja de mecanismo (enchufe/interruptor; 1-/2-/3-gang) |
 | `Panel` | Cuadro eléctrico (también puede declarar `openings`) |
 | `Zone` | Zona / planta / parking |
 | `House` | Casa / vivienda (no implica ser la raíz del árbol) |
@@ -102,6 +103,38 @@ por encima (p.ej. `Building/…/House/…`) sin cambiar tipos.
 - `cd` entra en outline o inline; `show` / `add element` actúan sobre el place actual.
 - `add location NAME --type T` → outline si el place actual es outline; inline si ya estás
   inline. Fuerza con `--inline` / `--dir` (`--dir` bajo inline no está permitido).
+
+### `install` (surface vs flush)
+
+Opcional en places con `mount`:
+
+| `install` | Significado |
+|---|---|
+| `surface` | Sobre superficie (caja vista / canaleta); tipico parking |
+| `flush` | Empotrado en pared/techo/suelo |
+
+Si se omite, no se asume. No cambia el marco local de aberturas; solo documenta la
+instalacion.
+
+### DeviceBox (mecanismos)
+
+```yaml
+type: DeviceBox
+subtype: 1-gang          # 1-gang | 2-gang | 3-gang
+install: surface
+mount: wall
+facing: S
+openings: [N1]               # entrada tipica por cara N (parking surface)
+elements:
+  Enchufe: { type: Socket, subtype: Schuko }
+  Interruptor: { type: Switch }   # cuando exista en catalogo
+```
+
+### Lamparas / colgantes
+
+Si el cable termina en el aire (portalámparas, manguera colgante) **no** hace falta
+`DeviceBox`: el extremo es el element (`Luminaire` / similar) y el conducto/ruta
+llega a ese element. Reserva `DeviceBox` para cajas de mecanismo reales.
 
 ## Elementos
 
@@ -142,7 +175,7 @@ En el catálogo, `wireviz_collapse` (análogo a `qet_hint`) empareja bornes para
 
 **IGA vs IGP:** el Moeller C50/2 del cuadro es un **magnetotermico** usado como **IGA** (automatico). Un **IGP** seria un interruptor de corte sin curva C/proteccion; no es lo que hay en la foto.
 
-## Aberturas (JunctionBox y Panel)
+## Aberturas (JunctionBox, DeviceBox y Panel)
 
 Los agujeros/pasatubos **no son bornes eléctricos**. Se identifican en el
 **marco local de la caja** (como el poker): mirando la tapa (`F`).

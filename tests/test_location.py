@@ -112,7 +112,15 @@ class TestDirectoryLocation(unittest.TestCase):
 
     def test_place_types_in_catalog(self) -> None:
         catalog = load_catalog()
-        for type_id in ("Room", "JunctionBox", "Panel", "Zone", "House", "Location"):
+        for type_id in (
+            "Room",
+            "JunctionBox",
+            "DeviceBox",
+            "Panel",
+            "Zone",
+            "House",
+            "Location",
+        ):
             self.assertIn(type_id, catalog)
             self.assertTrue(catalog[type_id].get("wireviz_skip"))
 
