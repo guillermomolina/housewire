@@ -124,7 +124,19 @@ subtype: 1-gang          # 1-gang | 2-gang | 3-gang
 install: surface
 mount: wall
 facing: S
-openings: [N1]               # entrada tipica por cara N (parking surface)
+openings: [N1]           # entrada por cara N (p.ej. parking surface)
+elements:
+  Socket:
+    type: Socket
+    subtype: Schuko
+```
+
+Varios artefactos en la misma caja (misma boca de entrada):
+
+```yaml
+type: DeviceBox
+subtype: 2-gang
+openings: [N1]
 elements:
   Enchufe: { type: Socket, subtype: Schuko }
   Interruptor: { type: Switch }   # cuando exista en catalogo
