@@ -7,10 +7,13 @@ from housewire.project import openings as op
 
 
 class TestOpeningIds(unittest.TestCase):
-    def test_side_and_plane_ids(self) -> None:
-        self.assertEqual(op.parse_opening_id("N1"), ("N", 1, None))
-        self.assertEqual(op.parse_opening_id("B1-2"), ("B", 1, 2))
-        self.assertEqual(op.normalize_opening_id("w2"), "W2")
+    def test_opening_compass_port(self) -> None:
+        self.assertEqual(op.opening_compass_port("N1"), "n")
+        self.assertEqual(op.opening_compass_port("S2"), "s")
+        self.assertEqual(op.opening_compass_port("E1"), "e")
+        self.assertEqual(op.opening_compass_port("W2"), "w")
+        self.assertEqual(op.opening_compass_port("B2-1"), "_")
+        self.assertEqual(op.opening_compass_port("F1-1"), "_")
 
     def test_invalid_id(self) -> None:
         with self.assertRaises(ValueError):

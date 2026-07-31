@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.16.2] — 2026-07-31
+
+### Changed
+
+- Physical edges attach to Graphviz compass ports from opening faces
+  (N→top, S→bottom, W→left, E→right); layout `rankdir=TB`.
+
 ## [0.16.1] — 2026-07-31
 
 ### Fixed

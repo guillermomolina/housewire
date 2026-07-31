@@ -109,3 +109,6 @@ class TestPhysicalConduits(unittest.TestCase):
             self.assertIn("Parking_Enchufe_1 [", dot, dot)
             # Container Parking has no duplicate node (not an edge endpoint).
             self.assertIsNone(re.search(r"(?m)^\s+Parking \[", dot), dot)
+            # Compass ports: leave W of Caja_4, enter N of Enchufe_1
+            self.assertIn("Parking_Caja_4:w -> Parking_Enchufe_1:n", dot, dot)
+            self.assertIn("rankdir=TB", dot)

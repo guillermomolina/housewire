@@ -24,6 +24,7 @@ from housewire.house.conduit_ref import (
     resolve_location_ref,
     split_conduit_endpoint,
 )
+from housewire.project.openings import opening_compass_port
 
 
 @dataclass
@@ -41,6 +42,8 @@ class PhysEdge:
     src: str
     dst: str
     label: str
+    src_port: str | None = None  # Graphviz compass: n/s/e/w/_
+    dst_port: str | None = None
 
 
 @dataclass
@@ -257,7 +260,15 @@ def build_physical_model(
             )
 
             label = f"{conduit_name}\\n{from_op} ↔ {to_op}"
-            model.edges.append(PhysEdge(src=from_key, dst=to_key, label=label))
+            model.edges.append(
+                PhysEdge(
+                    src=from_key,
+                    dst=to_key,
+                    label=label,
+                    src_port=opening_compass_port(from_op),
+                    dst_port=opening_compass_port(to_op),
+                )
+            )
 
     return model
 
@@ -336,8 +347,10 @@ def _emit_location(
 def model_to_dot(model: PhysModel) -> str:
     lines: list[str] = [
         "digraph physical {",
-        "  rankdir=LR;",
+        # TB: page north at top; edge ports pin N/S/E/W to box sides.
+        "  rankdir=TB;",
         "  compound=true;",
+        "  splines=true;",
         "  graph [fontname=Arial, fontsize=12, pad=0.3];",
         "  node [fontname=Arial, fontsize=10, shape=box, style=rounded];",
         "  edge [fontname=Arial, fontsize=8];",
@@ -354,16 +367,18 @@ def model_to_dot(model: PhysModel) -> str:
         for top in _immediate_children((), all_parts):
             _emit_location(lines, model, top, all_parts, endpoints, indent="  ")
 
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str, str, str | None, str | None]] = set()
     for edge in model.edges:
         src = model.nodes[edge.src].node_id
         dst = model.nodes[edge.dst].node_id
-        key = (src, dst, edge.label)
+        key = (src, dst, edge.label, edge.src_port, edge.dst_port)
         if key in seen:
             continue
         seen.add(key)
         label = edge.label.replace('"', "'")
-        lines.append(f'  {src} -> {dst} [label="{label}"];')
+        src_ep = f"{src}:{edge.src_port}" if edge.src_port else src
+        dst_ep = f"{dst}:{edge.dst_port}" if edge.dst_port else dst
+        lines.append(f'  {src_ep} -> {dst_ep} [label="{label}"];')
 
     lines.append("}")
     return "\n".join(lines) + "\n"
