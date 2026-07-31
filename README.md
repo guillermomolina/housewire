@@ -61,6 +61,18 @@ add feed Linea_A_a_B --from Junction_4.E1 --to Junction_3.N1 \
   --from-pin Regleta_2.1 --to-pin Regleta.1 --colors BK
 ```
 
+Unknown far end (leave a panel, claim at the next box later):
+
+```bash
+cd "Ground floor/Hall/Main panel"
+open S2 1.5 --colors BN,BU          # OPEN_Linea_01
+cd ../Junction_1
+claim OPEN_Linea_01 --enter N1 --exit E2
+land OPEN_Linea_01 --from Main_panel/MT.2 --to Junction_1/Regleta.1 \
+  --as Linea_panel_a_J1
+opens                               # list still-open runs
+```
+
 Fast capture at a junction box (pending cable, destination unknown):
 
 ```bash

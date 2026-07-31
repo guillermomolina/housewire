@@ -455,6 +455,30 @@ When closing:
 3. Add definitive `connections` `from` / `via` / `to`.
 4. Do not leave `PEND_` ids on closed circuits.
 
+### Open → claim → land (unknown far end)
+
+For a cable that **leaves** a known opening toward a destination you have not
+opened yet (distinct from local `pend` pass-through):
+
+```text
+cd Planta_baja/Recibidor/Cuadro_General
+open S2 1.5 --colors BN,BU
+# → OPEN_Linea_01  notes: status: open; leaves …/Cuadro_General.S2
+#   (no conduit yet)
+
+cd ../Caja_derivacion_1
+claim OPEN_Linea_01 --enter N1 --exit E2
+# → conduit leaves → CD1.N1; notes: status: claimed; enters …; exits …
+
+# later, when terminals are known (still finds the cable in the origin YAML):
+land OPEN_Linea_01 --from Cuadro_General/MT.2 --to Caja_derivacion_1/Regleta.1 \
+  --as Linea_CG_a_CD1
+```
+
+- `opens` lists open/claimed runs across the site tree.
+- A second `claim` on the same `OPEN_*` continues from the previous `--exit`.
+- Prefer opening from the box (or parent) that should own the cable YAML.
+
 ## Connections
 
 Canonical form (what the shell writes):

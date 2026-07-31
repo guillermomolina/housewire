@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.19.0] — 2026-07-31
+
+### Added
+
+- Open-ended runs: shell ``open`` / ``claim`` / ``land`` / ``opens`` for cables
+  that leave a known opening toward an unknown far end (``OPEN_Linea_NN``), then
+  attach conduit hops and finally electrical connections with rename.
+
 ## [0.18.0] — 2026-07-31
 
 ### Added

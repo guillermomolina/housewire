@@ -24,6 +24,13 @@ HELP_TEXT = """housewire shell commands:
   show --element NAME | --cable NAME
   pend [<enter> <exit>] [section] [--colors C1,C2] [--notes ...]
                                pending cable + conduit from/to (.N1 → .S1)
+  open [BOX.]Op [section] [--colors C1,C2] [--notes ...]
+                               OPEN_* cable leaving an opening (far end unknown)
+  claim OPEN_NN --enter [BOX.]Op [--exit Op]
+                               attach next conduit hop (from leaves/exits → enter)
+  land OPEN_NN --from REF --to REF --as FinalName [--notes ...]
+                               electrical connection + rename off OPEN_
+  opens                        list open/claimed OPEN_* cables (current + ancestors)
   set KEY VALUE | set KEY=VALUE
                                property of the current place (YAML; memory → save)
                                nested: opening_grid.N=1
@@ -526,6 +533,196 @@ def cmd_pend(session: ProjectSession, argv: list[str]) -> int:
     return 0
 
 
+def _iter_search_docs(session: ProjectSession) -> list[tuple[Path, dict]]:
+    """Current place, ancestors, root, buffers, then all outline housewire.yaml."""
+    from housewire.project.io import HOUSEWIRE_YAML
+    from housewire.project.paths import is_excluded_path
+    from housewire.project.session import place_node_at
+
+    seen: set[Path] = set()
+    rows: list[tuple[Path, dict]] = []
+
+    def add(path: Path, doc: dict, inline_parts: list[str] | None = None) -> None:
+        resolved = path.resolve()
+        if resolved in seen:
+            return
+        seen.add(resolved)
+        place = place_node_at(doc, inline_parts or [])
+        rows.append((resolved, place))
+
+    try:
+        path, doc = session.ensure_doc()
+        cursor = session.cursor()
+        add(path, doc, cursor.inline_parts)
+    except (ValueError, FileNotFoundError):
+        pass
+
+    parts = list(session.logical_parts)
+    while parts:
+        parts.pop()
+        try:
+            cursor = session._resolve_logical(parts)
+        except (ValueError, FileNotFoundError):
+            continue
+        if cursor.yaml_path is None:
+            continue
+        path, doc = session.ensure_doc(cursor.yaml_path)
+        add(path, doc, [])
+
+    root_yaml = session.root / HOUSEWIRE_YAML
+    if root_yaml.is_file() or root_yaml.resolve() in session._buffers:
+        path, doc = session.ensure_doc(root_yaml)
+        add(path, doc, [])
+
+    for path, buf in session._buffers.items():
+        add(path, buf.doc, [])
+
+    # Full outline scan so claim finds OPEN_* opened in a sibling box.
+    for yaml_path in session.root.rglob(HOUSEWIRE_YAML):
+        if is_excluded_path(yaml_path, session._excluded):
+            continue
+        try:
+            path, doc = session.ensure_doc(yaml_path)
+        except (ValueError, OSError):
+            continue
+        add(path, doc, [])
+
+    return rows
+
+
+def _find_cable_doc(
+    session: ProjectSession, cable_name: str
+) -> tuple[Path, dict]:
+    from housewire.project import open_runs
+
+    for path, place in _iter_search_docs(session):
+        if open_runs.find_cable_in_doc(place, cable_name) is not None:
+            return path, place
+    raise ValueError(f"Cable not found in current or ancestor YAMLs: {cable_name}")
+
+
+def cmd_open(session: ProjectSession, argv: list[str]) -> int:
+    from housewire.project import open_runs
+
+    p = argparse.ArgumentParser(prog="open", add_help=False)
+    p.add_argument("positional", nargs="*")
+    p.add_argument("--colors")
+    p.add_argument("--subtype", default=None)
+    p.add_argument("--label")
+    p.add_argument("--notes")
+    args = p.parse_args(argv)
+    positional = list(args.positional)
+    if not positional:
+        opening_arg = _prompt("Leave opening (e.g. S2 or Box.S2): ", session)
+        section = None
+    else:
+        opening_arg = positional[0]
+        section = positional[1] if len(positional) >= 2 else None
+    if not opening_arg:
+        raise ValueError("open requires an opening (e.g. S2 or Cuadro_General.S2)")
+
+    leaves = open_runs.resolve_leave_ref(
+        opening_arg,
+        current_location_ref=open_runs.current_location_ref(session.logical_parts),
+    )
+    path, doc = session.ensure_doc()
+    place = session.place_node(doc)
+    cable_name = open_runs.add_open_cable(
+        place,
+        leaves=leaves,
+        section=section,
+        colors=_colors_list(args.colors) if args.colors else None,
+        subtype=args.subtype or abm.DEFAULT_CABLE_SUBTYPE,
+        label=args.label,
+        notes=args.notes,
+    )
+    session.mark_dirty(path)
+    print(f"Open {cable_name} leaves {leaves} (far end unknown).")
+    return 0
+
+
+def cmd_claim(session: ProjectSession, argv: list[str]) -> int:
+    from housewire.project import open_runs
+
+    p = argparse.ArgumentParser(prog="claim", add_help=False)
+    p.add_argument("cable")
+    p.add_argument("--enter", required=True, help="Opening where the run arrives")
+    p.add_argument("--exit", dest="exit_op", default=None, help="Optional pass-through exit")
+    args = p.parse_args(argv)
+
+    path, place = _find_cable_doc(session, args.cable)
+    enter_ref = open_runs.opening_ref_at(session.logical_parts, args.enter)
+    exit_ref = (
+        open_runs.opening_ref_at(session.logical_parts, args.exit_op)
+        if args.exit_op
+        else None
+    )
+    # If --enter already has a box prefix, keep it (opening_ref_at preserves it).
+    conduit_name, meta = open_runs.claim_open_cable(
+        place,
+        args.cable,
+        enter=enter_ref,
+        exit=exit_ref,
+    )
+    session.mark_dirty(path)
+    exit_bit = f", exits {meta.exits}" if meta.exits else ""
+    print(
+        f"Claimed {args.cable}: {conduit_name} → enters {meta.enters}{exit_bit}."
+    )
+    return 0
+
+
+def cmd_land(session: ProjectSession, argv: list[str]) -> int:
+    from housewire.project import open_runs
+
+    p = argparse.ArgumentParser(prog="land", add_help=False)
+    p.add_argument("cable")
+    p.add_argument("--from", dest="from_ref", required=True)
+    p.add_argument("--to", dest="to_ref", required=True)
+    p.add_argument("--as", dest="as_name", default=None)
+    p.add_argument("--notes")
+    args = p.parse_args(argv)
+
+    path, place = _find_cable_doc(session, args.cable)
+    final = open_runs.land_open_cable(
+        place,
+        args.cable,
+        from_ref=args.from_ref,
+        to_ref=args.to_ref,
+        as_name=args.as_name,
+        notes=args.notes,
+    )
+    session.mark_dirty(path)
+    print(f"Landed {final}: {args.from_ref} → {args.to_ref}.")
+    return 0
+
+
+def cmd_opens(session: ProjectSession, argv: list[str]) -> int:
+    from housewire.project import open_runs
+
+    del argv  # no flags yet
+    found = False
+    seen_names: set[str] = set()
+    for path, place in _iter_search_docs(session):
+        for name, meta in open_runs.list_open_cables(place):
+            if name in seen_names:
+                continue
+            seen_names.add(name)
+            found = True
+            rel = path.relative_to(session.root)
+            bits = [meta.status]
+            if meta.leaves:
+                bits.append(f"leaves {meta.leaves}")
+            if meta.enters:
+                bits.append(f"enters {meta.enters}")
+            if meta.exits:
+                bits.append(f"exits {meta.exits}")
+            print(f"{name}  ({'; '.join(bits)})  [{rel}]")
+    if not found:
+        print("(no open runs)")
+    return 0
+
+
 def cmd_add(session: ProjectSession, argv: list[str]) -> int:
     kind, rest = _parse_add_args(argv)
     if kind == "dir":
@@ -943,6 +1140,14 @@ def run_shell_line(session: ProjectSession, line: str, *, generate_fn) -> int | 
             return cmd_show(session, args)
         if cmd == "pend":
             return cmd_pend(session, args)
+        if cmd == "open":
+            return cmd_open(session, args)
+        if cmd == "claim":
+            return cmd_claim(session, args)
+        if cmd == "land":
+            return cmd_land(session, args)
+        if cmd == "opens":
+            return cmd_opens(session, args)
         if cmd == "add":
             return cmd_add(session, args)
         if cmd == "set":
