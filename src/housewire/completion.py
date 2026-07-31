@@ -256,8 +256,18 @@ def enable_readline_completion(session: ProjectSession) -> bool:
     readline.set_completer(ShellCompleter(session))
     # Include '/' inside the token so nested paths complete as one argument.
     readline.set_completer_delims(" \t\n;")
+
+    # GNU readline: "tab: complete". libedit (macOS): "bind ^I rl_complete".
+    # Applying the libedit line on GNU readline can bind the key ``b`` and
+    # make that letter unusable in the shell — only use one, matching the library.
+    doc = getattr(readline, "__doc__", "") or ""
+    if "libedit" in doc:
+        bindings = ("bind ^I rl_complete",)
+    else:
+        bindings = ("tab: complete",)
+
     bound = False
-    for binding in ("tab: complete", "bind ^I rl_complete"):
+    for binding in bindings:
         try:
             readline.parse_and_bind(binding)
             bound = True

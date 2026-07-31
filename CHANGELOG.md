@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.16.7] — 2026-07-31
+
+### Fixed
+
+- Shell: letter ``b`` swallowed on GNU readline — only apply the libedit Tab
+  bind on libedit, not on Linux GNU readline.
+
 ## [0.16.6] — 2026-07-31
 
 ### Changed

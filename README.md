@@ -144,5 +144,5 @@ conduits:
 
 ## Version
 
-Package version: `pyproject.toml` / `housewire.__version__` (currently **0.16.6**).
+Package version: `pyproject.toml` / `housewire.__version__` (currently **0.16.7**).
 History: [CHANGELOG.md](CHANGELOG.md).
