@@ -274,34 +274,63 @@ def _immediate_children(
     return sorted(kids)
 
 
-def _emit_cluster(
+def _node_label(node: PhysNode) -> str:
+    """Single label for a location node (no separate cluster duplicate)."""
+    label = node.display_label.replace('"', "'")
+    if node.subtitle:
+        sub = node.subtitle.replace('"', "'")
+        return f"{label}\\n{sub}"
+    if node.type_id and node.type_id not in ("Location",):
+        return f"{label}\\n{node.type_id}"
+    return label
+
+
+def _emit_node(lines: list[str], node: PhysNode, *, indent: str) -> None:
+    title = _node_label(node)
+    shape = "oval" if node.type_id == "External" else "box"
+    fill = "lightyellow" if node.type_id == "External" else "white"
+    lines.append(
+        f'{indent}{node.node_id} [label="{title}", shape={shape}, '
+        f'style="rounded,filled", fillcolor={fill}];'
+    )
+
+
+def _emit_location(
     lines: list[str],
     model: PhysModel,
     parts: tuple[str, ...],
     all_parts: set[tuple[str, ...]],
+    endpoints: set[str],
     *,
     indent: str,
 ) -> None:
+    """Emit nested clusters for containers; a node only once (leaves / edge ends)."""
     key = location_key(parts)
     node = model.nodes[key]
-    cid = node.node_id
-    label = node.display_label.replace('"', "'")
-    subtitle = node.subtitle.replace('"', "'")
-    full_label = f"{label}\\n{subtitle}" if subtitle else label
-    lines.append(f"{indent}subgraph cluster_{cid} {{")
-    lines.append(f'{indent}  label="{full_label}";')
-    lines.append(f"{indent}  style=rounded;")
-    lines.append(f"{indent}  color=gray50;")
-    title = node.title.replace('"', "'")
-    shape = "oval" if node.type_id == "External" else "box"
-    fill = "lightyellow" if node.type_id == "External" else "white"
-    lines.append(
-        f'{indent}  {node.node_id} [label="{title}", shape={shape}, '
-        f'style="rounded,filled", fillcolor={fill}];'
-    )
-    for child in _immediate_children(parts, all_parts):
-        _emit_cluster(lines, model, child, all_parts, indent=indent + "  ")
-    lines.append(f"{indent}}}")
+    kids = _immediate_children(parts, all_parts)
+    is_endpoint = key in endpoints
+
+    if kids:
+        # Container: cluster frame only; node only if conduits attach here.
+        cid = node.node_id
+        label = node.display_label.replace('"', "'")
+        subtitle = node.subtitle.replace('"', "'")
+        full_label = f"{label}\\n{subtitle}" if subtitle else label
+        lines.append(f"{indent}subgraph cluster_{cid} {{")
+        lines.append(f'{indent}  label="{full_label}";')
+        lines.append(f"{indent}  style=rounded;")
+        lines.append(f"{indent}  color=gray50;")
+        if is_endpoint:
+            _emit_node(lines, node, indent=indent + "  ")
+        for child in kids:
+            _emit_location(
+                lines, model, child, all_parts, endpoints, indent=indent + "  "
+            )
+        lines.append(f"{indent}}}")
+        return
+
+    # Leaf: one node, no wrapping cluster with the same name.
+    _emit_node(lines, node, indent=indent)
 
 
 def model_to_dot(model: PhysModel) -> str:
@@ -317,11 +346,13 @@ def model_to_dot(model: PhysModel) -> str:
         lines.append(f'  labelloc="t"; label="{model.title}";')
 
     all_parts = {node.parts for node in model.nodes.values()}
+    endpoints = {edge.src for edge in model.edges} | {edge.dst for edge in model.edges}
+
     if () in all_parts:
-        _emit_cluster(lines, model, (), all_parts, indent="  ")
+        _emit_location(lines, model, (), all_parts, endpoints, indent="  ")
     else:
         for top in _immediate_children((), all_parts):
-            _emit_cluster(lines, model, top, all_parts, indent="  ")
+            _emit_location(lines, model, top, all_parts, endpoints, indent="  ")
 
     seen: set[tuple[str, str, str]] = set()
     for edge in model.edges:

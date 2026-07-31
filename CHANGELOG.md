@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.16.1] — 2026-07-31
+
+### Fixed
+
+- Physical diagram no longer draws each location twice (cluster + inner node).
+  Containers are clusters only; leaves (conduit ends) are single nodes.
+
 ## [0.16.0] — 2026-07-31
 
 ### Changed

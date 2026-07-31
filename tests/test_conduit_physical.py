@@ -99,9 +99,13 @@ class TestPhysicalConduits(unittest.TestCase):
             self.assertFalse(any("Socket" in t for t in titles), titles)
 
             from housewire.house.physical import model_to_dot
+            import re
 
             dot = model_to_dot(model)
-            parking_idx = dot.find("subgraph cluster_Parking {")
-            caja_idx = dot.find("subgraph cluster_Parking_Caja_4 {")
-            self.assertGreaterEqual(parking_idx, 0, dot)
-            self.assertGreater(caja_idx, parking_idx, dot)
+            self.assertIn("subgraph cluster_Parking {", dot)
+            # Leaves are nodes inside the parent cluster, not nested twin clusters.
+            self.assertNotIn("subgraph cluster_Parking_Caja_4", dot, dot)
+            self.assertIn("Parking_Caja_4 [", dot, dot)
+            self.assertIn("Parking_Enchufe_1 [", dot, dot)
+            # Container Parking has no duplicate node (not an edge endpoint).
+            self.assertIsNone(re.search(r"(?m)^\s+Parking \[", dot), dot)
