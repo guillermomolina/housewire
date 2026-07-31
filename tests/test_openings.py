@@ -24,12 +24,17 @@ class TestOpeningIds(unittest.TestCase):
         self.assertEqual(op.parse_grid_spec("3x2"), (3, 2))
 
     def test_expand_ns_ew_and_overrides(self) -> None:
-        grid = op.expand_opening_grid({"NS": 3, "EW": 2, "B": 2, "N": "3x2"})
+        grid = op.expand_opening_grid({"NS": 3, "WE": 2, "B": 2, "N": "3x2"})
         self.assertEqual(grid["N"], (3, 2))
         self.assertEqual(grid["S"], (3, 1))
         self.assertEqual(grid["E"], (2, 1))
         self.assertEqual(grid["W"], (2, 1))
         self.assertEqual(grid["B"], (2, 1))
+
+    def test_ew_alias_rejected(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            op.expand_opening_grid({"EW": 2})
+        self.assertIn("WE", str(ctx.exception))
 
     def test_opening_fits_grid(self) -> None:
         grid = op.expand_opening_grid({"NS": 2, "B": "2x1"})

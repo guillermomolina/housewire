@@ -16,7 +16,8 @@ from typing import Any
 SIDE_FACES = frozenset({"N", "S", "E", "W"})
 PLANE_FACES = frozenset({"F", "B"})
 ALL_FACES = SIDE_FACES | PLANE_FACES
-PAIR_KEYS = {"NS": ("N", "S"), "EW": ("E", "W")}
+# Pair keys follow index order: N→S, W→E.
+PAIR_KEYS = {"NS": ("N", "S"), "WE": ("W", "E")}
 
 SIDE_ID_RE = re.compile(r"^([NSEW])(\d+)$")
 PLANE_ID_RE = re.compile(r"^([FB])(\d+)-(\d+)$")
@@ -58,9 +59,9 @@ def parse_grid_spec(value: Any) -> tuple[int, int]:
 
 
 def expand_opening_grid(raw: Any) -> dict[str, tuple[int, int]]:
-    """Expand ``NS``/``EW`` pairs and per-face keys into ``{face: (cols, rows)}``.
+    """Expand ``NS``/``WE`` pairs and per-face keys into ``{face: (cols, rows)}``.
 
-    Explicit ``N``/``S``/… override values from ``NS``/``EW``.
+    Explicit ``N``/``S``/… override values from ``NS``/``WE``.
     """
     if raw is None:
         return {}
@@ -72,6 +73,10 @@ def expand_opening_grid(raw: Any) -> dict[str, tuple[int, int]]:
 
     for key, value in raw.items():
         name = str(key)
+        if name == "EW":
+            raise ValueError(
+                "opening_grid clave 'EW' renombrada a 'WE' (orden W→E, como NS)"
+            )
         spec = parse_grid_spec(value)
         if name in PAIR_KEYS:
             for face in PAIR_KEYS[name]:
@@ -81,7 +86,7 @@ def expand_opening_grid(raw: Any) -> dict[str, tuple[int, int]]:
         else:
             raise ValueError(
                 f"opening_grid clave desconocida: {name!r}. "
-                f"Usa N,S,E,W,F,B,NS,EW"
+                f"Usa N,S,E,W,F,B,NS,WE"
             )
 
     expanded.update(overrides)

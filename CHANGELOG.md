@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.7.1] — 2026-07-31
+
+### Changed
+
+- `opening_grid` pair key **`WE`** (W→E) instead of `EW`, matching `NS` order.
+
 ## [0.7.0] — 2026-07-31
 
 ### Changed

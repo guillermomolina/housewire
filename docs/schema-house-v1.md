@@ -46,7 +46,7 @@ location:
   mount: ceiling
   opening_grid:
     NS: 2
-    EW: 2
+    WE: 2
     B: 1
   openings: [B1-1, N1]
   notes: "…"
@@ -145,15 +145,16 @@ location:
   # facing: N             # wall: hacia dónde mira F (hacia el local)
   opening_grid:
     NS: 3                 # ≡ N: 3x1 y S: 3x1 (entero = 1 fila)
-    EW: 2
+    WE: 2                 # ≡ W y E (orden W→E, como NS)
     B: 2                  # ≡ B: 2x1 → B1-1, B1-2
   openings: [B1-1, W1, N1]
 ```
 
 - **`openings`**: lista de bocas **usadas** (sin objetos vacíos).
 - **`opening_grid`**: plantilla opcional por cara. Claves: `N` `S` `E` `W` `F` `B`,
-  o pares `NS` / `EW`. Un entero `3` = `3x1`. `3x2` = 3 columnas (W→E) × 2 filas (N→S).
-  Una cara omitida = sin rejilla conocida. Cara explícita pisa al par.
+  o pares `NS` / `WE` (mismo orden que los índices: N→S, W→E). Un entero `3` = `3x1`.
+  `3x2` = 3 columnas (W→E) × 2 filas (N→S). Una cara omitida = sin rejilla conocida.
+  Cara explícita pisa al par.
 
 Si `openings` está declarado, `pend` exige que entrada/salida existan en la lista.
 Si además hay `opening_grid`, cada id debe caber en la rejilla de su cara.
