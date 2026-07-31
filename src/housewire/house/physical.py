@@ -1,6 +1,6 @@
 """Physical topology diagram from house/v1 (locations + conduits).
 
-Physical layer only: location nodes linked by conduits (openings).
+Physical layer only: nested location clusters linked by conduits (openings).
 Electrical connections (elements + cables) belong to WireViz, not here.
 """
 from __future__ import annotations
@@ -31,9 +31,9 @@ class PhysNode:
     node_id: str
     title: str
     type_id: str
-    cluster_id: str
-    cluster_label: str
-    cluster_subtitle: str = ""
+    parts: tuple[str, ...]
+    display_label: str
+    subtitle: str = ""
 
 
 @dataclass
@@ -48,15 +48,6 @@ class PhysModel:
     nodes: dict[str, PhysNode] = field(default_factory=dict)
     edges: list[PhysEdge] = field(default_factory=list)
     title: str = ""
-
-
-def _cluster_label(parts: list[str], *, leaf_label: str | None = None) -> str:
-    if not parts:
-        return "raiz"
-    display = list(parts)
-    if leaf_label:
-        display[-1] = leaf_label
-    return " / ".join(display)
 
 
 def _leaf_place_meta(fragment: dict[str, Any], location_parts: list[str]) -> dict[str, Any]:
@@ -132,26 +123,54 @@ def _ensure_location_node(
     label: str | None = None,
     subtitle: str = "",
     external: bool = False,
+    root_name: str = "site",
 ) -> str:
     key = location_key(parts)
     if key in model.nodes:
+        node = model.nodes[key]
+        # Fill in better metadata if we only had a stub before.
+        if label and node.display_label in (parts[-1] if parts else root_name, "raiz"):
+            node.display_label = label
+            node.title = f"{label}\\n{node.type_id}"
+        if subtitle and not node.subtitle:
+            node.subtitle = subtitle
+        if type_id != "Location" and node.type_id in ("Location", "External"):
+            node.type_id = type_id
+            node.title = f"{node.display_label}\\n{type_id}"
         return key
-    leaf = parts[-1] if parts else "raiz"
-    display_label = label or leaf
+
+    if parts:
+        leaf = parts[-1]
+        display_label = label or leaf
+        node_id = _safe_id(key)
+    else:
+        display_label = label or root_name
+        node_id = _safe_id(root_name)
     title = f"{display_label}\\n{type_id}"
     if external:
         title = f"{display_label}\\n(externo)"
         type_id = "External"
-    cluster_label = _cluster_label(list(parts), leaf_label=label)
     model.nodes[key] = PhysNode(
-        node_id=_safe_id(key),
+        node_id=node_id,
         title=title,
         type_id=type_id,
-        cluster_id=_safe_id(key),
-        cluster_label=cluster_label,
-        cluster_subtitle=subtitle,
+        parts=parts,
+        display_label=display_label,
+        subtitle=subtitle,
     )
     return key
+
+
+def _ensure_ancestor_nodes(
+    model: PhysModel,
+    parts: tuple[str, ...],
+    *,
+    root_name: str,
+) -> None:
+    """Ensure every path prefix exists so clusters can nest."""
+    for depth in range(len(parts)):
+        prefix = parts[: depth + 1]
+        _ensure_location_node(model, prefix, root_name=root_name)
 
 
 def build_physical_model(
@@ -163,7 +182,8 @@ def build_physical_model(
     """Build location↔conduit graph (physical layer)."""
     from housewire.house import is_place_type
 
-    model = PhysModel(title=title or project_path.name)
+    root_name = project_path.name
+    model = PhysModel(title=title or root_name)
     pieces = _load_house_files(project_path, yaml_files)
     known: set[tuple[str, ...]] = {tuple(parts) for parts, _ in pieces}
     fragment_locations = set(known)
@@ -172,6 +192,8 @@ def build_physical_model(
     for location_parts, fragment in pieces:
         place_meta = _leaf_place_meta(fragment, location_parts)
         leaf_label = str(place_meta["label"]) if place_meta.get("label") else None
+        if not location_parts and leaf_label is None:
+            leaf_label = root_name
         type_id = str(place_meta.get("type") or "Location")
         subtitle = ""
         if place_meta.get("type"):
@@ -183,12 +205,15 @@ def build_physical_model(
             if place_meta.get("install"):
                 bits.append(f"install={place_meta['install']}")
             subtitle = " | ".join(bits)
+        parts = tuple(location_parts)
+        _ensure_ancestor_nodes(model, parts, root_name=root_name)
         _ensure_location_node(
             model,
-            tuple(location_parts),
+            parts,
             type_id=type_id if is_place_type(type_id) else "Location",
             label=leaf_label,
             subtitle=subtitle,
+            root_name=root_name,
         )
 
     # Pass 2: conduits → edges between locations.
@@ -216,33 +241,74 @@ def build_physical_model(
             known.add(from_parts)
             known.add(to_parts)
 
+            _ensure_ancestor_nodes(model, from_parts, root_name=root_name)
+            _ensure_ancestor_nodes(model, to_parts, root_name=root_name)
             from_key = _ensure_location_node(
                 model,
                 from_parts,
                 external=from_parts not in fragment_locations,
+                root_name=root_name,
             )
             to_key = _ensure_location_node(
                 model,
                 to_parts,
                 external=to_parts not in fragment_locations,
+                root_name=root_name,
             )
 
-            contains = [str(c) for c in (conduit.get("contains") or [])]
-            short_name = str(conduit_name)
-            label_bits = [short_name, f"{from_op} ↔ {to_op}"]
-            if contains:
-                label_bits.append(", ".join(contains))
-            model.edges.append(
-                PhysEdge(src=from_key, dst=to_key, label="\\n".join(label_bits))
-            )
+            label = f"{conduit_name}\\n{from_op} ↔ {to_op}"
+            model.edges.append(PhysEdge(src=from_key, dst=to_key, label=label))
 
     return model
+
+
+def _immediate_children(
+    parent: tuple[str, ...], all_parts: set[tuple[str, ...]]
+) -> list[tuple[str, ...]]:
+    depth = len(parent)
+    kids = [
+        p
+        for p in all_parts
+        if len(p) == depth + 1 and p[:depth] == parent
+    ]
+    return sorted(kids)
+
+
+def _emit_cluster(
+    lines: list[str],
+    model: PhysModel,
+    parts: tuple[str, ...],
+    all_parts: set[tuple[str, ...]],
+    *,
+    indent: str,
+) -> None:
+    key = location_key(parts)
+    node = model.nodes[key]
+    cid = node.node_id
+    label = node.display_label.replace('"', "'")
+    subtitle = node.subtitle.replace('"', "'")
+    full_label = f"{label}\\n{subtitle}" if subtitle else label
+    lines.append(f"{indent}subgraph cluster_{cid} {{")
+    lines.append(f'{indent}  label="{full_label}";')
+    lines.append(f"{indent}  style=rounded;")
+    lines.append(f"{indent}  color=gray50;")
+    title = node.title.replace('"', "'")
+    shape = "oval" if node.type_id == "External" else "box"
+    fill = "lightyellow" if node.type_id == "External" else "white"
+    lines.append(
+        f'{indent}  {node.node_id} [label="{title}", shape={shape}, '
+        f'style="rounded,filled", fillcolor={fill}];'
+    )
+    for child in _immediate_children(parts, all_parts):
+        _emit_cluster(lines, model, child, all_parts, indent=indent + "  ")
+    lines.append(f"{indent}}}")
 
 
 def model_to_dot(model: PhysModel) -> str:
     lines: list[str] = [
         "digraph physical {",
         "  rankdir=LR;",
+        "  compound=true;",
         "  graph [fontname=Arial, fontsize=12, pad=0.3];",
         "  node [fontname=Arial, fontsize=10, shape=box, style=rounded];",
         "  edge [fontname=Arial, fontsize=8];",
@@ -250,27 +316,12 @@ def model_to_dot(model: PhysModel) -> str:
     if model.title:
         lines.append(f'  labelloc="t"; label="{model.title}";')
 
-    clusters: dict[str, list[PhysNode]] = {}
-    for node in model.nodes.values():
-        clusters.setdefault(node.cluster_id, []).append(node)
-
-    for cluster_id, nodes in sorted(clusters.items(), key=lambda item: item[1][0].cluster_label):
-        label = nodes[0].cluster_label.replace('"', "'")
-        subtitle = nodes[0].cluster_subtitle.replace('"', "'")
-        full_label = f"{label}\n{subtitle}" if subtitle else label
-        lines.append(f"  subgraph cluster_{cluster_id} {{")
-        lines.append(f'    label="{full_label}";')
-        lines.append("    style=rounded;")
-        lines.append("    color=gray50;")
-        for node in nodes:
-            title = node.title.replace('"', "'")
-            shape = "oval" if node.type_id == "External" else "box"
-            fill = "lightyellow" if node.type_id == "External" else "white"
-            lines.append(
-                f'    {node.node_id} [label="{title}", shape={shape}, '
-                f'style="rounded,filled", fillcolor={fill}];'
-            )
-        lines.append("  }")
+    all_parts = {node.parts for node in model.nodes.values()}
+    if () in all_parts:
+        _emit_cluster(lines, model, (), all_parts, indent="  ")
+    else:
+        for top in _immediate_children((), all_parts):
+            _emit_cluster(lines, model, top, all_parts, indent="  ")
 
     seen: set[tuple[str, str, str]] = set()
     for edge in model.edges:

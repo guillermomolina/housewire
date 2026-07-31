@@ -92,7 +92,16 @@ class TestPhysicalConduits(unittest.TestCase):
             self.assertIn("Conducto_1", edge.label)
             self.assertIn("W2", edge.label)
             self.assertIn("N1", edge.label)
+            self.assertNotIn("Linea", edge.label)
             titles = {n.title for n in model.nodes.values()}
             self.assertTrue(any("Caja 4" in t or "Caja_4" in t for t in titles), titles)
             self.assertFalse(any("Regleta" in t for t in titles), titles)
             self.assertFalse(any("Socket" in t for t in titles), titles)
+
+            from housewire.house.physical import model_to_dot
+
+            dot = model_to_dot(model)
+            parking_idx = dot.find("subgraph cluster_Parking {")
+            caja_idx = dot.find("subgraph cluster_Parking_Caja_4 {")
+            self.assertGreaterEqual(parking_idx, 0, dot)
+            self.assertGreater(caja_idx, parking_idx, dot)

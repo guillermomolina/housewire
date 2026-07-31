@@ -9,6 +9,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.16.0] — 2026-07-31
+
+### Changed
+
+- Physical diagram nests location clusters (Floor ⊃ boxes), not flat sibling
+  clusters; site root uses the project name (no bare `raiz`).
+- Physical edge labels are conduit + openings only (no cable ids).
+- WireViz output drops PNG (SVG/HTML/TSV only) to avoid cairo bitmap scaling.
+
 ## [0.15.0] — 2026-07-31
 
 ### Removed

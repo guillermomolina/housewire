@@ -54,8 +54,8 @@ class TestDirectoryLocation(unittest.TestCase):
                 encoding="utf-8",
             )
             model = build_physical_model(root, [caja / "housewire.yaml"])
-            subtitles = {n.cluster_subtitle for n in model.nodes.values()}
-            labels = {n.cluster_label for n in model.nodes.values()}
+            subtitles = {n.subtitle for n in model.nodes.values()}
+            labels = {n.display_label for n in model.nodes.values()}
             self.assertTrue(any("JunctionBox" in s for s in subtitles), subtitles)
             self.assertTrue(any("100x100" in s for s in subtitles), subtitles)
             self.assertTrue(any("ceiling" in s for s in subtitles), subtitles)

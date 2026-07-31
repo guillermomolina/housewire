@@ -29,7 +29,7 @@ from housewire.project.paths import (
 from housewire.project.session import ProjectSession
 from housewire.shell import run_repl
 
-OUTPUT_SUFFIXES = (".html", ".png", ".svg", ".bom.tsv", ".yaml")
+OUTPUT_SUFFIXES = (".html", ".svg", ".bom.tsv", ".yaml")
 PACKAGE_ROOT = Path(__file__).resolve().parent
 EXCLUDED_DIR_NAMES = {".venv", "__pycache__", ".git", "out"}
 KNOWN_SUBCOMMANDS = frozenset({"generate", "shell", "ls", "show", "add", "rm", "version"})
@@ -52,11 +52,11 @@ def run_wireviz(input_file: Path, output_dir: Path) -> None:
     print("Input file:  ", input_file)
     print(
         "Output file: ",
-        f"{output_dir / input_file.stem}.[html|png|svg|tsv]",
+        f"{output_dir / input_file.stem}.[html|svg|tsv]",
     )
     wireviz_parse(
         str(input_file),
-        output_formats=("html", "png", "svg", "tsv"),
+        output_formats=("html", "svg", "tsv"),
         output_dir=output_dir,
         output_name=input_file.stem,
         image_paths=[input_file.parent],
@@ -334,7 +334,7 @@ def output_base_name(project_path: Path) -> str:
 def expected_output_files(base_name: str, output_dir: Path) -> list[Path]:
     return [
         output_dir / f"{base_name}{suffix}"
-        for suffix in (".html", ".png", ".svg", ".bom.tsv")
+        for suffix in (".html", ".svg", ".bom.tsv")
     ]
 
 
