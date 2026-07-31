@@ -25,7 +25,7 @@ HELP_TEXT = """Comandos del shell housewire:
                                cable pendiente + conduit (atajo de add pend)
   add location NAME --type T [--subtype ...] [--label ...] [--notes ...]
                                [--inline | --dir]
-                               T=Room|JunctionBox|DeviceBox|Panel|Zone|House
+                               T=Room|JunctionBox|DeviceBox|Panel|Floor|House
                                default: outline si estás en outline; inline si estás inline
                                NAME con espacios → id tecnico + label automatico
   add element NAME --type T [--subtype ...] [--label ...] [--manufacturer ...] [--model ...] [--notes ...]
@@ -41,7 +41,7 @@ HELP_TEXT = """Comandos del shell housewire:
   rm dir <path>                  solo si está vacío
   save [--force]                 escribir YAML dirty a disco (validate)
   reload                         descartar buffer y releer disco
-  generate [-f]                guardar dirty y generar diagramas
+  generate [-f]                guardar dirty y generar el arbol del cwd
   version                      version del programa
   help
   exit | quit                  avisa si hay cambios sin guardar
@@ -506,7 +506,7 @@ def run_shell_line(session: ProjectSession, line: str, *, generate_fn) -> int | 
             if dirty:
                 print(f"Guardando {len(dirty)} YAML dirty antes de generate…")
                 session.save_all()
-            return generate_fn(session.root, force=force)
+            return generate_fn(session.cwd_path(), force=force)
         print(f"Comando desconocido: {cmd}. Escribe help.", file=sys.stderr)
         return 1
     except (ValueError, FileNotFoundError, FileExistsError, NotADirectoryError, OSError) as exc:

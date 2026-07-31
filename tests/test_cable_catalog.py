@@ -52,7 +52,7 @@ class TestCableCatalog(unittest.TestCase):
     def test_wireviz_uses_subtype_as_cable_type(self) -> None:
         doc = {
             "schema": "house/v1",
-            "type": "Zone",
+            "type": "Floor",
             "elements": {"A": {"type": "Socket"}},
             "cables": {
                 "L1": {

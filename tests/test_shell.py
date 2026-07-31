@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from housewire.project import abm
-from housewire.project.io import create_empty_house_file
+from housewire.project.io import create_empty_house_file, create_location_index
 
 
 # ---------------------------------------------------------------------------
@@ -240,21 +240,39 @@ class TestShellDispatcher(unittest.TestCase):
     def test_generate_calls_fn(self) -> None:
         s = self._session()
         called = []
-        def mock_gen(root, force=False):
-            called.append(force)
+
+        def mock_gen(scope, force=False):
+            called.append((scope, force))
             return 0
+
         self._run(s, "generate -f", generate_fn=mock_gen)
-        self.assertEqual(called, [True])
+        self.assertEqual(called, [(s.cwd_path(), True)])
 
     def test_generate_without_force(self) -> None:
         s = self._session()
         called = []
-        def mock_gen(root, force=False):
-            called.append(force)
-            return 0
-        self._run(s, "generate", generate_fn=mock_gen)
-        self.assertEqual(called, [False])
 
+        def mock_gen(scope, force=False):
+            called.append((scope, force))
+            return 0
+
+        self._run(s, "generate", generate_fn=mock_gen)
+        self.assertEqual(called, [(s.cwd_path(), False)])
+
+    def test_generate_uses_cwd_not_root(self) -> None:
+        create_location_index(self.root / "Parking", type_id="Floor", label="Parking")
+        s = self._session()
+        self._run(s, "cd Parking")
+        called = []
+
+        def mock_gen(scope, force=False):
+            called.append(scope)
+            return 0
+
+        self._run(s, "generate -f", generate_fn=mock_gen)
+        self.assertEqual(called, [s.cwd_path()])
+        self.assertEqual(called[0], (self.root / "Parking").resolve())
+        self.assertNotEqual(called[0], s.root)
     def test_add_location_via_shell(self) -> None:
         s = self._session()
         code = self._run(
@@ -275,7 +293,7 @@ class TestShellDispatcher(unittest.TestCase):
         import sys
 
         create_location_index(
-            self.root / "zona_b", type_id="Zone", subtype="zona", notes="meta"
+            self.root / "zona_b", type_id="Floor", subtype="zona", notes="meta"
         )
         s = self._session()
         self._run(s, "cd zona_b")
@@ -288,5 +306,5 @@ class TestShellDispatcher(unittest.TestCase):
             sys.stdout = old
         self.assertEqual(code, 0)
         out = buf.getvalue()
-        self.assertIn("place (Zone)", out)
+        self.assertIn("place (Floor)", out)
         self.assertIn("zona", out)

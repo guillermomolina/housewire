@@ -13,7 +13,16 @@ HOUSE_SCHEMA = "house/v1"
 
 # Directory / inline place types (wireviz_skip in catalog).
 PLACE_TYPES = frozenset(
-    {"Room", "JunctionBox", "DeviceBox", "Panel", "Zone", "House", "Location"}
+    {
+        "Room",
+        "JunctionBox",
+        "DeviceBox",
+        "Panel",
+        "Floor",
+        "Zone",  # legacy alias of Floor
+        "House",
+        "Location",
+    }
 )
 
 # Catalog kinds for cables: / conduits: (not usable as elements).

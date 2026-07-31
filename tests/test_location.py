@@ -117,7 +117,7 @@ class TestDirectoryLocation(unittest.TestCase):
             "JunctionBox",
             "DeviceBox",
             "Panel",
-            "Zone",
+            "Floor",
             "House",
             "Location",
         ):

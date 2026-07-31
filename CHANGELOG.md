@@ -9,6 +9,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.13.0] — 2026-07-31
+
+### Added
+
+- Place type **`Floor`** for building levels (ground floor, parking, …).
+
+### Changed
+
+- Prefer **`Floor`** over **`Zone`** (`Zone` remains as a legacy place type).
+- `generate` scopes to the given directory (CLI path or shell current location);
+  dropped `--zones` / `--no-zones` and `out/zones/` multi-cut. Output is always
+  WireViz + physical under `<scope>/out/`.
+
 ## [0.12.0] — 2026-07-31
 
 ### Added

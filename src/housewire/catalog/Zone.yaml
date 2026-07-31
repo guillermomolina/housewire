@@ -1,8 +1,8 @@
 kind: place_type
 id: Zone
-title: Zone
+title: Zone (legacy)
 description_es: >
-  Zona amplia (parking, planta, area tecnica). Metadatos de la carpeta
-  (housewire.yaml root (type/label/…)). No genera conector WireViz ni bornes.
+  Legacy: preferir Floor (planta/nivel). Se sigue aceptando como place type.
+  No genera conector WireViz ni bornes.
 wireviz_skip: true
 terminals: {}

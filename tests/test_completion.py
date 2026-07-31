@@ -12,7 +12,7 @@ class TestShellCompletion(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        create_location_index(self.root / "Parking", type_id="Zone", notes="zone")
+        create_location_index(self.root / "Parking", type_id="Floor", notes="zone")
         create_location_index(
             self.root / "Parking" / "Caja derivacion 1",
             type_id="JunctionBox",

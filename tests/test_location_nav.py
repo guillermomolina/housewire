@@ -19,8 +19,9 @@ class TestLocationNavigation(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        # Outline tree: Zone/Parking + Zone/Caja_outline
-        create_location_index(self.root / "Parking", type_id="Zone", label="Parking")
+        # Outline tree: Floor/Parking + JunctionBox outline
+
+        create_location_index(self.root / "Parking", type_id="Floor", label="Parking")
         create_location_index(
             self.root / "Parking" / "Caja_outline",
             type_id="JunctionBox",
@@ -146,7 +147,7 @@ class TestLocationNavigation(unittest.TestCase):
             "type: House\n"
             "elements:\n"
             "  Parking:\n"
-            "    type: Zone\n"
+            "    type: Floor\n"
             "    elements:\n"
             "      Caja_1:\n"
             "        type: JunctionBox\n"
@@ -173,7 +174,7 @@ class TestAddLocationMode(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        create_location_index(self.root / "Parking", type_id="Zone")
+        create_location_index(self.root / "Parking", type_id="Floor")
 
     def tearDown(self) -> None:
         self.tmp.cleanup()

@@ -83,15 +83,15 @@ housewire generate -f "$SITE"
 python -m housewire -f "$SITE"
 ```
 
-Output under `$SITE/out/`:
+Output under `$SITE/out/` (or under the directory you pass / shell `cd` into):
 
 | Path | Content |
 |---|---|
-| `out/<site>.svg` | Full WireViz |
-| `out/zones/<zone>.svg` | WireViz per zone |
-| `out/physical/<zone>.svg` | Physical topology (no pin tables) |
+| `out/<name>.svg` | WireViz for that tree (cross-tree ends as `External`) |
+| `out/physical/<name>.svg` | Physical topology (no pin tables) |
 
-Zones + physical are on by default (`--zones`). Full merge only: `--no-zones`.
+Scope is the path argument (or the shell current location’s directory). Example:
+`housewire generate "$SITE/Parking"` or `cd Parking` then `generate` in the shell.
 
 ```bash
 make prepare          # venv + editable install + pytest (dev-requirements.txt)

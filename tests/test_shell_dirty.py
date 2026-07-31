@@ -12,7 +12,7 @@ class TestShellDirtyBuffer(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        create_location_index(self.root / "zona_a", type_id="Zone")
+        create_location_index(self.root / "zona_a", type_id="Floor")
         self.answers: list[str] = []
 
     def tearDown(self) -> None:
@@ -60,7 +60,7 @@ class TestShellDirtyBuffer(unittest.TestCase):
         self.assertTrue(s.prompt_label().endswith("*"))
 
     def test_discard_on_cd_to_other_yaml(self) -> None:
-        create_location_index(self.root / "zona_b", type_id="Zone")
+        create_location_index(self.root / "zona_b", type_id="Floor")
         s = self._session()
         self._run(s, "cd zona_a")
         self._run(s, "add element MT_A --type MCB --subtype C10")
@@ -72,7 +72,7 @@ class TestShellDirtyBuffer(unittest.TestCase):
         self.assertNotIn("MT_A", disk.get("elements") or {})
 
     def test_save_on_cd_to_other_yaml(self) -> None:
-        create_location_index(self.root / "zona_b", type_id="Zone")
+        create_location_index(self.root / "zona_b", type_id="Floor")
         s = self._session()
         self._run(s, "cd zona_a")
         self._run(s, "add element MT_A --type MCB --subtype C10")
@@ -83,7 +83,7 @@ class TestShellDirtyBuffer(unittest.TestCase):
         self.assertIn("MT_A", disk["elements"])
 
     def test_cancel_cd_keeps_location(self) -> None:
-        create_location_index(self.root / "zona_b", type_id="Zone")
+        create_location_index(self.root / "zona_b", type_id="Floor")
         s = self._session()
         self._run(s, "cd zona_a")
         self._run(s, "add element MT_A --type MCB --subtype C10")

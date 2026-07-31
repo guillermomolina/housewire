@@ -70,7 +70,7 @@ Sin `schema: house/v1`, el archivo se trata como WireViz legacy (como `Test/`).
 
 ```text
 Garage/
-  housewire.yaml                 # type: Zone + sockets…
+  housewire.yaml                 # type: Floor + sockets…
   Junction_box_1/
     housewire.yaml               # type: JunctionBox + regletas…
 ```
@@ -91,7 +91,8 @@ Place types (catalog, `wireviz_skip`):
 | `JunctionBox` | Caja de derivación |
 | `DeviceBox` | Caja de mecanismo (enchufe/interruptor; 1-/2-/3-gang) |
 | `Panel` | Cuadro eléctrico (también puede declarar `openings`) |
-| `Zone` | Zona / planta / parking |
+| `Floor` | Planta / nivel (planta baja, parking, …); preferir frente a `Zone` |
+| `Zone` | Legacy (alias de Floor) |
 | `House` | Casa / vivienda (no implica ser la raíz del árbol) |
 | `Location` | Genérico (legacy / inline) |
 
@@ -403,8 +404,9 @@ Las `connections` siguen yendo a los cables. El conduit se anota en los cables c
 
 ## Salidas al generar
 
-`housewire` (con `--zones`, por defecto):
+`housewire generate <path>` (o `generate` en el shell tras `cd` a un location):
 
-- `out/<proyecto>.*` — WireViz de **todo** el proyecto de obra
-- `out/zones/<zona>.*` — WireViz de una zona (`Parking`, `Cuadro_general`); elementos fuera de zona aparecen como stub `External`
-- `out/physical/<zona>.svg` — diagrama de **topología física** (clusters por carpeta, sin pines); `.dot` junto al SVG para depurar
+- `out/<nombre>.*` — WireViz del **árbol bajo ese path** (sitio completo, un Floor, una caja, …); extremos fuera del alcance aparecen como stub `External`
+- `out/physical/<nombre>.svg` — diagrama de **topología física** (clusters por carpeta, sin pines); `.dot` junto al SVG para depurar
+
+Para generar solo Parking: `housewire generate $SITE/Parking` o, en el shell, `cd Parking` y `generate`.

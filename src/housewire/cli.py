@@ -367,22 +367,6 @@ def ensure_overwrite_allowed(
     raise FileExistsError("Operacion cancelada por el usuario.")
 
 
-def discover_zones(project_path: Path, all_files: list[Path]) -> dict[str, list[Path]]:
-    """Group housewire.yaml files by top-level path under the project root.
-
-    No place type or site layout is assumed: each first-level directory is a
-    zone; files directly in the project root form a zone named after the
-    project directory. Point ``project_path`` at any subtree to remap scope.
-    """
-    zones: dict[str, list[Path]] = {}
-    for path in all_files:
-        rel = path.relative_to(project_path)
-        parts = rel.parts
-        zone_name = project_path.name if len(parts) == 1 else parts[0]
-        zones.setdefault(zone_name, []).append(path)
-    return zones
-
-
 def write_and_render_wireviz(
     project_path: Path,
     input_files: list[Path],
@@ -412,8 +396,12 @@ def run_generate_project(
     *,
     inputs: list[str] | None = None,
     force: bool = False,
-    do_zones: bool = True,
 ) -> int:
+    """Generate WireViz + physical for the given tree (``project_path`` as root).
+
+    Scope is the directory you pass (site root, a Floor, a DeviceBox, …).
+    Output goes to ``<project_path>/out/``. Cross-tree refs become External stubs.
+    """
     output_dir = (project_path / "out").resolve()
 
     if not project_path.exists():
@@ -434,36 +422,20 @@ def run_generate_project(
         ensure_overwrite_allowed(base_name, output_dir, force=force)
 
         write_and_render_wireviz(
-            project_path, input_files, output_dir, base_name, with_stubs=False
+            project_path, input_files, output_dir, base_name, with_stubs=True
         )
 
-        if do_zones:
-            zones_dir = output_dir / "zones"
-            physical_dir = output_dir / "physical"
-            if force:
-                if zones_dir.exists():
-                    shutil.rmtree(zones_dir)
-                if physical_dir.exists():
-                    shutil.rmtree(physical_dir)
-
-            zones = discover_zones(project_path, input_files)
-            for zone_name, zone_files in zones.items():
-                zone_base = normalize_token(zone_name)
-                write_and_render_wireviz(
-                    project_path,
-                    zone_files,
-                    zones_dir,
-                    zone_base,
-                    with_stubs=True,
-                )
-                phys_svg = physical_dir / f"{zone_base}.svg"
-                print(f"Diagrama fisico → {phys_svg}")
-                export_physical_zone(
-                    project_path,
-                    zone_files,
-                    phys_svg,
-                    title=f"{project_path.name} — {zone_name} (fisico)",
-                )
+        physical_dir = output_dir / "physical"
+        if force and physical_dir.exists():
+            shutil.rmtree(physical_dir)
+        phys_svg = physical_dir / f"{base_name}.svg"
+        print(f"Diagrama fisico → {phys_svg}")
+        export_physical_zone(
+            project_path,
+            input_files,
+            phys_svg,
+            title=f"{project_path.name} (fisico)",
+        )
 
     except Exception as exc:
         if hasattr(exc, "returncode"):
@@ -477,40 +449,27 @@ def run_generate_project(
             return 1
         raise
 
-    print(f"Diagrama fusionado generado en: {output_dir}")
-    if do_zones:
-        print(f"Zonas WireViz: {output_dir / 'zones'}")
-        print(f"Topologia fisica: {output_dir / 'physical'}")
+    print(f"Diagrama generado en: {output_dir}")
+    print(f"Topologia fisica: {output_dir / 'physical'}")
     return 0
 
 
 def _add_generate_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "project_path",
-        help="Ruta del proyecto donde estan los YAML y el directorio out",
+        help="Raiz del arbol a generar (sitio, Floor, DeviceBox, …); salida en out/",
     )
     parser.add_argument(
         "--input",
         action="append",
         dest="inputs",
-        help="Ruta relativa de YAML o carpeta dentro del proyecto",
+        help="Ruta relativa de YAML o carpeta dentro del arbol",
     )
     parser.add_argument(
         "-f",
         "--force",
         action="store_true",
         help="Sobreescribe la salida existente sin preguntar",
-    )
-    parser.add_argument(
-        "--zones",
-        action="store_true",
-        default=True,
-        help="Genera out/zones/ y out/physical/. Activo por defecto.",
-    )
-    parser.add_argument(
-        "--no-zones",
-        action="store_true",
-        help="Solo el diagrama fusionado total",
     )
 
 
@@ -598,7 +557,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--type",
         dest="type_id",
         required=True,
-        help="Room, JunctionBox, DeviceBox, Panel, Zone, House (or Location)",
+        help="Room, JunctionBox, DeviceBox, Panel, Floor, House (or Location)",
     )
     add_loc.add_argument("--subtype")
     add_loc.add_argument("--notes")
@@ -659,12 +618,10 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
         return 0
     if cmd == "generate":
         project_path = Path(args.project_path).resolve()
-        do_zones = args.zones and not args.no_zones
         return run_generate_project(
             project_path,
             inputs=args.inputs,
             force=args.force,
-            do_zones=do_zones,
         )
     if cmd == "shell":
         project_path = Path(args.project_path).resolve()
@@ -798,8 +755,9 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
     return 1
 
 
-def _run_generate_from_shell(project_path: Path, *, force: bool = False) -> int:
-    return run_generate_project(project_path, force=force, do_zones=True)
+def _run_generate_from_shell(scope_path: Path, *, force: bool = False) -> int:
+    """Generate for ``scope_path`` (shell cwd filesystem dir, or CLI path)."""
+    return run_generate_project(scope_path, force=force)
 
 
 def _legacy_generate_argv(argv: list[str]) -> argparse.Namespace:
@@ -819,12 +777,10 @@ def main(argv: list[str] | None = None) -> int:
         candidate = Path(first)
         if candidate.exists():
             args = _legacy_generate_argv(argv)
-            do_zones = args.zones and not args.no_zones
             return run_generate_project(
                 Path(args.project_path).resolve(),
                 inputs=args.inputs,
                 force=args.force,
-                do_zones=do_zones,
             )
 
     parser = _build_parser()
