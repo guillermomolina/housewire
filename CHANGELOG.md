@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.17.3] — 2026-07-31
+
+### Added
+
+- Catalog type ``Luminaire`` (lamp / pendant; terminals 1–3 by default).
+
 ## [0.17.2] — 2026-07-31
 
 ### Added

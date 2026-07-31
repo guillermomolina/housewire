@@ -1,0 +1,21 @@
+kind: element_type
+id: Luminaire
+title: Luminaire / lamp
+description_es: >
+  Luminaria o portalámparas. Bornes tipicos 1/2/3 cuando llegan fase conmutada,
+  fase permanente y neutro (o solo L+N si la instancia reduce terminals).
+qet_hint: luminaire
+terminals:
+  "1":
+    label: "1"
+    direction: in
+    role: phase
+  "2":
+    label: "2"
+    direction: in
+    role: phase
+  "3":
+    label: "3"
+    direction: in
+    role: neutral
+defaults: {}
