@@ -1,0 +1,26 @@
+kind: cable_type
+id: Cable
+title: Cable / logical line
+description_es: >
+  Línea lógica (uno o varios conductores) entre extremos. No es un conector;
+  vive bajo cables:, no en elements.
+defaults:
+  section: "1.5 mm2"
+  colors: [BN, BU]
+subtypes:
+  power:
+    title: Power (AC)
+    defaults:
+      colors: [BN, BU]
+  earth:
+    title: Protective earth
+    defaults:
+      colors: [GNYE]
+  dc:
+    title: DC
+    defaults:
+      colors: [RD, BK]
+  signal:
+    title: Signal / data
+    defaults:
+      colors: [WH, BU]

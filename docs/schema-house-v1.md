@@ -191,8 +191,11 @@ pend N1 S1
 ```
 
 ```yaml
+# Aberturas → conduit de paso
 conduits:
   Conducto_a_Caja_2:
+    type: Conduit
+    subtype: tube
     route: "abertura N1 ↔ Caja derivacion 2 abertura S1"
     contains: [Linea_a_Caja_derivacion_2]
 ```
@@ -211,11 +214,18 @@ pueden aparecer en texto antiguo; el canónico es `N1` / `B1-1`.
 ```yaml
 cables:
   Linea_X:
-    kind: power               # power | earth | dc | signal...
+    type: Cable               # catalog id (cable_type)
+    subtype: power            # power | earth | dc | signal | …
     section: "1.5 mm2"        # canónico (QET: conductor_section). WireViz ← gauge
-    colors: [BN, BU, GNYE]
+    colors: [BN, BU, GNYE]    # defaults from catalog subtype if omitted
+    label: "…"                # optional human name
     notes: "..."
 ```
+
+Catalog: `catalog/Cable.yaml` (`kind: cable_type`) with per-subtype defaults
+(section/colors). ABM `add cable` / `pend` fill missing fields from that catalog.
+
+Legacy: `kind: power` still loads as `subtype: power`.
 
 ### Convención: línea lógica ≠ un solo cable físico
 
@@ -251,14 +261,16 @@ Ejemplo YAML resultante:
 ```yaml
 cables:
   PEND_Linea_01:
-    kind: power
+    type: Cable
+    subtype: power
     section: "1.5 mm2"
     colors: [BN, BU]
     notes: "estado: pendiente; entra por N1 y sale por S1"
 
 conduits:
   Conducto_paso_01:
-    kind: conduit
+    type: Conduit
+    subtype: tube
     contains: [PEND_Linea_01]
     route: "abertura N1 ↔ abertura S1 ↔ destino pendiente"
 ```
@@ -321,11 +333,16 @@ Agrupación física (no es un conductor):
 ```yaml
 conduits:
   Manguera_Cuadro_a_Caja_Luces_1:
-    kind: conduit
-    type: M20
+    type: Conduit             # catalog id (conduit_type)
+    subtype: M20              # tube | hose | free | M16 | M20 | …
     contains: [Cable_Luces_Salon, Cable_Enchufes_Salon]
     route: "falso techo → caja"
+    label: "…"                # optional
+    notes: "..."
 ```
+
+Catalog: `catalog/Conduit.yaml`. Legacy `kind: conduit` + `type: M20` still
+loads as `type: Conduit` / `subtype: M20`.
 
 Las `connections` siguen yendo a los cables. El conduit se anota en los cables contenidos al exportar a WireViz.
 

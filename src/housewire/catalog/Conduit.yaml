@@ -1,0 +1,22 @@
+kind: conduit_type
+id: Conduit
+title: Conduit / hose
+description_es: >
+  Tubo o manguera de paso que agrupa cables. No es un conductor eléctrico;
+  vive bajo conduits:, no en elements.
+defaults: {}
+subtypes:
+  tube:
+    title: Tube (generic)
+  hose:
+    title: Multi-cable hose / sheath
+  free:
+    title: Free wires / no tube
+  M16:
+    title: Tube M16
+  M20:
+    title: Tube M20
+  M25:
+    title: Tube M25
+  M32:
+    title: Tube M32

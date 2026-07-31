@@ -9,6 +9,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.9.0] — 2026-07-31
+
+### Changed
+
+- Cables and conduits use **`type` / `subtype` / `label` / `notes`** like elements
+  (still under their own `cables:` / `conduits:` maps).
+- Catalog entries **`Cable`** (`cable_type`) and **`Conduit`** (`conduit_type`)
+  supply section/colors and tube-size subtype defaults.
+- Legacy `kind: power` and `kind: conduit` + `type: M20` still load.
+
 ## [0.8.0] — 2026-07-31
 
 ### Changed

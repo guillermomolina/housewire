@@ -95,6 +95,8 @@ class TestABMCables(unittest.TestCase):
     def test_add_cable_defaults(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
         abm.add_cable(doc, "L_def")
+        self.assertEqual(doc["cables"]["L_def"]["type"], "Cable")
+        self.assertEqual(doc["cables"]["L_def"]["subtype"], "power")
         self.assertEqual(doc["cables"]["L_def"]["section"], "1.5 mm2")
         self.assertEqual(doc["cables"]["L_def"]["colors"], ["BN", "BU"])
 
@@ -158,6 +160,8 @@ class TestABMPendingAndConduits(unittest.TestCase):
         self.assertIn(conduit, doc["conduits"])
         self.assertIn("estado: pendiente", doc["cables"][cable]["notes"])
         self.assertIn("B1", doc["cables"][cable]["notes"])
+        self.assertEqual(doc["cables"][cable]["type"], "Cable")
+        self.assertEqual(doc["conduits"][conduit]["type"], "Conduit")
         self.assertEqual(doc["conduits"][conduit]["contains"], [cable])
         self.assertIn("abertura B1", doc["conduits"][conduit]["route"])
         self.assertIn("destino pendiente", doc["conduits"][conduit]["route"])

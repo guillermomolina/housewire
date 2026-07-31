@@ -563,9 +563,11 @@ def _build_parser() -> argparse.ArgumentParser:
     add_cb.add_argument("project_path")
     add_cb.add_argument("yaml_path")
     add_cb.add_argument("name")
-    add_cb.add_argument("--section", default=None, help="default: 1.5 mm2")
-    add_cb.add_argument("--colors", default=None, help="default: BN,BU")
-    add_cb.add_argument("--kind", default="power")
+    add_cb.add_argument("--section", default=None, help="default: catalog / 1.5 mm2")
+    add_cb.add_argument("--colors", default=None, help="default: catalog / BN,BU")
+    add_cb.add_argument("--subtype", default=None, help="default: power")
+    add_cb.add_argument("--kind", default=None, help="legacy alias of --subtype")
+    add_cb.add_argument("--label")
     add_cb.add_argument("--notes")
 
     add_pend = add_sub.add_parser("pend", help="Cable pendiente + conduit de paso")
@@ -574,8 +576,10 @@ def _build_parser() -> argparse.ArgumentParser:
     add_pend.add_argument("enter", help="Abertura entrada, p.ej. N1")
     add_pend.add_argument("exit", help="Abertura salida, p.ej. S1")
     add_pend.add_argument("section", nargs="?", default=None, help="p.ej. 1.5 o 2.5 mm2")
-    add_pend.add_argument("--colors", default=None, help="default: BN,BU")
-    add_pend.add_argument("--kind", default="power")
+    add_pend.add_argument("--colors", default=None, help="default: catalog / BN,BU")
+    add_pend.add_argument("--subtype", default=None, help="default: power")
+    add_pend.add_argument("--kind", default=None, help="legacy alias of --subtype")
+    add_pend.add_argument("--label")
     add_pend.add_argument("--notes")
 
     add_cn = add_sub.add_parser("connection")
@@ -704,9 +708,10 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
             abm.add_cable(
                 doc,
                 args.name,
-                kind=args.kind,
+                subtype=args.subtype or args.kind or abm.DEFAULT_CABLE_SUBTYPE,
                 section=args.section,
                 colors=_colors_list(args.colors) if args.colors else None,
+                label=args.label,
                 notes=args.notes,
             )
         elif args.add_kind == "pend":
@@ -716,7 +721,8 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
                 exit=args.exit,
                 section=args.section,
                 colors=_colors_list(args.colors) if args.colors else None,
-                kind=args.kind,
+                subtype=args.subtype or args.kind or abm.DEFAULT_CABLE_SUBTYPE,
+                label=args.label,
                 notes=args.notes,
             )
             abm.persist(doc, yaml_path, project_path)

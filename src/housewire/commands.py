@@ -27,7 +27,8 @@ HELP_TEXT = """Comandos del shell housewire:
                                crear carpeta + housewire.yaml (T=Room|JunctionBox|Panel|Zone|House)
                                NAME con espacios → id tecnico + label automatico
   add element NAME --type T [--subtype ...] [--label ...] [--manufacturer ...] [--model ...] [--notes ...]
-  add cable NAME [--section S] [--colors C1,C2] [--kind power] [--notes ...]
+  add cable NAME [--section S] [--colors C1,C2] [--subtype power] [--label ...] [--notes ...]
+                               (--kind es alias legacy de --subtype)
                                defaults: section=1.5 mm2, colors=BN,BU
   add pend [<enter> <exit>] [section] [--colors ...] [--notes ...]
   add connection --from F --via V --to T
@@ -113,7 +114,9 @@ def _parse_pend_args(rest: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="pend", add_help=False)
     p.add_argument("positional", nargs="*")
     p.add_argument("--colors")
-    p.add_argument("--kind", default="power")
+    p.add_argument("--subtype", default=None)
+    p.add_argument("--kind", default=None, help="alias legacy de --subtype")
+    p.add_argument("--label")
     p.add_argument("--notes")
     return p.parse_args(rest)
 
@@ -152,7 +155,8 @@ def cmd_pend(session: ProjectSession, argv: list[str]) -> int:
         exit=exit_op,
         section=section,
         colors=colors,
-        kind=args.kind,
+        subtype=args.subtype or args.kind or abm.DEFAULT_CABLE_SUBTYPE,
+        label=args.label,
         notes=args.notes,
     )
     abm.persist(doc, path, session.root)
@@ -228,15 +232,18 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
         p.add_argument("name")
         p.add_argument("--section", default=None)
         p.add_argument("--colors", default=None)
-        p.add_argument("--kind", default="power")
+        p.add_argument("--subtype", default=None)
+        p.add_argument("--kind", default=None, help="alias legacy de --subtype")
+        p.add_argument("--label")
         p.add_argument("--notes")
         args = p.parse_args(rest)
         abm.add_cable(
             doc,
             args.name,
-            kind=args.kind,
+            subtype=args.subtype or args.kind or abm.DEFAULT_CABLE_SUBTYPE,
             section=args.section,
             colors=_colors_list(args.colors) if args.colors else None,
+            label=args.label,
             notes=args.notes,
         )
         abm.persist(doc, path, session.root)

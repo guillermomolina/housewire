@@ -4,7 +4,13 @@ import re
 from pathlib import Path
 from typing import Any
 
-from housewire.house import load_catalog, place_meta_from_mapping
+from housewire.house import (
+    DEFAULT_CABLE_TYPE,
+    DEFAULT_CONDUIT_TYPE,
+    expand_cable,
+    load_catalog,
+    place_meta_from_mapping,
+)
 from housewire.project.io import load_yaml, require_house_document, save_yaml
 from housewire.project.openings import (
     declared_opening_ids,
@@ -18,6 +24,9 @@ _PEND_CABLE_RE = re.compile(r"^PEND_Linea_(\d+)$")
 
 DEFAULT_CABLE_SECTION = "1.5 mm2"
 DEFAULT_CABLE_COLORS = ["BN", "BU"]
+DEFAULT_CABLE_SUBTYPE = "power"
+DEFAULT_CONDUIT_SUBTYPE = "tube"
+
 
 
 def declared_openings(doc: dict[str, Any]) -> set[str] | None:
@@ -54,14 +63,31 @@ def _ensure_maps(doc: dict[str, Any]) -> None:
     doc.setdefault("conduits", {})
 
 
-def normalize_section(raw: str | None) -> str:
-    """Acepta '1.5' o '1.5 mm2' → '1.5 mm2'."""
+def normalize_section(raw: str | None, *, default: str | None = None) -> str:
+    """Accept '1.5' or '1.5 mm2' → '1.5 mm2'."""
+    fallback = default if default is not None else DEFAULT_CABLE_SECTION
     if raw is None or not str(raw).strip():
-        return DEFAULT_CABLE_SECTION
+        return fallback
     text = str(raw).strip()
     if "mm" in text.lower():
         return text
     return f"{text} mm2"
+
+
+def _cable_catalog_defaults(
+    *,
+    type_id: str = DEFAULT_CABLE_TYPE,
+    subtype: str | None = DEFAULT_CABLE_SUBTYPE,
+) -> dict[str, Any]:
+    """Resolve section/colors defaults from catalog for ABM writers."""
+    expanded = expand_cable(
+        {"type": type_id, **({"subtype": subtype} if subtype else {})},
+        load_catalog(),
+    )
+    return {
+        "section": expanded.get("section") or DEFAULT_CABLE_SECTION,
+        "colors": list(expanded.get("colors") or DEFAULT_CABLE_COLORS),
+    }
 
 
 def _connection_text(conn: object) -> str:
@@ -152,9 +178,12 @@ def add_cable(
     doc: dict[str, Any],
     name: str,
     *,
-    kind: str = "power",
+    type_id: str = DEFAULT_CABLE_TYPE,
+    subtype: str | None = DEFAULT_CABLE_SUBTYPE,
+    kind: str | None = None,
     section: str | None = None,
     colors: list[str] | None = None,
+    label: str | None = None,
     notes: str | None = None,
 ) -> None:
     _ensure_maps(doc)
@@ -163,16 +192,24 @@ def add_cable(
         raise ValueError("cables debe ser un mapa")
     if name in cables:
         raise ValueError(f"Ya existe el cable: {name}")
-    resolved_colors = list(colors) if colors is not None else list(DEFAULT_CABLE_COLORS)
+    resolved_subtype = subtype if kind is None else kind
+    defaults = _cable_catalog_defaults(type_id=type_id, subtype=resolved_subtype)
+    resolved_colors = list(colors) if colors is not None else list(defaults["colors"])
     if not resolved_colors:
         raise ValueError("colors no puede estar vacio")
     entry: dict[str, Any] = {
-        "kind": kind,
-        "section": normalize_section(section),
+        "type": type_id,
+        "section": normalize_section(section, default=str(defaults["section"])),
         "colors": resolved_colors,
     }
+    if resolved_subtype is not None:
+        entry["subtype"] = resolved_subtype
+    if label:
+        entry["label"] = label
     if notes:
         entry["notes"] = notes
+    # Validate against catalog (raises on bad type).
+    expand_cable(entry, load_catalog())
     cables[name] = entry
 
 
@@ -219,9 +256,11 @@ def add_conduit(
     *,
     contains: list[str],
     route: str | None = None,
-    type_id: str | None = None,
+    type_id: str = DEFAULT_CONDUIT_TYPE,
+    subtype: str | None = DEFAULT_CONDUIT_SUBTYPE,
+    label: str | None = None,
     notes: str | None = None,
-    kind: str = "conduit",
+    kind: str | None = None,
 ) -> None:
     _ensure_maps(doc)
     conduits = doc["conduits"]
@@ -235,13 +274,26 @@ def add_conduit(
     for cable_ref in contains:
         if str(cable_ref) not in cables:
             raise ValueError(f"Conduit referencia cable inexistente: {cable_ref}")
-    entry: dict[str, Any] = {"kind": kind, "contains": [str(c) for c in contains]}
-    if type_id:
-        entry["type"] = type_id
+    # Legacy: kind was always "conduit"; type_id used to mean physical size.
+    resolved_type = type_id
+    resolved_subtype = subtype
+    if kind is not None and kind != "conduit" and resolved_subtype is None:
+        resolved_subtype = kind
+    entry: dict[str, Any] = {
+        "type": resolved_type,
+        "contains": [str(c) for c in contains],
+    }
+    if resolved_subtype is not None:
+        entry["subtype"] = resolved_subtype
     if route:
         entry["route"] = route
+    if label:
+        entry["label"] = label
     if notes:
         entry["notes"] = notes
+    from housewire.house import expand_conduit
+
+    expand_conduit(entry, load_catalog())
     conduits[name] = entry
 
 
@@ -252,10 +304,12 @@ def add_pending_cable(
     exit: str,
     section: str | None = None,
     colors: list[str] | None = None,
-    kind: str = "power",
+    subtype: str | None = DEFAULT_CABLE_SUBTYPE,
+    kind: str | None = None,
+    label: str | None = None,
     notes: str | None = None,
 ) -> tuple[str, str]:
-    """Crea cable PEND_* + conduit de paso sin connections.
+    """Create PEND_* cable + pass-through conduit without connections.
 
     Returns (cable_name, conduit_name).
     """
@@ -273,9 +327,11 @@ def add_pending_cable(
     add_cable(
         doc,
         cable_name,
+        subtype=subtype,
         kind=kind,
         section=section,
         colors=colors,
+        label=label,
         notes="; ".join(note_bits),
     )
     add_conduit(
@@ -364,10 +420,23 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
         lines.append(f"  {name} ({t})")
     lines.append(f"cables ({len(cables)}):")
     for name in sorted(cables):
-        lines.append(f"  {name}")
+        cb = cables[name] if isinstance(cables[name], dict) else {}
+        t = cb.get("type", "Cable")
+        st = cb.get("subtype") or cb.get("kind")
+        suffix = f"{t}/{st}" if st else str(t)
+        lines.append(f"  {name} ({suffix})")
     lines.append(f"conduits ({len(conduits)}):")
     for name in sorted(conduits):
-        lines.append(f"  {name}")
+        cd = conduits[name] if isinstance(conduits[name], dict) else {}
+        t = cd.get("type", "Conduit")
+        st = cd.get("subtype")
+        if st is None and cd.get("kind") and cd.get("kind") != "conduit":
+            st = cd.get("kind")
+        elif st is None and cd.get("type") and cd.get("type") != "Conduit" and cd.get("kind") == "conduit":
+            # legacy type-as-size
+            t, st = "Conduit", cd.get("type")
+        suffix = f"{t}/{st}" if st else str(t)
+        lines.append(f"  {name} ({suffix})")
     lines.append(f"connections ({len(connections)}):")
     for i, conn in enumerate(connections):
         lines.append(f"  [{i}] {conn}")

@@ -14,6 +14,12 @@ HOUSE_SCHEMA = "house/v1"
 # Directory / inline place types (wireviz_skip in catalog).
 PLACE_TYPES = frozenset({"Room", "JunctionBox", "Panel", "Zone", "House", "Location"})
 
+# Catalog kinds for cables: / conduits: (not usable as elements).
+CABLE_CATALOG_KIND = "cable_type"
+CONDUIT_CATALOG_KIND = "conduit_type"
+DEFAULT_CABLE_TYPE = "Cable"
+DEFAULT_CONDUIT_TYPE = "Conduit"
+
 # Keys that are document/tree structure, not place metadata fields.
 PLACE_CHILD_KEYS = frozenset({"elements", "cables", "connections", "conduits", "locations"})
 DOCUMENT_ONLY_KEYS = frozenset({"schema", "location", "self"})
@@ -150,6 +156,131 @@ def load_catalog(repo_root: Path | None = None) -> dict[str, dict[str, Any]]:
     return catalog
 
 
+def _catalog_defaults_for_subtype(
+    type_def: dict[str, Any] | None, subtype: str | None
+) -> dict[str, Any]:
+    """Merge type-level defaults with optional subtype defaults."""
+    defaults: dict[str, Any] = {}
+    if not isinstance(type_def, dict):
+        return defaults
+    base = type_def.get("defaults")
+    if isinstance(base, dict):
+        defaults.update(copy.deepcopy(base))
+    if subtype is None:
+        return defaults
+    subtypes = type_def.get("subtypes")
+    if isinstance(subtypes, dict):
+        sub = subtypes.get(str(subtype))
+        if isinstance(sub, dict):
+            sub_defaults = sub.get("defaults")
+            if isinstance(sub_defaults, dict):
+                defaults.update(copy.deepcopy(sub_defaults))
+    return defaults
+
+
+def expand_cable(
+    cable: dict[str, Any], catalog: dict[str, dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    """Normalize a cables: entry: type/subtype/label + catalog defaults.
+
+    Legacy ``kind: power`` becomes ``subtype: power`` with ``type: Cable``.
+    """
+    cat = catalog if catalog is not None else load_catalog()
+    raw = copy.deepcopy(cable)
+    if not isinstance(raw, dict):
+        raise ValueError("Cable invalido (no es mapa)")
+
+    subtype = raw.get("subtype")
+    if subtype is None and raw.get("kind") is not None:
+        subtype = raw.get("kind")
+    type_id = raw.get("type")
+    if type_id is None:
+        type_id = DEFAULT_CABLE_TYPE
+    type_id = str(type_id)
+    type_def = cat.get(type_id)
+    if type_def is not None and type_def.get("kind") not in (None, CABLE_CATALOG_KIND):
+        raise ValueError(
+            f"type: {type_id} no es un tipo de cable (catalog kind={type_def.get('kind')!r})"
+        )
+    if type_def is None and type_id != DEFAULT_CABLE_TYPE:
+        raise ValueError(f"Tipo de cable desconocido en catalogo: {type_id}")
+
+    defaults = _catalog_defaults_for_subtype(type_def, str(subtype) if subtype is not None else None)
+    out: dict[str, Any] = {"type": type_id}
+    if subtype is not None:
+        out["subtype"] = str(subtype)
+    for key in ("section", "gauge", "colors", "label", "notes", "manufacturer", "model"):
+        if key in raw and raw[key] is not None:
+            out[key] = copy.deepcopy(raw[key])
+        elif key in defaults and key not in ("gauge",):
+            # Prefer section over gauge from catalog defaults.
+            if key == "section" or key not in out:
+                out[key] = copy.deepcopy(defaults[key])
+    if "section" not in out and "gauge" not in out and defaults.get("section"):
+        out["section"] = copy.deepcopy(defaults["section"])
+    if "colors" not in out and defaults.get("colors"):
+        out["colors"] = copy.deepcopy(defaults["colors"])
+    return out
+
+
+def expand_conduit(
+    conduit: dict[str, Any], catalog: dict[str, dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    """Normalize a conduits: entry: type/subtype/label + catalog defaults.
+
+    Legacy forms:
+    - ``kind: conduit`` → ``type: Conduit``
+    - ``kind: conduit`` + ``type: M20`` → ``type: Conduit``, ``subtype: M20``
+    """
+    cat = catalog if catalog is not None else load_catalog()
+    raw = copy.deepcopy(conduit)
+    if not isinstance(raw, dict):
+        raise ValueError("Conduit invalido (no es mapa)")
+
+    type_id = raw.get("type")
+    subtype = raw.get("subtype")
+    kind = raw.get("kind")
+
+    type_def = cat.get(str(type_id)) if type_id is not None else None
+    if type_def is not None and type_def.get("kind") == CONDUIT_CATALOG_KIND:
+        resolved_type = str(type_id)
+    elif type_id is not None and subtype is None:
+        # Legacy: type held the physical size / hose class (M20, hose, …).
+        resolved_type = DEFAULT_CONDUIT_TYPE
+        subtype = type_id
+    elif type_id is None:
+        resolved_type = DEFAULT_CONDUIT_TYPE
+        if subtype is None and kind is not None and str(kind) != "conduit":
+            subtype = kind
+    else:
+        raise ValueError(
+            f"type: {type_id} no es un tipo de conduit conocido; "
+            f"usa type: {DEFAULT_CONDUIT_TYPE} y subtype: …"
+        )
+
+    type_def = cat.get(resolved_type)
+    if type_def is None:
+        raise ValueError(f"Tipo de conduit desconocido en catalogo: {resolved_type}")
+    if type_def.get("kind") not in (None, CONDUIT_CATALOG_KIND):
+        raise ValueError(
+            f"type: {resolved_type} no es un tipo de conduit "
+            f"(catalog kind={type_def.get('kind')!r})"
+        )
+
+    defaults = _catalog_defaults_for_subtype(
+        type_def, str(subtype) if subtype is not None else None
+    )
+    out: dict[str, Any] = {"type": resolved_type}
+    if subtype is not None:
+        out["subtype"] = str(subtype)
+    for key in ("contains", "route", "label", "notes"):
+        if key in raw and raw[key] is not None:
+            out[key] = copy.deepcopy(raw[key])
+        elif key in defaults:
+            out[key] = copy.deepcopy(defaults[key])
+    return out
+
+
 def path_location_parts(project_path: Path, yaml_file: Path) -> list[str]:
     relative_parent = yaml_file.relative_to(project_path).parent
     if str(relative_parent) == ".":
@@ -266,6 +397,11 @@ def _element_to_connector(
     type_def = catalog.get(type_id)
     if type_def is None:
         raise ValueError(f"Tipo de catalogo desconocido: {type_id}")
+    cat_kind = type_def.get("kind") if isinstance(type_def, dict) else None
+    if cat_kind in (CABLE_CATALOG_KIND, CONDUIT_CATALOG_KIND):
+        raise ValueError(
+            f"type: {type_id} pertenece a cables:/conduits:, no a elements:"
+        )
     # wireviz_skip: true — no genera conector (p.ej. type: Location)
     if isinstance(type_def, dict) and type_def.get("wireviz_skip"):
         return None, None
@@ -325,11 +461,14 @@ def _element_to_connector(
     return connector, pin_remap
 
 
-def _cable_to_wireviz(cable: dict[str, Any]) -> dict[str, Any]:
-    colors = cable.get("colors") or []
+def _cable_to_wireviz(
+    cable: dict[str, Any], catalog: dict[str, dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    expanded = expand_cable(cable, catalog)
+    colors = expanded.get("colors") or []
     if not isinstance(colors, list) or not colors:
         raise ValueError("Cable sin 'colors'")
-    section = cable.get("section") or cable.get("gauge")
+    section = expanded.get("section") or expanded.get("gauge")
     if not section:
         raise ValueError("Cable sin 'section'")
 
@@ -338,11 +477,17 @@ def _cable_to_wireviz(cable: dict[str, Any]) -> dict[str, Any]:
         "gauge": section,
         "colors": colors,
     }
-    kind = cable.get("kind") or cable.get("type")
-    if kind:
-        out["type"] = kind
-    if cable.get("notes"):
-        out["notes"] = cable["notes"]
+    # WireViz cable "type" is the functional class (power/earth/…), i.e. subtype.
+    wv_type = expanded.get("subtype") or expanded.get("type")
+    if wv_type:
+        out["type"] = wv_type
+    notes_parts: list[str] = []
+    if expanded.get("label"):
+        notes_parts.append(f"label: {expanded['label']}")
+    if expanded.get("notes"):
+        notes_parts.append(str(expanded["notes"]))
+    if notes_parts:
+        out["notes"] = " — ".join(notes_parts)
     return out
 
 
@@ -605,18 +750,24 @@ def _annotate_conduits(
     conduits: dict[str, Any],
     cable_map: dict[str, str],
     local_prefix: str,
+    catalog: dict[str, dict[str, Any]] | None = None,
 ) -> None:
     for conduit_name, conduit in (conduits or {}).items():
         if not isinstance(conduit, dict):
             continue
-        contains = conduit.get("contains") or []
+        expanded = expand_conduit(conduit, catalog)
+        contains = expanded.get("contains") or []
         note_bits = [f"conduit:{conduit_name}"]
-        if conduit.get("type"):
-            note_bits.append(f"type={conduit['type']}")
-        if conduit.get("route"):
-            note_bits.append(f"route={conduit['route']}")
-        if conduit.get("notes"):
-            note_bits.append(str(conduit["notes"]))
+        if expanded.get("type"):
+            note_bits.append(f"type={expanded['type']}")
+        if expanded.get("subtype"):
+            note_bits.append(f"subtype={expanded['subtype']}")
+        if expanded.get("label"):
+            note_bits.append(f"label={expanded['label']}")
+        if expanded.get("route"):
+            note_bits.append(f"route={expanded['route']}")
+        if expanded.get("notes"):
+            note_bits.append(str(expanded["notes"]))
         annotation = " — ".join(note_bits)
         for cable_ref in contains:
             cable_ref_s = str(cable_ref)
@@ -662,10 +813,12 @@ def _convert_flat_fragment(
         if not isinstance(definition, dict):
             raise ValueError(f"Cable invalido: {name}")
         new_name = prefixed_name(prefix, str(name))
-        cables[new_name] = _cable_to_wireviz(definition)
+        cables[new_name] = _cable_to_wireviz(definition, catalog)
         cable_map[str(name)] = new_name
 
-    _annotate_conduits(cables, fragment.get("conduits") or {}, cable_map, prefix)
+    _annotate_conduits(
+        cables, fragment.get("conduits") or {}, cable_map, prefix, catalog
+    )
 
     connections: list[Any] = []
     for conn in fragment.get("connections") or []:

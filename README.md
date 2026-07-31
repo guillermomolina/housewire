@@ -123,7 +123,8 @@ elements:
     subtype: C10
 cables:
   Line_X:
-    kind: power
+    type: Cable
+    subtype: power
     section: "1.5 mm2"
     colors: [BN, BU]
 connections:
