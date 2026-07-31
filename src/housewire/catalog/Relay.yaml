@@ -1,0 +1,36 @@
+kind: element_type
+id: Relay
+title: Relay / smart switch
+description_es: >
+  Relé o interruptor inteligente (p.ej. Sonoff ZBMini). Alimentación LIn+N,
+  salida conmutada LOut, entradas de interruptor externo S1/S2.
+qet_hint: relay
+terminals:
+  N:
+    label: N
+    direction: in
+    role: neutral
+  LIn:
+    label: L in
+    direction: in
+    role: phase
+  LOut:
+    label: L out
+    direction: out
+    role: phase
+  S1:
+    label: S1
+    direction: in
+    role: signal
+  S2:
+    label: S2
+    direction: in
+    role: signal
+defaults:
+  subtype: smart
+subtypes:
+  smart:
+    title: Smart relay (Zigbee / Wi-Fi)
+  zbmini_extreme:
+    title: Sonoff ZBMini Extreme
+    # Physical pins 1–6: N, N, LOut, LIn, S1, S2 (both N tied in the device).

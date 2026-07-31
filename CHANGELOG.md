@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.19.1] — 2026-07-31
+
+### Added
+
+- Catalog type ``Relay`` (smart switch / Zigbee relay) with terminals
+  ``N``, ``LIn``, ``LOut``, ``S1``, ``S2`` and subtype ``zbmini_extreme``.
+
 ## [0.19.0] — 2026-07-31
 
 ### Added
