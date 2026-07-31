@@ -296,13 +296,86 @@ def _node_label(node: PhysNode) -> str:
     return label
 
 
+def _style_for_type(type_id: str) -> dict[str, str]:
+    """Visual style by place type so containers/leaves are not all identical."""
+    tid = str(type_id or "Location")
+    # Distinct but sober fills/borders (Graphviz named or hex colors).
+    presets: dict[str, dict[str, str]] = {
+        "House": {
+            "shape": "box",
+            "fill": "#D9E4F2",
+            "border": "#3A5F8A",
+            "penwidth": "2",
+            "cluster_style": "rounded,filled",
+            "cluster_bg": "#E8F0FA",
+        },
+        "Floor": {
+            "shape": "box",
+            "fill": "#DDEDDD",
+            "border": "#2F6B3A",
+            "penwidth": "1.5",
+            "cluster_style": "rounded,filled,dashed",
+            "cluster_bg": "#EAF6EA",
+        },
+        "Room": {
+            "shape": "box",
+            "fill": "#F3EADF",
+            "border": "#7A5A2E",
+            "penwidth": "1.2",
+            "cluster_style": "rounded,filled",
+            "cluster_bg": "#F7F1E8",
+        },
+        "Panel": {
+            "shape": "box",
+            "fill": "#EEDDDD",
+            "border": "#7A3030",
+            "penwidth": "2.5",
+            "cluster_style": "rounded,filled",
+            "cluster_bg": "#F6EAEA",
+        },
+        "JunctionBox": {
+            "shape": "box",
+            "fill": "#FFFFFF",
+            "border": "#444444",
+            "penwidth": "1.2",
+            "cluster_style": "rounded,filled",
+            "cluster_bg": "#F5F5F5",
+        },
+        "DeviceBox": {
+            "shape": "note",
+            "fill": "#D9EEF5",
+            "border": "#1F6A86",
+            "penwidth": "1.2",
+            "cluster_style": "rounded,filled",
+            "cluster_bg": "#E8F5FA",
+        },
+        "External": {
+            "shape": "oval",
+            "fill": "lightyellow",
+            "border": "#888888",
+            "penwidth": "1",
+            "cluster_style": "rounded,filled,dashed",
+            "cluster_bg": "#FFF8DC",
+        },
+        "Location": {
+            "shape": "box",
+            "fill": "#F0F0F0",
+            "border": "#666666",
+            "penwidth": "1",
+            "cluster_style": "rounded,filled",
+            "cluster_bg": "#F4F4F4",
+        },
+    }
+    return presets.get(tid, presets["Location"])
+
+
 def _emit_node(lines: list[str], node: PhysNode, *, indent: str) -> None:
     title = _node_label(node)
-    shape = "oval" if node.type_id == "External" else "box"
-    fill = "lightyellow" if node.type_id == "External" else "white"
+    style = _style_for_type(node.type_id)
     lines.append(
-        f'{indent}{node.node_id} [label="{title}", shape={shape}, '
-        f'style="rounded,filled", fillcolor={fill}];'
+        f'{indent}{node.node_id} [label="{title}", shape={style["shape"]}, '
+        f'style="rounded,filled", fillcolor="{style["fill"]}", '
+        f'color="{style["border"]}", penwidth={style["penwidth"]}];'
     )
 
 
@@ -320,6 +393,7 @@ def _emit_location(
     node = model.nodes[key]
     kids = _immediate_children(parts, all_parts)
     is_endpoint = key in endpoints
+    style = _style_for_type(node.type_id)
 
     if kids:
         # Container: cluster frame only; node only if conduits attach here.
@@ -329,8 +403,10 @@ def _emit_location(
         full_label = f"{label}\\n{subtitle}" if subtitle else label
         lines.append(f"{indent}subgraph cluster_{cid} {{")
         lines.append(f'{indent}  label="{full_label}";')
-        lines.append(f"{indent}  style=rounded;")
-        lines.append(f"{indent}  color=gray50;")
+        lines.append(f'{indent}  style="{style["cluster_style"]}";')
+        lines.append(f'{indent}  color="{style["border"]}";')
+        lines.append(f'{indent}  bgcolor="{style["cluster_bg"]}";')
+        lines.append(f'{indent}  penwidth={style["penwidth"]};')
         if is_endpoint:
             _emit_node(lines, node, indent=indent + "  ")
         for child in kids:

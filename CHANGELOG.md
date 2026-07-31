@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.16.6] — 2026-07-31
+
+### Changed
+
+- Physical diagram styles locations by place type (House / Floor / Room /
+  Panel / JunctionBox / DeviceBox) with distinct fills, borders, and shapes.
+
 ## [0.16.5] — 2026-07-31
 
 ### Changed

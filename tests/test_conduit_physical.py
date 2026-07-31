@@ -111,3 +111,7 @@ class TestPhysicalConduits(unittest.TestCase):
             self.assertIn("W2 ↔ N1", dot, dot)
             self.assertIn("dir=none", dot)
             self.assertIn("splines=true", dot)
+            # Type-based styling
+            self.assertIn('bgcolor="#EAF6EA"', dot)  # Floor cluster
+            self.assertIn("shape=note", dot)  # DeviceBox
+            self.assertIn('fillcolor="#FFFFFF"', dot)  # JunctionBox
