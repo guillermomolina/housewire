@@ -29,12 +29,12 @@ HELP_TEXT = """housewire shell commands:
   set --element NAME KEY VALUE property of an element in the place
   unset KEY | unset --element NAME KEY
   add location NAME --type T [--subtype ...] [--label ...] [--notes ...]
-                               [--inline | --dir] [--set KEY=VALUE ...]
+                               [--inline | --dir] [--set KEY=VALUE | --set KEY VALUE …]
                                T=Room|JunctionBox|DeviceBox|LightPoint|Panel|Floor|House
                                default: outline if you are in outline; inline if you are inline
                                (memory → save; outline creates folder on save)
                                NAME with spaces → technical id + automatic label
-  add element NAME --type T … [--set KEY=VALUE …]  (memory → save)
+  add element NAME --type T … [--set KEY=VALUE | --set KEY VALUE …]  (memory → save)
   add cable NAME …             (memory → save)
   add conduit NAME --from A.Op --to B.Op --contains C1[,C2…]
                                [--subtype tube] [--label ...] [--notes …]
@@ -78,6 +78,36 @@ def _colors_list(raw: str) -> list[str]:
 
 def _csv_list(raw: str) -> list[str]:
     return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def normalize_set_argv(argv: list[str]) -> list[str]:
+    """Rewrite ``--set KEY VALUE`` into ``--set KEY=VALUE`` (one argparse token).
+
+    ``--set KEY=VALUE`` is left unchanged. Without this, ``--set notes "text"``
+    is parsed as ``--set notes`` plus a stray positional.
+    """
+    out: list[str] = []
+    i = 0
+    while i < len(argv):
+        tok = argv[i]
+        if tok == "--set" and i + 1 < len(argv):
+            spec = argv[i + 1]
+            if (
+                "=" not in spec
+                and i + 2 < len(argv)
+                and not str(argv[i + 2]).startswith("-")
+            ):
+                out.append("--set")
+                out.append(f"{spec}={argv[i + 2]}")
+                i += 3
+                continue
+            out.append("--set")
+            out.append(spec)
+            i += 2
+            continue
+        out.append(tok)
+        i += 1
+    return out
 
 
 def _prompt(message: str, session: ProjectSession | None = None) -> str:
@@ -251,9 +281,9 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
             action="append",
             default=[],
             metavar="KEY=VALUE",
-            help="Set place field (repeatable; YAML value)",
+            help="Set place field (repeatable; KEY=VALUE or KEY VALUE)",
         )
-        args = p.parse_args(rest)
+        args = p.parse_args(normalize_set_argv(rest))
         raw = _Path(args.name)
         leaf_id, auto_label = location_id_from_name(raw.name)
         label = args.label or auto_label
@@ -342,9 +372,9 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
             action="append",
             default=[],
             metavar="KEY=VALUE",
-            help="Set element field (repeatable; YAML value)",
+            help="Set element field (repeatable; KEY=VALUE or KEY VALUE)",
         )
-        args = p.parse_args(rest)
+        args = p.parse_args(normalize_set_argv(rest))
         abm.add_element(
             place,
             args.name,

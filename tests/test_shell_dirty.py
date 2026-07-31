@@ -220,6 +220,18 @@ class TestShellDirtyBuffer(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(doc["openings"], ["N1", "N2"])
 
+    def test_add_location_set_notes_two_tokens(self) -> None:
+        """--set notes 'text' must not leave 'text' as a stray argparse arg."""
+        s = self._session()
+        self._run(s, "cd zona_a")
+        code = self._run(
+            s,
+            'add location Box_n --type DeviceBox --set notes "back to parking"',
+        )
+        self.assertEqual(code, 0)
+        _path, doc = s.ensure_doc()
+        self.assertEqual(doc.get("notes"), "back to parking")
+
 
 if __name__ == "__main__":
     unittest.main()

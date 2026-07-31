@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.17.1] — 2026-07-31
+
+### Fixed
+
+- Shell ``add … --set KEY VALUE`` (two tokens) is accepted, not only
+  ``--set KEY=VALUE`` — fixes stray argparse errors on ``--set notes "…"``.
+
 ## [0.17.0] — 2026-07-31
 
 ### Changed
