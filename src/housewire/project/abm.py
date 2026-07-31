@@ -58,11 +58,11 @@ def require_opening_ids(doc: dict[str, Any], *opening_ids: str) -> None:
     normalized = [normalize_opening_id(oid) for oid in opening_ids]
     missing = [oid for oid in normalized if oid not in declared]
     if missing:
-        known = ", ".join(sorted(declared)) or "(ninguna)"
+        known = ", ".join(sorted(declared)) or "(none)"
         raise ValueError(
-            "Abertura(s) no declarada(s) en openings: "
+            "Opening(s) not declared in openings: "
             + ", ".join(missing)
-            + f". Declaradas: {known}"
+            + f". Declared: {known}"
         )
 
 
@@ -81,55 +81,55 @@ def parse_set_value(raw: str) -> Any:
     try:
         return yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        raise ValueError(f"Valor YAML invalido: {raw!r}") from exc
+        raise ValueError(f"Invalid YAML value: {raw!r}") from exc
 
 
 def parse_set_spec(spec: str) -> tuple[str, Any | None]:
     """Parse ``KEY=VALUE`` (set) or ``KEY`` (unset → value None)."""
     text = str(spec).strip()
     if not text:
-        raise ValueError("set vacio: usa KEY=VALUE o KEY")
+        raise ValueError("empty set: use KEY=VALUE or KEY")
     if "=" not in text:
         return text, None
     key, _, raw_val = text.partition("=")
     key = key.strip()
     if not key:
-        raise ValueError(f"Clave invalida en --set: {spec!r}")
+        raise ValueError(f"Invalid key in --set: {spec!r}")
     return key, parse_set_value(raw_val)
 
 
 def _split_field_key(key: str) -> tuple[str, str | None]:
     text = str(key).strip()
     if not text:
-        raise ValueError("clave vacia")
+        raise ValueError("empty key")
     if "." not in text:
         return text, None
     root, _, nested = text.partition(".")
     root = root.strip()
     nested = nested.strip()
     if not root or not nested:
-        raise ValueError(f"Clave anidada invalida: {key!r}")
+        raise ValueError(f"Invalid nested key: {key!r}")
     if "." in nested:
         raise ValueError(
-            f"Solo un nivel de anidacion (padre.hijo): {key!r}"
+            f"Only one nesting level (parent.child): {key!r}"
         )
     return root, nested
 
 
 def _validate_type_field(value: Any, *, target: SetTarget) -> None:
     if not isinstance(value, str) or not value.strip():
-        raise ValueError("type debe ser un string no vacio")
+        raise ValueError("type must be a non-empty string")
     type_id = value.strip()
     if target == "place":
         if not is_place_type(type_id):
             raise ValueError(
-                f"type de place desconocido: {type_id!r}. "
-                "Usa Room|JunctionBox|DeviceBox|LightPoint|Panel|Floor|House (o Location)."
+                f"Unknown place type: {type_id!r}. "
+                "Use Room|JunctionBox|DeviceBox|LightPoint|Panel|Floor|House (or Location)."
             )
         return
     catalog = load_catalog()
     if type_id not in catalog:
-        raise ValueError(f"Tipo de catalogo desconocido: {type_id}")
+        raise ValueError(f"Unknown catalog type: {type_id}")
 
 
 def _maybe_validate_openings(mapping: dict[str, Any], root_key: str) -> None:
@@ -146,11 +146,11 @@ def set_field(
 ) -> None:
     """Set a property on a place or element mapping (in memory)."""
     if not isinstance(mapping, dict):
-        raise ValueError("destino set debe ser un mapa")
+        raise ValueError("set target must be a map")
     root_key, nested_key = _split_field_key(key)
     if root_key in RESERVED_SET_KEYS:
         raise ValueError(
-            f"Clave reservada {root_key!r}: usa add/rm (no set)"
+            f"Reserved key {root_key!r}: use add/rm (not set)"
         )
     if root_key == "type" and nested_key is None:
         _validate_type_field(value, target=target)
@@ -163,7 +163,7 @@ def set_field(
             container = {}
             mapping[root_key] = container
         elif not isinstance(container, dict):
-            raise ValueError(f"{root_key!r} no es un mapa; no se puede anidar")
+            raise ValueError(f"{root_key!r} is not a map; cannot nest")
         container[nested_key] = value
 
     _maybe_validate_openings(mapping, root_key)
@@ -172,20 +172,20 @@ def set_field(
 def unset_field(mapping: dict[str, Any], key: str) -> None:
     """Remove a property from a place or element mapping."""
     if not isinstance(mapping, dict):
-        raise ValueError("destino unset debe ser un mapa")
+        raise ValueError("unset target must be a map")
     root_key, nested_key = _split_field_key(key)
     if root_key in RESERVED_SET_KEYS:
         raise ValueError(
-            f"Clave reservada {root_key!r}: usa add/rm (no unset)"
+            f"Reserved key {root_key!r}: use add/rm (not unset)"
         )
     if nested_key is None:
         if root_key not in mapping:
-            raise ValueError(f"No existe la clave: {key}")
+            raise ValueError(f"Key does not exist: {key}")
         del mapping[root_key]
     else:
         container = mapping.get(root_key)
         if not isinstance(container, dict) or nested_key not in container:
-            raise ValueError(f"No existe la clave: {key}")
+            raise ValueError(f"Key does not exist: {key}")
         del container[nested_key]
         if not container:
             del mapping[root_key]
@@ -281,12 +281,12 @@ def add_element(
     _ensure_maps(doc)
     catalog = load_catalog()
     if type_id not in catalog:
-        raise ValueError(f"Tipo de catalogo desconocido: {type_id}")
+        raise ValueError(f"Unknown catalog type: {type_id}")
     elements = doc["elements"]
     if not isinstance(elements, dict):
-        raise ValueError("elements debe ser un mapa")
+        raise ValueError("elements must be a map")
     if name in elements:
-        raise ValueError(f"Ya existe el elemento: {name}")
+        raise ValueError(f"Element already exists: {name}")
     entry: dict[str, Any] = {"type": type_id}
     defaults = (catalog[type_id].get("defaults") or {}) if isinstance(catalog[type_id], dict) else {}
     if subtype is None and defaults.get("subtype") is not None:
@@ -308,12 +308,12 @@ def rm_element(doc: dict[str, Any], name: str) -> None:
     _ensure_maps(doc)
     elements = doc["elements"]
     if not isinstance(elements, dict) or name not in elements:
-        raise ValueError(f"No existe el elemento: {name}")
+        raise ValueError(f"Element does not exist: {name}")
     refs = connections_referencing_element(doc, name)
     if refs:
         raise ValueError(
-            f"No se puede borrar {name}: referenciado en conexiones {refs}. "
-            "Borra esas conexiones primero."
+            f"Cannot delete {name}: referenced in connections {refs}. "
+            "Delete those connections first."
         )
     del elements[name]
 
@@ -333,14 +333,14 @@ def add_cable(
     _ensure_maps(doc)
     cables = doc["cables"]
     if not isinstance(cables, dict):
-        raise ValueError("cables debe ser un mapa")
+        raise ValueError("cables must be a map")
     if name in cables:
-        raise ValueError(f"Ya existe el cable: {name}")
+        raise ValueError(f"Cable already exists: {name}")
     resolved_subtype = subtype if kind is None else kind
     defaults = _cable_catalog_defaults(type_id=type_id, subtype=resolved_subtype)
     resolved_colors = list(colors) if colors is not None else list(defaults["colors"])
     if not resolved_colors:
-        raise ValueError("colors no puede estar vacio")
+        raise ValueError("colors cannot be empty")
     entry: dict[str, Any] = {
         "type": type_id,
         "section": normalize_section(section, default=str(defaults["section"])),
@@ -361,14 +361,14 @@ def rm_cable(doc: dict[str, Any], name: str) -> None:
     _ensure_maps(doc)
     cables = doc["cables"]
     if not isinstance(cables, dict) or name not in cables:
-        raise ValueError(f"No existe el cable: {name}")
+        raise ValueError(f"Cable does not exist: {name}")
     refs: list[int] = []
     for index, conn in enumerate(doc.get("connections") or []):
         if name in _connection_text(conn):
             refs.append(index)
     if refs:
         raise ValueError(
-            f"No se puede borrar cable {name}: referenciado en conexiones {refs}."
+            f"Cannot delete cable {name}: referenced in connections {refs}."
         )
     conduits = doc.get("conduits") or {}
     if isinstance(conduits, dict):
@@ -378,7 +378,7 @@ def rm_cable(doc: dict[str, Any], name: str) -> None:
             contains = [str(c) for c in (conduit.get("contains") or [])]
             if name in contains:
                 raise ValueError(
-                    f"No se puede borrar cable {name}: referenciado en conduit {conduit_name}."
+                    f"Cannot delete cable {name}: referenced in conduit {conduit_name}."
                 )
     del cables[name]
 
@@ -410,15 +410,15 @@ def add_conduit(
     _ensure_maps(doc)
     conduits = doc["conduits"]
     if not isinstance(conduits, dict):
-        raise ValueError("conduits debe ser un mapa")
+        raise ValueError("conduits must be a map")
     if name in conduits:
-        raise ValueError(f"Ya existe el conduit: {name}")
+        raise ValueError(f"Conduit already exists: {name}")
     if not contains:
-        raise ValueError("contains no puede estar vacio")
+        raise ValueError("contains cannot be empty")
     cables = doc.get("cables") or {}
     for cable_ref in contains:
         if str(cable_ref) not in cables:
-            raise ValueError(f"Conduit referencia cable inexistente: {cable_ref}")
+            raise ValueError(f"Conduit references missing cable: {cable_ref}")
     from housewire.house.conduit_ref import split_conduit_endpoint
 
     split_conduit_endpoint(from_ref)
@@ -465,12 +465,12 @@ def add_pending_cable(
     enter_s = str(enter).strip()
     exit_s = str(exit).strip()
     if not enter_s or not exit_s:
-        raise ValueError("enter y exit (aberturas) son obligatorios")
+        raise ValueError("enter and exit (openings) are required")
     require_opening_ids(doc, enter_s, exit_s)
     cable_name = next_pend_cable_name(doc)
     suffix = cable_name.rsplit("_", 1)[-1]
     conduit_name = f"Conducto_paso_{suffix}"
-    note_bits = [f"estado: pendiente; entra por {enter_s} y sale por {exit_s}"]
+    note_bits = [f"status: pending; enters via {enter_s} and exits via {exit_s}"]
     if notes:
         note_bits.append(str(notes))
     add_cable(
@@ -503,7 +503,7 @@ def add_connection(
     _ensure_maps(doc)
     connections = doc["connections"]
     if not isinstance(connections, list):
-        raise ValueError("connections debe ser una lista")
+        raise ValueError("connections must be a list")
     connections.append({"from": from_ref, "via": via_ref, "to": to_ref})
 
 
@@ -511,9 +511,9 @@ def rm_connection(doc: dict[str, Any], index: int) -> None:
     _ensure_maps(doc)
     connections = doc["connections"]
     if not isinstance(connections, list):
-        raise ValueError("connections debe ser una lista")
+        raise ValueError("connections must be a list")
     if index < 0 or index >= len(connections):
-        raise ValueError(f"Indice de conexion invalido: {index}")
+        raise ValueError(f"Invalid connection index: {index}")
     del connections[index]
 
 
@@ -522,7 +522,7 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
     if element:
         el = (doc.get("elements") or {}).get(element)
         if el is None:
-            raise ValueError(f"No existe el elemento: {element}")
+            raise ValueError(f"Element does not exist: {element}")
         lines.append(f"element {element}:")
         import yaml as _yaml
 
@@ -531,7 +531,7 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
     if cable:
         cb = (doc.get("cables") or {}).get(cable)
         if cb is None:
-            raise ValueError(f"No existe el cable: {cable}")
+            raise ValueError(f"Cable does not exist: {cable}")
         lines.append(f"cable {cable}:")
         import yaml as _yaml
 
@@ -557,7 +557,7 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
         elif isinstance(openings, dict) and openings:
             lines.append(f"openings ({len(openings)}):")
             for name in sorted(openings, key=lambda n: str(n)):
-                lines.append(f"  {name}  (legacy map — migra a lista)")
+                lines.append(f"  {name}  (legacy map — migrate to list)")
             lines.append("")
 
     elements = doc.get("elements") or {}

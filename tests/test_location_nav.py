@@ -128,7 +128,7 @@ class TestLocationNavigation(unittest.TestCase):
         s.cd("Parking")
         with self.assertRaises(ValueError) as ctx:
             s.list_location_children()
-        self.assertIn("ambigua", str(ctx.exception).lower())
+        self.assertIn("ambiguous", str(ctx.exception).lower())
 
     def test_monolith_single_file_navigation(self) -> None:
         mono = Path(tempfile.mkdtemp())
@@ -194,9 +194,13 @@ class TestAddLocationMode(unittest.TestCase):
         s.cd("Parking")
         code = self._run(s, "add location Caja_nueva --type JunctionBox")
         self.assertEqual(code, 0)
-        self.assertTrue((self.root / "Parking" / "Caja_nueva" / "housewire.yaml").is_file())
+        disk = self.root / "Parking" / "Caja_nueva" / "housewire.yaml"
+        self.assertFalse(disk.is_file())
+        self.assertTrue(s.is_dirty())
         self.assertEqual(s.logical_parts, ["Parking", "Caja_nueva"])
         self.assertFalse(s.cursor().is_inline)
+        self._run(s, "save")
+        self.assertTrue(disk.is_file())
 
     def test_add_location_inline_flag(self) -> None:
         s = self._session()

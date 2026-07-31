@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.17.0] — 2026-07-31
+
+### Changed
+
+- Program messages (CLI/shell help, banners, prompts, errors) are English-only;
+  internationalization deferred.
+
 ## [0.16.15] — 2026-07-31
 
 ### Added

@@ -471,7 +471,7 @@ def model_to_dot(model: PhysModel) -> str:
 
 def render_physical_svg(dot_text: str, svg_path: Path, *, also_dot: bool = True) -> None:
     if shutil.which("dot") is None:
-        raise RuntimeError("No se encontro 'dot' (Graphviz).")
+        raise RuntimeError("Could not find 'dot' (Graphviz).")
     svg_path.parent.mkdir(parents=True, exist_ok=True)
     if also_dot:
         svg_path.with_suffix(".dot").write_text(dot_text, encoding="utf-8")

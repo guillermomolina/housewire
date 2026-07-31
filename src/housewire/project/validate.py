@@ -14,7 +14,7 @@ def validate_house_document(
     yaml_path: Path,
 ) -> None:
     if not is_house_document(doc):
-        raise ValueError("schema debe ser house/v1")
+        raise ValueError("schema must be house/v1")
     meta = place_meta_from_mapping(doc)
     if meta is not None:
         validate_location_openings(meta)

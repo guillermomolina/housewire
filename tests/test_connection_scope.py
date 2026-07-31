@@ -86,7 +86,10 @@ connections:
                 ["Parking", "Caja 1"],
             )
         msg = str(ctx.exception).lower()
-        self.assertTrue("fuera" in msg or "arbol" in msg or "ancestro" in msg)
+        self.assertTrue(
+            "outside" in msg or "tree" in msg or "ancestor" in msg,
+            msg,
+        )
 
     def test_absolute_into_child_ok(self) -> None:
         wv = self._wv(

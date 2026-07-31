@@ -62,7 +62,7 @@ class TestNamingConvention(unittest.TestCase):
                 doc, catalog=load_catalog(), file_location_parts=["Parking"]
             )
         self.assertIn("location:", str(ctx.exception))
-        self.assertIn("lista", str(ctx.exception).lower())
+        self.assertIn("list", str(ctx.exception).lower())
 
     def test_path_only_determines_prefix(self) -> None:
         """File path sets hierarchy; root place fields are metadata only."""

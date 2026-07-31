@@ -38,7 +38,7 @@ KNOWN_SUBCOMMANDS = frozenset({"generate", "shell", "ls", "show", "add", "rm", "
 def run_wireviz(input_file: Path, output_dir: Path) -> None:
     if shutil.which("dot") is None:
         raise RuntimeError(
-            "No se encontro 'dot' (Graphviz). Instala el paquete del sistema 'graphviz'."
+            "Could not find 'dot' (Graphviz). Install the system package 'graphviz'."
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -75,11 +75,11 @@ def resolve_inputs(
     for item in raw_inputs:
         candidate = (project_path / item).resolve()
         if not candidate.exists():
-            raise FileNotFoundError(f"No existe la ruta de entrada: {candidate}")
+            raise FileNotFoundError(f"Input path does not exist: {candidate}")
 
         if candidate.is_file():
             if not is_yaml(candidate):
-                raise ValueError(f"No es un YAML valido: {candidate}")
+                raise ValueError(f"Not a valid YAML file: {candidate}")
             resolved_files.append(candidate)
             continue
 
@@ -87,12 +87,12 @@ def resolve_inputs(
             yaml_files = collect_yaml_from_directory(candidate, excluded_dirs)
             if not yaml_files:
                 raise FileNotFoundError(
-                    f"No se encontraron YAML en el directorio: {candidate}"
+                    f"No YAML files found in directory: {candidate}"
                 )
             resolved_files.extend(yaml_files)
             continue
 
-        raise ValueError(f"Tipo de entrada no soportado: {candidate}")
+        raise ValueError(f"Unsupported input type: {candidate}")
 
     return sorted(set(resolved_files))
 
@@ -165,30 +165,30 @@ def _merge_wireviz_piece(
 
     local_connectors = data.get("connectors", {}) or {}
     if not isinstance(local_connectors, dict):
-        raise ValueError("'connectors' debe ser un mapa")
+        raise ValueError("'connectors' must be a map")
     for name, definition in local_connectors.items():
         new_name = str(name) if already_qualified else prefixed_name(prefix, str(name))
         if new_name in connectors:
-            raise ValueError(f"Colision de nombre en connectors tras prefijo: {new_name}")
+            raise ValueError(f"Name collision in connectors after prefix: {new_name}")
         connectors[new_name] = copy.deepcopy(definition)
         local_map[str(name)] = new_name
 
     local_cables = data.get("cables", {}) or {}
     if not isinstance(local_cables, dict):
-        raise ValueError("'cables' debe ser un mapa")
+        raise ValueError("'cables' must be a map")
     for name, definition in local_cables.items():
         new_name = str(name) if already_qualified else prefixed_name(prefix, str(name))
         if new_name in cables:
-            raise ValueError(f"Colision de nombre en cables tras prefijo: {new_name}")
+            raise ValueError(f"Name collision in cables after prefix: {new_name}")
         cables[new_name] = copy.deepcopy(definition)
         local_map[str(name)] = new_name
 
     local_connections = data.get("connections", []) or []
     if not isinstance(local_connections, list):
-        raise ValueError("'connections' debe ser una lista")
+        raise ValueError("'connections' must be a list")
     for connection in local_connections:
         if not isinstance(connection, list):
-            raise ValueError("Cada connection debe ser una lista")
+            raise ValueError("Each connection must be a list")
         if already_qualified:
             connections.append(copy.deepcopy(connection))
         else:
@@ -200,7 +200,7 @@ def _merge_wireviz_piece(
     for name, remap in (data.get("_pin_remaps") or {}).items():
         name_s = str(name)
         if name_s in pin_remaps:
-            raise ValueError(f"Colision de pin_remap: {name_s}")
+            raise ValueError(f"pin_remap collision: {name_s}")
         pin_remaps[name_s] = copy.deepcopy(remap)
 
     if "options" in data and not options_already_set:
@@ -245,7 +245,7 @@ def merge_yaml_files(project_path: Path, input_files: list[Path]) -> dict:
             data = yaml.safe_load(handle) or {}
 
         if not isinstance(data, dict):
-            raise ValueError(f"El YAML no contiene un objeto valido: {yaml_file}")
+            raise ValueError(f"YAML does not contain a valid object: {yaml_file}")
 
         if is_house_document(data):
             wireviz_data = house_document_to_wireviz(
@@ -323,7 +323,7 @@ def add_external_stubs(merged: dict[str, object]) -> None:
             "subtype": "fuera de zona",
             "pins": pins or ["x"],
             "pinlabels": [str(p) for p in (pins or ["x"])],
-            "notes": f"Stub: {short} referenciado desde esta zona pero definido fuera",
+            "notes": f"Stub: {short} referenced from this zone but defined outside",
         }
 
 
@@ -354,9 +354,9 @@ def ensure_overwrite_allowed(
 
     output_list = "\n".join(f" - {path}" for path in sorted(set(existing_outputs)))
     answer = input(
-        "Se detectaron archivos de salida ya existentes:\n"
+        "Existing output files detected:\n"
         f"{output_list}\n"
-        "Quieres sobreescribirlos? [s/N]: "
+        "Overwrite them? [y/N]: "
     ).strip().lower()
 
     if answer in {"s", "si", "y", "yes"}:
@@ -364,7 +364,7 @@ def ensure_overwrite_allowed(
             file_path.unlink()
         return
 
-    raise FileExistsError("Operacion cancelada por el usuario.")
+    raise FileExistsError("Operation cancelled by user.")
 
 
 def write_and_render_wireviz(
@@ -375,7 +375,7 @@ def write_and_render_wireviz(
     *,
     with_stubs: bool = False,
 ) -> None:
-    print(f"Fusionando {len(input_files)} YAML → {base_name}...")
+    print(f"Merging {len(input_files)} YAML → {base_name}...")
     for input_file in input_files:
         print(f" - {input_file}")
 
@@ -405,17 +405,17 @@ def run_generate_project(
     output_dir = (project_path / "out").resolve()
 
     if not project_path.exists():
-        print(f"No existe la ruta de proyecto: {project_path}", file=sys.stderr)
+        print(f"Project path does not exist: {project_path}", file=sys.stderr)
         return 1
 
     if not project_path.is_dir():
-        print(f"La ruta de proyecto no es un directorio: {project_path}", file=sys.stderr)
+        print(f"Project path is not a directory: {project_path}", file=sys.stderr)
         return 1
 
     try:
         input_files = resolve_inputs(project_path, inputs, output_dir)
         if not input_files:
-            print(f"No se encontraron archivos YAML en: {project_path}", file=sys.stderr)
+            print(f"No YAML files found in: {project_path}", file=sys.stderr)
             return 1
 
         base_name = output_base_name(project_path)
@@ -429,17 +429,17 @@ def run_generate_project(
         if force and physical_dir.exists():
             shutil.rmtree(physical_dir)
         phys_svg = physical_dir / f"{base_name}.svg"
-        print(f"Diagrama fisico → {phys_svg}")
+        print(f"Physical diagram → {phys_svg}")
         export_physical_zone(
             project_path,
             input_files,
             phys_svg,
-            title=f"{project_path.name} (fisico)",
+            title=f"{project_path.name} (physical)",
         )
 
     except Exception as exc:
         if hasattr(exc, "returncode"):
-            print(f"Error ejecutando WireViz (codigo {exc.returncode}).", file=sys.stderr)
+            print(f"Error running WireViz (code {exc.returncode}).", file=sys.stderr)
             return int(exc.returncode)
         if isinstance(exc, RuntimeError):
             print(str(exc), file=sys.stderr)
@@ -449,34 +449,34 @@ def run_generate_project(
             return 1
         raise
 
-    print(f"Diagrama generado en: {output_dir}")
-    print(f"Topologia fisica: {output_dir / 'physical'}")
+    print(f"Diagram generated in: {output_dir}")
+    print(f"Physical topology: {output_dir / 'physical'}")
     return 0
 
 
 def _add_generate_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "project_path",
-        help="Raiz del arbol a generar (sitio, Floor, DeviceBox, …); salida en out/",
+        help="Root of the tree to generate (site, Floor, DeviceBox, …); output in out/",
     )
     parser.add_argument(
         "--input",
         action="append",
         dest="inputs",
-        help="Ruta relativa de YAML o carpeta dentro del arbol",
+        help="Relative path to YAML or folder inside the tree",
     )
     parser.add_argument(
         "-f",
         "--force",
         action="store_true",
-        help="Sobreescribe la salida existente sin preguntar",
+        help="Overwrite existing output without prompting",
     )
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="housewire",
-        description="housewire: diagramas, shell y ABM de instalaciones house/v1.",
+        description="housewire: diagrams, shell, and ABM for house/v1 installations.",
     )
     parser.add_argument(
         "-V",
@@ -486,25 +486,25 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command")
 
-    gen = sub.add_parser("generate", help="Fusionar YAML y generar diagramas")
+    gen = sub.add_parser("generate", help="Merge YAML and generate diagrams")
     _add_generate_arguments(gen)
 
     sh = sub.add_parser("shell", help="REPL: cd, ls, use, add, rm, generate")
-    sh.add_argument("project_path", help="Ruta del proyecto de obra")
+    sh.add_argument("project_path", help="Site project path")
 
-    sub.add_parser("version", help="Mostrar version de housewire")
+    sub.add_parser("version", help="Show housewire version")
 
-    ls_p = sub.add_parser("ls", help="Listar locations (cd) y elements")
+    ls_p = sub.add_parser("ls", help="List locations (cd) and elements")
     ls_p.add_argument("project_path")
-    ls_p.add_argument("path", nargs="?", default=".", help="Ruta relativa")
+    ls_p.add_argument("path", nargs="?", default=".", help="Relative path")
 
-    show_p = sub.add_parser("show", help="Ver contenido de un YAML house/v1")
+    show_p = sub.add_parser("show", help="Show contents of a house/v1 YAML")
     show_p.add_argument("project_path")
     show_p.add_argument("yaml_path")
     show_p.add_argument("--element")
     show_p.add_argument("--cable")
 
-    add_p = sub.add_parser("add", help="Alta de artefactos o archivos")
+    add_p = sub.add_parser("add", help="Add artifacts or files")
     add_sub = add_p.add_subparsers(dest="add_kind", required=True)
 
     add_el = add_sub.add_parser("element")
@@ -537,12 +537,12 @@ def _build_parser() -> argparse.ArgumentParser:
     add_cb.add_argument("--label")
     add_cb.add_argument("--notes")
 
-    add_pend = add_sub.add_parser("pend", help="Cable pendiente + conduit de paso")
+    add_pend = add_sub.add_parser("pend", help="Pending cable + pass-through conduit")
     add_pend.add_argument("project_path")
     add_pend.add_argument("yaml_path")
-    add_pend.add_argument("enter", help="Abertura entrada, p.ej. N1")
-    add_pend.add_argument("exit", help="Abertura salida, p.ej. S1")
-    add_pend.add_argument("section", nargs="?", default=None, help="p.ej. 1.5 o 2.5 mm2")
+    add_pend.add_argument("enter", help="Enter opening, e.g. N1")
+    add_pend.add_argument("exit", help="Exit opening, e.g. S1")
+    add_pend.add_argument("section", nargs="?", default=None, help="e.g. 1.5 or 2.5 mm2")
     add_pend.add_argument("--colors", default=None, help="default: catalog / BN,BU")
     add_pend.add_argument("--subtype", default=None, help="default: power")
     add_pend.add_argument("--kind", default=None, help="legacy alias of --subtype")
@@ -556,7 +556,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_cn.add_argument("--via", dest="via_ref", required=True)
     add_cn.add_argument("--to", dest="to_ref", required=True)
 
-    add_cd = add_sub.add_parser("conduit", help="Tubo entre aberturas (capa fisica)")
+    add_cd = add_sub.add_parser("conduit", help="Tube between openings (physical layer)")
     add_cd.add_argument("project_path")
     add_cd.add_argument("yaml_path")
     add_cd.add_argument("name")
@@ -565,7 +565,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_cd.add_argument(
         "--contains",
         required=True,
-        help="Cable ids en este YAML, separados por coma",
+        help="Cable ids in this YAML, comma-separated",
     )
     add_cd.add_argument("--subtype", default=None, help="default: tube")
     add_cd.add_argument("--label")
@@ -609,7 +609,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_d.add_argument("project_path")
     add_d.add_argument("dir_path")
 
-    rm_p = sub.add_parser("rm", help="Baja de artefactos o archivos")
+    rm_p = sub.add_parser("rm", help="Remove artifacts or files")
     rm_sub = rm_p.add_subparsers(dest="rm_kind", required=True)
 
     rm_el = rm_sub.add_parser("element")
@@ -679,7 +679,7 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
             label = args.label or auto_label
             if args.inline:
                 if not args.yaml_path:
-                    raise ValueError("add location --inline requiere --yaml PATH")
+                    raise ValueError("add location --inline requires --yaml PATH")
                 yaml_path = (project_path / args.yaml_path).resolve()
                 doc = abm.load_editable(yaml_path, project_path)
                 entry = create_inline_location(
@@ -713,7 +713,7 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
         if args.add_kind == "dir":
             target = (project_path / args.dir_path).resolve()
             target.mkdir(parents=True, exist_ok=True)
-            print(f"Creado: {target.relative_to(project_path)}")
+            print(f"Created: {target.relative_to(project_path)}")
             return 0
         yaml_path = (project_path / args.yaml_path).resolve()
         doc = abm.load_editable(yaml_path, project_path)
@@ -766,7 +766,7 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
         elif args.add_kind == "conduit":
             contains = _colors_list(args.contains)
             if not contains:
-                raise ValueError("--contains no puede estar vacio")
+                raise ValueError("--contains cannot be empty")
             abm.add_conduit(
                 doc,
                 args.name,
@@ -778,7 +778,7 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
                 notes=args.notes,
             )
         else:
-            raise ValueError(f"add desconocido: {args.add_kind}")
+            raise ValueError(f"Unknown add kind: {args.add_kind}")
         abm.persist(doc, yaml_path, project_path)
         print("OK")
         return 0
@@ -787,15 +787,15 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
         if args.rm_kind == "file":
             target = (project_path / args.file_path).resolve()
             target.unlink()
-            print(f"Borrado: {target.relative_to(project_path)}")
+            print(f"Deleted: {target.relative_to(project_path)}")
             return 0
         if args.rm_kind == "dir":
             target = (project_path / args.dir_path).resolve()
             if any(target.iterdir()):
-                print("rm dir: el directorio no esta vacio", file=sys.stderr)
+                print("rm dir: directory is not empty", file=sys.stderr)
                 return 1
             target.rmdir()
-            print(f"Borrado: {target.relative_to(project_path)}")
+            print(f"Deleted: {target.relative_to(project_path)}")
             return 0
         yaml_path = (project_path / args.yaml_path).resolve()
         doc = abm.load_editable(yaml_path, project_path)
@@ -808,7 +808,7 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
         abm.persist(doc, yaml_path, project_path)
         print("OK")
         return 0
-    print("Comando no implementado", file=sys.stderr)
+    print("Command not implemented", file=sys.stderr)
     return 1
 
 

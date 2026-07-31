@@ -50,33 +50,33 @@ def place_meta_from_mapping(node: dict[str, Any]) -> dict[str, Any] | None:
     """
     if "self" in node and node.get("self") is not None:
         raise ValueError(
-            "El bloque 'self:' ya no se usa. Pon type/label/openings/… en la raiz "
-            "del YAML (el fichero es el objeto place). "
-            "Ejemplo:\n  schema: house/v1\n  type: JunctionBox\n  openings: [N1]"
+            "The 'self:' block is no longer used. Put type/label/openings/… at the root "
+            "of the YAML (the file is the place object). "
+            "Example:\n  schema: house/v1\n  type: JunctionBox\n  openings: [N1]"
         )
     loc = node.get("location")
     if loc is not None:
         if isinstance(loc, list):
             raise ValueError(
-                "location: como lista de path ya no se usa. "
-                "La jerarquia es el path de directorios o keys en elements."
+                "location: as a path list is no longer used. "
+                "Hierarchy is the directory path or keys under elements."
             )
         if not isinstance(loc, dict):
             raise ValueError(
-                "location: legacy debe ser un mapa { type: JunctionBox, … }. "
-                "Preferible: type/label/… en la raiz del documento."
+                "location: legacy must be a map { type: JunctionBox, … }. "
+                "Preferred: type/label/… at the document root."
             )
         if node.get("type") is not None and is_place_type(node.get("type")):
             raise ValueError(
-                "No mezcles type: en la raiz con bloque location:. "
-                "Usa solo campos en la raiz."
+                "Do not mix type: at the root with a location: block. "
+                "Use only root-level fields."
             )
         type_id = loc.get("type")
         if not type_id or not is_place_type(type_id):
             raise ValueError(
-                "location.type debe ser uno de: "
+                "location.type must be one of: "
                 + ", ".join(sorted(PLACE_TYPES - {"Location"}))
-                + " (o Location)"
+                + " (or Location)"
             )
         return {**copy.deepcopy(loc), "type": str(type_id)}
 
@@ -119,7 +119,7 @@ def location_id_from_name(raw_name: str) -> tuple[str, str | None]:
     """
     name = raw_name.strip()
     if not name:
-        raise ValueError("nombre de location vacio")
+        raise ValueError("empty location name")
     if is_technical_id(name):
         return name, None
     return normalize_token(name), name
@@ -161,7 +161,7 @@ def load_catalog(repo_root: Path | None = None) -> dict[str, dict[str, Any]]:
         with path.open("r", encoding="utf-8") as handle:
             data = yaml.safe_load(handle) or {}
         if not isinstance(data, dict):
-            raise ValueError(f"Catalogo invalido (no es mapa): {path}")
+            raise ValueError(f"Invalid catalog (not a map): {path}")
         type_id = str(data.get("id") or path.stem)
         catalog[type_id] = data
     return catalog
@@ -199,7 +199,7 @@ def expand_cable(
     cat = catalog if catalog is not None else load_catalog()
     raw = copy.deepcopy(cable)
     if not isinstance(raw, dict):
-        raise ValueError("Cable invalido (no es mapa)")
+        raise ValueError("Invalid cable (not a map)")
 
     subtype = raw.get("subtype")
     if subtype is None and raw.get("kind") is not None:
@@ -211,10 +211,10 @@ def expand_cable(
     type_def = cat.get(type_id)
     if type_def is not None and type_def.get("kind") not in (None, CABLE_CATALOG_KIND):
         raise ValueError(
-            f"type: {type_id} no es un tipo de cable (catalog kind={type_def.get('kind')!r})"
+            f"type: {type_id} is not a cable type (catalog kind={type_def.get('kind')!r})"
         )
     if type_def is None and type_id != DEFAULT_CABLE_TYPE:
-        raise ValueError(f"Tipo de cable desconocido en catalogo: {type_id}")
+        raise ValueError(f"Unknown cable type in catalog: {type_id}")
 
     defaults = _catalog_defaults_for_subtype(type_def, str(subtype) if subtype is not None else None)
     out: dict[str, Any] = {"type": type_id}
@@ -246,7 +246,7 @@ def expand_conduit(
     cat = catalog if catalog is not None else load_catalog()
     raw = copy.deepcopy(conduit)
     if not isinstance(raw, dict):
-        raise ValueError("Conduit invalido (no es mapa)")
+        raise ValueError("Invalid conduit (not a map)")
 
     type_id = raw.get("type")
     subtype = raw.get("subtype")
@@ -265,16 +265,16 @@ def expand_conduit(
             subtype = kind
     else:
         raise ValueError(
-            f"type: {type_id} no es un tipo de conduit conocido; "
-            f"usa type: {DEFAULT_CONDUIT_TYPE} y subtype: …"
+            f"type: {type_id} is not a known conduit type; "
+            f"use type: {DEFAULT_CONDUIT_TYPE} and subtype: …"
         )
 
     type_def = cat.get(resolved_type)
     if type_def is None:
-        raise ValueError(f"Tipo de conduit desconocido en catalogo: {resolved_type}")
+        raise ValueError(f"Unknown conduit type in catalog: {resolved_type}")
     if type_def.get("kind") not in (None, CONDUIT_CATALOG_KIND):
         raise ValueError(
-            f"type: {resolved_type} no es un tipo de conduit "
+            f"type: {resolved_type} is not a conduit type "
             f"(catalog kind={type_def.get('kind')!r})"
         )
 
@@ -306,7 +306,7 @@ def _as_location_list(value: object) -> list[str]:
         return [part for part in value.split("/") if part]
     if isinstance(value, list):
         return [str(part) for part in value]
-    raise ValueError(f"location invalida: {value!r}")
+    raise ValueError(f"invalid location: {value!r}")
 
 
 def _merge_terminals(
@@ -368,10 +368,10 @@ def _collapse_pairs_for_wireviz(
     used: set[str] = set()
     for pair in pairs:
         if len(pair) != 2:
-            raise ValueError(f"wireviz_collapse debe tener 2 pines: {pair}")
+            raise ValueError(f"wireviz_collapse must have 2 pins: {pair}")
         a, b = str(pair[0]), str(pair[1])
         if a not in terminals or b not in terminals:
-            raise ValueError(f"wireviz_collapse referencia pines inexistentes: {pair}")
+            raise ValueError(f"wireviz_collapse references missing pins: {pair}")
         used.add(a)
         used.add(b)
         wv_pin = _wireviz_pin(a)
@@ -403,15 +403,15 @@ def _element_to_connector(
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     type_id = element.get("type")
     if not type_id:
-        raise ValueError("Elemento sin 'type'")
+        raise ValueError("Element missing 'type'")
     type_id = str(type_id)
     type_def = catalog.get(type_id)
     if type_def is None:
-        raise ValueError(f"Tipo de catalogo desconocido: {type_id}")
+        raise ValueError(f"Unknown catalog type: {type_id}")
     cat_kind = type_def.get("kind") if isinstance(type_def, dict) else None
     if cat_kind in (CABLE_CATALOG_KIND, CONDUIT_CATALOG_KIND):
         raise ValueError(
-            f"type: {type_id} pertenece a cables:/conduits:, no a elements:"
+            f"type: {type_id} belongs to cables:/conduits:, not to elements:"
         )
     # wireviz_skip: true — no genera conector (p.ej. type: Location)
     if isinstance(type_def, dict) and type_def.get("wireviz_skip"):
@@ -421,7 +421,7 @@ def _element_to_connector(
         type_def.get("terminals") or {}, element.get("terminals")
     )
     if not terminals:
-        raise ValueError(f"El tipo {type_id} no define terminals")
+        raise ValueError(f"Type {type_id} does not define terminals")
 
     pairs_raw = element.get("wireviz_collapse")
     if pairs_raw is None:
@@ -478,10 +478,10 @@ def _cable_to_wireviz(
     expanded = expand_cable(cable, catalog)
     colors = expanded.get("colors") or []
     if not isinstance(colors, list) or not colors:
-        raise ValueError("Cable sin 'colors'")
+        raise ValueError("Cable missing 'colors'")
     section = expanded.get("section") or expanded.get("gauge")
     if not section:
-        raise ValueError("Cable sin 'section'")
+        raise ValueError("Cable missing 'section'")
 
     out: dict[str, Any] = {
         "wirecount": len(colors),
@@ -511,7 +511,7 @@ def _expand_endpoint_token(token: str) -> list[str]:
     body = match.group("body")
     items = [item.strip() for item in body.split(",") if item.strip()]
     if not items:
-        raise ValueError(f"Lista vacia en endpoint: {token}")
+        raise ValueError(f"Empty list in endpoint: {token}")
     if head.endswith(".") or head.endswith("/"):
         return [f"{head}{item}" for item in items]
     if head:
@@ -521,10 +521,10 @@ def _expand_endpoint_token(token: str) -> list[str]:
 
 def _split_element_terminal(ref: str) -> tuple[str, str]:
     if "." not in ref:
-        raise ValueError(f"Referencia de borne invalida (falta '.'): {ref}")
+        raise ValueError(f"Invalid terminal reference (missing '.'): {ref}")
     element, terminal = ref.rsplit(".", 1)
     if not element or not terminal:
-        raise ValueError(f"Referencia de borne invalida: {ref}")
+        raise ValueError(f"Invalid terminal reference: {ref}")
     return element, terminal
 
 
@@ -555,24 +555,24 @@ def _parse_element_path(
     """
     name = raw_name.strip()
     if not name:
-        raise ValueError("Referencia de elemento vacia")
+        raise ValueError("Empty element reference")
     parts_probe = [part for part in name.replace("\\", "/").split("/") if part]
     if ".." in parts_probe or name.startswith("../") or name == "..":
         raise ValueError(
-            f"Referencia fuera de esta location (../ no permitido): {raw_name}. "
-            "Define la conexion en un ancestro comun."
+            f"Reference outside this location (../ not allowed): {raw_name}. "
+            "Define the connection in a common ancestor."
         )
     if name.startswith("/"):
         parts = [part for part in name.strip("/").split("/") if part]
         if not parts:
-            raise ValueError(f"Referencia absoluta invalida: {raw_name}")
+            raise ValueError(f"Invalid absolute reference: {raw_name}")
         return parts[:-1], parts[-1]
     if name.startswith("./"):
         name = name[2:]
     if "/" in name:
         parts = [part for part in name.split("/") if part]
         if len(parts) < 2:
-            raise ValueError(f"Referencia relativa invalida: {raw_name}")
+            raise ValueError(f"Invalid relative reference: {raw_name}")
         return list(current_location) + parts[:-1], parts[-1]
     return list(current_location), name
 
@@ -584,9 +584,9 @@ def _assert_ref_in_location_tree(raw_name: str, *, current_location: list[str]) 
     if not _location_contains(current_location, location):
         here = "/".join(current_location) if current_location else "/"
         raise ValueError(
-            f"Referencia fuera del arbol de esta location: {raw_name}. "
-            f"Solo se permiten esta location y sublocations (actual: {here}). "
-            "Define la conexion mas arriba."
+            f"Reference outside this location tree: {raw_name}. "
+            f"Only this location and sublocations are allowed (current: {here}). "
+            "Define the connection higher up."
         )
 
 
@@ -646,7 +646,7 @@ def _parse_via_wires(
             wire_ids.append(None)
 
     if len(set(cable_names)) != 1:
-        raise ValueError(f"via mezcla varios cables: {via_token}")
+        raise ValueError(f"via mixes multiple cables: {via_token}")
     cable_raw = cable_names[0]
     if (
         cable_raw.startswith("/")
@@ -660,7 +660,7 @@ def _parse_via_wires(
         )
         if _norm_location_parts(location) != _norm_location_parts(current_location):
             raise ValueError(
-                f"via debe referir un cable de esta location (no de una sublocation): "
+                f"via must refer to a cable in this location (not a sublocation): "
                 f"{via_token}"
             )
         cable_name = prefixed_name(location_prefix(location), element)
@@ -670,9 +670,9 @@ def _parse_via_wires(
         )
 
     if all(wire is None for wire in wire_ids):
-        raise ValueError(f"via sin indices de hilo: {via_token}")
+        raise ValueError(f"via missing wire indices: {via_token}")
     if any(wire is None for wire in wire_ids):
-        raise ValueError(f"via inconsistente: {via_token}")
+        raise ValueError(f"inconsistent via: {via_token}")
     return cable_name, wire_ids
 
 
@@ -686,7 +686,7 @@ def _connection_dict_to_wireviz(
     pin_remap_by_element: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     if "from" not in conn or "to" not in conn or "via" not in conn:
-        raise ValueError("Connection house/v1 requiere from, via y to")
+        raise ValueError("house/v1 connection requires from, via, and to")
 
     from_tokens = _expand_endpoint_token(str(conn["from"]))
     to_tokens = _expand_endpoint_token(str(conn["to"]))
@@ -703,7 +703,7 @@ def _connection_dict_to_wireviz(
 
     if not (len(from_pairs) == len(to_pairs) == len(wire_ids)):
         raise ValueError(
-            "from/via/to deben tener la misma longitud tras expandir listas: "
+            "from/via/to must have the same length after expanding lists: "
             f"{conn}"
         )
 
@@ -727,7 +727,7 @@ def _connection_dict_to_wireviz(
             local_map=element_map,
         )
         if resolved != from_element:
-            raise ValueError(f"from mezcla elementos distintos: {conn}")
+            raise ValueError(f"from mixes different elements: {conn}")
     for element, _terminal in to_pairs:
         resolved = _normalize_local_element_ref(
             element,
@@ -736,7 +736,7 @@ def _connection_dict_to_wireviz(
             local_map=element_map,
         )
         if resolved != to_element:
-            raise ValueError(f"to mezcla elementos distintos: {conn}")
+            raise ValueError(f"to mixes different elements: {conn}")
 
     from_remap = pin_remap_by_element.get(from_element, {})
     to_remap = pin_remap_by_element.get(to_element, {})
@@ -785,7 +785,7 @@ def _annotate_conduits(
             wv_name = cable_map.get(cable_ref_s, prefixed_name(local_prefix, cable_ref_s))
             if wv_name not in cables_wv:
                 raise ValueError(
-                    f"Conduit {conduit_name} referencia cable inexistente: {cable_ref_s}"
+                    f"Conduit {conduit_name} references missing cable: {cable_ref_s}"
                 )
             existing = cables_wv[wv_name].get("notes")
             cables_wv[wv_name]["notes"] = (
@@ -807,12 +807,12 @@ def _convert_flat_fragment(
     connectors: dict[str, Any] = {}
     for name, definition in (fragment.get("elements") or {}).items():
         if not isinstance(definition, dict):
-            raise ValueError(f"Elemento invalido: {name}")
+            raise ValueError(f"Invalid element: {name}")
         new_name = prefixed_name(prefix, str(name))
         connector, pin_remap = _element_to_connector(definition, catalog)
         if connector is None:
             # wireviz_skip (e.g. type: Location) — registrar en element_map
-            # para que las referencias locales no fallen, pero no emitir conector
+            # so local references do not fail, but do not emit a connector
             element_map[str(name)] = new_name
             continue
         connectors[new_name] = connector
@@ -822,7 +822,7 @@ def _convert_flat_fragment(
     cables: dict[str, Any] = {}
     for name, definition in (fragment.get("cables") or {}).items():
         if not isinstance(definition, dict):
-            raise ValueError(f"Cable invalido: {name}")
+            raise ValueError(f"Invalid cable: {name}")
         new_name = prefixed_name(prefix, str(name))
         cables[new_name] = _cable_to_wireviz(definition, catalog)
         cable_map[str(name)] = new_name
@@ -863,7 +863,7 @@ def _convert_flat_fragment(
                 renamed.append(mapped)
             connections.append(renamed)
         else:
-            raise ValueError(f"Connection invalida: {conn!r}")
+            raise ValueError(f"Invalid connection: {conn!r}")
 
     return {
         "connectors": connectors,
@@ -959,10 +959,10 @@ def _walk_locations(
     nested = node.get("locations")
     if nested is not None:
         if not isinstance(nested, dict):
-            raise ValueError("'locations' debe ser un mapa")
+            raise ValueError("'locations' must be a map")
         for name, child in nested.items():
             if not isinstance(child, dict):
-                raise ValueError(f"locations.{name} debe ser un mapa")
+                raise ValueError(f"locations.{name} must be a map")
             fragments.extend(_walk_locations(child, base + [str(name)]))
     return fragments
 
@@ -1015,16 +1015,16 @@ def house_document_to_wireviz(
         )
         for name, definition in converted["connectors"].items():
             if name in merged["connectors"]:
-                raise ValueError(f"Colision de elemento house/v1: {name}")
+                raise ValueError(f"house/v1 element collision: {name}")
             merged["connectors"][name] = definition
         for name, definition in converted["cables"].items():
             if name in merged["cables"]:
-                raise ValueError(f"Colision de cable house/v1: {name}")
+                raise ValueError(f"house/v1 cable collision: {name}")
             merged["cables"][name] = definition
         merged["connections"].extend(converted["connections"])
         for name, remap in converted.get("pin_remaps", {}).items():
             if name in merged["_pin_remaps"]:
-                raise ValueError(f"Colision de pin_remap house/v1: {name}")
+                raise ValueError(f"house/v1 pin_remap collision: {name}")
             merged["_pin_remaps"][name] = remap
 
     for key in ("options", "metadata"):

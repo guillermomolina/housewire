@@ -191,7 +191,7 @@ class TestABMPendingAndConduits(unittest.TestCase):
         self.assertEqual(conduit, "Conducto_paso_01")
         self.assertIn(cable, doc["cables"])
         self.assertIn(conduit, doc["conduits"])
-        self.assertIn("estado: pendiente", doc["cables"][cable]["notes"])
+        self.assertIn("status: pending", doc["cables"][cable]["notes"])
         self.assertIn("B1", doc["cables"][cable]["notes"])
         self.assertEqual(doc["cables"][cable]["type"], "Cable")
         self.assertEqual(doc["conduits"][conduit]["type"], "Conduit")

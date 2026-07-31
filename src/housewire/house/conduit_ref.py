@@ -15,16 +15,16 @@ def split_conduit_endpoint(ref: str) -> tuple[str, str]:
     """
     text = str(ref).strip()
     if not text:
-        raise ValueError("endpoint de conduit vacio")
+        raise ValueError("empty conduit endpoint")
     if "." not in text:
         raise ValueError(
-            f"endpoint de conduit invalido {text!r}: usa LocationRef.OpeningId "
-            f"(p.ej. Caja_derivacion_4.W2 o .N1)"
+            f"invalid conduit endpoint {text!r}: use LocationRef.OpeningId "
+            f"(e.g. Caja_derivacion_4.W2 or .N1)"
         )
     loc, opening = text.rsplit(".", 1)
     opening = opening.strip()
     if not opening:
-        raise ValueError(f"endpoint de conduit sin abertura: {text!r}")
+        raise ValueError(f"conduit endpoint missing opening: {text!r}")
     loc = loc.strip() if loc.strip() else "."
     return loc, opening
 
@@ -40,7 +40,7 @@ def conduit_endpoints(conduit: dict[str, Any]) -> tuple[str, str]:
     to_ref = conduit.get("to")
     if from_ref is None or to_ref is None:
         raise ValueError(
-            "conduit requiere from y to (LocationRef.OpeningId, p.ej. Caja.W2)"
+            "conduit requires from and to (LocationRef.OpeningId, e.g. Caja.W2)"
         )
     return str(from_ref).strip(), str(to_ref).strip()
 

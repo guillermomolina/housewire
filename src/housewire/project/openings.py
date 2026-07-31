@@ -51,10 +51,10 @@ def openings_from_text(*texts: str) -> list[str]:
 def parse_grid_spec(value: Any) -> tuple[int, int]:
     """Return ``(cols, rows)``. A bare int / ``\"3\"`` means ``3x1`` (one row)."""
     if isinstance(value, bool):
-        raise ValueError(f"opening_grid invalido: {value!r}")
+        raise ValueError(f"invalid opening_grid: {value!r}")
     if isinstance(value, int):
         if value < 1:
-            raise ValueError(f"opening_grid debe ser >= 1: {value}")
+            raise ValueError(f"opening_grid must be >= 1: {value}")
         return value, 1
     if isinstance(value, float) and value == int(value):
         return parse_grid_spec(int(value))
@@ -66,9 +66,9 @@ def parse_grid_spec(value: Any) -> tuple[int, int]:
         else:
             cols, rows = int(raw), 1
         if cols < 1 or rows < 1:
-            raise ValueError(f"opening_grid debe ser >= 1: {value!r}")
+            raise ValueError(f"opening_grid must be >= 1: {value!r}")
         return cols, rows
-    raise ValueError(f"opening_grid invalido: {value!r}")
+    raise ValueError(f"invalid opening_grid: {value!r}")
 
 
 def expand_opening_grid(raw: Any) -> dict[str, tuple[int, int]]:
@@ -79,7 +79,7 @@ def expand_opening_grid(raw: Any) -> dict[str, tuple[int, int]]:
     if raw is None:
         return {}
     if not isinstance(raw, dict):
-        raise ValueError("location.opening_grid debe ser un mapa")
+        raise ValueError("location.opening_grid must be a map")
 
     expanded: dict[str, tuple[int, int]] = {}
     overrides: dict[str, tuple[int, int]] = {}
@@ -88,7 +88,7 @@ def expand_opening_grid(raw: Any) -> dict[str, tuple[int, int]]:
         name = str(key)
         if name == "EW":
             raise ValueError(
-                "opening_grid clave 'EW' renombrada a 'WE' (orden W→E, como NS)"
+                "opening_grid key 'EW' renamed to 'WE' (W→E order, like NS)"
             )
         spec = parse_grid_spec(value)
         if name in PAIR_KEYS:
@@ -98,8 +98,8 @@ def expand_opening_grid(raw: Any) -> dict[str, tuple[int, int]]:
             overrides[name] = spec
         else:
             raise ValueError(
-                f"opening_grid clave desconocida: {name!r}. "
-                f"Usa N,S,E,W,F,B,NS,WE"
+                f"unknown opening_grid key: {name!r}. "
+                f"Use N,S,E,W,F,B,NS,WE"
             )
 
     expanded.update(overrides)
@@ -116,8 +116,8 @@ def parse_opening_id(opening_id: str) -> tuple[str, int, int | None]:
     if plane:
         return plane.group(1), int(plane.group(2)), int(plane.group(3))
     raise ValueError(
-        f"Id de abertura invalido: {opening_id!r}. "
-        f"Usa N1, W2, … o B1-1, F2-3, …"
+        f"Invalid opening id: {opening_id!r}. "
+        f"Use N1, W2, … or B1-1, F2-3, …"
     )
 
 
@@ -163,17 +163,17 @@ def declared_opening_ids(openings: Any) -> set[str] | None:
         for item in openings:
             if not isinstance(item, str):
                 raise ValueError(
-                    "location.openings debe ser una lista de ids "
-                    "(p.ej. [N1, B1-1])"
+                    "location.openings must be a list of ids "
+                    "(e.g. [N1, B1-1])"
                 )
             ids.add(normalize_opening_id(item))
         return ids
     if isinstance(openings, dict):
         raise ValueError(
-            "location.openings ya no es un mapa {B1: {face:…}}. "
-            "Usa una lista de ids locales: openings: [N1, B1-1]"
+            "location.openings is no longer a map {B1: {face:…}}. "
+            "Use a list of local ids: openings: [N1, B1-1]"
         )
-    raise ValueError("location.openings debe ser una lista de ids")
+    raise ValueError("location.openings must be a list of ids")
 
 
 def validate_location_openings(location: dict[str, Any]) -> None:
@@ -193,5 +193,5 @@ def validate_location_openings(location: dict[str, Any]) -> None:
             face, _, _ = parse_opening_id(oid)
             cols, rows = grid[face]
             raise ValueError(
-                f"Abertura {oid} fuera de opening_grid[{face}]={cols}x{rows}"
+                f"Opening {oid} outside opening_grid[{face}]={cols}x{rows}"
             )

@@ -21,7 +21,7 @@ def load_yaml(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         data = yaml.safe_load(handle) or {}
     if not isinstance(data, dict):
-        raise ValueError(f"El YAML no contiene un objeto valido: {path}")
+        raise ValueError(f"YAML does not contain a valid object: {path}")
     return data
 
 
@@ -38,14 +38,14 @@ def require_house_document(data: dict[str, Any], path: Path | None = None) -> No
     if not is_house_document(data):
         hint = f": {path}" if path else ""
         raise ValueError(
-            f"Solo se puede editar YAML con schema house/v1{hint}. "
-            "Usa otro archivo o migra el documento."
+            f"Only YAML with schema house/v1 can be edited{hint}. "
+            "Use another file or migrate the document."
         )
 
 
 def create_empty_house_file(path: Path) -> dict[str, Any]:
     if path.exists():
-        raise FileExistsError(f"Ya existe: {path}")
+        raise FileExistsError(f"Already exists: {path}")
     doc = {
         "schema": HOUSE_SCHEMA,
         "elements": {},
@@ -68,16 +68,16 @@ def create_inline_location(
     """Create an inline place under ``parent_place['elements'][name]``."""
     if not is_place_type(type_id):
         raise ValueError(
-            "type debe ser uno de: "
+            "type must be one of: "
             + ", ".join(sorted(PLACE_TYPES - {"Location"}))
-            + " (o Location)"
+            + " (or Location)"
         )
     parent_place.setdefault("elements", {})
     elements = parent_place["elements"]
     if not isinstance(elements, dict):
-        raise ValueError("elements debe ser un mapa")
+        raise ValueError("elements must be a map")
     if name in elements:
-        raise ValueError(f"Ya existe el elemento/location: {name}")
+        raise ValueError(f"Element/location already exists: {name}")
     entry: dict[str, Any] = {
         "type": str(type_id),
         "elements": {},
@@ -104,9 +104,9 @@ def build_location_document(
     """Build a place-root house/v1 document (no I/O)."""
     if not is_place_type(type_id):
         raise ValueError(
-            "type debe ser uno de: "
+            "type must be one of: "
             + ", ".join(sorted(PLACE_TYPES - {"Location"}))
-            + " (o Location)"
+            + " (or Location)"
         )
     doc: dict[str, Any] = {
         "schema": HOUSE_SCHEMA,
@@ -142,7 +142,7 @@ def create_location_index(
     dir_path.mkdir(parents=True, exist_ok=True)
     yaml_path = dir_path / HOUSEWIRE_YAML
     if yaml_path.exists():
-        raise FileExistsError(f"Ya existe: {yaml_path}")
+        raise FileExistsError(f"Already exists: {yaml_path}")
     doc = build_location_document(
         type_id=type_id, subtype=subtype, notes=notes, label=label
     )

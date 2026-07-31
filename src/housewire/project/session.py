@@ -93,10 +93,10 @@ def place_node_at(doc: dict[str, Any], inline_parts: list[str]) -> dict[str, Any
     for part in inline_parts:
         elements = node.get("elements") or {}
         if not isinstance(elements, dict) or part not in elements:
-            raise ValueError(f"Location inline inexistente: {'/'.join(inline_parts)}")
+            raise ValueError(f"Inline location does not exist: {'/'.join(inline_parts)}")
         child = elements[part]
         if not isinstance(child, dict) or not is_place_type(child.get("type")):
-            raise ValueError(f"No es una location (place type): {part}")
+            raise ValueError(f"Not a location (place type): {part}")
         node = child
     return node
 
@@ -174,7 +174,7 @@ class ProjectSession:
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
         if not self.root.is_dir():
-            raise NotADirectoryError(f"No es un directorio de proyecto: {self.root}")
+            raise NotADirectoryError(f"Not a project directory: {self.root}")
         self._excluded = {(self.root / "out").resolve()}
         # Logical path from project root (location ids, outline or inline).
         self.logical_parts: list[str] = []
@@ -221,10 +221,10 @@ class ProjectSession:
 
         yaml_path = (dir_path / HOUSEWIRE_YAML).resolve()
         if yaml_path.is_file() or yaml_path in self._buffers:
-            raise FileExistsError(f"Ya existe: {yaml_path}")
+            raise FileExistsError(f"Already exists: {yaml_path}")
         # Collision with an existing sibling dir that already has housewire.yaml
         if dir_path.is_dir() and _housewire_in_dir(dir_path, buffers=self._buffers):
-            raise FileExistsError(f"Ya existe location outline: {dir_path.name}")
+            raise FileExistsError(f"Outline location already exists: {dir_path.name}")
         doc = build_location_document(
             type_id=type_id, subtype=subtype, notes=notes, label=label
         )
@@ -264,8 +264,8 @@ class ProjectSession:
             and resolved.stat().st_mtime != buf.mtime
         ):
             raise ValueError(
-                f"{resolved.relative_to(self.root)} cambió en disco desde la carga. "
-                "Usa: save --force  o  reload"
+                f"{resolved.relative_to(self.root)} changed on disk since load. "
+                "Use: save --force  or  reload"
             )
         resolved.parent.mkdir(parents=True, exist_ok=True)
         abm.persist(doc, resolved, self.root)
@@ -288,8 +288,8 @@ class ProjectSession:
             # Staged outline location never written: discard buffer only.
             self._buffers.pop(resolved, None)
             raise ValueError(
-                f"{resolved.relative_to(self.root)} aún no existe en disco "
-                "(location solo en memoria). Usa discard o save."
+                f"{resolved.relative_to(self.root)} does not exist on disk yet "
+                "(location only in memory). Use discard or save."
             )
         doc = abm.load_editable(resolved, self.root)
         mtime = resolved.stat().st_mtime if resolved.is_file() else None
@@ -352,25 +352,25 @@ class ProjectSession:
             child = self._child_at(yaml_path, inline_parts, part)
             if child is None:
                 raise FileNotFoundError(
-                    f"Location inexistente: {'/'.join(walked + [part]) or part}"
+                    f"Location does not exist: {'/'.join(walked + [part]) or part}"
                 )
             walked.append(part)
             if child.storage == "dir":
                 if inline_parts:
                     raise ValueError(
-                        f"Location outline {part!r} no puede colgar de un place inline "
-                        f"({'/'.join(walked)}). Usa solo hijos inline aquí."
+                        f"Outline location {part!r} cannot hang under an inline place "
+                        f"({'/'.join(walked)}). Use only inline children here."
                     )
                 host_dir = (yaml_path.parent if yaml_path else self.root) / part
                 next_yaml = _housewire_in_dir(host_dir, buffers=self._buffers)
                 if next_yaml is None:
-                    raise FileNotFoundError(f"Location sin {HOUSEWIRE_YAML}: {part}")
+                    raise FileNotFoundError(f"Location without {HOUSEWIRE_YAML}: {part}")
                 yaml_path = next_yaml
                 inline_parts = []
             else:
                 if yaml_path is None:
                     raise ValueError(
-                        f"Location inline {part!r} requiere {HOUSEWIRE_YAML} en el ancestro"
+                        f"Inline location {part!r} requires {HOUSEWIRE_YAML} on an ancestor"
                     )
                 inline_parts = [*inline_parts, part]
         return LocationCursor(
@@ -392,8 +392,8 @@ class ProjectSession:
         if len(hits) > 1:
             kinds = ", ".join(sorted({c.storage for c in hits}))
             raise ValueError(
-                f"Location ambigua {name!r}: existe como {kinds}. "
-                "No mezcles el mismo id en carpeta y en elements."
+                f"Ambiguous location {name!r}: exists as {kinds}. "
+                "Do not mix the same id as a folder and under elements."
             )
         return hits[0]
 
@@ -420,8 +420,8 @@ class ProjectSession:
         for child in inline:
             if child.name in outline_names:
                 raise ValueError(
-                    f"Location ambigua {child.name!r}: existe como dir e inline. "
-                    "No mezcles el mismo id en carpeta y en elements."
+                    f"Ambiguous location {child.name!r}: exists as dir and inline. "
+                    "Do not mix the same id as a folder and under elements."
                 )
         return sorted(outline + inline, key=lambda c: c.name.lower())
 
@@ -470,9 +470,9 @@ class ProjectSession:
         try:
             candidate.relative_to(self.root)
         except ValueError as exc:
-            raise ValueError(f"Ruta fuera del proyecto: {raw}") from exc
+            raise ValueError(f"Path outside project: {raw}") from exc
         if is_excluded_path(candidate, self._excluded):
-            raise ValueError(f"Ruta excluida: {raw}")
+            raise ValueError(f"Excluded path: {raw}")
         return candidate
 
     def compute_cd_parts(self, raw: str | None) -> list[str]:
@@ -495,14 +495,14 @@ class ProjectSession:
                     continue
                 if segment == "..":
                     if not parts:
-                        raise ValueError("Ya estas en la raiz del proyecto")
+                        raise ValueError("Already at project root")
                     parts = parts[:-1]
                     continue
                 cursor = self._resolve_logical(parts)
                 child = self._child_at(cursor.yaml_path, cursor.inline_parts, segment)
                 if child is None:
                     raise FileNotFoundError(
-                        f"Location inexistente: {'/'.join(parts + [segment])}"
+                        f"Location does not exist: {'/'.join(parts + [segment])}"
                     )
                 parts = parts + [segment]
         self._resolve_logical(parts)
@@ -531,24 +531,24 @@ class ProjectSession:
             self.active_yaml = path
             return path
         raise ValueError(
-            f"No hay {HOUSEWIRE_YAML} en esta location. "
-            f"Usa: add location <nombre>  o crea {HOUSEWIRE_YAML}"
+            f"No {HOUSEWIRE_YAML} in this location. "
+            f"Use: add location <name>  or create {HOUSEWIRE_YAML}"
         )
 
     def use_yaml(self, name: str) -> Path:
         path = self.resolve_under_root(name)
         if not path.is_file() or not is_yaml(path):
-            raise FileNotFoundError(f"No es un archivo YAML: {name}")
+            raise FileNotFoundError(f"Not a YAML file: {name}")
         if not is_housewire_yaml(path):
             raise ValueError(
-                f"Solo se edita {HOUSEWIRE_YAML} (un fichero por Location). "
-                f"Recibido: {path.name}"
+                f"Only {HOUSEWIRE_YAML} can be edited (one file per Location). "
+                f"Got: {path.name}"
             )
         # use only allowed when it matches the hosting yaml of current cursor
         cursor = self.cursor()
         if cursor.yaml_path is not None and path.resolve() != cursor.yaml_path.resolve():
             raise ValueError(
-                f"use solo activa el {HOUSEWIRE_YAML} de la location actual "
+                f"use only activates the {HOUSEWIRE_YAML} of the current location "
                 f"({cursor.yaml_path.relative_to(self.root)})"
             )
         self.active_yaml = path

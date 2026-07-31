@@ -289,8 +289,12 @@ class TestShellDispatcher(unittest.TestCase):
             'add location "Caja X" --type JunctionBox --subtype "100x100" --notes "mount: wall"',
         )
         self.assertEqual(code, 0)
-        self.assertTrue((self.root / "Caja_X" / "housewire.yaml").is_file())
+        disk = self.root / "Caja_X" / "housewire.yaml"
+        self.assertFalse(disk.is_file())
+        self.assertTrue(s.is_dirty())
         self.assertEqual(s.active_yaml.name, "housewire.yaml")
+        self._run(s, "save")
+        self.assertTrue(disk.is_file())
         doc = abm.load_editable(s.active_path(), self.root)
         self.assertEqual(doc["type"], "JunctionBox")
         self.assertEqual(doc["subtype"], "100x100")

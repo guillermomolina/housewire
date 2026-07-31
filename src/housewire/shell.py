@@ -48,11 +48,11 @@ def run_repl(
     session = ProjectSession(project_path)
     print(f"housewire shell — {session.root}")
     print(
-        "Escribe help. Tab completa. Cambios en memoria hasta save. "
-        "Varias lineas: termina con \\"
+        "Type help. Tab completes. Changes stay in memory until save. "
+        "Multi-line: end with \\"
     )
     if not enable_readline_completion(session):
-        print("(Sin readline: Tab completion no disponible)")
+        print("(No readline: Tab completion unavailable)")
     while True:
         try:
             line = read_logical_line(
@@ -67,8 +67,8 @@ def run_repl(
         stripped = line.lstrip()
         if stripped.startswith("--"):
             print(
-                "Parece una continuación de comando. "
-                "Pon \\ al final de la línea anterior, o pega todo en una sola línea."
+                "Looks like a command continuation. "
+                "Put \\ at the end of the previous line, or paste everything on one line."
             )
             continue
         code = run_shell_line(session, line, generate_fn=generate_fn)
