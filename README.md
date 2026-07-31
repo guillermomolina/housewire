@@ -113,7 +113,7 @@ Site trees (private) are **not** part of this repository. A local `projects/` pa
 
 ## house/v1
 
-See [docs/schema-house-v1.md](docs/schema-house-v1.md).
+See [docs/schema-house-v1.md](docs/schema-house-v1.md) (including IEC 60757 **cable color codes**: `BN`, `BU`, `GNYE`, …).
 
 ```yaml
 schema: house/v1

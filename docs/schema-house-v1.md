@@ -347,6 +347,40 @@ Catalog: `catalog/Cable.yaml` (`kind: cable_type`) with per-subtype defaults
 
 Legacy: `kind: power` still loads as `subtype: power`.
 
+### Color codes (`colors:`)
+
+Codes follow **IEC 60757** letter abbreviations (same vocabulary WireViz expects).
+Use uppercase tokens in YAML (`BN`, not `bn`).
+
+| Code | English | Spanish (obra) | Typical use in this project |
+|------|---------|----------------|------------------------------|
+| `BK` | black | negro | Phase from panel / permanent lights phase |
+| `BN` | brown | marrón | Switched phase, lamp feeds, some socket L |
+| `RD` | red | rojo | Catalog `dc` default (with `BK`) |
+| `OG` | orange | naranja | (available; rare in domestic) |
+| `YE` | yellow | amarillo | (available; do not confuse with PE) |
+| `GN` | green | verde | (available; prefer `GNYE` for PE) |
+| `BU` | blue | azul | Neutral (N) |
+| `VT` | violet | violeta | (available) |
+| `GY` | grey | gris | Phase (light grey), travellers, some feeds |
+| `WH` | white | blanco | Catalog `signal` default (with `BU`) |
+| `PK` | pink | rosa | (available) |
+| `TQ` | turquoise | turquesa | (available) |
+| `GNYE` | green-yellow | verde-amarillo | Protective earth (PE) |
+
+Notes:
+
+- **PE** is always `GNYE` in this project (not plain `GN` / `YE`).
+- **Neutral** is `BU` (IEC / EU practice).
+- **Phase** may be `BK`, `BN`, or `GY` depending on the run (document in `notes` when several phases share a box).
+- Order in `colors: […]` is the wire index for `via: Cable.[1, 2, …]` (1-based).
+
+Example:
+
+```yaml
+colors: [BN, BU, GNYE]   # wire 1 brown, 2 blue, 3 PE
+```
+
 ### Convención: línea lógica ≠ un solo cable físico
 
 En el cuadro (y en general en este repo) una entrada de `cables` con varios colores (p.ej. `[BN, BU]`) es una **línea lógica**: el par de conductores que va de A a B. WireViz la dibuja como un bloque multipolar; eso es **intencional** (claridad del circuito), no una afirmación de que sea una manguera o un solo revestimiento.
