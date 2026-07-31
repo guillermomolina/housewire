@@ -2,8 +2,9 @@ kind: conduit_type
 id: Conduit
 title: Conduit / hose
 description_es: >
-  Tubo o manguera de paso que agrupa cables. No es un conductor eléctrico;
-  vive bajo conduits:, no en elements.
+  Tubo o manguera entre locations (capa fisica). Une aberturas con from/to
+  (LocationRef.OpeningId); contains lista los cables que viajan dentro.
+  No es un conductor electrico; vive bajo conduits:, no en elements.
 defaults: {}
 subtypes:
   tube:

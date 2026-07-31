@@ -87,8 +87,8 @@ Output under `$SITE/out/` (or under the directory you pass / shell `cd` into):
 
 | Path | Content |
 |---|---|
-| `out/<name>.svg` | WireViz for that tree (cross-tree ends as `External`) |
-| `out/physical/<name>.svg` | Physical topology (no pin tables) |
+| `out/<name>.svg` | WireViz (electrical: elements ↔ cables) |
+| `out/physical/<name>.svg` | Physical topology (locations ↔ conduits) |
 
 Scope is the path argument (or the shell current location’s directory). Example:
 `housewire generate "$SITE/Parking"` or `cd Parking` then `generate` in the shell.
@@ -117,6 +117,7 @@ See [docs/schema-house-v1.md](docs/schema-house-v1.md).
 
 ```yaml
 schema: house/v1
+# Electrical
 elements:
   MT_Lights:
     type: MCB
@@ -131,9 +132,17 @@ connections:
   - from: A.[1, 3]
     via: Line_X.[1, 2]
     to: B.[1, 3]
+# Physical
+conduits:
+  Tube_A_to_B:
+    type: Conduit
+    subtype: tube
+    from: Box_A.N1
+    to: Box_B.S1
+    contains: [Line_X]
 ```
 
 ## Version
 
-Package version: `pyproject.toml` / `housewire.__version__` (currently **0.2.2**).
+Package version: `pyproject.toml` / `housewire.__version__` (currently **0.14.0**).
 History: [CHANGELOG.md](CHANGELOG.md).

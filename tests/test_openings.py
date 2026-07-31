@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from housewire.house.physical import _openings_from_text
+from housewire.project.openings import openings_from_text as _openings_from_text
 from housewire.project import openings as op
 
 

@@ -163,8 +163,9 @@ class TestABMPendingAndConduits(unittest.TestCase):
         self.assertEqual(doc["cables"][cable]["type"], "Cable")
         self.assertEqual(doc["conduits"][conduit]["type"], "Conduit")
         self.assertEqual(doc["conduits"][conduit]["contains"], [cable])
-        self.assertIn("abertura B1", doc["conduits"][conduit]["route"])
-        self.assertIn("destino pendiente", doc["conduits"][conduit]["route"])
+        self.assertEqual(doc["conduits"][conduit]["from"], ".B1")
+        self.assertEqual(doc["conduits"][conduit]["to"], ".B2")
+        self.assertNotIn("route", doc["conduits"][conduit])
         self.assertEqual(doc.get("connections") or [], [])
 
     def test_pending_cable_numbering_increments(self) -> None:

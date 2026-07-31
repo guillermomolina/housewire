@@ -255,6 +255,8 @@ def add_conduit(
     name: str,
     *,
     contains: list[str],
+    from_ref: str | None = None,
+    to_ref: str | None = None,
     route: str | None = None,
     type_id: str = DEFAULT_CONDUIT_TYPE,
     subtype: str | None = DEFAULT_CONDUIT_SUBTYPE,
@@ -274,6 +276,10 @@ def add_conduit(
     for cable_ref in contains:
         if str(cable_ref) not in cables:
             raise ValueError(f"Conduit referencia cable inexistente: {cable_ref}")
+    if (from_ref is None) ^ (to_ref is None):
+        raise ValueError("conduit requiere from y to juntos (o route legacy)")
+    if from_ref is None and to_ref is None and not route:
+        raise ValueError("conduit requiere from/to o route")
     # Legacy: kind was always "conduit"; type_id used to mean physical size.
     resolved_type = type_id
     resolved_subtype = subtype
@@ -285,6 +291,13 @@ def add_conduit(
     }
     if resolved_subtype is not None:
         entry["subtype"] = resolved_subtype
+    if from_ref is not None and to_ref is not None:
+        from housewire.house.conduit_ref import split_conduit_endpoint
+
+        split_conduit_endpoint(from_ref)
+        split_conduit_endpoint(to_ref)
+        entry["from"] = str(from_ref).strip()
+        entry["to"] = str(to_ref).strip()
     if route:
         entry["route"] = route
     if label:
@@ -338,7 +351,8 @@ def add_pending_cable(
         doc,
         conduit_name,
         contains=[cable_name],
-        route=f"abertura {enter_s} ↔ abertura {exit_s} ↔ destino pendiente",
+        from_ref=f".{enter_s}",
+        to_ref=f".{exit_s}",
     )
     return cable_name, conduit_name
 
@@ -414,6 +428,7 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
     cables = doc.get("cables") or {}
     connections = doc.get("connections") or []
     conduits = doc.get("conduits") or {}
+    lines.append("# Electrical layer: elements ↔ cables/connections")
     lines.append(f"elements ({len(elements)}):")
     for name in sorted(elements):
         t = elements[name].get("type", "?") if isinstance(elements[name], dict) else "?"
@@ -425,6 +440,11 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
         st = cb.get("subtype") or cb.get("kind")
         suffix = f"{t}/{st}" if st else str(t)
         lines.append(f"  {name} ({suffix})")
+    lines.append(f"connections ({len(connections)}):")
+    for i, conn in enumerate(connections):
+        lines.append(f"  [{i}] {conn}")
+    lines.append("")
+    lines.append("# Physical layer: locations ↔ conduits (openings)")
     lines.append(f"conduits ({len(conduits)}):")
     for name in sorted(conduits):
         cd = conduits[name] if isinstance(conduits[name], dict) else {}
@@ -436,8 +456,12 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
             # legacy type-as-size
             t, st = "Conduit", cd.get("type")
         suffix = f"{t}/{st}" if st else str(t)
-        lines.append(f"  {name} ({suffix})")
-    lines.append(f"connections ({len(connections)}):")
-    for i, conn in enumerate(connections):
-        lines.append(f"  [{i}] {conn}")
+        ends = ""
+        if cd.get("from") is not None and cd.get("to") is not None:
+            ends = f": {cd['from']} → {cd['to']}"
+        elif cd.get("route"):
+            ends = f": route={cd['route']}"
+        contains = cd.get("contains") or []
+        contains_s = f" [{', '.join(str(c) for c in contains)}]" if contains else ""
+        lines.append(f"  {name} ({suffix}){ends}{contains_s}")
     return "\n".join(lines)

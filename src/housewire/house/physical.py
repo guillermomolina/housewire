@@ -1,6 +1,7 @@
-"""Physical topology diagram from house/v1 (boxes, elements, conduits).
+"""Physical topology diagram from house/v1 (locations + conduits).
 
-Not WireViz: no pin tables. Graphviz clusters by location folder.
+Physical layer only: location nodes linked by conduits (openings).
+Electrical connections (elements + cables) belong to WireViz, not here.
 """
 from __future__ import annotations
 
@@ -14,13 +15,15 @@ import yaml
 
 from housewire.house import (
     is_house_document,
-    location_prefix,
     normalize_token,
     path_location_parts,
-    prefixed_name,
 )
-
-from housewire.project.openings import OPENING_TOKEN_RE as _OPENING_RE
+from housewire.house.conduit_ref import (
+    conduit_endpoints,
+    location_key,
+    resolve_location_ref,
+    split_conduit_endpoint,
+)
 
 
 @dataclass
@@ -79,18 +82,6 @@ def _safe_id(value: str) -> str:
     return normalize_token(value) or "n"
 
 
-def _openings_from_text(*texts: str) -> list[str]:
-    found: list[str] = []
-    for text in texts:
-        if not text:
-            continue
-        for match in _OPENING_RE.finditer(str(text)):
-            token = match.group(1)
-            if token not in found:
-                found.append(token)
-    return found
-
-
 def _load_house_files(
     project_path: Path, yaml_files: list[Path]
 ) -> list[tuple[list[str], dict[str, Any]]]:
@@ -133,143 +124,118 @@ def _load_house_files(
     return pieces
 
 
+def _ensure_location_node(
+    model: PhysModel,
+    parts: tuple[str, ...],
+    *,
+    type_id: str = "Location",
+    label: str | None = None,
+    subtitle: str = "",
+    external: bool = False,
+) -> str:
+    key = location_key(parts)
+    if key in model.nodes:
+        return key
+    leaf = parts[-1] if parts else "raiz"
+    display_label = label or leaf
+    title = f"{display_label}\\n{type_id}"
+    if external:
+        title = f"{display_label}\\n(externo)"
+        type_id = "External"
+    cluster_label = _cluster_label(list(parts), leaf_label=label)
+    model.nodes[key] = PhysNode(
+        node_id=_safe_id(key),
+        title=title,
+        type_id=type_id,
+        cluster_id=_safe_id(key),
+        cluster_label=cluster_label,
+        cluster_subtitle=subtitle,
+    )
+    return key
+
+
 def build_physical_model(
     project_path: Path,
     yaml_files: list[Path],
     *,
     title: str = "",
 ) -> PhysModel:
-    from housewire.house import (
-        _expand_endpoint_token,
-        _normalize_local_element_ref,
-        _parse_via_wires,
-        _split_element_terminal,
-        is_place_type,
-    )
+    """Build location↔conduit graph (physical layer)."""
+    from housewire.house import is_place_type
 
     model = PhysModel(title=title or project_path.name)
-    cable_openings: dict[str, list[str]] = {}
+    pieces = _load_house_files(project_path, yaml_files)
+    known: set[tuple[str, ...]] = {tuple(parts) for parts, _ in pieces}
+    fragment_locations = set(known)
 
-    for location_parts, fragment in _load_house_files(project_path, yaml_files):
-        prefix = location_prefix(location_parts)
-        cluster_id = _safe_id(prefix or "raiz")
-
+    # Pass 1: one node per location (place), not per electrical element.
+    for location_parts, fragment in pieces:
         place_meta = _leaf_place_meta(fragment, location_parts)
-        leaf_label = None
-        if place_meta.get("label"):
-            leaf_label = str(place_meta["label"])
-        cluster_label = _cluster_label(location_parts, leaf_label=leaf_label)
-
-        # Place metadata (directory location: or inline place) → cluster subtitle
-        cluster_subtitle = ""
+        leaf_label = str(place_meta["label"]) if place_meta.get("label") else None
+        type_id = str(place_meta.get("type") or "Location")
+        subtitle = ""
         if place_meta.get("type"):
-            parts_sub: list[str] = [str(place_meta.get("type"))]
+            bits = [str(place_meta.get("type"))]
             if place_meta.get("subtype"):
-                parts_sub.append(str(place_meta["subtype"]))
+                bits.append(str(place_meta["subtype"]))
             if place_meta.get("notes"):
-                parts_sub.append(str(place_meta["notes"]).replace("\n", " "))
-            cluster_subtitle = " | ".join(parts_sub)
-        else:
-            for _name, definition in (fragment.get("elements") or {}).items():
-                if isinstance(definition, dict) and is_place_type(definition.get("type")):
-                    parts_sub = [str(definition.get("type"))]
-                    if definition.get("subtype"):
-                        parts_sub.append(str(definition["subtype"]))
-                    if definition.get("notes"):
-                        parts_sub.append(str(definition["notes"]).replace("\n", " "))
-                    cluster_subtitle = " | ".join(parts_sub)
-                    break
+                bits.append(str(place_meta["notes"]).replace("\n", " "))
+            if place_meta.get("install"):
+                bits.append(f"install={place_meta['install']}")
+            subtitle = " | ".join(bits)
+        _ensure_location_node(
+            model,
+            tuple(location_parts),
+            type_id=type_id if is_place_type(type_id) else "Location",
+            label=leaf_label,
+            subtitle=subtitle,
+        )
 
-        element_map: dict[str, str] = {}
-        for name, definition in (fragment.get("elements") or {}).items():
-            if not isinstance(definition, dict):
-                continue
-            type_id = str(definition.get("type") or "?")
-            if is_place_type(type_id):
-                continue  # no physical node for place types
-            qname = prefixed_name(prefix, str(name))
-            element_map[str(name)] = qname
-            label = str(definition.get("label") or name)
-            extra = f"\\n{label}" if label and label != str(name) else ""
-            model.nodes[qname] = PhysNode(
-                node_id=_safe_id(qname),
-                title=f"{name}\\n{type_id}{extra}",
-                type_id=type_id,
-                cluster_id=cluster_id,
-                cluster_label=cluster_label,
-                cluster_subtitle=cluster_subtitle,
-            )
-
-        cable_map: dict[str, str] = {}
-        for name in fragment.get("cables") or {}:
-            cable_map[str(name)] = prefixed_name(prefix, str(name))
-
-        for _conduit_name, conduit in (fragment.get("conduits") or {}).items():
+    # Pass 2: conduits → edges between locations.
+    for location_parts, fragment in pieces:
+        for conduit_name, conduit in (fragment.get("conduits") or {}).items():
             if not isinstance(conduit, dict):
                 continue
-            openings = _openings_from_text(
-                str(conduit.get("route") or ""),
-                str(conduit.get("notes") or ""),
-            )
-            for cable_ref in conduit.get("contains") or []:
-                cref = str(cable_ref)
-                qcable = cable_map.get(cref, prefixed_name(prefix, cref))
-                cable_openings.setdefault(qcable, [])
-                for op in openings:
-                    if op not in cable_openings[qcable]:
-                        cable_openings[qcable].append(op)
-
-        for conn in fragment.get("connections") or []:
-            if not isinstance(conn, dict):
-                continue
-            if "from" not in conn or "to" not in conn or "via" not in conn:
-                continue
             try:
-                from_tokens = _expand_endpoint_token(str(conn["from"]))
-                to_tokens = _expand_endpoint_token(str(conn["to"]))
-                from_pairs = [_split_element_terminal(t) for t in from_tokens]
-                to_pairs = [_split_element_terminal(t) for t in to_tokens]
-                from_el = _normalize_local_element_ref(
-                    from_pairs[0][0],
-                    current_location=location_parts,
-                    local_prefix=prefix,
-                    local_map=element_map,
-                )
-                to_el = _normalize_local_element_ref(
-                    to_pairs[0][0],
-                    current_location=location_parts,
-                    local_prefix=prefix,
-                    local_map=element_map,
-                )
-                cable_name, _wires = _parse_via_wires(
-                    str(conn["via"]),
-                    cable_map,
-                    prefix,
-                    current_location=location_parts,
-                )
-            except (ValueError, KeyError, IndexError):
+                ends = conduit_endpoints(conduit)
+            except ValueError:
+                continue
+            if ends is None:
+                continue
+            from_ref, to_ref = ends
+            try:
+                from_loc_ref, from_op = split_conduit_endpoint(from_ref)
+                to_loc_ref, to_op = split_conduit_endpoint(to_ref)
+            except ValueError:
                 continue
 
-            for el in (from_el, to_el):
-                if el in model.nodes:
-                    continue
-                short = el.rsplit("_", 1)[-1]
-                model.nodes[el] = PhysNode(
-                    node_id=_safe_id(el),
-                    title=f"{short}\\n(externo)",
-                    type_id="External",
-                    cluster_id="externo",
-                    cluster_label="externo",
-                )
+            from_parts = resolve_location_ref(
+                from_loc_ref, current_parts=location_parts, known=known
+            )
+            to_parts = resolve_location_ref(
+                to_loc_ref, current_parts=location_parts, known=known
+            )
+            known.add(from_parts)
+            known.add(to_parts)
 
-            parts = cable_name.split("__")
-            short_cable = parts[-1] if parts else cable_name
-            openings = cable_openings.get(cable_name) or []
-            label_bits = [short_cable]
-            if openings:
-                label_bits.append(" · ".join(openings))
+            from_key = _ensure_location_node(
+                model,
+                from_parts,
+                external=from_parts not in fragment_locations,
+            )
+            to_key = _ensure_location_node(
+                model,
+                to_parts,
+                external=to_parts not in fragment_locations,
+            )
+
+            contains = [str(c) for c in (conduit.get("contains") or [])]
+            short_name = str(conduit_name)
+            label_bits = [short_name, f"{from_op} ↔ {to_op}"]
+            if contains:
+                label_bits.append(", ".join(contains))
             model.edges.append(
-                PhysEdge(src=from_el, dst=to_el, label="\\n".join(label_bits))
+                PhysEdge(src=from_key, dst=to_key, label="\\n".join(label_bits))
             )
 
     return model

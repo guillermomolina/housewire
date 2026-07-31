@@ -9,6 +9,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.14.0] — 2026-07-31
+
+### Changed
+
+- Clear **two-layer** model: physical = locations ↔ conduits; electrical =
+  elements ↔ cables/connections.
+- Conduits use structured **`from` / `to`** (`LocationRef.OpeningId`); legacy
+  `route` text still loads. `pend` writes `.N1` / `.S1` endpoints.
+- Physical export draws **conduit edges between locations** (not connection
+  edges between elements).
+
 ## [0.13.0] — 2026-07-31
 
 ### Added

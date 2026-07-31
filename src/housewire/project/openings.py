@@ -35,6 +35,19 @@ OPENING_TOKEN_RE = re.compile(
 )
 
 
+def openings_from_text(*texts: str) -> list[str]:
+    """Extract opening id tokens mentioned after ``abertura`` in free text."""
+    found: list[str] = []
+    for text in texts:
+        if not text:
+            continue
+        for match in OPENING_TOKEN_RE.finditer(str(text)):
+            token = match.group(1)
+            if token not in found:
+                found.append(token)
+    return found
+
+
 def parse_grid_spec(value: Any) -> tuple[int, int]:
     """Return ``(cols, rows)``. A bare int / ``\"3\"`` means ``3x1`` (one row)."""
     if isinstance(value, bool):

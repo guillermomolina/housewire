@@ -9,6 +9,32 @@ Edición asistida: `housewire shell <proyecto>` o subcomandos `add` / `rm` / `sh
 Los tipos viven en el paquete: `src/housewire/catalog/`.
 Los YAML de una instalación viven en un **directorio/repo de obra aparte** (no en el repo del programa).
 
+## Dos capas (no mezclar)
+
+| Capa | Nodos | Aristas | Export |
+|------|-------|---------|--------|
+| **Física** | locations (cajas, DeviceBox, Panel, Floor…) | **conduits** entre aberturas (`from` / `to`) | `out/physical/` |
+| **Eléctrica** | elements (Socket, Regleta, MCB…) | **connections** con cable como `via` | WireViz |
+
+Puente único: `conduit.contains: [cable_ids]`. El cable viaja en el conducto; la connection une bornes.
+
+```yaml
+# Fisica: locations ↔ conduit
+conduits:
+  Conducto_a_Enchufe_1:
+    type: Conduit
+    subtype: tube
+    from: Caja_derivacion_4.W2
+    to: Enchufe_1.N1
+    contains: [Linea_a_Enchufe_1]
+
+# Electrica: elements ↔ cable
+connections:
+  - from: Caja_derivacion_4/Regleta_1.[1, 2, 3]
+    via: Linea_a_Enchufe_1.[1, 2, 3]
+    to: Enchufe_1/Socket.[L, PE, N]
+```
+
 ## Cabecera
 
 ```yaml
@@ -247,20 +273,21 @@ pend N1 S1
 ```
 
 ```yaml
-# Aberturas → conduit de paso
+# Aberturas → conduit de paso (capa fisica)
 conduits:
   Conducto_a_Caja_2:
     type: Conduit
     subtype: tube
-    route: "abertura N1 ↔ Caja derivacion 2 abertura S1"
+    from: .N1
+    to: Caja_derivacion_2.S1
     contains: [Linea_a_Caja_derivacion_2]
 ```
 
 ### Qué no mezclar
 
-- **Abertura** (`N1`, `B1-1`): geometría local. Va en `route` / `notes`.
-- **Conducto**: tubo entre sitios (`Conducto_<A>_a_<B>`).
-- **Borne** (`Regleta.1`): conexión eléctrica dentro de la caja.
+- **Abertura** (`N1`, `B1-1`): geometría local del place. Va en `from`/`to` del conduit.
+- **Conducto**: tubo entre locations (`from: A.N1` → `to: B.S1`).
+- **Borne** (`Regleta.1`): conexión eléctrica dentro de la caja (capa eléctrica).
 
 Legacy: ids opacos `B1`/`B2`, cardinales compuestos (`W.N`) y `back`/`lid`/`fondo`/`tapa`
 pueden aparecer en texto antiguo; el canónico es `N1` / `B1-1`.
@@ -327,8 +354,9 @@ conduits:
   Conducto_paso_01:
     type: Conduit
     subtype: tube
+    from: .N1
+    to: .S1
     contains: [PEND_Linea_01]
-    route: "abertura N1 ↔ abertura S1 ↔ destino pendiente"
 ```
 
 Al cerrar el pendiente:
@@ -384,29 +412,35 @@ El path de carpetas define el prefijo:
 
 ## Conduits / mangueras
 
-Agrupación física (no es un conductor):
+Agrupación **física** entre locations (no es un conductor eléctrico):
 
 ```yaml
 conduits:
-  Manguera_Cuadro_a_Caja_Luces_1:
+  Conducto_Cuadro_a_Caja:
     type: Conduit             # catalog id (conduit_type)
     subtype: M20              # tube | hose | free | M16 | M20 | …
+    from: Cuadro_General.S1   # LocationRef.OpeningId
+    to: Caja_Luces_1.N1
     contains: [Cable_Luces_Salon, Cable_Enchufes_Salon]
-    route: "falso techo → caja"
     label: "…"                # optional
     notes: "..."
 ```
 
-Catalog: `catalog/Conduit.yaml`. Legacy `kind: conduit` + `type: M20` still
-loads as `type: Conduit` / `subtype: M20`.
+- `from` / `to` = `LocationRef.OpeningId` (p.ej. `Caja_derivacion_4.W2`,
+  `Parking/Caja_derivacion_4.B2-1`, o `.N1` = place actual).
+- Legacy: `route: "A abertura X ↔ B abertura Y"` todavía se carga si faltan `from`/`to`.
+- Catalog: `catalog/Conduit.yaml`. Legacy `kind: conduit` + `type: M20` still
+  loads as `type: Conduit` / `subtype: M20`.
 
-Las `connections` siguen yendo a los cables. El conduit se anota en los cables contenidos al exportar a WireViz.
+Las `connections` (capa eléctrica) siguen yendo a los cables. El conduit se
+anota en los cables contenidos al exportar a WireViz; el diagrama **físico**
+dibuja aristas solo entre locations vía conduits.
 
 ## Salidas al generar
 
 `housewire generate <path>` (o `generate` en el shell tras `cd` a un location):
 
-- `out/<nombre>.*` — WireViz del **árbol bajo ese path** (sitio completo, un Floor, una caja, …); extremos fuera del alcance aparecen como stub `External`
-- `out/physical/<nombre>.svg` — diagrama de **topología física** (clusters por carpeta, sin pines); `.dot` junto al SVG para depurar
+- `out/<nombre>.*` — WireViz (**capa eléctrica**: elements ↔ cables); extremos fuera del alcance como stub `External`
+- `out/physical/<nombre>.svg` — topología **física** (locations ↔ conduits); `.dot` junto al SVG
 
 Para generar solo Parking: `housewire generate $SITE/Parking` o, en el shell, `cd Parking` y `generate`.

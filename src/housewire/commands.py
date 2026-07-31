@@ -19,10 +19,10 @@ HELP_TEXT = """Comandos del shell housewire:
   cd [path]                    navegar locations (carpeta outline o place inline)
   ls                           locations hijas (outline+inline) y elements (no-place)
   use housewire.yaml           fijar housewire.yaml activo de la location actual
-  show                         place actual (type/label) + elements/cables/…
+  show                         place actual: capa electrica + capa fisica
   show --element NAME | --cable NAME
   pend [<enter> <exit>] [section] [--colors C1,C2] [--notes ...]
-                               cable pendiente + conduit (atajo de add pend)
+                               cable pendiente + conduit from/to (.N1 → .S1)
   add location NAME --type T [--subtype ...] [--label ...] [--notes ...]
                                [--inline | --dir]
                                T=Room|JunctionBox|DeviceBox|Panel|Floor|House
@@ -34,6 +34,7 @@ HELP_TEXT = """Comandos del shell housewire:
                                defaults: section=1.5 mm2, colors=BN,BU
   add pend [<enter> <exit>] [section] [--colors ...] [--notes ...]
   add connection --from F --via V --to T
+                               (capa electrica: elements ↔ cable)
   add dir <path>                 mkdir -p (sin housewire.yaml; preferible add location)
   rm element|cable NAME
   rm connection <índice>
@@ -42,6 +43,7 @@ HELP_TEXT = """Comandos del shell housewire:
   save [--force]                 escribir YAML dirty a disco (validate)
   reload                         descartar buffer y releer disco
   generate [-f]                guardar dirty y generar el arbol del cwd
+                               physical=locations↔conduits; WireViz=elements↔cables
   version                      version del programa
   help
   exit | quit                  avisa si hay cambios sin guardar
