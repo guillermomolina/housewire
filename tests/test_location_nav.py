@@ -204,8 +204,12 @@ class TestAddLocationMode(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(s.logical_parts, ["Parking", "Caja_in"])
         self.assertTrue(s.cursor().is_inline)
-        doc = load_yaml(self.root / "Parking" / "housewire.yaml")
+        self.assertTrue(s.is_dirty())
+        _path, doc = s.ensure_doc()
         self.assertEqual(doc["elements"]["Caja_in"]["type"], "JunctionBox")
+        self._run(s, "save")
+        disk = load_yaml(self.root / "Parking" / "housewire.yaml")
+        self.assertEqual(disk["elements"]["Caja_in"]["type"], "JunctionBox")
 
     def test_add_location_under_inline_defaults_inline(self) -> None:
         s = self._session()
@@ -215,7 +219,7 @@ class TestAddLocationMode(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(s.logical_parts, ["Parking", "Padre", "Hija"])
         self.assertTrue(s.cursor().is_inline)
-        doc = load_yaml(self.root / "Parking" / "housewire.yaml")
+        _path, doc = s.ensure_doc()
         self.assertIn("Hija", doc["elements"]["Padre"]["elements"])
 
     def test_add_location_dir_under_inline_fails(self) -> None:

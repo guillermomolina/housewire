@@ -9,6 +9,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.11.0] — 2026-07-31
+
+### Changed
+
+- Interactive shell keeps `housewire.yaml` **in memory**: edits mark dirty (`*`
+  in the prompt); `save` / `reload` write or discard; `exit`/`quit`/EOF and
+  `cd` across YAMLs prompt to save/discard/cancel.
+- `generate` auto-saves dirty buffers first.
+- One-shot CLI `add`/`rm` still load → mutate → persist in a single step.
+
 ## [0.10.0] — 2026-07-31
 
 ### Changed

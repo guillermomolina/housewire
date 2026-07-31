@@ -17,6 +17,16 @@ from housewire.project.paths import (
 StorageKind = Literal["dir", "inline"]
 
 
+@dataclass
+class DocBuffer:
+    """In-memory housewire.yaml for the interactive shell."""
+
+    path: Path
+    doc: dict[str, Any]
+    dirty: bool = False
+    mtime: float | None = None
+
+
 @dataclass(frozen=True)
 class LocationChild:
     """A navigable child location under the current place."""
@@ -103,7 +113,13 @@ def _inline_children(node: dict[str, Any]) -> list[LocationChild]:
     return rows
 
 
-def _outline_children(directory: Path, *, excluded: set[Path]) -> list[LocationChild]:
+def _outline_children(
+    directory: Path,
+    *,
+    excluded: set[Path],
+    load_doc: Any = None,
+) -> list[LocationChild]:
+    loader = load_doc if load_doc is not None else _load_doc
     rows: list[LocationChild] = []
     if not directory.is_dir():
         return rows
@@ -117,7 +133,7 @@ def _outline_children(directory: Path, *, excluded: set[Path]) -> list[LocationC
         meta_path = _housewire_in_dir(child)
         if meta_path is None:
             continue
-        data = _load_doc(meta_path)
+        data = loader(meta_path)
         place_type: str | None = None
         if data is not None:
             meta = place_meta_from_mapping(data)
@@ -136,7 +152,99 @@ class ProjectSession:
         # Logical path from project root (location ids, outline or inline).
         self.logical_parts: list[str] = []
         self.active_yaml: Path | None = None
+        self._buffers: dict[Path, DocBuffer] = {}
+        # Injectable for tests (default: builtin input).
+        self.input_fn = input
         self._sync_from_logical()
+
+    # --- document buffer (shell in-memory edits) ---
+
+    def peek_doc(self, path: Path) -> dict[str, Any] | None:
+        """Return buffered doc if loaded, else read from disk (no buffer insert)."""
+        key = path.resolve()
+        buf = self._buffers.get(key)
+        if buf is not None:
+            return buf.doc
+        return _load_doc(key)
+
+    def ensure_doc(self, path: Path | None = None) -> tuple[Path, dict[str, Any]]:
+        """Load hosting yaml into the buffer if needed; return ``(path, doc)``."""
+        from housewire.project import abm
+
+        resolved = (path or self.ensure_active_yaml()).resolve()
+        buf = self._buffers.get(resolved)
+        if buf is None:
+            doc = abm.load_editable(resolved, self.root)
+            mtime = resolved.stat().st_mtime if resolved.is_file() else None
+            buf = DocBuffer(path=resolved, doc=doc, dirty=False, mtime=mtime)
+            self._buffers[resolved] = buf
+        return resolved, buf.doc
+
+    def mark_dirty(self, path: Path | None = None) -> None:
+        resolved, _ = self.ensure_doc(path)
+        self._buffers[resolved].dirty = True
+
+    def is_dirty(self, path: Path | None = None) -> bool:
+        if path is None:
+            cursor = self.cursor()
+            if cursor.yaml_path is None:
+                return False
+            path = cursor.yaml_path
+        buf = self._buffers.get(path.resolve())
+        return bool(buf and buf.dirty)
+
+    def dirty_paths(self) -> list[Path]:
+        return [p for p, buf in sorted(self._buffers.items()) if buf.dirty]
+
+    def save(self, path: Path | None = None, *, force: bool = False) -> Path:
+        """Validate and write a buffered document to disk."""
+        from housewire.project import abm
+
+        resolved, doc = self.ensure_doc(path)
+        buf = self._buffers[resolved]
+        if not buf.dirty:
+            return resolved
+        if (
+            not force
+            and buf.mtime is not None
+            and resolved.is_file()
+            and resolved.stat().st_mtime != buf.mtime
+        ):
+            raise ValueError(
+                f"{resolved.relative_to(self.root)} cambió en disco desde la carga. "
+                "Usa: save --force  o  reload"
+            )
+        abm.persist(doc, resolved, self.root)
+        buf.dirty = False
+        buf.mtime = resolved.stat().st_mtime if resolved.is_file() else None
+        return resolved
+
+    def save_all(self, *, force: bool = False) -> list[Path]:
+        saved: list[Path] = []
+        for path in self.dirty_paths():
+            saved.append(self.save(path, force=force))
+        return saved
+
+    def reload(self, path: Path | None = None) -> Path:
+        """Drop buffer and reload from disk (discards unsaved changes)."""
+        from housewire.project import abm
+
+        resolved = (path or self.ensure_active_yaml()).resolve()
+        doc = abm.load_editable(resolved, self.root)
+        mtime = resolved.stat().st_mtime if resolved.is_file() else None
+        self._buffers[resolved] = DocBuffer(
+            path=resolved, doc=doc, dirty=False, mtime=mtime
+        )
+        return resolved
+
+    def discard(self, path: Path | None = None) -> None:
+        """Forget a buffer (next ensure_doc reloads from disk)."""
+        if path is None:
+            cursor = self.cursor()
+            if cursor.yaml_path is None:
+                return
+            path = cursor.yaml_path
+        self._buffers.pop(path.resolve(), None)
 
     # --- compatibility aliases ---
 
@@ -158,7 +266,8 @@ class ProjectSession:
 
     def prompt_label(self) -> str:
         rel = "." if not self.logical_parts else "/".join(self.logical_parts)
-        return f"{self.root.name}/{rel}"
+        dirty = "*" if self.is_dirty() else ""
+        return f"{self.root.name}/{rel}{dirty}"
 
     def cwd_path(self) -> Path:
         """Filesystem directory of the nearest outline place (hosting yaml's parent)."""
@@ -234,9 +343,11 @@ class ProjectSession:
         inline: list[LocationChild] = []
         if not inline_parts:
             host_dir = yaml_path.parent if yaml_path is not None else self.root
-            outline = _outline_children(host_dir, excluded=self._excluded)
+            outline = _outline_children(
+                host_dir, excluded=self._excluded, load_doc=self.peek_doc
+            )
         if yaml_path is not None:
-            doc = _load_doc(yaml_path)
+            doc = self.peek_doc(yaml_path)
             if doc is not None:
                 node = place_node_at(doc, inline_parts)
                 inline = _inline_children(node)
@@ -264,7 +375,7 @@ class ProjectSession:
         cursor = self.cursor()
         if cursor.yaml_path is None:
             return []
-        doc = _load_doc(cursor.yaml_path)
+        doc = self.peek_doc(cursor.yaml_path)
         if doc is None:
             return []
         node = place_node_at(doc, cursor.inline_parts)
@@ -300,15 +411,12 @@ class ProjectSession:
             raise ValueError(f"Ruta excluida: {raw}")
         return candidate
 
-    def cd(self, raw: str | None) -> Path | None:
-        """Change logical location (outline dir or inline place) and sync active yaml."""
+    def compute_cd_parts(self, raw: str | None) -> list[str]:
+        """Resolve a ``cd`` argument to logical parts without changing state."""
         if raw is None or raw.strip() == "":
-            self.logical_parts = []
-            self._sync_from_logical()
-            return self.active_yaml
+            return []
 
         text = raw.strip()
-        # Absolute-from-root if starts with /
         if text.startswith("/"):
             start: list[str] = []
             rest = text.lstrip("/")
@@ -326,7 +434,6 @@ class ProjectSession:
                         raise ValueError("Ya estas en la raiz del proyecto")
                     parts = parts[:-1]
                     continue
-                # Validate step exists (also detects collisions).
                 cursor = self._resolve_logical(parts)
                 child = self._child_at(cursor.yaml_path, cursor.inline_parts, segment)
                 if child is None:
@@ -334,10 +441,15 @@ class ProjectSession:
                         f"Location inexistente: {'/'.join(parts + [segment])}"
                     )
                 parts = parts + [segment]
-
-        # Full resolve to validate the final path.
         self._resolve_logical(parts)
-        self.logical_parts = parts
+        return parts
+
+    def preview_cd(self, raw: str | None) -> LocationCursor:
+        return self._resolve_logical(self.compute_cd_parts(raw))
+
+    def cd(self, raw: str | None) -> Path | None:
+        """Change logical location (outline dir or inline place) and sync active yaml."""
+        self.logical_parts = self.compute_cd_parts(raw)
         self._sync_from_logical()
         return self.active_yaml
 

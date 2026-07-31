@@ -19,6 +19,8 @@ SHELL_COMMANDS = (
     "pend",
     "add",
     "rm",
+    "save",
+    "reload",
     "generate",
     "version",
     "help",

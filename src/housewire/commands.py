@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 HELP_TEXT = """Comandos del shell housewire:
   (Tab completa comandos, subcomandos add/rm y rutas de cd/use/…)
-  pwd                          path lógico de location y YAML anfitrión
+  pwd                          path lógico de location y YAML anfitrión (* = dirty)
   cd [path]                    navegar locations (carpeta outline o place inline)
   ls                           locations hijas (outline+inline) y elements (no-place)
   use housewire.yaml           fijar housewire.yaml activo de la location actual
@@ -38,10 +38,12 @@ HELP_TEXT = """Comandos del shell housewire:
   rm connection <índice>
   rm file housewire.yaml
   rm dir <path>                  solo si está vacío
-  generate [-f]                generar diagramas (como housewire generate)
+  save [--force]                 escribir YAML dirty a disco (validate)
+  reload                         descartar buffer y releer disco
+  generate [-f]                guardar dirty y generar diagramas
   version                      version del programa
   help
-  exit | quit
+  exit | quit                  avisa si hay cambios sin guardar
 """
 
 
@@ -63,8 +65,34 @@ def _colors_list(raw: str) -> list[str]:
     return [part.strip() for part in raw.split(",") if part.strip()]
 
 
-def _prompt(message: str) -> str:
-    return input(message).strip()
+def _prompt(message: str, session: ProjectSession | None = None) -> str:
+    fn = session.input_fn if session is not None else input
+    return fn(message).strip()
+
+
+def _confirm_unsaved(session: ProjectSession, paths: list[Path]) -> bool:
+    """Ask what to do with dirty buffers. True = proceed, False = cancel."""
+    if not paths:
+        return True
+    for path in paths:
+        rel = path.relative_to(session.root)
+        while True:
+            ans = _prompt(
+                f"Cambios sin guardar en {rel}. [g]uardar / [d]escartar / [c]ancelar: ",
+                session,
+            ).lower()
+            if ans in {"g", "guardar", "s", "y", "yes"}:
+                session.save(path)
+                print(f"Guardado: {rel}")
+                break
+            if ans in {"d", "descartar", "n", "no"}:
+                session.discard(path)
+                print(f"Descartado: {rel}")
+                break
+            if ans in {"c", "cancelar", ""}:
+                return False
+            print("Responde g, d o c.")
+    return True
 
 
 def cmd_ls(session: ProjectSession) -> int:
@@ -102,8 +130,7 @@ def cmd_show(session: ProjectSession, argv: list[str]) -> int:
     parser.add_argument("--cable", dest="cable")
     args, _ = parser.parse_known_args(argv)
 
-    path = session.ensure_active_yaml()
-    doc = abm.load_editable(path, session.root)
+    path, doc = session.ensure_doc()
     place = session.place_node(doc)
     print(abm.format_show(place, element=args.element, cable=args.cable))
     return 0
@@ -127,7 +154,9 @@ def _parse_pend_args(rest: list[str]) -> argparse.Namespace:
     return p.parse_args(rest)
 
 
-def _resolve_pend_openings(positional: list[str]) -> tuple[str, str, str | None]:
+def _resolve_pend_openings(
+    positional: list[str], session: ProjectSession | None = None
+) -> tuple[str, str, str | None]:
     """Return (enter, exit, section_or_none) from positional args or wizard."""
     enter: str | None = None
     exit_op: str | None = None
@@ -141,9 +170,9 @@ def _resolve_pend_openings(positional: list[str]) -> tuple[str, str, str | None]
             "pend requiere dos aberturas (entrada y salida), p.ej.: pend N1 S1"
         )
     if not enter:
-        enter = _prompt("Abertura entrada (p.ej. N1): ")
+        enter = _prompt("Abertura entrada (p.ej. N1): ", session)
     if not exit_op:
-        exit_op = _prompt("Abertura salida (p.ej. S1): ")
+        exit_op = _prompt("Abertura salida (p.ej. S1): ", session)
     if not enter or not exit_op:
         raise ValueError("Aberturas entrada y salida son obligatorias")
     return enter, exit_op, section
@@ -151,10 +180,9 @@ def _resolve_pend_openings(positional: list[str]) -> tuple[str, str, str | None]
 
 def cmd_pend(session: ProjectSession, argv: list[str]) -> int:
     args = _parse_pend_args(argv)
-    enter, exit_op, section = _resolve_pend_openings(list(args.positional))
+    enter, exit_op, section = _resolve_pend_openings(list(args.positional), session)
     colors = _colors_list(args.colors) if args.colors else None
-    path = session.ensure_active_yaml()
-    doc = abm.load_editable(path, session.root)
+    path, doc = session.ensure_doc()
     cable_name, conduit_name = abm.add_pending_cable(
         session.place_node(doc),
         enter=enter,
@@ -165,7 +193,7 @@ def cmd_pend(session: ProjectSession, argv: list[str]) -> int:
         label=args.label,
         notes=args.notes,
     )
-    abm.persist(doc, path, session.root)
+    session.mark_dirty(path)
     print(f"Pendiente {cable_name} + {conduit_name} (entra {enter} → sale {exit_op}).")
     return 0
 
@@ -219,8 +247,7 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
                     "add location --inline solo acepta un nombre hoja "
                     "(sin path); cd primero a la location padre"
                 )
-            path = session.ensure_active_yaml()
-            doc = abm.load_editable(path, session.root)
+            path, doc = session.ensure_doc()
             place = session.place_node(doc)
             # Collision with outline sibling
             for child in session.list_location_children():
@@ -237,7 +264,7 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
                 notes=args.notes,
                 label=label,
             )
-            abm.persist(doc, path, session.root)
+            session.mark_dirty(path)
             session.cd(leaf_id)
             print(f"Location inline creada: {'/'.join(session.logical_parts)}")
             return 0
@@ -266,8 +293,7 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
         return 0
     if kind == "pend":
         return cmd_pend(session, rest)
-    path = session.ensure_active_yaml()
-    doc = abm.load_editable(path, session.root)
+    path, doc = session.ensure_doc()
     place = session.place_node(doc)
     if kind == "element":
         p = argparse.ArgumentParser(prog="add element", add_help=False)
@@ -289,7 +315,7 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
             label=args.label,
             notes=args.notes,
         )
-        abm.persist(doc, path, session.root)
+        session.mark_dirty(path)
         print(f"Elemento {args.name} añadido.")
         return 0
     if kind == "cable":
@@ -311,7 +337,7 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
             label=args.label,
             notes=args.notes,
         )
-        abm.persist(doc, path, session.root)
+        session.mark_dirty(path)
         print(f"Cable {args.name} añadido.")
         return 0
     if kind == "connection":
@@ -323,7 +349,7 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
         abm.add_connection(
             place, from_ref=args.from_ref, via_ref=args.via_ref, to_ref=args.to_ref
         )
-        abm.persist(doc, path, session.root)
+        session.mark_dirty(path)
         print("Conexión añadida.")
         return 0
     raise ValueError(f"add desconocido: {kind}")
@@ -351,31 +377,80 @@ def cmd_rm(session: ProjectSession, argv: list[str]) -> int:
         target.unlink()
         print(f"Borrado: {target.relative_to(session.root)}")
         return 0
-    path = session.ensure_active_yaml()
-    doc = abm.load_editable(path, session.root)
+    path, doc = session.ensure_doc()
     place = session.place_node(doc)
     if kind == "element":
         if not rest:
             raise ValueError("rm element requiere NAME")
         abm.rm_element(place, rest[0])
-        abm.persist(doc, path, session.root)
+        session.mark_dirty(path)
         print(f"Elemento {rest[0]} borrado.")
         return 0
     if kind == "cable":
         if not rest:
             raise ValueError("rm cable requiere NAME")
         abm.rm_cable(place, rest[0])
-        abm.persist(doc, path, session.root)
+        session.mark_dirty(path)
         print(f"Cable {rest[0]} borrado.")
         return 0
     if kind == "connection":
         if not rest:
             raise ValueError("rm connection requiere índice")
         abm.rm_connection(place, int(rest[0]))
-        abm.persist(doc, path, session.root)
+        session.mark_dirty(path)
         print(f"Conexión [{rest[0]}] borrada.")
         return 0
     raise ValueError(f"rm desconocido: {kind}")
+
+
+def cmd_cd(session: ProjectSession, argv: list[str]) -> int:
+    raw = argv[0] if argv else None
+    current = session.cursor()
+    preview = session.preview_cd(raw)
+    cur_yaml = current.yaml_path.resolve() if current.yaml_path else None
+    new_yaml = preview.yaml_path.resolve() if preview.yaml_path else None
+    if cur_yaml is not None and cur_yaml != new_yaml and session.is_dirty(cur_yaml):
+        if not _confirm_unsaved(session, [cur_yaml]):
+            print("cd cancelado.")
+            return 0
+    session.cd(raw)
+    if session.housewire_yaml_in_cwd() is None and str(session.cwd) != ".":
+        print(
+            f"Aviso: no hay {HOUSEWIRE_YAML} aquí (no es una location). "
+            f"cd a una location o: add location …",
+            file=sys.stderr,
+        )
+    return 0
+
+
+def cmd_save(session: ProjectSession, argv: list[str]) -> int:
+    force = "--force" in argv or "-f" in argv
+    dirty = session.dirty_paths()
+    if not dirty:
+        print("Nada que guardar.")
+        return 0
+    for path in dirty:
+        session.save(path, force=force)
+        print(f"Guardado: {path.relative_to(session.root)}")
+    return 0
+
+
+def cmd_reload(session: ProjectSession, argv: list[str]) -> int:
+    if session.is_dirty():
+        ans = _prompt(
+            "Hay cambios sin guardar. ¿Descartar y releer? [s/N]: ", session
+        ).lower()
+        if ans not in {"s", "y", "yes", "si", "sí"}:
+            print("reload cancelado.")
+            return 0
+    path = session.reload()
+    print(f"Recargado: {path.relative_to(session.root)}")
+    return 0
+
+
+def request_leave(session: ProjectSession) -> bool:
+    """Return True if the shell may exit (saved/discarded or clean)."""
+    return _confirm_unsaved(session, session.dirty_paths())
 
 
 def run_shell_line(session: ProjectSession, line: str, *, generate_fn) -> int | None:
@@ -405,14 +480,7 @@ def run_shell_line(session: ProjectSession, line: str, *, generate_fn) -> int | 
         if cmd == "ls":
             return cmd_ls(session)
         if cmd == "cd":
-            session.cd(args[0] if args else None)
-            if session.housewire_yaml_in_cwd() is None and str(session.cwd) != ".":
-                print(
-                    f"Aviso: no hay {HOUSEWIRE_YAML} aquí (no es una location). "
-                    f"cd a una location o: add location …",
-                    file=sys.stderr,
-                )
-            return 0
+            return cmd_cd(session, args)
         if cmd == "use":
             if not args:
                 raise ValueError("use requiere <archivo.yaml>")
@@ -427,8 +495,16 @@ def run_shell_line(session: ProjectSession, line: str, *, generate_fn) -> int | 
             return cmd_add(session, args)
         if cmd == "rm":
             return cmd_rm(session, args)
+        if cmd == "save":
+            return cmd_save(session, args)
+        if cmd == "reload":
+            return cmd_reload(session, args)
         if cmd == "generate":
             force = "-f" in args or "--force" in args
+            dirty = session.dirty_paths()
+            if dirty:
+                print(f"Guardando {len(dirty)} YAML dirty antes de generate…")
+                session.save_all()
             return generate_fn(session.root, force=force)
         print(f"Comando desconocido: {cmd}. Escribe help.", file=sys.stderr)
         return 1

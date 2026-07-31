@@ -122,8 +122,12 @@ class TestShellDispatcher(unittest.TestCase):
         self._run(s, "use housewire.yaml")
         code = self._run(s, "add element MT_Nuevo --type MCB --subtype C10")
         self.assertEqual(code, 0)
-        doc = abm.load_editable(s.active_path(), self.root)
+        self.assertTrue(s.is_dirty())
+        _path, doc = s.ensure_doc()
         self.assertIn("MT_Nuevo", doc["elements"])
+        self._run(s, "save")
+        disk = abm.load_editable(s.active_path(), self.root)
+        self.assertIn("MT_Nuevo", disk["elements"])
 
     def test_rm_element_via_shell(self) -> None:
         s = self._session()
@@ -132,7 +136,7 @@ class TestShellDispatcher(unittest.TestCase):
         self._run(s, "add element MT_Nuevo --type MCB --subtype C10")
         code = self._run(s, "rm element MT_Nuevo")
         self.assertEqual(code, 0)
-        doc = abm.load_editable(s.active_path(), self.root)
+        _path, doc = s.ensure_doc()
         self.assertNotIn("MT_Nuevo", doc["elements"])
 
     def test_add_cable_via_shell(self) -> None:
@@ -141,7 +145,7 @@ class TestShellDispatcher(unittest.TestCase):
         self._run(s, "use housewire.yaml")
         code = self._run(s, "add cable Linea_X --section '1.5 mm2' --colors BN,BU")
         self.assertEqual(code, 0)
-        doc = abm.load_editable(s.active_path(), self.root)
+        _path, doc = s.ensure_doc()
         self.assertIn("Linea_X", doc["cables"])
 
     def test_add_cable_defaults_via_shell(self) -> None:
@@ -149,7 +153,7 @@ class TestShellDispatcher(unittest.TestCase):
         self._run(s, "cd zona_a")
         code = self._run(s, "add cable Linea_Y")
         self.assertEqual(code, 0)
-        doc = abm.load_editable(s.active_path(), self.root)
+        _path, doc = s.ensure_doc()
         self.assertEqual(doc["cables"]["Linea_Y"]["section"], "1.5 mm2")
         self.assertEqual(doc["cables"]["Linea_Y"]["colors"], ["BN", "BU"])
 
@@ -158,7 +162,7 @@ class TestShellDispatcher(unittest.TestCase):
         self._run(s, "cd zona_a")
         code = self._run(s, "pend B1 B2")
         self.assertEqual(code, 0)
-        doc = abm.load_editable(s.active_path(), self.root)
+        _path, doc = s.ensure_doc()
         self.assertIn("PEND_Linea_01", doc["cables"])
         self.assertIn("Conducto_paso_01", doc["conduits"])
 
@@ -167,7 +171,7 @@ class TestShellDispatcher(unittest.TestCase):
         self._run(s, "cd zona_a")
         code = self._run(s, "pend B1 B2 2.5")
         self.assertEqual(code, 0)
-        doc = abm.load_editable(s.active_path(), self.root)
+        _path, doc = s.ensure_doc()
         self.assertEqual(doc["cables"]["PEND_Linea_01"]["section"], "2.5 mm2")
 
     def test_cd_auto_use_message_path(self) -> None:
@@ -184,7 +188,7 @@ class TestShellDispatcher(unittest.TestCase):
         with patch("housewire.commands._prompt", side_effect=["B1", "B2"]):
             code = self._run(s, "pend")
         self.assertEqual(code, 0)
-        doc = abm.load_editable(s.active_path(), self.root)
+        _path, doc = s.ensure_doc()
         self.assertIn("PEND_Linea_01", doc["cables"])
         self.assertIn("B1", doc["cables"]["PEND_Linea_01"]["notes"])
 
