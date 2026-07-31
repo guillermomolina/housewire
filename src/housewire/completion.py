@@ -18,6 +18,8 @@ SHELL_COMMANDS = (
     "show",
     "pend",
     "add",
+    "set",
+    "unset",
     "rm",
     "save",
     "reload",

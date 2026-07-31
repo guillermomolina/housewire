@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+import yaml
 
 from housewire.house import (
     DEFAULT_CABLE_TYPE,
     DEFAULT_CONDUIT_TYPE,
     expand_cable,
+    is_place_type,
     load_catalog,
     place_meta_from_mapping,
 )
@@ -26,6 +29,13 @@ DEFAULT_CABLE_SECTION = "1.5 mm2"
 DEFAULT_CABLE_COLORS = ["BN", "BU"]
 DEFAULT_CABLE_SUBTYPE = "power"
 DEFAULT_CONDUIT_SUBTYPE = "tube"
+
+# Structural keys — use add/rm instead of set.
+RESERVED_SET_KEYS = frozenset(
+    {"schema", "elements", "cables", "connections", "conduits"}
+)
+
+SetTarget = Literal["place", "element"]
 
 
 
@@ -61,6 +71,140 @@ def _ensure_maps(doc: dict[str, Any]) -> None:
     doc.setdefault("cables", {})
     doc.setdefault("connections", [])
     doc.setdefault("conduits", {})
+
+
+def parse_set_value(raw: str) -> Any:
+    """Parse a shell/CLI value as YAML (scalar, list, or map)."""
+    text = str(raw).strip()
+    if text == "":
+        return ""
+    try:
+        return yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Valor YAML invalido: {raw!r}") from exc
+
+
+def parse_set_spec(spec: str) -> tuple[str, Any | None]:
+    """Parse ``KEY=VALUE`` (set) or ``KEY`` (unset → value None)."""
+    text = str(spec).strip()
+    if not text:
+        raise ValueError("set vacio: usa KEY=VALUE o KEY")
+    if "=" not in text:
+        return text, None
+    key, _, raw_val = text.partition("=")
+    key = key.strip()
+    if not key:
+        raise ValueError(f"Clave invalida en --set: {spec!r}")
+    return key, parse_set_value(raw_val)
+
+
+def _split_field_key(key: str) -> tuple[str, str | None]:
+    text = str(key).strip()
+    if not text:
+        raise ValueError("clave vacia")
+    if "." not in text:
+        return text, None
+    root, _, nested = text.partition(".")
+    root = root.strip()
+    nested = nested.strip()
+    if not root or not nested:
+        raise ValueError(f"Clave anidada invalida: {key!r}")
+    if "." in nested:
+        raise ValueError(
+            f"Solo un nivel de anidacion (padre.hijo): {key!r}"
+        )
+    return root, nested
+
+
+def _validate_type_field(value: Any, *, target: SetTarget) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("type debe ser un string no vacio")
+    type_id = value.strip()
+    if target == "place":
+        if not is_place_type(type_id):
+            raise ValueError(
+                f"type de place desconocido: {type_id!r}. "
+                "Usa Room|JunctionBox|DeviceBox|LightPoint|Panel|Floor|House (o Location)."
+            )
+        return
+    catalog = load_catalog()
+    if type_id not in catalog:
+        raise ValueError(f"Tipo de catalogo desconocido: {type_id}")
+
+
+def _maybe_validate_openings(mapping: dict[str, Any], root_key: str) -> None:
+    if root_key in {"openings", "opening_grid"}:
+        validate_location_openings(mapping)
+
+
+def set_field(
+    mapping: dict[str, Any],
+    key: str,
+    value: Any,
+    *,
+    target: SetTarget = "place",
+) -> None:
+    """Set a property on a place or element mapping (in memory)."""
+    if not isinstance(mapping, dict):
+        raise ValueError("destino set debe ser un mapa")
+    root_key, nested_key = _split_field_key(key)
+    if root_key in RESERVED_SET_KEYS:
+        raise ValueError(
+            f"Clave reservada {root_key!r}: usa add/rm (no set)"
+        )
+    if root_key == "type" and nested_key is None:
+        _validate_type_field(value, target=target)
+
+    if nested_key is None:
+        mapping[root_key] = value
+    else:
+        container = mapping.get(root_key)
+        if container is None:
+            container = {}
+            mapping[root_key] = container
+        elif not isinstance(container, dict):
+            raise ValueError(f"{root_key!r} no es un mapa; no se puede anidar")
+        container[nested_key] = value
+
+    _maybe_validate_openings(mapping, root_key)
+
+
+def unset_field(mapping: dict[str, Any], key: str) -> None:
+    """Remove a property from a place or element mapping."""
+    if not isinstance(mapping, dict):
+        raise ValueError("destino unset debe ser un mapa")
+    root_key, nested_key = _split_field_key(key)
+    if root_key in RESERVED_SET_KEYS:
+        raise ValueError(
+            f"Clave reservada {root_key!r}: usa add/rm (no unset)"
+        )
+    if nested_key is None:
+        if root_key not in mapping:
+            raise ValueError(f"No existe la clave: {key}")
+        del mapping[root_key]
+    else:
+        container = mapping.get(root_key)
+        if not isinstance(container, dict) or nested_key not in container:
+            raise ValueError(f"No existe la clave: {key}")
+        del container[nested_key]
+        if not container:
+            del mapping[root_key]
+    _maybe_validate_openings(mapping, root_key)
+
+
+def apply_set_specs(
+    mapping: dict[str, Any],
+    specs: list[str],
+    *,
+    target: SetTarget = "place",
+) -> None:
+    """Apply ``KEY=VALUE`` / ``KEY`` (unset) specs to ``mapping``."""
+    for spec in specs:
+        key, value = parse_set_spec(spec)
+        if value is None:
+            unset_field(mapping, key)
+        else:
+            set_field(mapping, key, value, target=target)
 
 
 def normalize_section(raw: str | None, *, default: str | None = None) -> str:

@@ -1,0 +1,12 @@
+kind: place_type
+id: LightPoint
+title: Light point / luminaire outlet
+description_es: >
+  Punto de luz (agujero de techo/pared, portalámparas, salida a luminaria).
+  No es DeviceBox: no hay mecanismo de enchufe/interruptor. Sirve de extremo
+  fisico de conductos (una boca tipica B1-1 o N1). El element Luminaire (capa
+  electrica) puede anadirse despues bajo elements.
+wireviz_skip: true
+terminals: {}
+defaults:
+  subtype: ceiling-hole

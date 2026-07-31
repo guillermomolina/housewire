@@ -317,3 +317,28 @@ class TestShellDispatcher(unittest.TestCase):
         out = buf.getvalue()
         self.assertIn("place (Floor)", out)
         self.assertIn("zona", out)
+
+
+class TestShellLineContinuation(unittest.TestCase):
+    def test_read_logical_line_joins_backslash(self) -> None:
+        from housewire.shell import read_logical_line
+
+        answers = [
+            "add conduit X --from A.E1 --to B.N1 \\",
+            "  --contains C1",
+        ]
+
+        def fake_input(prompt: str = "") -> str:
+            return answers.pop(0)
+
+        line = read_logical_line(prompt="$ ", input_fn=fake_input)
+        self.assertEqual(
+            line,
+            "add conduit X --from A.E1 --to B.N1 --contains C1",
+        )
+
+    def test_read_logical_line_single(self) -> None:
+        from housewire.shell import read_logical_line
+
+        line = read_logical_line(prompt="$ ", input_fn=lambda p: "pwd")
+        self.assertEqual(line, "pwd")

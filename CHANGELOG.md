@@ -9,6 +9,52 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.16.15] — 2026-07-31
+
+### Added
+
+- Place type ``LightPoint`` (ceiling/wall light outlet / hole) for physical
+  conduit ends; distinct style in the physical diagram. Docs: luminaires use
+  ``LightPoint`` + openings (not DeviceBox / not bare elements).
+
+## [0.16.14] — 2026-07-31
+
+### Fixed
+
+- Shell: join lines ending with ``\`` so multi-line paste/continuation works;
+  hint when a line starts with ``--`` (orphan flag fragment).
+
+## [0.16.13] — 2026-07-31
+
+### Fixed
+
+- Shell ``set``: re-join tokens so YAML values with spaces work
+  (``set openings=[W1, S2, E1]``).
+
+## [0.16.12] — 2026-07-31
+
+### Added
+
+- Shell/CLI: generic ``set`` / ``unset`` and ``--set KEY=VALUE`` on
+  ``add location`` / ``add element`` (YAML-parsed values; nested ``a.b``;
+  reserved structural keys blocked).
+
+## [0.16.11] — 2026-07-31
+
+### Added
+
+- Catalog type ``Switch`` (mechanism switch; terminals 1→2 phase; default
+  subtype ``unipolar``).
+
+## [0.16.10] — 2026-07-31
+
+### Changed
+
+- Shell: outline ``add location`` stays in the dirty buffer until ``save``
+  (mkdir + ``housewire.yaml`` on disk only then), same as inline locations and
+  element/cable/conduit edits. CLI one-shot ``add location`` still writes
+  immediately.
+
 ## [0.16.9] — 2026-07-31
 
 ### Fixed

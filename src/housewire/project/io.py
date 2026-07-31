@@ -94,29 +94,20 @@ def create_inline_location(
     return entry
 
 
-def create_location_index(
-    dir_path: Path,
+def build_location_document(
     *,
     type_id: str,
     subtype: str | None = None,
     notes: str | None = None,
     label: str | None = None,
-) -> Path:
-    """Create directory + housewire.yaml whose root *is* the place object.
-
-    ``dir_path.name`` is the technical location id (prefer ``[A-Za-z0-9_]+``).
-    Optional ``label`` is the human-readable name for diagrams / UI.
-    """
+) -> dict[str, Any]:
+    """Build a place-root house/v1 document (no I/O)."""
     if not is_place_type(type_id):
         raise ValueError(
             "type debe ser uno de: "
             + ", ".join(sorted(PLACE_TYPES - {"Location"}))
             + " (o Location)"
         )
-    dir_path.mkdir(parents=True, exist_ok=True)
-    yaml_path = dir_path / HOUSEWIRE_YAML
-    if yaml_path.exists():
-        raise FileExistsError(f"Ya existe: {yaml_path}")
     doc: dict[str, Any] = {
         "schema": HOUSE_SCHEMA,
         "type": str(type_id),
@@ -130,5 +121,30 @@ def create_location_index(
     doc["elements"] = {}
     doc["cables"] = {}
     doc["connections"] = []
+    return doc
+
+
+def create_location_index(
+    dir_path: Path,
+    *,
+    type_id: str,
+    subtype: str | None = None,
+    notes: str | None = None,
+    label: str | None = None,
+) -> Path:
+    """Create directory + housewire.yaml whose root *is* the place object.
+
+    ``dir_path.name`` is the technical location id (prefer ``[A-Za-z0-9_]+``).
+    Optional ``label`` is the human-readable name for diagrams / UI.
+    Writes immediately (CLI one-shot). The interactive shell stages in memory
+    via ``ProjectSession.stage_outline_location`` instead.
+    """
+    dir_path.mkdir(parents=True, exist_ok=True)
+    yaml_path = dir_path / HOUSEWIRE_YAML
+    if yaml_path.exists():
+        raise FileExistsError(f"Ya existe: {yaml_path}")
+    doc = build_location_document(
+        type_id=type_id, subtype=subtype, notes=notes, label=label
+    )
     save_yaml(yaml_path, doc, backup=False)
     return yaml_path

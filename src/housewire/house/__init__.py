@@ -17,6 +17,7 @@ PLACE_TYPES = frozenset(
         "Room",
         "JunctionBox",
         "DeviceBox",
+        "LightPoint",
         "Panel",
         "Floor",
         "House",

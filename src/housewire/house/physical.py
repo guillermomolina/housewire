@@ -349,6 +349,14 @@ def _style_for_type(type_id: str) -> dict[str, str]:
             "cluster_style": "rounded,filled",
             "cluster_bg": "#E8F5FA",
         },
+        "LightPoint": {
+            "shape": "ellipse",
+            "fill": "#FFF4CC",
+            "border": "#A67C00",
+            "penwidth": "1.2",
+            "cluster_style": "rounded,filled",
+            "cluster_bg": "#FFF8E0",
+        },
         "External": {
             "shape": "oval",
             "fill": "lightyellow",

@@ -75,6 +75,39 @@ class TestABMElements(unittest.TestCase):
         doc2 = abm.load_editable(self.yaml, self.root)
         self.assertIn("MT_A", doc2["elements"])
 
+    def test_set_field_place_and_nested(self) -> None:
+        doc = abm.load_editable(self.yaml, self.root)
+        abm.set_field(doc, "install", "surface", target="place")
+        abm.set_field(doc, "opening_grid.N", 1, target="place")
+        abm.set_field(doc, "openings", ["N1"], target="place")
+        self.assertEqual(doc["install"], "surface")
+        self.assertEqual(doc["opening_grid"], {"N": 1})
+        self.assertEqual(doc["openings"], ["N1"])
+
+    def test_set_field_reserved_raises(self) -> None:
+        doc = abm.load_editable(self.yaml, self.root)
+        with self.assertRaises(ValueError):
+            abm.set_field(doc, "elements", {}, target="place")
+
+    def test_apply_set_specs_and_unset(self) -> None:
+        doc = abm.load_editable(self.yaml, self.root)
+        abm.apply_set_specs(
+            doc,
+            ["install=surface", "notes=hola", "opening_grid.N=1"],
+            target="place",
+        )
+        self.assertEqual(doc["install"], "surface")
+        abm.apply_set_specs(doc, ["notes"], target="place")
+        self.assertNotIn("notes", doc)
+        abm.unset_field(doc, "install")
+        self.assertNotIn("install", doc)
+
+    def test_set_element_type_validates_catalog(self) -> None:
+        doc = abm.load_editable(self.yaml, self.root)
+        abm.add_element(doc, "SW", type_id="Switch")
+        with self.assertRaises(ValueError):
+            abm.set_field(doc["elements"]["SW"], "type", "NoSuch", target="element")
+
 # ---------------------------------------------------------------------------
 # abm – cables
 # ---------------------------------------------------------------------------

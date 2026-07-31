@@ -517,6 +517,14 @@ def _build_parser() -> argparse.ArgumentParser:
     add_el.add_argument("--model")
     add_el.add_argument("--label")
     add_el.add_argument("--notes")
+    add_el.add_argument(
+        "--set",
+        dest="set_specs",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Set element field (repeatable; YAML value)",
+    )
 
     add_cb = add_sub.add_parser("cable")
     add_cb.add_argument("project_path")
@@ -572,7 +580,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--type",
         dest="type_id",
         required=True,
-        help="Room, JunctionBox, DeviceBox, Panel, Floor, House (or Location)",
+        help="Room, JunctionBox, DeviceBox, LightPoint, Panel, Floor, House (or Location)",
     )
     add_loc.add_argument("--subtype")
     add_loc.add_argument("--notes")
@@ -587,6 +595,14 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="yaml_path",
         default=None,
         help="Host housewire.yaml for --inline (relative to project)",
+    )
+    add_loc.add_argument(
+        "--set",
+        dest="set_specs",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Set place field (repeatable; YAML value)",
     )
 
     add_d = add_sub.add_parser("dir")
@@ -666,7 +682,7 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
                     raise ValueError("add location --inline requiere --yaml PATH")
                 yaml_path = (project_path / args.yaml_path).resolve()
                 doc = abm.load_editable(yaml_path, project_path)
-                create_inline_location(
+                entry = create_inline_location(
                     doc,
                     leaf_id,
                     type_id=args.type_id,
@@ -674,6 +690,8 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
                     notes=args.notes,
                     label=label,
                 )
+                if getattr(args, "set_specs", None):
+                    abm.apply_set_specs(entry, args.set_specs, target="place")
                 abm.persist(doc, yaml_path, project_path)
                 print(f"OK inline {leaf_id} in {yaml_path.relative_to(project_path)}")
                 return 0
@@ -686,6 +704,10 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
                 notes=args.notes,
                 label=label,
             )
+            if getattr(args, "set_specs", None):
+                loc_doc = abm.load_editable(index_path, project_path)
+                abm.apply_set_specs(loc_doc, args.set_specs, target="place")
+                abm.persist(loc_doc, index_path, project_path)
             print(f"OK {index_path.relative_to(project_path)}")
             return 0
         if args.add_kind == "dir":
@@ -706,6 +728,10 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
                 label=args.label,
                 notes=args.notes,
             )
+            if getattr(args, "set_specs", None):
+                abm.apply_set_specs(
+                    doc["elements"][args.name], args.set_specs, target="element"
+                )
         elif args.add_kind == "cable":
             abm.add_cable(
                 doc,

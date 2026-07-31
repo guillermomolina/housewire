@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from housewire.project import abm
-from housewire.project.io import HOUSEWIRE_YAML, create_inline_location, create_location_index
+from housewire.project.io import HOUSEWIRE_YAML, create_inline_location
 from housewire.project.session import ProjectSession
 
 if TYPE_CHECKING:
@@ -23,13 +23,18 @@ HELP_TEXT = """Comandos del shell housewire:
   show --element NAME | --cable NAME
   pend [<enter> <exit>] [section] [--colors C1,C2] [--notes ...]
                                cable pendiente + conduit from/to (.N1 → .S1)
+  set KEY VALUE | set KEY=VALUE
+                               propiedad del place actual (YAML; memoria → save)
+                               anidado: opening_grid.N=1
+  set --element NAME KEY VALUE propiedad de un element del place
+  unset KEY | unset --element NAME KEY
   add location NAME --type T [--subtype ...] [--label ...] [--notes ...]
-                               [--inline | --dir]
-                               T=Room|JunctionBox|DeviceBox|Panel|Floor|House
+                               [--inline | --dir] [--set KEY=VALUE ...]
+                               T=Room|JunctionBox|DeviceBox|LightPoint|Panel|Floor|House
                                default: outline si estás en outline; inline si estás inline
-                               outline (carpeta) → escribe disco ya; inline → dirty (save)
+                               (memoria → save; outline crea carpeta al grabar)
                                NAME con espacios → id tecnico + label automatico
-  add element NAME --type T …  (memoria → save)
+  add element NAME --type T … [--set KEY=VALUE …]  (memoria → save)
   add cable NAME …             (memoria → save)
   add conduit NAME --from A.Op --to B.Op --contains C1[,C2…]
                                [--subtype tube] [--label ...] [--notes …]
@@ -49,6 +54,7 @@ HELP_TEXT = """Comandos del shell housewire:
   version                      version del programa
   help
   exit | quit                  avisa si hay cambios sin guardar
+  (varias lineas)              termina la línea con \\ y sigue en la siguiente
 """
 
 
@@ -239,6 +245,14 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
             action="store_true",
             help="Create subdirectory + housewire.yaml (outline)",
         )
+        p.add_argument(
+            "--set",
+            dest="set_specs",
+            action="append",
+            default=[],
+            metavar="KEY=VALUE",
+            help="Set place field (repeatable; YAML value)",
+        )
         args = p.parse_args(rest)
         raw = _Path(args.name)
         leaf_id, auto_label = location_id_from_name(raw.name)
@@ -265,7 +279,7 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
                         f"Ya existe location outline {leaf_id!r}; "
                         "no se puede crear el mismo id inline"
                     )
-            create_inline_location(
+            entry = create_inline_location(
                 place,
                 leaf_id,
                 type_id=args.type_id,
@@ -273,6 +287,8 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
                 notes=args.notes,
                 label=label,
             )
+            if args.set_specs:
+                abm.apply_set_specs(entry, args.set_specs, target="place")
             session.mark_dirty(path)
             session.cd(leaf_id)
             print(f"Location inline creada: {'/'.join(session.logical_parts)} (en memoria → save)")
@@ -287,20 +303,24 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
                     "no se puede crear el mismo id como carpeta"
                 )
         target = session.resolve_under_root(str(rel))
-        index_path = create_location_index(
+        index_path = session.stage_outline_location(
             target,
             type_id=args.type_id,
             subtype=args.subtype,
             notes=args.notes,
             label=label,
         )
+        if args.set_specs:
+            _path, staged = session.ensure_doc(index_path)
+            abm.apply_set_specs(staged, args.set_specs, target="place")
+            session.mark_dirty(index_path)
         # Move logical cwd to the new outline location.
         session.logical_parts = list(session.logical_parts) + list(rel.parts)
         session._sync_from_logical()
         session.active_yaml = index_path
         print(
-            f"Location creada en disco: {index_path.relative_to(session.root)} "
-            f"(no hace falta save)"
+            f"Location outline creada: {index_path.relative_to(session.root)} "
+            f"(en memoria → save)"
         )
         return 0
     if kind == "pend":
@@ -316,6 +336,14 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
         p.add_argument("--model")
         p.add_argument("--label")
         p.add_argument("--notes")
+        p.add_argument(
+            "--set",
+            dest="set_specs",
+            action="append",
+            default=[],
+            metavar="KEY=VALUE",
+            help="Set element field (repeatable; YAML value)",
+        )
         args = p.parse_args(rest)
         abm.add_element(
             place,
@@ -327,6 +355,9 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
             label=args.label,
             notes=args.notes,
         )
+        if args.set_specs:
+            entry = place["elements"][args.name]
+            abm.apply_set_specs(entry, args.set_specs, target="element")
         session.mark_dirty(path)
         print(f"Elemento {args.name} añadido.")
         return 0
@@ -465,6 +496,72 @@ def cmd_cd(session: ProjectSession, argv: list[str]) -> int:
     return 0
 
 
+def cmd_set(session: ProjectSession, argv: list[str]) -> int:
+    p = argparse.ArgumentParser(prog="set", add_help=False)
+    p.add_argument("--element", "-e", dest="element")
+    p.add_argument("tokens", nargs="+")
+    args = p.parse_args(argv)
+    tokens = list(args.tokens)
+    path, doc = session.ensure_doc()
+    place = session.place_node(doc)
+    if args.element:
+        elements = place.get("elements") or {}
+        if not isinstance(elements, dict) or args.element not in elements:
+            raise ValueError(f"No existe el elemento: {args.element}")
+        target_map = elements[args.element]
+        if not isinstance(target_map, dict):
+            raise ValueError(f"Elemento invalido: {args.element}")
+        target_kind: abm.SetTarget = "element"
+        where = f"element {args.element}"
+    else:
+        target_map = place
+        target_kind = "place"
+        where = "place"
+
+    # Forms: KEY=VALUE | KEY VALUE… | KEY (unset).
+    # Re-join tokens so YAML with spaces works: openings=[W1, S2, E1]
+    if "=" in tokens[0]:
+        key, value = abm.parse_set_spec(" ".join(tokens))
+        if value is None:
+            raise ValueError("Usa unset KEY o set KEY=VALUE")
+        abm.set_field(target_map, key, value, target=target_kind)
+        print(f"Set {where}: {key}={value!r}")
+    elif len(tokens) == 1:
+        abm.unset_field(target_map, tokens[0])
+        print(f"Unset {where}: {tokens[0]}")
+    else:
+        key = tokens[0]
+        value = abm.parse_set_value(" ".join(tokens[1:]))
+        abm.set_field(target_map, key, value, target=target_kind)
+        print(f"Set {where}: {key}={value!r}")
+    session.mark_dirty(path)
+    return 0
+
+
+def cmd_unset(session: ProjectSession, argv: list[str]) -> int:
+    p = argparse.ArgumentParser(prog="unset", add_help=False)
+    p.add_argument("--element", "-e", dest="element")
+    p.add_argument("key")
+    args = p.parse_args(argv)
+    path, doc = session.ensure_doc()
+    place = session.place_node(doc)
+    if args.element:
+        elements = place.get("elements") or {}
+        if not isinstance(elements, dict) or args.element not in elements:
+            raise ValueError(f"No existe el elemento: {args.element}")
+        target_map = elements[args.element]
+        if not isinstance(target_map, dict):
+            raise ValueError(f"Elemento invalido: {args.element}")
+        where = f"element {args.element}"
+    else:
+        target_map = place
+        where = "place"
+    abm.unset_field(target_map, args.key)
+    session.mark_dirty(path)
+    print(f"Unset {where}: {args.key}")
+    return 0
+
+
 def cmd_save(session: ProjectSession, argv: list[str]) -> int:
     force = "--force" in argv or "-f" in argv
     dirty = session.dirty_paths()
@@ -535,6 +632,10 @@ def run_shell_line(session: ProjectSession, line: str, *, generate_fn) -> int | 
             return cmd_pend(session, args)
         if cmd == "add":
             return cmd_add(session, args)
+        if cmd == "set":
+            return cmd_set(session, args)
+        if cmd == "unset":
+            return cmd_unset(session, args)
         if cmd == "rm":
             return cmd_rm(session, args)
         if cmd == "save":

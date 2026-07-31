@@ -116,6 +116,7 @@ Place types (catalog, `wireviz_skip`):
 | `Room` | Habitación / estancia |
 | `JunctionBox` | Caja de derivación |
 | `DeviceBox` | Caja de mecanismo (enchufe/interruptor; 1-/2-/3-gang) |
+| `LightPoint` | Punto de luz (agujero / salida a luminaria) |
 | `Panel` | Cuadro eléctrico (también puede declarar `openings`) |
 | `Floor` | Planta / nivel (planta baja, parking, …) |
 | `House` | Casa / vivienda (no implica ser la raíz del árbol) |
@@ -165,16 +166,52 @@ subtype: 2-gang
 openings: [N1]
 elements:
   Enchufe: { type: Socket, subtype: Schuko }
-  Interruptor: { type: Switch }   # cuando exista en catalogo
+  Interruptor: { type: Switch, subtype: unipolar }
 ```
 
-### Lamparas / colgantes
+En el shell, sin editar el YAML a mano ni flags por campo:
 
-Si el cable termina en el aire (portalámparas, manguera colgante) **no** hace falta
-`DeviceBox`: el extremo es el element (`Luminaire` / similar) y el conducto/ruta
-llega a ese element. Reserva `DeviceBox` para cajas de mecanismo reales.
+```text
+set install surface
+set openings=[N1]
+set opening_grid.N=1
+add location Interruptor_1 --type DeviceBox --subtype 1-gang \
+  --set install=surface --set mount=wall --set openings=[N1]
+set --element Switch notes "…"
+```
 
-## Elementos
+Los valores se interpretan como YAML. Claves estructurales (`elements`, `cables`,
+`connections`, `conduits`, `schema`) no se pueden `set`; usa `add`/`rm`.
+
+### Lamparas / puntos de luz
+
+El conducto termina en un place **`LightPoint`** (agujero de techo/pared), no en
+un `DeviceBox`. La boca tipica es ``B1-1`` (fondo hacia el forjado) o una cara
+de contorno si el tubo llega lateralmente.
+
+```yaml
+type: LightPoint
+subtype: ceiling-hole    # default de catalogo
+install: surface
+mount: ceiling
+opening_grid:
+  B: 1                   # → B1-1
+openings: [B1-1]
+# elements:              # mas adelante, capa electrica
+#   Luminaire: { type: Luminaire, … }
+```
+
+```text
+add location Lampara_1 --type LightPoint --label "Lampara 1" \
+  --set install=surface --set mount=ceiling \
+  --set opening_grid.B=1 --set openings=[B1-1]
+add conduit Conducto_a_Lampara_1 --from Caja_derivacion_1.E2 --to Lampara_1.B1-1 \
+  --contains Linea_a_Lampara_1
+```
+
+Reserva `DeviceBox` para cajas de mecanismo reales (enchufe/interruptor).
+
+### Elementos
 
 ```yaml
 elements:
@@ -208,12 +245,13 @@ En el catálogo, `wireviz_collapse` (análogo a `qet_hint`) empareja bornes para
 | `Intercom` | Portero eléctrico | Alimentación DC (+/−) |
 | `TerminalStrip` | Regleta / bornes | Empalme en caja de derivación |
 | `Socket` | Toma Schuko | Enchufe 2P+T |
+| `Switch` | Interruptor | Mecanismo; fase 1→2 (unipolar por defecto) |
 
 **No es un “disyuntor”** en el sentido de diferencial: en obra a veces se dice “disyuntor” al ID; el magnetotermico es el MCB/PIA.
 
 **IGA vs IGP:** el Moeller C50/2 del cuadro es un **magnetotermico** usado como **IGA** (automatico). Un **IGP** seria un interruptor de corte sin curva C/proteccion; no es lo que hay en la foto.
 
-## Aberturas (JunctionBox, DeviceBox y Panel)
+## Aberturas (JunctionBox, DeviceBox, LightPoint y Panel)
 
 Los agujeros/pasatubos **no son bornes eléctricos**. Se identifican en el
 **marco local de la caja** (como el poker): mirando la tapa (`F`).
