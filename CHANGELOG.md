@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.16.5] — 2026-07-31
+
+### Changed
+
+- Physical edges no longer pin Graphviz to YAML opening faces (W/S/…). Attach
+  to the border facing the neighbor; real openings remain in the edge label.
+
 ## [0.16.4] — 2026-07-31
 
 ### Changed

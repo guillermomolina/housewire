@@ -344,17 +344,11 @@ def _emit_location(
     _emit_node(lines, node, indent=indent)
 
 
-def _port_ep(node_id: str, port: str | None) -> str:
-    """Attach to box side (n/s/e/w). Skip center ``_`` so edges don't dive into the node."""
-    if port in {"n", "s", "e", "w"}:
-        return f"{node_id}:{port}"
-    return node_id
-
-
 def model_to_dot(model: PhysModel) -> str:
     lines: list[str] = [
         "digraph physical {",
-        # Free layout; compass ports keep edges on the box border (not the center).
+        # Free layout. No compass ports: Graphviz clips each edge to the
+        # border facing the neighbor (better than forcing YAML opening faces).
         "  rankdir=LR;",
         "  compound=true;",
         "  splines=true;",
@@ -376,18 +370,16 @@ def model_to_dot(model: PhysModel) -> str:
         for top in _immediate_children((), all_parts):
             _emit_location(lines, model, top, all_parts, endpoints, indent="  ")
 
-    seen: set[tuple[str, str, str, str | None, str | None]] = set()
+    seen: set[tuple[str, str, str]] = set()
     for edge in model.edges:
         src = model.nodes[edge.src].node_id
         dst = model.nodes[edge.dst].node_id
-        key = (src, dst, edge.label, edge.src_port, edge.dst_port)
+        key = (src, dst, edge.label)
         if key in seen:
             continue
         seen.add(key)
         label = edge.label.replace('"', "'")
-        src_ep = _port_ep(src, edge.src_port)
-        dst_ep = _port_ep(dst, edge.dst_port)
-        lines.append(f'  {src_ep} -> {dst_ep} [label="{label}"];')
+        lines.append(f'  {src} -> {dst} [label="{label}"];')
 
     lines.append("}")
     return "\n".join(lines) + "\n"

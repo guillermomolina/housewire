@@ -105,7 +105,9 @@ class TestPhysicalConduits(unittest.TestCase):
             self.assertIn("Parking_Caja_4 [", dot, dot)
             self.assertIn("Parking_Enchufe_1 [", dot, dot)
             self.assertIsNone(re.search(r"(?m)^\s+Parking \[", dot), dot)
-            # Side ports (border), not center
-            self.assertIn("Parking_Caja_4:w -> Parking_Enchufe_1:n", dot, dot)
+            # Openings stay in the label; Graphviz picks border clip by placement.
+            self.assertIn("Parking_Caja_4 -> Parking_Enchufe_1", dot, dot)
+            self.assertNotIn("Parking_Caja_4:w", dot, dot)
+            self.assertIn("W2 ↔ N1", dot, dot)
             self.assertIn("dir=none", dot)
             self.assertIn("splines=true", dot)
