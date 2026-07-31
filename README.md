@@ -73,8 +73,6 @@ housewire add pend "$SITE" "…/housewire.yaml" N1 S1
 housewire rm element "$SITE" "…/housewire.yaml" MT_New
 ```
 
-Legacy shortcut `housewire <site> -f` still maps to `generate`.
-
 ## Generate diagrams
 
 ```bash
@@ -113,7 +111,7 @@ Site trees (private) are **not** part of this repository. A local `projects/` pa
 
 ## house/v1
 
-See [docs/schema-house-v1.md](docs/schema-house-v1.md) (including IEC 60757 **cable color codes**: `BN`, `BU`, `GNYE`, …).
+See [docs/schema-house-v1.md](docs/schema-house-v1.md) (IEC **cable color codes**, openings, conduits, connections).
 
 ```yaml
 schema: house/v1

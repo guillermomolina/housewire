@@ -1,25 +1,25 @@
 # Schema house/v1
 
-Formato canónico de **housewire** para documentar instalación eléctrica.
-`housewire` / `python -m housewire` lo traduce a WireViz y a diagramas físicos.
-Un exporter QElectroTech podrá reutilizar el mismo YAML más adelante.
+Canonical format for **housewire**: document a home electrical installation in YAML,
+then export WireViz (electrical) and physical topology diagrams.
+A future QElectroTech exporter can reuse the same YAML.
 
-Edición asistida: `housewire shell <proyecto>` o subcomandos `add` / `rm` / `show` (ver README).
+Editing: `housewire shell <site>` or non-interactive `add` / `rm` / `show` (see README).
 
-Los tipos viven en el paquete: `src/housewire/catalog/`.
-Los YAML de una instalación viven en un **directorio/repo de obra aparte** (no en el repo del programa).
+Element and place types live in the package: `src/housewire/catalog/`.
+Installation YAML lives in a **separate site directory/repo** (not in the program repo).
 
-## Dos capas (no mezclar)
+## Two layers (do not mix)
 
-| Capa | Nodos | Aristas | Export |
-|------|-------|---------|--------|
-| **Física** | locations (cajas, DeviceBox, Panel, Floor…) | **conduits** entre aberturas (`from` / `to`) | `out/physical/` |
-| **Eléctrica** | elements (Socket, Regleta, MCB…) | **connections** con cable como `via` | WireViz |
+| Layer | Nodes | Edges | Export |
+|-------|-------|-------|--------|
+| **Physical** | locations (`JunctionBox`, `DeviceBox`, `Panel`, `Floor`, …) | **conduits** between openings (`from` / `to`) | `out/physical/` |
+| **Electrical** | elements (`Socket`, `TerminalStrip`, `MCB`, …) | **connections** with a cable as `via` | WireViz |
 
-Puente único: `conduit.contains: [cable_ids]`. El cable viaja en el conducto; la connection une bornes.
+Bridge: `conduit.contains: [cable_ids]`. The cable rides in the conduit; the connection joins terminals.
 
 ```yaml
-# Fisica: locations ↔ conduit
+# Physical: locations ↔ conduit
 conduits:
   Conducto_a_Enchufe_1:
     type: Conduit
@@ -28,39 +28,41 @@ conduits:
     to: Enchufe_1.N1
     contains: [Linea_a_Enchufe_1]
 
-# Electrica: elements ↔ cable
+# Electrical: elements ↔ cable
 connections:
   - from: Caja_derivacion_4/Regleta_1.[1, 2, 3]
     via: Linea_a_Enchufe_1.[1, 2, 3]
     to: Enchufe_1/Socket.[L, PE, N]
 ```
 
-## Cabecera
+## Document header
+
+Every editable `housewire.yaml` must declare:
 
 ```yaml
 schema: house/v1
 ```
 
-La **jerarquía** es el path de directorios (o keys anidadas en un YAML).
-El fichero `housewire.yaml` **es el objeto place**: mismos campos que un hijo
-en `elements` (`type`, `label`, `mount`, `openings`, …), más `schema: house/v1`.
+The file **is** the place object: the same fields as a nested place (`type`, `label`,
+`mount`, `openings`, …), plus `schema: house/v1`. Hierarchy is the directory tree
+(and/or inline places under `elements:`).
 
-### Ids técnicos vs `label`
+### Technical ids vs `label`
 
-| Rol | Qué es el id | Display |
-|---|---|---|
-| Place (carpeta) | nombre del directorio | `label` opcional en la raiz |
-| Place inline | clave en `elements:` | `label` en ese mapa |
-| Elemento / cable | clave YAML | `label` opcional |
+| Role | Id | Display |
+|------|----|---------|
+| Place (folder) | directory name | optional root `label` |
+| Inline place | key under `elements:` | `label` on that map |
+| Element / cable | YAML key | optional `label` |
 
-- **Id**: `[A-Za-z0-9_]+` (p.ej. `Caja_derivacion_4`). Sin espacios. Va en conexiones.
-- **`label`**: texto humano. `add location "Caja derivacion 6"` → carpeta
-  `Caja_derivacion_6/` con `label: Caja derivacion 6`.
+- **Id**: `[A-Za-z0-9_]+` (e.g. `Caja_derivacion_4`). No spaces. Used in refs.
+- **`label`**: human text. `add location "Caja derivacion 6"` → folder
+  `Caja_derivacion_6/` with `label: Caja derivacion 6`.
 
-Misma forma en carpeta o anidado:
+Outline place example:
 
 ```yaml
-# Garage/Junction_box_1/housewire.yaml  (el fichero ES el place)
+# Garage/Junction_box_1/housewire.yaml
 schema: house/v1
 type: JunctionBox
 label: "Junction box 1"
@@ -71,11 +73,12 @@ openings: [B1-1, N1]
 elements:
   Regleta_1:
     type: TerminalStrip
-    label: "Regleta 3 pares"
+    label: "3-pair strip"
 ```
 
+Equivalent inline place (under a parent `housewire.yaml`):
+
 ```yaml
-# Inline equivalente dentro de otro place
 elements:
   Junction_box_1:
     type: JunctionBox
@@ -86,64 +89,62 @@ elements:
         type: TerminalStrip
 ```
 
-Legacy: bloque `location: { type: … }` aún se lee; preferir campos en la raiz.
+## Locations = logical tree (outline and/or inline)
 
-Sin `schema: house/v1`, el archivo se trata como WireViz legacy (como `Test/`).
-
-## Locations = árbol lógico (outline y/o inline)
-
-**Outline** (recomendado en obra):
+**Outline** (recommended on site):
 
 ```text
 Garage/
-  housewire.yaml                 # type: Floor + sockets…
+  housewire.yaml                 # type: Floor + …
   Junction_box_1/
-    housewire.yaml               # type: JunctionBox + regletas…
+    housewire.yaml               # type: JunctionBox + …
 ```
 
-**Inline** (escape hatch / monolito): place anidado en `elements:` del YAML ancestro.
+**Inline**: a place nested under the ancestor’s `elements:` (shell: `add location … --inline`).
 
-El shell (`cd` / `ls` / `pwd`) navega el **árbol de locations**, no el filesystem a ciegas:
-hijos outline (carpeta + `housewire.yaml`) e hijos inline (`type` place) aparecen juntos en
-`locations:`. Los devices (Socket, MCB, …) van en `elements:`.
+The shell (`cd` / `ls` / `pwd`) walks the **location tree**: outline children
+(folder + `housewire.yaml`) and inline place-typed children appear together.
+Devices (`Socket`, `MCB`, …) stay under `elements:` of the current place.
 
-Mezcla permitida; **prohibido** el mismo id como carpeta y como key inline a la vez.
+Mixing outline and inline is allowed; the **same id** must not exist both as a
+sibling folder and as an inline key.
 
 Place types (catalog, `wireviz_skip`):
 
 | type | Meaning |
 |------|---------|
-| `Room` | Habitación / estancia |
-| `JunctionBox` | Caja de derivación |
-| `DeviceBox` | Caja de mecanismo (enchufe/interruptor; 1-/2-/3-gang) |
-| `LightPoint` | Punto de luz (agujero / salida a luminaria) |
-| `Panel` | Cuadro eléctrico (también puede declarar `openings`) |
-| `Floor` | Planta / nivel (planta baja, parking, …) |
-| `House` | Casa / vivienda (no implica ser la raíz del árbol) |
-| `Location` | Genérico / inline ocasional |
+| `Room` | Room / space |
+| `JunctionBox` | Junction / derivation box |
+| `DeviceBox` | Device box (socket / switch; 1-/2-/3-gang) |
+| `LightPoint` | Light point (ceiling/wall hole to a luminaire) |
+| `Panel` | Distribution board (may declare `openings`) |
+| `Floor` | Floor / level |
+| `House` | Dwelling (need not be the tree root) |
+| `Location` | Generic place (rare; prefer a specific type) |
 
-La **raíz del árbol** es el directorio que pasas a `housewire` (`project_path`),
-no un `location.type` concreto. Puedes apuntar a un subárbol o montar carpetas
-por encima (p.ej. `Building/…/House/…`) sin cambiar tipos.
+The **tree root** is the directory you pass to `housewire` (`project_path`), not a
+particular `type`. You can point at a subtree or insert folders above
+(e.g. `Building/…/House/…`) without changing types.
 
 - One outline directory → one `housewire.yaml` (no sibling fragment YAMLs).
-- `cd` entra en outline o inline; `show` / `add element` actúan sobre el place actual.
-- `add location NAME --type T` → outline si el place actual es outline; inline si ya estás
-  inline. Fuerza con `--inline` / `--dir` (`--dir` bajo inline no está permitido).
+- `cd` enters outline or inline; `show` / `add element` act on the current place.
+- `add location NAME --type T` → outline when the current place is outline; inline
+  when already inline. Force with `--inline` / `--dir` (`--dir` under inline is forbidden).
+- Dirty YAML stay in memory across `cd`; `save` writes all dirty buffers; `exit`
+  prompts per dirty file.
 
 ### `install` (surface vs flush)
 
-Opcional en places con `mount`:
+Optional on places with `mount`:
 
-| `install` | Significado |
-|---|---|
-| `surface` | Sobre superficie (caja vista / canaleta); tipico parking |
-| `flush` | Empotrado en pared/techo/suelo |
+| `install` | Meaning |
+|-----------|---------|
+| `surface` | Surface-mounted (visible box / trunking) |
+| `flush` | Recessed in wall / ceiling / floor |
 
-Si se omite, no se asume. No cambia el marco local de aberturas; solo documenta la
-instalacion.
+If omitted, nothing is assumed. It does not change the local opening frame.
 
-### DeviceBox (mecanismos)
+### DeviceBox
 
 ```yaml
 type: DeviceBox
@@ -151,25 +152,25 @@ subtype: 1-gang          # 1-gang | 2-gang | 3-gang
 install: surface
 mount: wall
 facing: S
-openings: [N1]           # entrada por cara N (p.ej. parking surface)
+openings: [N1]
 elements:
   Socket:
     type: Socket
     subtype: Schuko
 ```
 
-Varios artefactos en la misma caja (misma boca de entrada):
+Several mechanisms in one box (same entry opening):
 
 ```yaml
 type: DeviceBox
 subtype: 2-gang
 openings: [N1]
 elements:
-  Enchufe: { type: Socket, subtype: Schuko }
-  Interruptor: { type: Switch, subtype: unipolar }
+  Socket: { type: Socket, subtype: Schuko }
+  Switch: { type: Switch, subtype: unipolar }
 ```
 
-En el shell, sin editar el YAML a mano ni flags por campo:
+Shell (no hand-editing required):
 
 ```text
 set install surface
@@ -180,25 +181,25 @@ add location Interruptor_1 --type DeviceBox --subtype 1-gang \
 set --element Switch notes "…"
 ```
 
-Los valores se interpretan como YAML. Claves estructurales (`elements`, `cables`,
-`connections`, `conduits`, `schema`) no se pueden `set`; usa `add`/`rm`.
+Values parse as YAML. Structural keys (`elements`, `cables`, `connections`,
+`conduits`, `schema`) cannot be `set`; use `add` / `rm`.
 
-### Lamparas / puntos de luz
+### Light points
 
-El conducto termina en un place **`LightPoint`** (agujero de techo/pared), no en
-un `DeviceBox`. La boca tipica es ``B1-1`` (fondo hacia el forjado) o una cara
-de contorno si el tubo llega lateralmente.
+A conduit ends on a **`LightPoint`** place (ceiling/wall hole), not on a `DeviceBox`.
+Typical opening: `B1-1` (back toward the slab) or a contour face if the tube arrives sideways.
 
 ```yaml
 type: LightPoint
-subtype: ceiling-hole    # default de catalogo
+subtype: ceiling-hole
 install: surface
 mount: ceiling
 opening_grid:
-  B: 1                   # → B1-1
+  B: 1
 openings: [B1-1]
-# elements:              # mas adelante, capa electrica
-#   Luminaire: { type: Luminaire, … }
+elements:
+  Luminaire:
+    type: Luminaire
 ```
 
 ```text
@@ -209,108 +210,113 @@ add conduit Conducto_a_Lampara_1 --from Caja_derivacion_1.E2 --to Lampara_1.B1-1
   --contains Linea_a_Lampara_1
 ```
 
-Reserva `DeviceBox` para cajas de mecanismo reales (enchufe/interruptor).
+Reserve `DeviceBox` for real mechanism boxes (socket / switch).
 
-### Elementos
+### Elements
 
 ```yaml
 elements:
   MT_Luces:
-    type: MCB                 # magnetotermico 1P+N (ingles: MCB)
+    type: MCB
     subtype: C10
     manufacturer: Merlin Gerin
     model: multi9
     serial: null
     label: LUZ
     notes: "..."
-    terminals:                # opcional; sobrescribe el catalogo
-      "1": { label: "" }      # Merlin Gerin: fase a menudo sin letra
+    terminals:                # optional; merges over catalog
+      "1": { label: "" }
 ```
 
-Campos de borne: `label`, `direction` (`in` | `out` | `inout`), `role`.
+Terminal fields: `label`, `direction` (`in` | `out` | `inout`), `role`.
 
-En el catálogo, `wireviz_collapse` (análogo a `qet_hint`) empareja bornes para el **export WireViz**: cada par se colapsa en un solo pin visual (cables a izquierda y derecha). No son los `loops` nativos de WireViz (dibujan arcos raros) ni implican necesariamente continuidad eléctrica (p.ej. en `PowerSupply`, L↔+ es solo layout).
+Catalog `wireviz_collapse` pairs terminals for the **WireViz export**: each pair
+becomes one visual pin (cables left and right). That is layout only, not WireViz
+`loops`, and not necessarily electrical continuity.
 
-### Que es cada tipo (catalog/)
+### Catalog element types
 
-| type | Espanol | Que protege / hace |
-|---|---|---|
-| `MCB` | Magnetotermico 1P+N (PIA) | Sobrecarga/cortocircuito. Pines 1→2 (fase), 3→4 (N); labels carcasa 1/2/N/N |
-| `MCB2P` | Magnetotermico bipolar | Bornes 1→2 y 3→4. En el cuadro: IGA Moeller C50/2 |
-| `RCD` | Diferencial (ID) | Fugas. Pines 1→2 (fase, a menudo sin letra), 3→4 (N) |
-| `Supply` | Acometida | Entrada de red |
-| `PETerminal` | Bornera PE | Reparto de tierra |
-| `EarthElectrode` | Jabalina | Toma de tierra |
-| `PowerSupply` | Fuente AC/DC | Portero, etc. |
-| `Intercom` | Portero eléctrico | Alimentación DC (+/−) |
-| `TerminalStrip` | Regleta / bornes | Empalme en caja de derivación |
-| `Socket` | Toma Schuko | Enchufe 2P+T |
-| `Switch` | Interruptor | Mecanismo; fase 1→2 (unipolar por defecto) |
+| type | Role |
+|------|------|
+| `MCB` | 1P+N miniature circuit breaker. Pins 1→2 (phase), 3→4 (N) |
+| `MCB2P` | 2-pole MCB (e.g. main breaker) |
+| `RCD` | Residual-current device. Pins 1→2 (phase), 3→4 (N) |
+| `Supply` | Incoming supply (L + N) |
+| `PETerminal` | PE bar / earth terminal strip |
+| `EarthElectrode` | Earth electrode |
+| `PowerSupply` | AC/DC supply (e.g. intercom) |
+| `Intercom` | Door phone / video door phone (DC +/−) |
+| `TerminalStrip` | Terminal strip in a junction box |
+| `Socket` | Schuko / 2P+E outlet |
+| `Switch` | Switch mechanism; subtypes `unipolar`, `crossover`, `intermediate` |
+| `Luminaire` | Lamp / pendant (default terminals 1–3) |
 
-**No es un “disyuntor”** en el sentido de diferencial: en obra a veces se dice “disyuntor” al ID; el magnetotermico es el MCB/PIA.
+**Switch subtypes**
 
-**IGA vs IGP:** el Moeller C50/2 del cuadro es un **magnetotermico** usado como **IGA** (automatico). Un **IGP** seria un interruptor de corte sin curva C/proteccion; no es lo que hay en la foto.
+| subtype | Terminals |
+|---------|-----------|
+| `unipolar` (default) | `1`, `2` |
+| `crossover` (3-way) | `C` (common), `1`, `2` (travellers) |
+| `intermediate` | `1`–`4` |
 
-## Aberturas (JunctionBox, DeviceBox, LightPoint y Panel)
+## Openings (`JunctionBox`, `DeviceBox`, `LightPoint`, `Panel`)
 
-Los agujeros/pasatubos **no son bornes eléctricos**. Se identifican en el
-**marco local de la caja** (como el poker): mirando la tapa (`F`).
+Openings are **not** electrical terminals. They use the **local box frame**
+(poker face): looking at the front face `F`.
 
 ```text
         N
     W   F   E
         S
          ↓
-         B   (fondo / empotrado)
+         B   (back / embedded)
 ```
 
-`mount` + `facing` anclan ese marco al edificio. Al escribir bocas piensas en
-la caja, no en el norte geográfico.
+`mount` + `facing` align that frame to the building. When naming openings, think
+in the box frame, not geographic north.
 
 ### Ids
 
-| Cara | Id | Orden |
-|---|---|---|
-| Contorno `N`/`S`/`E`/`W` | `N1`, `W2`, … | `N`/`S`: W→E · `E`/`W`: N→S |
-| Fondo `B` / tapa `F` | `B1-1`, `F2-3`, … | 1.er índice N→S, 2.º W→E |
+| Face | Id | Index order |
+|------|----|-------------|
+| Contour `N`/`S`/`E`/`W` | `N1`, `W2`, … | `N`/`S`: W→E · `E`/`W`: N→S |
+| Back `B` / front `F` | `B1-1`, `F2-3`, … | 1st index N→S, 2nd W→E |
 
 ```yaml
 type: JunctionBox
 subtype: "100x100 IP40"
 mount: ceiling          # ceiling | wall | floor
-# facing: N             # wall: hacia dónde mira F (hacia el local)
+# facing: N             # wall: direction F faces (into the room)
 opening_grid:
-  NS: 3                 # ≡ N: 3x1 y S: 3x1 (entero = 1 fila)
-  WE: 2                 # ≡ W y E (orden W→E, como NS)
+  NS: 3                 # ≡ N: 3x1 and S: 3x1 (integer = one row)
+  WE: 2
   B: 2                  # ≡ B: 2x1 → B1-1, B1-2
 openings: [B1-1, W1, N1]
 ```
 
-- **`openings`**: lista de bocas **usadas** (sin objetos vacíos).
-- **`opening_grid`**: plantilla opcional por cara. Claves: `N` `S` `E` `W` `F` `B`,
-  o pares `NS` / `WE` (mismo orden que los índices: N→S, W→E). Un entero `3` = `3x1`.
-  `3x2` = 3 columnas (W→E) × 2 filas (N→S). Una cara omitida = sin rejilla conocida.
-  Cara explícita pisa al par.
+- **`openings`**: list of **used** opening ids (plain strings).
+- **`opening_grid`**: optional template per face. Keys: `N` `S` `E` `W` `F` `B`,
+  or pairs `NS` / `WE`. Integer `3` = `3x1`. `3x2` = 3 columns (W→E) × 2 rows (N→S).
+  An omitted face has no known grid. An explicit face overrides the pair.
 
-Si `openings` está declarado, `pend` exige que entrada/salida existan en la lista.
-Si además hay `opening_grid`, cada id debe caber en la rejilla de su cara.
+If `openings` is set, `pend` requires enter/exit ids to be in that list.
+If `opening_grid` is also set, each id must fit the grid for its face.
 
-### Montaje
+### Mounting
 
-| `mount` | `F` mira a… | `B` es… | Contorno local N/S/E/W |
-|---|---|---|---|
-| `ceiling` | suelo | empotrado en el techo | perímetro (poker al mirar F desde abajo) |
-| `wall` | el local (`facing:`) | dentro de la pared | N local = borde “arriba” de la vista de F |
-| `floor` | techo | empotrado en el suelo | perímetro al mirar F |
+| `mount` | `F` faces… | `B` is… | Local N/S/E/W |
+|---------|------------|---------|---------------|
+| `ceiling` | floor | into the ceiling | perimeter (poker looking at F from below) |
+| `wall` | the room (`facing:`) | into the wall | local N = “up” edge of the F view |
+| `floor` | ceiling | into the floor | perimeter looking at F |
 
-### Uso
+### Usage
 
 ```text
 pend N1 S1
 ```
 
 ```yaml
-# Aberturas → conduit de paso (capa fisica)
 conduits:
   Conducto_a_Caja_2:
     type: Conduit
@@ -320,98 +326,87 @@ conduits:
     contains: [Linea_a_Caja_derivacion_2]
 ```
 
-### Qué no mezclar
+### Do not confuse
 
-- **Abertura** (`N1`, `B1-1`): geometría local del place. Va en `from`/`to` del conduit.
-- **Conducto**: tubo entre locations (`from: A.N1` → `to: B.S1`).
-- **Borne** (`Regleta.1`): conexión eléctrica dentro de la caja (capa eléctrica).
-
-Legacy: ids opacos `B1`/`B2`, cardinales compuestos (`W.N`) y `back`/`lid`/`fondo`/`tapa`
-pueden aparecer en texto antiguo; el canónico es `N1` / `B1-1`.
+- **Opening** (`N1`, `B1-1`): local geometry. Used in conduit `from` / `to`.
+- **Conduit**: tube between locations (`from: A.N1` → `to: B.S1`).
+- **Terminal** (`Regleta.1`): electrical connection inside the box.
 
 ## Cables
 
 ```yaml
 cables:
   Linea_X:
-    type: Cable               # catalog id (cable_type)
+    type: Cable
     subtype: power            # power | earth | dc | signal | …
-    section: "1.5 mm2"        # canónico (QET: conductor_section). WireViz ← gauge
-    colors: [BN, BU, GNYE]    # defaults from catalog subtype if omitted
-    label: "…"                # optional human name
+    section: "1.5 mm2"
+    colors: [BN, BU, GNYE]
+    label: "…"
     notes: "..."
 ```
 
-Catalog: `catalog/Cable.yaml` (`kind: cable_type`) with per-subtype defaults
-(section/colors). ABM `add cable` / `pend` fill missing fields from that catalog.
-
-Legacy: `kind: power` still loads as `subtype: power`.
+Catalog: `catalog/Cable.yaml` (`kind: cable_type`) with per-subtype defaults for
+`section` / `colors`. ABM `add cable` / `pend` fill omitted fields from that catalog.
 
 ### Color codes (`colors:`)
 
-Codes follow **IEC 60757** letter abbreviations (same vocabulary WireViz expects).
-Use uppercase tokens in YAML (`BN`, not `bn`).
+Codes are **IEC 60757** letter abbreviations (WireViz vocabulary). Use uppercase
+in YAML (`BN`, not `bn`).
 
-| Code | English | Spanish (obra) | Typical use in this project |
-|------|---------|----------------|------------------------------|
-| `BK` | black | negro | Phase from panel / permanent lights phase |
-| `BN` | brown | marrón | Switched phase, lamp feeds, some socket L |
-| `RD` | red | rojo | Catalog `dc` default (with `BK`) |
-| `OG` | orange | naranja | (available; rare in domestic) |
-| `YE` | yellow | amarillo | (available; do not confuse with PE) |
-| `GN` | green | verde | (available; prefer `GNYE` for PE) |
-| `BU` | blue | azul | Neutral (N) |
-| `VT` | violet | violeta | (available) |
-| `GY` | grey | gris | Phase (light grey), travellers, some feeds |
-| `WH` | white | blanco | Catalog `signal` default (with `BU`) |
-| `PK` | pink | rosa | (available) |
-| `TQ` | turquoise | turquesa | (available) |
-| `GNYE` | green-yellow | verde-amarillo | Protective earth (PE) |
+| Code | Color | Typical use |
+|------|-------|-------------|
+| `BK` | black | Phase from panel / permanent lights phase |
+| `BN` | brown | Switched phase, lamp feeds, some socket L |
+| `RD` | red | Catalog `dc` default (with `BK`) |
+| `OG` | orange | Available; uncommon in domestic work |
+| `YE` | yellow | Available; do not use for PE |
+| `GN` | green | Available; prefer `GNYE` for PE |
+| `BU` | blue | Neutral (N) |
+| `VT` | violet | Available |
+| `GY` | grey | Phase (light grey), travellers, some feeds |
+| `WH` | white | Catalog `signal` default (with `BU`) |
+| `PK` | pink | Available |
+| `TQ` | turquoise | Available |
+| `GNYE` | green-yellow | Protective earth (PE) |
 
-Notes:
-
-- **PE** is always `GNYE` in this project (not plain `GN` / `YE`).
-- **Neutral** is `BU` (IEC / EU practice).
-- **Phase** may be `BK`, `BN`, or `GY` depending on the run (document in `notes` when several phases share a box).
+- **PE** → `GNYE` (not bare `GN` / `YE`).
+- **Neutral** → `BU` (IEC / EU practice).
+- **Phase** may be `BK`, `BN`, or `GY`; note mixed phases in the same box.
 - Order in `colors: […]` is the wire index for `via: Cable.[1, 2, …]` (1-based).
-
-Example:
 
 ```yaml
 colors: [BN, BU, GNYE]   # wire 1 brown, 2 blue, 3 PE
 ```
 
-### Convención: línea lógica ≠ un solo cable físico
+### Logical line ≠ one physical sheath
 
-En el cuadro (y en general en este repo) una entrada de `cables` con varios colores (p.ej. `[BN, BU]`) es una **línea lógica**: el par de conductores que va de A a B. WireViz la dibuja como un bloque multipolar; eso es **intencional** (claridad del circuito), no una afirmación de que sea una manguera o un solo revestimiento.
+A `cables` entry with several colors (e.g. `[BN, BU]`) is a **logical line**: the
+set of conductors from A to B. WireViz draws it as one multipolar block on purpose
+(circuit clarity), not as a claim that it is one jacketed multicore.
 
-En la práctica del cuadro suelen ser **hilos sueltos** (fase y neutro separados). Si hace falta dejar constancia de la construcción física:
+In panels these are often **loose singles**. Record construction in:
 
-- `notes`: p.ej. `"hilos sueltos"` / `"manguera RVK"` / sección estimada
-- `conduits`: cuando varios cables comparten tubo/manguera de paso
+- `notes` (e.g. loose wires / multicore type / estimated section)
+- `conduits` when several cables share a tube
 
-No partas cada bipolar en dos `cables` solo para “ser realista”: el diagrama se vuelve ruidoso y no aporta al seguimiento L/N. Reserva el detalle físico a notas/conduits (y, más adelante, a QElectroTech si hace falta).
+Do not split every bipolar into two `cables` only to look “physical”: diagrams get
+noisy without helping L/N tracing.
 
-### Convención para tramos pendientes (documentación incremental)
+### Pending runs (incremental capture)
 
-Para poder cargar obra “incompleta” sin bloquearte:
+When a cable enters/leaves a box but the far end is unknown:
 
-- Si un cable **entra/sale por caja** pero aún no sabes destino, crea el `cable` y su `conduit`, pero **no** añadas `connections` todavía.
-- Usa prefijo `PEND_` en id de cable mientras esté abierto.
-- Marca estado en `notes` de cable: `estado: pendiente`.
-- Describe por dónde pasa en `conduits.from` / `conduits.to` con aberturas
-  (`N1`, `B1-1`, …); el destino pendiente puede ser `.S1` u otro place.
-
-Desde el shell (recomendado en obra):
+- Create the `cable` and its `conduit`, but **omit** `connections` for now.
+- Prefix the cable id with `PEND_` while open.
+- Put status in cable `notes` (e.g. `status: pending`).
+- Set `conduits.from` / `to` with openings (`N1`, `B1-1`, …).
 
 ```text
-cd Parking/Caja derivacion 2
+cd Parking/Caja_derivacion_2
 pend N1 S1            # defaults 1.5 mm2 / BN,BU
-pend N1 S1 2.5        # sección distinta
-pend                  # pregunta aberturas por stdin
+pend N1 S1 2.5
+pend                  # prompts for openings
 ```
-
-Ejemplo YAML resultante:
 
 ```yaml
 cables:
@@ -420,7 +415,7 @@ cables:
     subtype: power
     section: "1.5 mm2"
     colors: [BN, BU]
-    notes: "estado: pendiente; entra por N1 y sale por S1"
+    notes: "status: pending; enters N1, leaves S1"
 
 conduits:
   Conducto_paso_01:
@@ -431,86 +426,75 @@ conduits:
     contains: [PEND_Linea_01]
 ```
 
-Al cerrar el pendiente:
+When closing:
 
-1. Renombra `PEND_*` a nombre definitivo (`Linea_<A>_a_<B>`).
-2. Sustituye `estado: pendiente` por una nota final (o bórrala).
-3. Añade `connections` `from/via/to` definitivas.
-4. Evita dejar ids `PEND_` en circuitos cerrados.
+1. Rename `PEND_*` to the final id (`Linea_<A>_a_<B>`).
+2. Replace pending notes with a final note (or remove them).
+3. Add definitive `connections` `from` / `via` / `to`.
+4. Do not leave `PEND_` ids on closed circuits.
 
-## Conexiones
+## Connections
 
-Forma compacta:
+Canonical form (what the shell writes):
 
 ```yaml
 connections:
-  - from: ID_Fila_Superior.[L, N]
+  - from: ID_Fila_Superior.[2, 4]
     via: Linea_ID_Fila_Superior_a_MT_Luces.[1, 2]
-    to: MT_Luces.[L, N]
+    to: MT_Luces.[1, 3]
 ```
 
-También se acepta la lista estilo WireViz.
+### Cross-location references
 
-### Referencias entre niveles
+Connections in a `housewire.yaml` may only refer to elements in **that location and
+its sublocations** (paths relative to the current directory).
 
-Las conexiones de un `housewire.yaml` **solo pueden referir elementos de esa location
-y de sus sublocations** (paths relativos al directorio actual).
+- Local: `MT_Luces.1`
+- Sublocation: `Cuadro_General/Fuente_portero.+`
+- Absolute **within the same tree**: `/Parking/Caja_derivacion_1/Regleta.1` (from under `Parking/`)
 
-- Local: `MT_Luces.L`
-- Sublocation: `Cuadro General/Fuente_portero.+` o `./Cuadro General/Fuente_portero.+`
-- Absoluta **dentro del mismo árbol**: `/Parking/Caja 1/Regleta.1` (desde `Parking/`)
+Not allowed (lift the connection to the common ancestor):
 
-No permitido (hay que subir la conexión al ancestro común):
+- `../Salon/Caja_Luces.L` (walks upward)
+- `/Parking/Caja_2/Regleta.1` declared inside `Parking/Caja_1/` (sibling)
 
-- `../Salon/Caja_Luces.L` (sale hacia arriba)
-- `/Parking/Caja 2/Regleta.1` declarado en `Parking/Caja 1/` (hermano)
+The `via` cable must be defined in the **same** location document as the connection.
 
-El `via` debe ser un cable **definido en la misma location** que la conexión.
+## WireViz name prefixes
 
-## Locations anidadas (inline, escape hatch)
+The folder path defines the export prefix:
 
-Lo recomendado es **siempre directorios + housewire.yaml**. Como escape hatch en un solo fichero aún se admite:
+- `Parking/Caja_derivacion_1/housewire.yaml` → element `Regleta` →
+  `Parking__Caja_derivacion_1__Regleta`
 
-- `locations: { Nombre: { elements: … } }`
-- o un elemento `type: JunctionBox` / `Room` / `Location` con `elements`/`cables` anidados
+## Conduits
 
-Prefiere no mezclarlo con el layout de obra real.
-
-### Prefijos WireViz
-
-El path de carpetas define el prefijo:
-
-- `Parking/Caja derivacion 1/housewire.yaml` → elemento `Regleta` → `Parking__Caja_derivacion_1__Regleta`
-
-## Conduits / mangueras
-
-Agrupación **física** entre locations (no es un conductor eléctrico):
+Physical grouping between locations (not an electrical conductor):
 
 ```yaml
 conduits:
   Conducto_Cuadro_a_Caja:
-    type: Conduit             # catalog id (conduit_type)
-    subtype: M20              # tube | hose | free | M16 | M20 | …
-    from: Cuadro_General.S1   # LocationRef.OpeningId
+    type: Conduit
+    subtype: tube             # tube | hose | free | M16 | M20 | M25 | M32 | …
+    from: Cuadro_General.S1
     to: Caja_Luces_1.N1
     contains: [Cable_Luces_Salon, Cable_Enchufes_Salon]
-    label: "…"                # optional
+    label: "…"
     notes: "..."
 ```
 
-- `from` / `to` = `LocationRef.OpeningId` (p.ej. `Caja_derivacion_4.W2`,
-  `Parking/Caja_derivacion_4.B2-1`, o `.N1` = place actual). Obligatorios.
+- `from` / `to` = `LocationRef.OpeningId` (e.g. `Caja_derivacion_4.W2`,
+  `Parking/Caja_derivacion_4.B2-1`, or `.N1` = current place). Required.
 - Catalog: `catalog/Conduit.yaml`.
 
-Las `connections` (capa eléctrica) siguen yendo a los cables. El conduit se
-anota en los cables contenidos al exportar a WireViz; el diagrama **físico**
-dibuja aristas solo entre locations vía conduits.
+Electrical `connections` still target cables. Contained cables are annotated for
+WireViz; the **physical** diagram draws edges only between locations via conduits.
 
-## Salidas al generar
+## Generate outputs
 
-`housewire generate <path>` (o `generate` en el shell tras `cd` a un location):
+`housewire generate <path>` (or shell `generate` after `cd`):
 
-- `out/<nombre>.*` — WireViz (**capa eléctrica**: elements ↔ cables); extremos fuera del alcance como stub `External`
-- `out/physical/<nombre>.svg` — topología **física** (locations ↔ conduits); `.dot` junto al SVG
+- `out/<name>.*` — WireViz (**electrical**: elements ↔ cables); out-of-scope ends as `External` stubs
+- `out/physical/<name>.svg` — **physical** topology (locations ↔ conduits); `.dot` beside the SVG
 
-Para generar solo Parking: `housewire generate $SITE/Parking` o, en el shell, `cd Parking` y `generate`.
+Generate only a subtree: `housewire generate $SITE/Parking` or `cd Parking` then `generate`.

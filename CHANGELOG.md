@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.17.6] — 2026-07-31
+
+### Changed
+
+- Rewrote ``docs/schema-house-v1.md`` in English; removed obsolete/legacy notes;
+  documented current place/element types (incl. ``Luminaire``, Switch subtypes),
+  openings, color codes, and in-memory shell ``cd`` behavior.
+
 ## [0.17.5] — 2026-07-31
 
 ### Added
