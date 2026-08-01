@@ -5,6 +5,7 @@
   --text: #e6edf3;
   --muted: #8b949e;
   --accent: #3fb950;
+  --selection: #e3b341;
   --node: #2d333b;
   --node-stroke: #6e7681;
   --edge: #58a6ff;
@@ -800,7 +801,7 @@ button:hover {
 }
 
 .node-box.selected {
-  stroke: var(--accent);
+  stroke: var(--selection);
   stroke-width: 2;
 }
 
@@ -873,7 +874,7 @@ button:hover {
 }
 
 .element-node .element-box.selected {
-  stroke: var(--accent);
+  stroke: var(--selection);
   stroke-width: 2.5;
 }
 

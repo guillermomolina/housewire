@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.8] — 2026-08-01
+
+### Fixed
+
+- Selected places/elements use amber ``--selection`` instead of the same green
+  as cable edges.
+
 ## [0.27.7] — 2026-08-01
 
 ### Fixed
