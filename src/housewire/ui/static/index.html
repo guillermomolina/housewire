@@ -6,7 +6,7 @@
   <title>HouseWire — physical</title>
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <link rel="stylesheet" href="/static/app.css?v=0.27.12" />
+  <link rel="stylesheet" href="/static/app.css?v=0.27.13" />
 </head>
 <body>
   <nav class="menubar" aria-label="Application">
@@ -26,13 +26,13 @@
     <div id="doc-label" class="doc-label" title="Active site document"></div>
   </nav>
   <header class="toolbar">
-    <label class="field toggle" title="Show electrical elements inside places">
-      <input type="checkbox" id="toggle-elements" />
-      Elements
-    </label>
-    <label class="field toggle" title="Show cable connections between elements">
-      <input type="checkbox" id="toggle-cables" />
-      Cables
+    <label class="field" title="Physical: places + conduits. Electrical: elements + cables. Both: overlay.">
+      Diagram
+      <select id="diagram-mode">
+        <option value="physical">Physical</option>
+        <option value="electrical">Electrical</option>
+        <option value="both">Both</option>
+      </select>
     </label>
     <div class="actions">
       <button type="button" id="btn-auto-force" title="Reposition every visible place on a grid">Auto-layout</button>
@@ -136,6 +136,6 @@
     </div>
   </div>
   <input type="file" id="file-open-input" accept=".yaml,.yml,text/yaml,application/x-yaml" hidden />
-  <script src="/static/app.js?v=0.27.12"></script>
+  <script src="/static/app.js?v=0.27.13"></script>
 </body>
 </html>

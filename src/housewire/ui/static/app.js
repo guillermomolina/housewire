@@ -42,8 +42,8 @@
   let layoutHistory = [];
   let layoutIndex = -1;
   let layoutBaseline = null;
-  let showElements = false;
-  let showCables = false;
+  let showPhysical = true;
+  let showElectrical = false;
   let outlineNodes = [];
   let canvasLocations = [];
   let collapsedOutline = new Set();
@@ -84,7 +84,7 @@
       if (n.kind !== "place" || (n.depth || 0) < 1) continue;
       const hasKid = list.some((c) => {
         if (outlineParentId(c) !== n.id) return false;
-        if (c.kind === "element" && !showElements) return false;
+        if (c.kind === "element" && !showElectrical) return false;
         return true;
       });
       if (hasKid) set.add(n.id);
@@ -574,7 +574,7 @@
         hit.add(node.id);
       }
     }
-    if (showElements) {
+    if (showElectrical) {
       for (const elem of graph?.elements || []) {
         if (!elementsById[elem.id]) continue;
         if (rectsIntersect(elementWorldRect(elem, byId), worldRect)) {
@@ -1873,30 +1873,32 @@
 
     /** @type {{axis:string,x?:number,y?:number,a:number,b:number}[]} */
     const occupied = [];
-    for (const edge of graph.edges) {
-      const routed = edgePathD(edge, byId, occupied);
-      if (!routed) continue;
-      const d = routed.d;
-      for (const s of routed.segs) occupied.push(s);
-      const contains = (edge.contains || []).join(", ");
-      const edgeName = edge.name || edge.id;
-      const title = contains
-        ? `${edgeName}: ${contains}`
-        : String(edgeName || "");
-      const tube = el("path", { class: "edge-tube", d });
-      const core = el("path", { class: "edge-tube-core", d });
-      tube.appendChild(el("title", null, title));
-      core.appendChild(el("title", null, title));
-      edgesG.appendChild(tube);
-      edgesG.appendChild(core);
-      edgePaths.push({ edge, paths: [tube, core], d });
+    if (showPhysical) {
+      for (const edge of graph.edges) {
+        const routed = edgePathD(edge, byId, occupied);
+        if (!routed) continue;
+        const d = routed.d;
+        for (const s of routed.segs) occupied.push(s);
+        const contains = (edge.contains || []).join(", ");
+        const edgeName = edge.name || edge.id;
+        const title = contains
+          ? `${edgeName}: ${contains}`
+          : String(edgeName || "");
+        const tube = el("path", { class: "edge-tube", d });
+        const core = el("path", { class: "edge-tube-core", d });
+        tube.appendChild(el("title", null, title));
+        core.appendChild(el("title", null, title));
+        edgesG.appendChild(tube);
+        edgesG.appendChild(core);
+        edgePaths.push({ edge, paths: [tube, core], d });
+      }
     }
 
     for (const node of graph.nodes) {
       if (!childrenOf(node.id).length) paintNode(node, leavesG, byId);
     }
 
-    if (showElements) {
+    if (showElectrical) {
       for (const elem of graph.elements || []) {
         if (elem.parent && !byId[elem.parent]) continue;
         // Like depth: interior elements only when the place is a leaf in view.
@@ -1906,7 +1908,7 @@
     }
 
     // Cables last (above tubes + elements) using the cached tube paths.
-    if (showCables) {
+    if (showElectrical) {
       for (const edge of graph.cable_edges || []) {
         const d = cablePathD(edge, byId, elemById, occupied);
         if (!d) continue;
@@ -2928,7 +2930,7 @@
   function outlineHasKids(nodeId) {
     return outlineNodes.some((n) => {
       if (outlineParentId(n) !== nodeId) return false;
-      if (n.kind === "element" && !showElements) return false;
+      if (n.kind === "element" && !showElectrical) return false;
       return true;
     });
   }
@@ -2968,7 +2970,7 @@
     if (!host) return;
     host.innerHTML = "";
     for (const node of outlineNodes) {
-      if (node.kind === "element" && !showElements) continue;
+      if (node.kind === "element" && !showElectrical) continue;
       if (isOutlineHidden(node)) continue;
       const row = document.createElement("div");
       row.className =
@@ -3150,11 +3152,12 @@
     } else if (needDepth > depthLevel) {
       await setDepth(needDepth);
     }
-    if (!showElements) {
-      showElements = true;
-      const toggle = document.getElementById("toggle-elements");
-      if (toggle) toggle.checked = true;
+    if (!showElectrical) {
+      // Outline picked an element — show electrical (keep physical if already on).
+      showElectrical = true;
+      syncDiagramModeSelect();
       render();
+      renderOutline();
     }
     const rel = siteToCanvasRelative(node.id);
     if (rel) {
@@ -3213,19 +3216,35 @@
     await loadLocation({ fit: false });
   }
 
-  const toggleElements = document.getElementById("toggle-elements");
-  const toggleCables = document.getElementById("toggle-cables");
-  if (toggleElements) {
-    toggleElements.addEventListener("change", () => {
-      showElements = Boolean(toggleElements.checked);
-      render();
-      renderOutline();
-    });
+  function syncDiagramModeSelect() {
+    const sel = document.getElementById("diagram-mode");
+    if (!sel) return;
+    if (showPhysical && showElectrical) sel.value = "both";
+    else if (showElectrical) sel.value = "electrical";
+    else sel.value = "physical";
   }
-  if (toggleCables) {
-    toggleCables.addEventListener("change", () => {
-      showCables = Boolean(toggleCables.checked);
-      render();
+
+  function applyDiagramMode(mode) {
+    if (mode === "electrical") {
+      showPhysical = false;
+      showElectrical = true;
+    } else if (mode === "both") {
+      showPhysical = true;
+      showElectrical = true;
+    } else {
+      showPhysical = true;
+      showElectrical = false;
+    }
+    syncDiagramModeSelect();
+    render();
+    renderOutline();
+  }
+
+  const diagramModeSelect = document.getElementById("diagram-mode");
+  if (diagramModeSelect) {
+    syncDiagramModeSelect();
+    diagramModeSelect.addEventListener("change", () => {
+      applyDiagramMode(diagramModeSelect.value);
     });
   }
 
@@ -3243,7 +3262,7 @@
       depthLevel = graph.depth || depthLevel;
       maxDepth = graph.max_depth || maxDepth;
       let elemUpdated = [];
-      if (showElements) {
+      if (showElectrical) {
         const elData = await api(`/api/electrical/auto-layout`, {
           method: "POST",
           body: JSON.stringify({

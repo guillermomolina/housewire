@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.13] — 2026-08-01
+
+### Changed
+
+- Replace Elements/Cables checkboxes with a **Diagram** control: Physical
+  (places + conduits), Electrical (elements + cables), or Both.
+
 ## [0.27.12] — 2026-08-01
 
 ### Fixed

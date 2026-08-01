@@ -378,11 +378,11 @@ views:
   the UI always draws conduits as tubes).
 - **Depth zoom** (`depth` query / toolbar) controls how many nested place
   levels are drawn inside parent boxes; it does not change representation.
-- **Elements / Cables** toolbar toggles show or hide the electrical LOD on the
-  same canvas (session UI state; not persisted). Cables that ride in a conduit
-  draw only the in-box tails; the tube shows the run between places. Element
-  boxes enlarge their host place (like nested locations); Elements draw only
-  when the place is a leaf in the current depth view.
+- **Diagram** toolbar mode (session UI state; not persisted): *Physical*
+  (places + conduits), *Electrical* (elements + cables), or *Both*. Element
+  boxes enlarge their host place (like nested locations); elements draw only
+  when the place is a leaf in the current depth view. Cables ride on conduit
+  paths when the physical layer is also visible.
 - Back openings (`B…`) are drawn at the symbol center, not as a fourth side.
 - Omitted when unused; Graphviz/WireViz generate does not require these fields.
 
