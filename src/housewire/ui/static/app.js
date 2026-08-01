@@ -1595,6 +1595,21 @@
     return `${d} ${seg}`;
   }
 
+  /** Short orth stub from ``from`` toward ``to`` (in-box hop hint, not a full run). */
+  function stubToward(from, to, len) {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 1e-6) return { x: from.x, y: from.y };
+    const t = Math.min(len ?? 32, dist) / dist;
+    const tip = { x: from.x + dx * t, y: from.y + dy * t };
+    // Keep stub axis-aligned: prefer the dominant delta.
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      return { x: tip.x, y: from.y };
+    }
+    return { x: from.x, y: tip.y };
+  }
+
   function pathDToPoints(d) {
     /** @type {number[][]} */
     const pts = [];
@@ -1697,21 +1712,23 @@
       ) {
         return orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
       }
-      const opStart = openingAnchorAbs(
-        startPlace,
-        first.from_opening,
-        first.from_opening?.[0],
-        placeById
-      );
       const innerStart = openingInteriorPoint(
         startPlace,
         first.from_opening,
         first.from_opening?.[0],
         placeById
       );
-      // Element → opening: simple L inside the box.
-      let d = appendSimple("", c1, innerStart);
-      d = appendSimple(d, innerStart, opStart);
+      const innerEnd = openingInteriorPoint(
+        endPlace,
+        last.to_opening,
+        last.to_opening?.[0],
+        placeById
+      );
+      // Hop cables: only a short stub toward the exit (full element→opening
+      // L's for every cable turned junction boxes into an unreadable grid).
+      // Local same-box bridges are drawn in full above.
+      const startStub = stubToward(c1, innerStart, 36);
+      let d = pointsToPathD(simpleOrthoPts(c1, startStub));
       for (let i = 0; i < hops.length; i++) {
         const hop = hops[i];
         const pf = placeById[hop.from];
@@ -1754,20 +1771,8 @@
           if (ext) d = `${d} ${ext}`;
         }
       }
-      const opEnd = openingAnchorAbs(
-        endPlace,
-        last.to_opening,
-        last.to_opening?.[0],
-        placeById
-      );
-      const innerEnd = openingInteriorPoint(
-        endPlace,
-        last.to_opening,
-        last.to_opening?.[0],
-        placeById
-      );
-      d = appendSimpleSubpath(d, opEnd, innerEnd);
-      d = appendSimple(d, innerEnd, c2);
+      const endStub = stubToward(c2, innerEnd, 36);
+      d = appendSimpleSubpath(d, endStub, c2);
       return d;
     }
     return orthoPathD(c1, c2, null, null, occupied, outsideObstacles);

@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.8] — 2026-08-01
+
+### Fixed
+
+- Junction-box cable clutter: hop cables only draw a short in-box stub toward
+  the exit opening (plus the exterior tube overlay). Full cross-box L tails for
+  every outgoing cable were painting a green lattice; same-box bridges stay as
+  full simple L runs.
+
 ## [0.28.7] — 2026-08-01
 
 ### Fixed
