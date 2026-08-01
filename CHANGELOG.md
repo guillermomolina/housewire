@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.15] — 2026-08-01
+
+### Fixed
+
+- Properties PATCH 400 on notes with colons (e.g. ``Regleta_1: 5 bornes``):
+  panel values are stored as plain text, not YAML-parsed. Also resolve canvas
+  place id on save (``id=.``).
+
 ## [0.28.14] — 2026-08-01
 
 ### Fixed

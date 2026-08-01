@@ -686,11 +686,9 @@ def update_place_properties(
             if key in target:
                 abm.unset_field(target, key)
             continue
-        if isinstance(raw, str):
-            value = abm.parse_set_value(raw)
-        else:
-            value = raw
-        abm.set_field(target, key, value, target=target_kind)
+        # Plain text from the Properties panel (notes often contain "a: b").
+        # Do not YAML-parse — that raises or turns free text into mappings.
+        abm.set_field(target, key, raw, target=target_kind)
 
     session.mark_dirty(path)
     return place_detail(

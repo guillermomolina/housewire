@@ -74,14 +74,19 @@ def _ensure_maps(doc: dict[str, Any]) -> None:
 
 
 def parse_set_value(raw: str) -> Any:
-    """Parse a shell/CLI value as YAML (scalar, list, or map)."""
-    text = str(raw).strip()
-    if text == "":
+    """Parse a shell/CLI value as YAML (scalar, list, or map).
+
+    On YAML syntax errors, keep the raw string so values like notes with
+    ``key: value`` fragments still work.
+    """
+    text = str(raw)
+    stripped = text.strip()
+    if stripped == "":
         return ""
     try:
-        return yaml.safe_load(text)
-    except yaml.YAMLError as exc:
-        raise ValueError(f"Invalid YAML value: {raw!r}") from exc
+        return yaml.safe_load(stripped)
+    except yaml.YAMLError:
+        return text
 
 
 def parse_set_spec(spec: str) -> tuple[str, Any | None]:

@@ -517,6 +517,22 @@ class TestServeApi(unittest.TestCase):
             body = edited.json()
             self.assertEqual(body["detail"]["label"], "Caja cuatro")
             self.assertEqual(body["detail"]["notes"], "UI edit")
+            colon_notes = client.patch(
+                "/api/place/properties",
+                json={
+                    "location_id": "Parking",
+                    "id": "Caja_4",
+                    "fields": {
+                        "notes": "Regleta_1: 5 bornes; Regleta_2: N luces",
+                    },
+                    "depth": 1,
+                },
+            )
+            self.assertEqual(colon_notes.status_code, 200, colon_notes.text)
+            self.assertEqual(
+                colon_notes.json()["detail"]["notes"],
+                "Regleta_1: 5 bornes; Regleta_2: N luces",
+            )
             elem_edit = client.patch(
                 "/api/place/properties",
                 json={

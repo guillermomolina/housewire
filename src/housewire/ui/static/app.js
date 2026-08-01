@@ -2211,7 +2211,7 @@
     if (!Object.keys(fields).length) return;
     const body = {
       location_id: locationId,
-      id: propsTarget.placeId,
+      id: resolvePlaceApiId(propsTarget.placeId),
       fields,
       depth: depthLevel,
     };
