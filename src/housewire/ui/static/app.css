@@ -303,6 +303,7 @@ button:hover {
   fill: none;
   stroke: var(--edge);
   stroke-width: 1.5;
+  stroke-linejoin: round;
   pointer-events: none;
 }
 
@@ -311,6 +312,8 @@ button:hover {
   stroke: var(--edge);
   stroke-width: 8;
   stroke-opacity: 0.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   pointer-events: none;
 }
 
@@ -318,6 +321,8 @@ button:hover {
   fill: none;
   stroke: var(--edge);
   stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   pointer-events: none;
 }
 

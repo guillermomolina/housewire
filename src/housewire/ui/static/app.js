@@ -455,13 +455,33 @@
     applyWorldTransform();
   }
 
+  function orthoPathD(p1, p2, fromFace) {
+    const x1 = p1.x;
+    const y1 = p1.y;
+    const x2 = p2.x;
+    const y2 = p2.y;
+    if (x1 === x2 || y1 === y2) {
+      return `M ${x1} ${y1} L ${x2} ${y2}`;
+    }
+    // Leave along the opening axis when known (E/W → horizontal first).
+    let horizontalFirst;
+    if (fromFace === "E" || fromFace === "W") horizontalFirst = true;
+    else if (fromFace === "N" || fromFace === "S") horizontalFirst = false;
+    else horizontalFirst = Math.abs(x2 - x1) >= Math.abs(y2 - y1);
+    if (horizontalFirst) {
+      return `M ${x1} ${y1} L ${x2} ${y1} L ${x2} ${y2}`;
+    }
+    return `M ${x1} ${y1} L ${x1} ${y2} L ${x2} ${y2}`;
+  }
+
   function edgePathD(edge, byId) {
     const a = byId[edge.from];
     const b = byId[edge.to];
     if (!a || !b) return null;
-    const p1 = openingAnchorAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
+    const fromFace = edge.from_opening?.[0];
+    const p1 = openingAnchorAbs(a, edge.from_opening, fromFace, byId);
     const p2 = openingAnchorAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
-    return `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
+    return orthoPathD(p1, p2, fromFace);
   }
 
   function refreshEdges() {

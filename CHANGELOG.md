@@ -23,7 +23,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   places. Canvas **Fit** frames all places in the viewport (also runs after
   load). After **Save**, only the Reset baseline moves to the saved positions
   (Reset greys out; undo/redo history is kept). Undo/redo back to the saved
-  layout clears dirty and disables **Save**.
+  layout clears dirty and disables **Save**. Conduit edges use orthogonal
+  (axis-aligned) elbows instead of diagonal segments.
 
 ### Changed
 
