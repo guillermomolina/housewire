@@ -3517,6 +3517,7 @@
       if (!item || item.disabled) return;
       const action = item.getAttribute("data-view-action");
       if (action === "electrical") {
+        closeAllMenus();
         setElectrical(!showElectrical);
         return;
       }
