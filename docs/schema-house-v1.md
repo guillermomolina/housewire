@@ -89,8 +89,10 @@ Fallbacks:
 - Inspector / human display → `label` → `name` → **id**
 - Graphviz physical node title → `name` → **id**; `label` may appear in the subtitle if different
 
-Elements / cables / terminals still use their YAML key as id and optional `label` only
-(not covered by place `name`).
+Elements still use their YAML key as id and optional ``label`` (and optional
+``name`` where useful). **Cables** and **conduits** follow the same id / name /
+label pattern as places: map key = id; optional ``name:`` for short display;
+optional ``label:`` for longer human text.
 
 - **Id**: e.g. `Caja_derivacion_4`. No spaces. Used in refs.
 - **`name`**: e.g. `CD4` (canvas).
@@ -444,7 +446,8 @@ cables:
     subtype: power            # power | earth | dc | signal | …
     section: "1.5 mm2"
     colors: [BN, BU, GNYE]
-    label: "…"
+    name: Linea X             # optional short display (UI lists)
+    label: "…"                # optional longer human text
     notes: "..."
 ```
 
@@ -628,6 +631,7 @@ conduits:
     from: Cuadro_General.S1
     to: Caja_Luces_1.N1
     contains: [Cable_Luces_Salon, Cable_Enchufes_Salon]
+    name: Conducto Cuadro a Caja
     label: "…"
     notes: "..."
 ```

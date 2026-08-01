@@ -54,6 +54,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - Physical UI inspector: **locations** list Elements + Conduits; **elements**
   list Cables (connection edges). Place detail API still returns both
   ``conduits`` and ``cables`` for reuse.
+- Cables and conduits support optional YAML ``name:`` (short display) beside
+  ``label:``; UI lists and tooltips prefer ``name`` → id.
 
 ### Changed
 

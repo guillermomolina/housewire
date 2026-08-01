@@ -299,13 +299,23 @@ def _build_cable_edges(
                 continue
             seen.add(key)
             colors: list[str] = []
+            cable_name_disp = None
+            cable_label = None
             cable = cables.get(cable_name)
             if isinstance(cable, dict):
                 raw_colors = cable.get("colors") or []
                 if isinstance(raw_colors, list):
                     colors = [str(c) for c in raw_colors]
+                raw_n = cable.get("name")
+                if raw_n is not None and str(raw_n).strip():
+                    cable_name_disp = str(raw_n).strip()
+                raw_l = cable.get("label")
+                if raw_l is not None and str(raw_l).strip():
+                    cable_label = str(raw_l).strip()
             row: dict[str, Any] = {
                 "id": cable_name or f"connection_{index}",
+                "name": cable_name_disp,
+                "label": cable_label,
                 "from": from_id,
                 "to": to_id,
                 "via": via,
@@ -841,9 +851,21 @@ def build_physical_graph(
                 continue
             seen_edges.add(key)
             contains = [str(c) for c in (conduit.get("contains") or [])]
+            cname = conduit.get("name")
+            clabel = conduit.get("label")
             edges.append(
                 {
                     "id": str(conduit_name),
+                    "name": (
+                        str(cname).strip()
+                        if cname is not None and str(cname).strip()
+                        else None
+                    ),
+                    "label": (
+                        str(clabel).strip()
+                        if clabel is not None and str(clabel).strip()
+                        else None
+                    ),
                     "from": from_id,
                     "to": to_id,
                     "from_opening": from_op,

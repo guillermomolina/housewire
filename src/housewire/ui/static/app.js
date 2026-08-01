@@ -1149,9 +1149,10 @@
       const d = edgePathD(edge, byId);
       if (!d) continue;
       const contains = (edge.contains || []).join(", ");
+      const edgeName = edge.name || edge.id;
       const title = contains
-        ? `${edge.id}: ${contains}`
-        : String(edge.id || "");
+        ? `${edgeName}: ${contains}`
+        : String(edgeName || "");
       const paths = [];
       if (representation === "tube") {
         const tube = el("path", { class: "edge-tube", d });
@@ -1179,9 +1180,10 @@
         const d = cablePathD(edge, byId, elemById);
         if (!d) continue;
         const colors = (edge.colors || []).join(",");
+        const edgeName = edge.name || edge.id || edge.via || "";
         const title = colors
-          ? `${edge.id} (${colors})`
-          : String(edge.id || edge.via || "");
+          ? `${edgeName} (${colors})`
+          : String(edgeName);
         const line = el("path", { class: "cable-edge", d });
         line.appendChild(el("title", null, title));
         cablesG.appendChild(line);
@@ -1271,10 +1273,15 @@
     for (const c of conduits) {
       const li = document.createElement("li");
       const ends = [c.from, c.to].filter(Boolean).join(" → ");
-      const head = [c.id, c.subtype].filter(Boolean).join(" · ");
+      const title = c.name || c.id;
+      const head = [title, c.subtype].filter(Boolean).join(" · ");
       li.textContent = ends ? `${head}: ${ends}` : head;
+      if (c.name && c.id && c.name !== c.id) {
+        appendSub(li, `id: ${c.id}`);
+      }
       const contains = (c.contains || []).join(", ");
       appendSub(li, contains ? `contains: ${contains}` : "");
+      appendSub(li, c.label && c.label !== c.name ? String(c.label).trim() : "");
       appendSub(li, c.notes ? String(c.notes).trim() : "");
       ul.appendChild(li);
     }
@@ -1293,10 +1300,14 @@
     for (const e of edges) {
       const li = document.createElement("li");
       const other = e.from === elem.id ? e.to : e.from;
-      const bits = [e.id || "cable", `↔ ${other}`];
+      const title = e.name || e.id || "cable";
+      const bits = [title, `↔ ${other}`];
       if ((e.colors || []).length) bits.push((e.colors || []).join(", "));
       if (e.conduit) bits.push(`via ${e.conduit}`);
       li.textContent = bits.join(" · ");
+      if (e.name && e.id && e.name !== e.id) {
+        appendSub(li, `id: ${e.id}`);
+      }
       ul.appendChild(li);
     }
   }

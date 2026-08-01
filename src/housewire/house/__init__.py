@@ -290,7 +290,7 @@ def expand_cable(
     out: dict[str, Any] = {"type": type_id}
     if subtype is not None:
         out["subtype"] = str(subtype)
-    for key in ("section", "gauge", "colors", "label", "notes", "manufacturer", "model"):
+    for key in ("section", "gauge", "colors", "name", "label", "notes", "manufacturer", "model"):
         if key in raw and raw[key] is not None:
             out[key] = copy.deepcopy(raw[key])
         elif key in defaults and key not in ("gauge",):
@@ -354,7 +354,7 @@ def expand_conduit(
     out: dict[str, Any] = {"type": resolved_type}
     if subtype is not None:
         out["subtype"] = str(subtype)
-    for key in ("contains", "from", "to", "label", "notes"):
+    for key in ("contains", "from", "to", "name", "label", "notes"):
         if key in raw and raw[key] is not None:
             out[key] = copy.deepcopy(raw[key])
         elif key in defaults:

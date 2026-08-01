@@ -53,6 +53,20 @@ def _known_location_parts(root: Path) -> set[tuple[str, ...]]:
     return known
 
 
+def _entry_name(defn: dict[str, Any], entry_id: str) -> str | None:
+    raw = defn.get("name")
+    if raw is not None and str(raw).strip():
+        return str(raw).strip()
+    return None
+
+
+def _entry_label(defn: dict[str, Any]) -> str | None:
+    raw = defn.get("label")
+    if raw is not None and str(raw).strip():
+        return str(raw).strip()
+    return None
+
+
 def _cable_row(name: str, defn: dict[str, Any], *, defined_in: str | None = None) -> dict[str, Any]:
     colors_raw = defn.get("colors") or []
     colors = (
@@ -60,6 +74,8 @@ def _cable_row(name: str, defn: dict[str, Any], *, defined_in: str | None = None
     )
     row: dict[str, Any] = {
         "id": str(name),
+        "name": _entry_name(defn, str(name)),
+        "label": _entry_label(defn),
         "type": defn.get("type"),
         "subtype": defn.get("subtype"),
         "section": defn.get("section"),
@@ -85,6 +101,8 @@ def _conduit_row(
     )
     row: dict[str, Any] = {
         "id": str(name),
+        "name": _entry_name(defn, str(name)),
+        "label": _entry_label(defn),
         "from": defn.get("from"),
         "to": defn.get("to"),
         "subtype": defn.get("subtype"),
