@@ -1970,37 +1970,47 @@
   }
 
   async function fileOpen() {
+    const dirty = await isDocumentDirty();
+    let force = false;
+    if (dirty) {
+      const discard = window.confirm(
+        "There are unsaved changes. Discard them and open another site?"
+      );
+      if (!discard) return;
+      force = true;
+    }
+    const viaDialog = await tryWorkspaceDialog("open", { force });
+    if (viaDialog === "done" || viaDialog === "cancelled") return;
     let defaultPath = "";
     try {
       const st = await api("/api/workspace");
-      defaultPath = (st.document && st.document.path) || "";
+      defaultPath =
+        (st.document && (st.document.yaml_path || st.document.path)) || "";
     } catch {
       /* ignore */
     }
-    const dirty = await isDocumentDirty();
     const choice = await promptPath({
       title: "Open site",
-      hint: "Absolute path to a site directory (contains housewire.yaml).",
+      hint: "Path to a site directory, or to any .yaml/.yml file at the site root.",
       defaultPath,
-      showForce: dirty,
+      showForce: false,
     });
     if (!choice) return;
     try {
       await api("/api/workspace/open", {
         method: "POST",
-        body: JSON.stringify({ path: choice.path, force: choice.force }),
+        body: JSON.stringify({ path: choice.path, force }),
       });
       await reloadAfterDocumentChange();
       setStatus(`opened ${choice.path}`);
     } catch (err) {
-      if (String(err.message || err).includes("unsaved") && !choice.force) {
-        setStatus("Unsaved changes — tick “Discard” or Save first");
-      }
       setStatus(String(err.message || err));
     }
   }
 
   async function fileSaveAs() {
+    const viaDialog = await tryWorkspaceDialog("save-as", { force: false });
+    if (viaDialog === "done" || viaDialog === "cancelled") return;
     let defaultPath = "";
     try {
       const st = await api("/api/workspace");
@@ -2027,6 +2037,47 @@
       setStatus(`saved as ${choice.path}`);
     } catch (err) {
       setStatus(String(err.message || err));
+    }
+  }
+
+  /** @returns {"done"|"cancelled"|"fallback"} */
+  async function tryWorkspaceDialog(kind, { force }) {
+    let native = false;
+    try {
+      const st = await api("/api/workspace");
+      native = Boolean(st.dialogs && st.dialogs.native);
+    } catch {
+      native = false;
+    }
+    if (!native) return "fallback";
+    const endpoint =
+      kind === "save-as" ? "/api/workspace/save-as" : "/api/workspace/open";
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dialog: true, force: Boolean(force) }),
+      });
+      if (res.status === 501) return "fallback";
+      const body = await res.text();
+      if (!res.ok) {
+        setStatus(body || res.statusText);
+        return "cancelled";
+      }
+      const st = body ? JSON.parse(body) : {};
+      if (st.cancelled) return "cancelled";
+      if (kind === "save-as") {
+        dirtyLocal = false;
+        updateSaveButton(false);
+      }
+      await reloadAfterDocumentChange();
+      const label =
+        (st.document && (st.document.yaml_path || st.document.path)) || "";
+      setStatus(kind === "save-as" ? `saved as ${label}` : `opened ${label}`);
+      return "done";
+    } catch (err) {
+      setStatus(String(err.message || err));
+      return "cancelled";
     }
   }
 
@@ -2129,11 +2180,17 @@
     if (!el) return;
     try {
       const st = await api("/api/workspace");
-      const name = st.document && st.document.name;
-      el.textContent = name ? String(name) : "(no document)";
-      el.title = st.document && st.document.path
-        ? String(st.document.path)
-        : "Active site document";
+      const doc = st.document;
+      if (!doc) {
+        el.textContent = "(no document)";
+        el.title = "Active site document";
+        return;
+      }
+      const yamlName = doc.yaml ? String(doc.yaml) : "";
+      el.textContent = yamlName ? `${doc.name}/${yamlName}` : String(doc.name);
+      el.title = doc.yaml_path
+        ? String(doc.yaml_path)
+        : String(doc.path || "Active site document");
     } catch {
       el.textContent = "";
     }

@@ -7,7 +7,7 @@ from typing import Any
 
 from housewire.house import is_house_document, is_place_type
 from housewire.project.io import HOUSEWIRE_YAML, load_yaml
-from housewire.project.paths import is_excluded_path, is_housewire_yaml, is_yaml
+from housewire.project.paths import find_site_yaml, is_excluded_path, is_yaml
 from housewire.project.tree import get_place_node, iter_place_children, site_yaml_path
 
 
@@ -72,7 +72,7 @@ def _load_doc(path: Path) -> dict[str, Any] | None:
 
 
 class ProjectSession:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, site_yaml: Path | None = None) -> None:
         self.root = root.resolve()
         if not self.root.is_dir():
             raise NotADirectoryError(f"Not a project directory: {self.root}")
@@ -81,10 +81,26 @@ class ProjectSession:
         self.active_yaml: Path | None = None
         self._buffers: dict[Path, DocBuffer] = {}
         self.input_fn = input
+        self._site_yaml = self._resolve_initial_site_yaml(site_yaml)
         self._sync_from_logical()
 
-    def site_yaml(self) -> Path:
+    def _resolve_initial_site_yaml(self, site_yaml: Path | None) -> Path:
+        if site_yaml is not None:
+            path = site_yaml.resolve()
+            if path.parent != self.root:
+                raise ValueError(
+                    f"Site YAML must be at the site root ({self.root}), got {path}"
+                )
+            if not is_yaml(path):
+                raise ValueError(f"Not a YAML file: {path}")
+            return path
+        found = find_site_yaml(self.root)
+        if found is not None:
+            return found
         return site_yaml_path(self.root)
+
+    def site_yaml(self) -> Path:
+        return self._site_yaml
 
     def peek_doc(self, path: Path | None = None) -> dict[str, Any] | None:
         """Return buffered doc if loaded, else read from disk (no buffer insert)."""
@@ -99,18 +115,17 @@ class ProjectSession:
         from housewire.project import abm
 
         resolved = (path or self.ensure_active_yaml()).resolve()
-        if resolved != self.site_yaml() and resolved.name not in (
-            HOUSEWIRE_YAML,
-            "housewire.yml",
-        ):
-            raise ValueError(
-                f"Only the site {HOUSEWIRE_YAML} can be edited "
-                f"(got {resolved.relative_to(self.root)})"
-            )
-        # Normalize alternate name to canonical site path when present.
         site = self.site_yaml()
-        if resolved.parent == self.root and resolved.name == "housewire.yml":
-            resolved = site
+        if resolved != site:
+            # Allow activating another root YAML as the document.
+            if resolved.parent == self.root and is_yaml(resolved) and resolved.is_file():
+                self._site_yaml = resolved
+                site = resolved
+            else:
+                raise ValueError(
+                    f"Only the site YAML can be edited "
+                    f"(got {resolved.relative_to(self.root)}; active is {site.name})"
+                )
         buf = self._buffers.get(resolved)
         if buf is None:
             doc = abm.load_editable(resolved, self.root)
@@ -241,9 +256,11 @@ class ProjectSession:
         site = self.site_yaml()
         if site in self._buffers or site.is_file():
             return site
-        yml = (self.root / "housewire.yml").resolve()
-        if yml in self._buffers or yml.is_file():
-            return yml
+        # Discover if the preferred path was a default that does not exist yet.
+        found = find_site_yaml(self.root)
+        if found is not None:
+            self._site_yaml = found
+            return found
         return None
 
     def _resolve_logical(self, parts: list[str]) -> LocationCursor:
@@ -253,12 +270,12 @@ class ProjectSession:
         if yaml_path is None:
             raise FileNotFoundError(
                 f"Location does not exist: {'/'.join(parts)} "
-                f"(no {HOUSEWIRE_YAML} at site root)"
+                f"(no .yaml/.yml at site root)"
             )
         doc = self.peek_doc(yaml_path)
         if doc is None:
             raise FileNotFoundError(
-                f"Cannot read {HOUSEWIRE_YAML} for location {'/'.join(parts)}"
+                f"Cannot read site YAML for location {'/'.join(parts)}"
             )
         # Validate the full path exists as nested places.
         get_place_node(doc, parts)
@@ -386,26 +403,23 @@ class ProjectSession:
             self.active_yaml = path
             return path
         raise ValueError(
-            f"No {HOUSEWIRE_YAML} at site root. "
-            f"Create {HOUSEWIRE_YAML} or use add location under an existing site."
+            f"No .yaml/.yml at site root. "
+            f"Create {HOUSEWIRE_YAML} (or any site *.yaml) "
+            f"or use add location under an existing site."
         )
 
     def use_yaml(self, name: str) -> Path:
         path = self.resolve_under_root(name)
         if not path.is_file() or not is_yaml(path):
             raise FileNotFoundError(f"Not a YAML file: {name}")
-        if not is_housewire_yaml(path):
+        if path.parent.resolve() != self.root:
             raise ValueError(
-                f"Only {HOUSEWIRE_YAML} can be edited. Got: {path.name}"
+                f"Only a YAML at the site root can be the document. Got: {name}"
             )
-        site = self.site_yaml()
-        if path.resolve() not in {site, (self.root / "housewire.yml").resolve()}:
-            raise ValueError(
-                f"use only activates the site {HOUSEWIRE_YAML} "
-                f"({site.relative_to(self.root)})"
-            )
-        self.active_yaml = path.resolve()
-        return path.resolve()
+        resolved = path.resolve()
+        self._site_yaml = resolved
+        self.active_yaml = resolved
+        return resolved
 
     def active_path(self) -> Path:
         return self.ensure_active_yaml()

@@ -6,9 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from housewire.project.io import HOUSEWIRE_YAML
+from housewire.project.paths import find_site_yaml, is_yaml, list_root_yaml_files
 from housewire.project.session import ProjectSession
-from housewire.project.tree import site_yaml_path
 
 # Directories copied on Save As (editable site content).
 _SAVE_AS_SKIP = frozenset({".git", "out", ".venv", "__pycache__", ".mypy_cache"})
@@ -16,7 +15,7 @@ _SAVE_AS_SKIP = frozenset({".git", "out", ".venv", "__pycache__", ".mypy_cache"}
 
 @dataclass
 class Document:
-    """A complete site (directory + housewire.yaml)."""
+    """A complete site (directory + one site YAML of any ``.yml``/``.yaml`` name)."""
 
     root: Path
     session: ProjectSession
@@ -46,14 +45,16 @@ class Workspace:
     def require_session(self) -> ProjectSession:
         if self.document is None:
             raise FileNotFoundError(
-                "No document open. Open a site directory (POST /api/workspace/open)."
+                "No document open. Open a site YAML or directory "
+                "(POST /api/workspace/open)."
             )
         return self.document.session
 
     def require_root(self) -> Path:
         if self.document is None:
             raise FileNotFoundError(
-                "No document open. Open a site directory (POST /api/workspace/open)."
+                "No document open. Open a site YAML or directory "
+                "(POST /api/workspace/open)."
             )
         return self.document.root
 
@@ -66,6 +67,7 @@ class Workspace:
             }
         root = self.document.root
         sess = self.document.session
+        yaml_path = sess.site_yaml()
         dirty = []
         for path in sess.dirty_paths():
             try:
@@ -77,27 +79,52 @@ class Workspace:
                 "id": str(root),
                 "path": str(root),
                 "name": root.name,
-                "yaml": HOUSEWIRE_YAML,
+                "yaml": yaml_path.name,
+                "yaml_path": str(yaml_path),
             },
             "dirty": dirty,
             "site": str(root),
         }
 
     def open_site(self, path: Path, *, force: bool = False) -> Document:
-        """Load ``path`` as the active document."""
-        root = path.resolve()
-        if not root.is_dir():
-            raise NotADirectoryError(f"Not a site directory: {root}")
-        yaml_path = site_yaml_path(root)
-        if not yaml_path.is_file():
-            raise FileNotFoundError(f"No {HOUSEWIRE_YAML} in {root}")
+        """Load ``path`` as the active document.
+
+        ``path`` may be a site directory or a ``.yaml``/``.yml`` file at the
+        site root (any filename).
+        """
+        target = path.expanduser().resolve()
+        if target.is_file():
+            if not is_yaml(target):
+                raise ValueError(f"Not a YAML file: {target}")
+            root = target.parent
+            yaml_path = target
+        elif target.is_dir():
+            root = target
+            yaml_path = find_site_yaml(root)
+            if yaml_path is None:
+                found = list_root_yaml_files(root)
+                if len(found) > 1:
+                    names = ", ".join(p.name for p in found)
+                    raise FileNotFoundError(
+                        f"Multiple YAML files in {root}; open one explicitly "
+                        f"({names})"
+                    )
+                raise FileNotFoundError(
+                    f"No .yaml/.yml file in {root}"
+                )
+        else:
+            raise FileNotFoundError(f"Path not found: {target}")
+
         if self.document is not None and self.document.session.dirty_paths():
             if not force:
                 raise ValueError(
                     "Active document has unsaved changes. "
                     "Save, or open with force=true to discard."
                 )
-        doc = Document(root=root, session=ProjectSession(root))
+        doc = Document(
+            root=root,
+            session=ProjectSession(root, site_yaml=yaml_path),
+        )
         self.document = doc
         self.documents = {str(root): doc}
         return doc
@@ -119,7 +146,7 @@ class Workspace:
         if self.document is None:
             raise FileNotFoundError("No document open to Save As")
         src = self.document.root
-        target = dest.resolve()
+        target = dest.expanduser().resolve()
         if target.exists():
             if not force:
                 raise FileExistsError(f"Destination already exists: {target}")
@@ -139,18 +166,14 @@ class Workspace:
                 )
             else:
                 shutil.copy2(child, dest_child)
-        # Persist current buffers into the copy's YAML if dirty on source.
-        if self.document.session.dirty_paths():
-            # Save source first so copy gets latest from disk after we re-copy yaml,
-            # or write buffers into the new session after open.
-            pass
         # Prefer writing current in-memory doc into the new tree.
         src_sess = self.document.session
+        yaml_name = src_sess.site_yaml().name
         try:
             _path, doc = src_sess.ensure_doc()
         except ValueError:
             doc = None
-        new_doc = self.open_site(target, force=True)
+        new_doc = self.open_site(target / yaml_name, force=True)
         if doc is not None:
             yaml_path = new_doc.session.site_yaml()
             new_doc.session.ensure_doc(yaml_path)

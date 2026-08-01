@@ -6,10 +6,20 @@ from typing import Any, Iterator
 
 from housewire.house import is_place_type
 from housewire.project.io import HOUSEWIRE_YAML
+from housewire.project.paths import find_site_yaml
 
 
-def site_yaml_path(site_root: Path) -> Path:
-    """Path of the single site ``housewire.yaml``."""
+def site_yaml_path(site_root: Path, *, name: str | None = None) -> Path:
+    """Path of the site document YAML (any ``.yaml`` / ``.yml`` name).
+
+    When the file already exists it is discovered via :func:`find_site_yaml`.
+    Otherwise returns ``site_root / name`` or the default ``housewire.yaml``.
+    """
+    found = find_site_yaml(site_root, preferred=name)
+    if found is not None:
+        return found
+    if name:
+        return (site_root / name).resolve()
     return (site_root / HOUSEWIRE_YAML).resolve()
 
 

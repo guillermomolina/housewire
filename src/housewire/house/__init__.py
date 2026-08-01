@@ -217,31 +217,45 @@ def _types_dir_from_catalog_root(root: Path) -> Path | None:
 
 
 def _site_catalog_ref(site_root: Path | None) -> str | Path | None:
-    """Read optional ``catalog:`` from the site housewire.yaml."""
+    """Read optional ``catalog:`` from the site document YAML."""
     if site_root is None:
         return None
+    root = Path(site_root)
+    path: Path | None = None
     for name in ("housewire.yaml", "housewire.yml"):
-        path = Path(site_root) / name
-        if not path.is_file():
-            continue
-        try:
-            with path.open("r", encoding="utf-8") as handle:
-                data = yaml.safe_load(handle) or {}
-        except OSError:
-            return None
-        if not isinstance(data, dict):
-            return None
-        ref = data.get("catalog")
-        if ref is None:
-            return None
-        if isinstance(ref, (str, Path)):
-            return ref
-        if isinstance(ref, dict):
-            if ref.get("path"):
-                return Path(str(ref["path"]))
-            if ref.get("id") or ref.get("name"):
-                return str(ref.get("id") or ref.get("name"))
+        candidate = root / name
+        if candidate.is_file():
+            path = candidate
+            break
+    if path is None and root.is_dir():
+        found = [
+            child
+            for child in sorted(root.iterdir(), key=lambda p: p.name.lower())
+            if child.is_file()
+            and child.suffix.lower() in {".yaml", ".yml"}
+            and not child.name.endswith(".bak")
+        ]
+        if len(found) == 1:
+            path = found[0]
+    if path is None:
         return None
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+    except OSError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    ref = data.get("catalog")
+    if ref is None:
+        return None
+    if isinstance(ref, (str, Path)):
+        return ref
+    if isinstance(ref, dict):
+        if ref.get("path"):
+            return Path(str(ref["path"]))
+        if ref.get("id") or ref.get("name"):
+            return str(ref.get("id") or ref.get("name"))
     return None
 
 
@@ -520,13 +534,13 @@ def expand_conduit(
 def path_location_parts(project_path: Path, yaml_file: Path) -> list[str]:
     """Location prefix for a YAML file.
 
-    Sites use a single root ``housewire.yaml``; nested places live under
+    Sites use a single root ``.yaml``/``.yml``; nested places live under
     ``elements:`` and get their path from ``_walk_locations``, so the file
     itself always contributes an empty prefix when it sits at the site root.
     """
     relative = yaml_file.resolve().relative_to(project_path.resolve())
     # Nested files are not supported; ignore parent dirs other than ``.``.
-    if relative.name.lower() in {"housewire.yaml", "housewire.yml"} and len(relative.parts) == 1:
+    if len(relative.parts) == 1 and relative.suffix.lower() in {".yaml", ".yml"}:
         return []
     relative_parent = relative.parent
     if str(relative_parent) == ".":

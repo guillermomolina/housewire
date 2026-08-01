@@ -1,11 +1,13 @@
 """Workspace / document API (site = document; views are client-side)."""
 from __future__ import annotations
 
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
 from fixtures import add_place, init_site, save_site
+from housewire.project.io import load_yaml, save_yaml
 from housewire.ui.workspace import create_workspace
 
 
@@ -20,6 +22,7 @@ class TestWorkspaceUnit(unittest.TestCase):
 
             ws = create_workspace(root)
             self.assertEqual(ws.status()["document"]["name"], "site_a")
+            self.assertEqual(ws.status()["document"]["yaml"], "housewire.yaml")
 
             dest = Path(tmp) / "site_b"
             ws.save_as(dest)
@@ -39,6 +42,24 @@ class TestWorkspaceUnit(unittest.TestCase):
                 ws.open_site(dest)
             ws.open_site(dest, force=True)
             self.assertEqual(ws.status()["document"]["name"], "site_b")
+
+    def test_open_custom_yaml_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "custom"
+            root.mkdir()
+            init_site(root, type_id="House", label="Custom")
+            yaml_path = root / "housewire.yaml"
+            custom = root / "instalacion.yml"
+            shutil.move(str(yaml_path), str(custom))
+            save_yaml(custom, load_yaml(custom), backup=False)
+
+            ws = create_workspace(custom)
+            st = ws.status()
+            self.assertEqual(st["document"]["yaml"], "instalacion.yml")
+            self.assertTrue(str(st["document"]["yaml_path"]).endswith("instalacion.yml"))
+
+            ws2 = create_workspace(root)
+            self.assertEqual(ws2.status()["document"]["yaml"], "instalacion.yml")
 
 
 class TestWorkspaceApi(unittest.TestCase):
@@ -68,6 +89,7 @@ class TestWorkspaceApi(unittest.TestCase):
             st = client.get("/api/workspace").json()
             self.assertEqual(st["document"]["name"], "site_a")
             self.assertEqual(st["dirty"], [])
+            self.assertIn("dialogs", st)
 
             dest = Path(tmp) / "site_b"
             saved = client.post(
@@ -100,6 +122,20 @@ class TestWorkspaceApi(unittest.TestCase):
             )
             self.assertEqual(forced.status_code, 200)
             self.assertEqual(forced.json()["document"]["name"], "site_b")
+
+            # Open by YAML file path (custom name)
+            custom_root = Path(tmp) / "named"
+            custom_root.mkdir()
+            cdoc = init_site(custom_root, type_id="House", label="N")
+            save_site(custom_root, cdoc)
+            named = custom_root / "plan.yaml"
+            shutil.move(str(custom_root / "housewire.yaml"), str(named))
+            opened = client.post(
+                "/api/workspace/open",
+                json={"path": str(named), "force": True},
+            )
+            self.assertEqual(opened.status_code, 200)
+            self.assertEqual(opened.json()["document"]["yaml"], "plan.yaml")
 
 
 if __name__ == "__main__":

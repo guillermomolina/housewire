@@ -77,12 +77,13 @@ class TestProjectSession(unittest.TestCase):
         path = s.ensure_active_yaml()
         self.assertEqual(path.name, "housewire.yaml")
 
-    def test_use_non_index_raises(self) -> None:
+    def test_use_other_root_yaml(self) -> None:
         create_empty_house_file(self.root / "otro.yaml")
         s = self._session()
         s.cd("zona_a")
-        with self.assertRaises(ValueError):
-            s.use_yaml("otro.yaml")
+        path = s.use_yaml("otro.yaml")
+        self.assertEqual(path.name, "otro.yaml")
+        self.assertEqual(s.site_yaml().name, "otro.yaml")
 
     def test_cd_outside_root_raises(self) -> None:
         s = self._session()

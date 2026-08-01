@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-08-01
+
+### Changed
+
+- Site document YAML may use **any** ``.yaml`` / ``.yml`` filename at the site
+  root (not only ``housewire.yaml``). Open accepts a directory or a YAML file
+  path. New sites still default to ``housewire.yaml``.
+- File → Open / Save as prefer a **native OS dialog** via the local server
+  (``zenity`` / ``kdialog`` / ``tkinter``); path modal is the fallback. Browser
+  pickers cannot expose real paths to the API (see ``docs/ui-workspace.md``).
+
 ## [0.23.1] — 2026-08-01
 
 ### Fixed

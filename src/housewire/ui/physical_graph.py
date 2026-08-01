@@ -22,7 +22,7 @@ from housewire.house.conduit_ref import (
     resolve_location_ref,
     split_conduit_endpoint,
 )
-from housewire.project.io import HOUSEWIRE_YAML, load_yaml
+from housewire.project.io import load_yaml
 from housewire.project.openings import declared_opening_ids, expand_opening_grid
 from housewire.project.tree import (
     get_place_node,
@@ -371,7 +371,7 @@ def _load_site_doc(
             if key.resolve() == path:
                 return path, doc
     if not path.is_file():
-        raise FileNotFoundError(f"No {HOUSEWIRE_YAML} at site root {site_root}")
+        raise FileNotFoundError(f"No site .yaml/.yml at site root {site_root}")
     return path, load_yaml(path)
 
 
