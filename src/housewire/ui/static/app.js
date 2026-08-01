@@ -89,6 +89,12 @@
     updateHistoryButtons();
   }
 
+  /** Update Reset target only; leave undo/redo stack intact. */
+  function markLayoutBaseline() {
+    layoutBaseline = cloneSnap(snapshotPositions());
+    updateHistoryButtons();
+  }
+
   function pushLayoutHistory() {
     const snap = snapshotPositions();
     if (layoutIndex >= 0 && snapsEqual(snap, layoutHistory[layoutIndex])) {
@@ -1047,6 +1053,7 @@
       setStatus(`saved ${data.saved.length} file(s)`);
       dirtyLocal = false;
       updateSaveButton(false);
+      markLayoutBaseline();
     } catch (err) {
       setStatus(String(err.message || err));
     }
