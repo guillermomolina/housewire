@@ -25,7 +25,6 @@
   let drag = null;
   let panDrag = null;
   let marquee = null;
-  let spacePan = false;
   let saveTimer = null;
   let worldEl = null;
   let nodesById = {};
@@ -2118,44 +2117,29 @@
   viewport.addEventListener("pointerdown", (ev) => {
     if (drag || marquee) return;
     if (ev.target !== svg && ev.target !== viewport) return;
-    const panWithLeft = spacePan || ev.altKey;
-    if (ev.button === 1 || (ev.button === 0 && panWithLeft)) {
+    if (ev.button === 0 && ev.shiftKey) {
+      marquee = {
+        pointerId: ev.pointerId,
+        startClientX: ev.clientX,
+        startClientY: ev.clientY,
+        additive: isModClick(ev),
+        moved: false,
+        captured: true,
+      };
+      viewport.classList.add("marqueeing");
+      try {
+        svg.setPointerCapture(ev.pointerId);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    if (ev.button === 1 || ev.button === 0) {
       ev.preventDefault();
       panDrag = { x: ev.clientX, y: ev.clientY, panX, panY };
       viewport.classList.add("panning");
       svg.setPointerCapture(ev.pointerId);
-      return;
     }
-    if (ev.button !== 0) return;
-    marquee = {
-      pointerId: ev.pointerId,
-      startClientX: ev.clientX,
-      startClientY: ev.clientY,
-      additive: isModClick(ev),
-      moved: false,
-      captured: true,
-    };
-    viewport.classList.add("marqueeing");
-    try {
-      svg.setPointerCapture(ev.pointerId);
-    } catch {
-      /* ignore */
-    }
-  });
-
-  window.addEventListener("keydown", (ev) => {
-    if (ev.code === "Space" && !ev.repeat) {
-      const tag = (ev.target && ev.target.tagName) || "";
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      spacePan = true;
-      ev.preventDefault();
-    }
-  });
-  window.addEventListener("keyup", (ev) => {
-    if (ev.code === "Space") spacePan = false;
-  });
-  window.addEventListener("blur", () => {
-    spacePan = false;
   });
 
   viewport.addEventListener(
