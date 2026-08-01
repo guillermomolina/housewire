@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.19] — 2026-08-01
+
+### Changed
+
+- **Reset** jumps the edit cursor to the last Save/open baseline without
+  clearing history, so Redo can walk forward again from that point.
+
 ## [0.28.18] — 2026-08-01
 
 ### Changed

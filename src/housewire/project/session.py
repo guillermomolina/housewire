@@ -234,18 +234,33 @@ class ProjectSession:
         return True
 
     def reset_edits(self, path: Path | None = None) -> bool:
-        """Restore baseline (last open/save). Return False if already at baseline."""
+        """Jump the edit cursor to the last open/save baseline.
+
+        Unlike wiping the stack, this keeps later snapshots so Redo can walk
+        forward again from the saved point (same as undoing until baseline).
+        """
         resolved, _doc = self.ensure_doc(path)
         self._ensure_edit_history(resolved, self._buffers[resolved].doc)
         baseline = self._edit_baseline.get(resolved)
         if baseline is None:
             return False
-        if _docs_equivalent(self._buffers[resolved].doc, baseline):
+        hist = self._edit_history[resolved]
+        idx = self._edit_index[resolved]
+        base_idx: int | None = None
+        for i, snap in enumerate(hist):
+            if _docs_equivalent(snap, baseline):
+                base_idx = i
+                break
+        if base_idx is None:
+            # History truncated past the save point — reinsert baseline and
+            # keep the redo trail ahead of the current cursor.
+            hist.insert(0, _clone_doc(baseline))
+            self._edit_index[resolved] = idx + 1
+            base_idx = 0
+        if idx == base_idx and _docs_equivalent(self._buffers[resolved].doc, baseline):
             return False
-        restored = _clone_doc(baseline)
-        self._buffers[resolved].doc = restored
-        self._edit_history[resolved] = [_clone_doc(restored)]
-        self._edit_index[resolved] = 0
+        self._edit_index[resolved] = base_idx
+        self._buffers[resolved].doc = _clone_doc(hist[base_idx])
         self.reconcile_dirty(resolved)
         return True
 

@@ -654,6 +654,19 @@ class TestServeApi(unittest.TestCase):
             self.assertEqual(detail["label"], "Caja 4")
             self.assertFalse(reset.json().get("can_undo"))
             self.assertFalse(reset.json().get("can_reset"))
+            # Reset keeps the redo trail from the save point.
+            self.assertTrue(reset.json().get("can_redo"))
+            redo_after_reset = client.post(
+                "/api/edit/redo",
+                json={"location_id": "Parking", "depth": 1},
+            )
+            self.assertEqual(redo_after_reset.status_code, 200, redo_after_reset.text)
+            self.assertTrue(redo_after_reset.json().get("changed"))
+            detail = client.get(
+                "/api/place?location=Parking&id=Caja_4"
+            ).json()
+            self.assertEqual(detail["label"], "Moved label")
+            self.assertTrue(redo_after_reset.json().get("can_reset"))
 
 
 if __name__ == "__main__":
