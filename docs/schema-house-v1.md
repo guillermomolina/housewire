@@ -374,14 +374,15 @@ views:
   box (parent-local, ``>= 0``). Used when the UI **Elements** layer is on.
 - **`views.physical`**: page size and preferred conduit drawing mode for the
   canvas root location (often a `Floor` or `Room`, but any place type works).
-- Canvas zoom (pan/wheel) is independent of `representation` (line vs tube).
+- Canvas zoom (pan/wheel) is independent of `representation` (legacy YAML;
+  the UI always draws conduits as tubes).
 - **Depth zoom** (`depth` query / toolbar) controls how many nested place
   levels are drawn inside parent boxes; it does not change representation.
 - **Elements / Cables** toolbar toggles show or hide the electrical LOD on the
-  same canvas (session UI state; not persisted). Conduit `line`/`tube` is
-  independent of cable edges. Element boxes enlarge their host place (like
-  nested locations); Elements draw only when the place is a leaf in the current
-  depth view. Cables listed in a conduit ``contains`` follow the conduit path.
+  same canvas (session UI state; not persisted). Cables that ride in a conduit
+  draw only the in-box tails; the tube shows the run between places. Element
+  boxes enlarge their host place (like nested locations); Elements draw only
+  when the place is a leaf in the current depth view.
 - Back openings (`B…`) are drawn at the symbol center, not as a fourth side.
 - Omitted when unused; Graphviz/WireViz generate does not require these fields.
 

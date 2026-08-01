@@ -135,9 +135,9 @@ def get_physical_page(place: dict[str, Any]) -> dict[str, Any]:
         phys = dict(views["physical"])
     width = phys.get("width", 2000)
     height = phys.get("height", 1400)
-    representation = phys.get("representation", "line")
+    representation = phys.get("representation", "tube")
     if representation not in REPRESENTATIONS:
-        representation = "line"
+        representation = "tube"
     return {
         "width": float(width),
         "height": float(height),

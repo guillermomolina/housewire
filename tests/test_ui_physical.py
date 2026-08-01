@@ -80,7 +80,7 @@ class TestViewLayout(unittest.TestCase):
     def test_page_defaults_and_set(self) -> None:
         place: dict = {"schema": "house/v1", "type": "Room"}
         page = get_physical_page(place)
-        self.assertEqual(page["representation"], "line")
+        self.assertEqual(page["representation"], "tube")
         self.assertEqual(page["width"], 2000.0)
         set_physical_page(place, representation="tube", width=1200)
         page2 = get_physical_page(place)

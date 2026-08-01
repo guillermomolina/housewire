@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.9] — 2026-08-01
+
+### Changed
+
+- Conduits always draw as **tubes**; the Representation line/tube control is
+  removed. Default ``views.physical.representation`` is ``tube``.
+- Cable overlay only draws in-box tails (element↔opening); the tube shows the
+  run between places, so cables no longer fan out beside or outside tubes.
+
 ## [0.27.8] — 2026-08-01
 
 ### Fixed

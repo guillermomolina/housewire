@@ -1,6 +1,5 @@
 (() => {
   const svg = document.getElementById("canvas");
-  const representationSelect = document.getElementById("representation");
   const depthLabel = document.getElementById("depth-label");
   const statusEl = document.getElementById("status");
   const viewport = document.getElementById("viewport");
@@ -1367,6 +1366,14 @@
     };
   }
 
+  /** Start a new subpath (keep M) so cable skips the tube middle. */
+  function appendOrthoSubpath(d, p1, p2, fromFace, toFace, occupied) {
+    const pts = orthoRoute(p1, p2, fromFace, toFace, occupied);
+    const seg = pointsToPathD(pts);
+    if (!d) return { d: seg, segs: segsFromPoints(pts) };
+    return { d: `${d} ${seg}`, segs: segsFromPoints(pts) };
+  }
+
   function cablePathD(edge, placeById, elemById, occupied) {
     const a = elemById[edge.from];
     const b = elemById[edge.to];
@@ -1399,6 +1406,7 @@
       ) {
         return orthoPathD(c1, c2, null, null, occupied);
       }
+      // Only draw in-box tails; the conduit tube already shows the run between places.
       const opStart = openingAnchorAbs(
         startPlace,
         first.from_opening,
@@ -1411,8 +1419,7 @@
         first.from_opening?.[0],
         placeById
       );
-      // Element → interior approach → opening (stay inside the box).
-      let d = appendOrtho("", c1, innerStart, null, null, null).d;
+      let d = appendOrthoSubpath("", c1, innerStart, null, null, null).d;
       d = appendOrtho(d, innerStart, opStart, null, null, null).d;
       let prevArrive = null;
       let prevToOpening = null;
@@ -1436,7 +1443,6 @@
           placeById
         );
         if (prevArrive && prevToOpening) {
-          // Through intermediate box: contour → interior → next opening.
           const innerIn = openingInteriorPoint(
             pf,
             prevToOpening,
@@ -1449,23 +1455,11 @@
             hop.from_opening?.[0],
             placeById
           );
-          d = appendOrtho(d, prevArrive, innerIn, null, null, null).d;
+          d = appendOrthoSubpath(d, prevArrive, innerIn, null, null, null).d;
           d = appendOrtho(d, innerIn, innerOut, null, null, null).d;
           d = appendOrtho(d, innerOut, opA, null, null, null).d;
         }
-        const fromFace = routeFace(
-          pf,
-          hop.from_opening,
-          hop.from_opening?.[0],
-          placeById
-        );
-        const toFace = routeFace(
-          pt,
-          hop.to_opening,
-          hop.to_opening?.[0],
-          placeById
-        );
-        d = appendOrtho(d, opA, opB, fromFace, toFace, null).d;
+        // Skip hop.from → hop.to (tube owns that corridor).
         prevArrive = opB;
         prevToOpening = hop.to_opening;
       }
@@ -1481,7 +1475,7 @@
         last.to_opening?.[0],
         placeById
       );
-      d = appendOrtho(d, opEnd, innerEnd, null, null, null).d;
+      d = appendOrthoSubpath(d, opEnd, innerEnd, null, null, null).d;
       d = appendOrtho(d, innerEnd, c2, null, null, null).d;
       return d;
     }
@@ -1807,9 +1801,6 @@
     applyWorldTransform();
     svg.appendChild(worldEl);
 
-    const page = graph.page || {};
-    const representation =
-      representationSelect.value || page.representation || "line";
     const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
     const elemById = Object.fromEntries(
       (graph.elements || []).map((e) => [e.id, e])
@@ -1847,22 +1838,13 @@
       const title = contains
         ? `${edgeName}: ${contains}`
         : String(edgeName || "");
-      const paths = [];
-      if (representation === "tube") {
-        const tube = el("path", { class: "edge-tube", d });
-        const core = el("path", { class: "edge-tube-core", d });
-        tube.appendChild(el("title", null, title));
-        core.appendChild(el("title", null, title));
-        edgesG.appendChild(tube);
-        edgesG.appendChild(core);
-        paths.push(tube, core);
-      } else {
-        const line = el("path", { class: "edge-line", d });
-        line.appendChild(el("title", null, title));
-        edgesG.appendChild(line);
-        paths.push(line);
-      }
-      edgePaths.push({ edge, paths });
+      const tube = el("path", { class: "edge-tube", d });
+      const core = el("path", { class: "edge-tube-core", d });
+      tube.appendChild(el("title", null, title));
+      core.appendChild(el("title", null, title));
+      edgesG.appendChild(tube);
+      edgesG.appendChild(core);
+      edgePaths.push({ edge, paths: [tube, core] });
     }
 
     for (const node of graph.nodes) {
@@ -3146,7 +3128,6 @@
     depthLevel = graph.depth || depthLevel;
     maxDepth = graph.max_depth || 1;
     if (depthLevel > maxDepth) depthLevel = Math.max(maxDepth, 1);
-    representationSelect.value = graph.page?.representation || "line";
     let filled = [];
     let filledElem = [];
     try {
@@ -3185,22 +3166,6 @@
     depthLevel = capped;
     await loadLocation({ fit: false });
   }
-
-  representationSelect.addEventListener("change", async () => {
-    const value = representationSelect.value;
-    render();
-    if (!locationId) return;
-    try {
-      await api(`/api/physical/page`, {
-        method: "PATCH",
-        body: JSON.stringify({ location_id: locationId, representation: value }),
-      });
-      setStatus(`representation=${value} · unsaved`);
-      scheduleStatusRefresh();
-    } catch (err) {
-      setStatus(String(err.message || err));
-    }
-  });
 
   const toggleElements = document.getElementById("toggle-elements");
   const toggleCables = document.getElementById("toggle-cables");
