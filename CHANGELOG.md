@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.15] — 2026-08-01
+
+### Changed
+
+- Replace Diagram Physical/Electrical/Both with a single **Electrical**
+  on/off toggle (elements + cables; off by default). Places and conduits
+  always show.
+
 ## [0.27.14] — 2026-08-01
 
 ### Changed

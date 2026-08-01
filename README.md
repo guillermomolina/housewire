@@ -62,8 +62,8 @@ housewire serve "$SITE"
 Drag places on a location canvas (any place with child locations), auto-layout,
 then **Save**. Conduits always draw as tubes. Canvas zoom (`+`/`−`/wheel) is
 separate from **depth zoom** (`depth −`/`+` or Alt+wheel), which nests more
-children inside parent boxes. **Diagram** mode: *Physical* (places + conduits),
-*Electrical* (elements + cables), or *Both*. Click a box or element for the
+children inside parent boxes. **Electrical** toggles elements and cables on
+the same canvas (off by default). Click a box or element for the
 side panel (inspector + socket/lamp/feed recipes). Place positions go to
 `view.physical`; element positions to `view.electrical`; page settings to
 `views.physical` on the canvas root.

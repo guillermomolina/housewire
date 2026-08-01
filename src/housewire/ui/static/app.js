@@ -42,7 +42,6 @@
   let layoutHistory = [];
   let layoutIndex = -1;
   let layoutBaseline = null;
-  let showPhysical = true;
   let showElectrical = false;
   let outlineNodes = [];
   let canvasLocations = [];
@@ -1898,25 +1897,23 @@
 
     /** @type {{axis:string,x?:number,y?:number,a:number,b:number}[]} */
     const occupied = [];
-    if (showPhysical) {
-      for (const edge of graph.edges) {
-        const routed = edgePathD(edge, byId, occupied);
-        if (!routed) continue;
-        const d = routed.d;
-        for (const s of routed.segs) occupied.push(s);
-        const contains = (edge.contains || []).join(", ");
-        const edgeName = edge.name || edge.id;
-        const title = contains
-          ? `${edgeName}: ${contains}`
-          : String(edgeName || "");
-        const tube = el("path", { class: "edge-tube", d });
-        const core = el("path", { class: "edge-tube-core", d });
-        tube.appendChild(el("title", null, title));
-        core.appendChild(el("title", null, title));
-        edgesG.appendChild(tube);
-        edgesG.appendChild(core);
-        edgePaths.push({ edge, paths: [tube, core], d });
-      }
+    for (const edge of graph.edges) {
+      const routed = edgePathD(edge, byId, occupied);
+      if (!routed) continue;
+      const d = routed.d;
+      for (const s of routed.segs) occupied.push(s);
+      const contains = (edge.contains || []).join(", ");
+      const edgeName = edge.name || edge.id;
+      const title = contains
+        ? `${edgeName}: ${contains}`
+        : String(edgeName || "");
+      const tube = el("path", { class: "edge-tube", d });
+      const core = el("path", { class: "edge-tube-core", d });
+      tube.appendChild(el("title", null, title));
+      core.appendChild(el("title", null, title));
+      edgesG.appendChild(tube);
+      edgesG.appendChild(core);
+      edgePaths.push({ edge, paths: [tube, core], d });
     }
 
     for (const node of graph.nodes) {
@@ -3178,9 +3175,9 @@
       await setDepth(needDepth);
     }
     if (!showElectrical) {
-      // Outline picked an element — show electrical (keep physical if already on).
       showElectrical = true;
-      syncDiagramModeSelect();
+      const toggle = document.getElementById("toggle-electrical");
+      if (toggle) toggle.checked = true;
       render();
       renderOutline();
     }
@@ -3241,35 +3238,13 @@
     await loadLocation({ fit: false });
   }
 
-  function syncDiagramModeSelect() {
-    const sel = document.getElementById("diagram-mode");
-    if (!sel) return;
-    if (showPhysical && showElectrical) sel.value = "both";
-    else if (showElectrical) sel.value = "electrical";
-    else sel.value = "physical";
-  }
-
-  function applyDiagramMode(mode) {
-    if (mode === "electrical") {
-      showPhysical = false;
-      showElectrical = true;
-    } else if (mode === "both") {
-      showPhysical = true;
-      showElectrical = true;
-    } else {
-      showPhysical = true;
-      showElectrical = false;
-    }
-    syncDiagramModeSelect();
-    render();
-    renderOutline();
-  }
-
-  const diagramModeSelect = document.getElementById("diagram-mode");
-  if (diagramModeSelect) {
-    syncDiagramModeSelect();
-    diagramModeSelect.addEventListener("change", () => {
-      applyDiagramMode(diagramModeSelect.value);
+  const toggleElectrical = document.getElementById("toggle-electrical");
+  if (toggleElectrical) {
+    toggleElectrical.checked = showElectrical;
+    toggleElectrical.addEventListener("change", () => {
+      showElectrical = Boolean(toggleElectrical.checked);
+      render();
+      renderOutline();
     });
   }
 
