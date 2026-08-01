@@ -19,7 +19,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   Ctrl+Z / Ctrl+Y). Reset restores the snapshot from the last location load.
   Missing ``x``/``y`` are filled automatically on location load (marks dirty;
   **Save** enabled only when there are unsaved changes). Manual **Auto-layout**
-  repositions all visible places.
+  repositions all visible places. Canvas **Fit** frames all places in the
+  viewport (also runs after load).
 
 ### Changed
 

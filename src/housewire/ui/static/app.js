@@ -397,6 +397,47 @@
     }
   }
 
+  function contentBounds() {
+    if (!graph?.nodes?.length) return null;
+    const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const n of graph.nodes) {
+      const a = absXY(n, byId);
+      const w = nodeW(n);
+      const h = nodeH(n);
+      minX = Math.min(minX, a.x);
+      minY = Math.min(minY, a.y);
+      maxX = Math.max(maxX, a.x + w);
+      maxY = Math.max(maxY, a.y + h);
+    }
+    if (!Number.isFinite(minX)) return null;
+    return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
+  }
+
+  function fitView() {
+    const bounds = contentBounds();
+    const rect = viewport.getBoundingClientRect();
+    const viewW = Math.max(rect.width || 800, 100);
+    const viewH = Math.max(rect.height || 600, 100);
+    const pad = 48;
+    if (!bounds || bounds.w < 1 || bounds.h < 1) {
+      scale = 1;
+      panX = 40;
+      panY = 40;
+      applyWorldTransform();
+      return;
+    }
+    const sx = (viewW - pad * 2) / bounds.w;
+    const sy = (viewH - pad * 2) / bounds.h;
+    scale = Math.min(3, Math.max(0.05, Math.min(sx, sy)));
+    panX = pad - bounds.minX * scale + (viewW - pad * 2 - bounds.w * scale) / 2;
+    panY = pad - bounds.minY * scale + (viewH - pad * 2 - bounds.h * scale) / 2;
+    applyWorldTransform();
+  }
+
   function edgePathD(edge, byId) {
     const a = byId[edge.from];
     const b = byId[edge.to];
@@ -913,6 +954,7 @@
     }
     render();
     resetLayoutHistory();
+    fitView();
     await refreshStatus();
     if (filled.length) {
       setStatus(
@@ -1015,14 +1057,11 @@
     applyWorldTransform();
   });
   document.getElementById("btn-zoom-out").addEventListener("click", () => {
-    scale = Math.max(0.35, scale / 1.15);
+    scale = Math.max(0.05, scale / 1.15);
     applyWorldTransform();
   });
   document.getElementById("btn-zoom-reset").addEventListener("click", () => {
-    scale = 1;
-    panX = 40;
-    panY = 40;
-    applyWorldTransform();
+    fitView();
   });
 
   document.getElementById("btn-depth-in").addEventListener("click", () => {
@@ -1053,7 +1092,7 @@
         return;
       }
       const factor = ev.deltaY > 0 ? 1 / 1.08 : 1.08;
-      scale = Math.min(3, Math.max(0.35, scale * factor));
+      scale = Math.min(3, Math.max(0.05, scale * factor));
       applyWorldTransform();
     },
     { passive: false }
