@@ -5,31 +5,32 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import add_place, init_site, save_site
 from housewire.project import abm
-from housewire.project.io import create_empty_house_file, create_location_index
+from housewire.project.io import HOUSEWIRE_YAML, create_empty_house_file
+from housewire.project.tree import get_place_node
 
-
-# ---------------------------------------------------------------------------
-# Shell dispatcher (run_shell_line)
-# ---------------------------------------------------------------------------
 
 class TestShellDispatcher(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        (self.root / "zona_a").mkdir()
-        self.yaml = self.root / "zona_a" / "housewire.yaml"
-        create_empty_house_file(self.yaml)
+        doc = init_site(self.root, type_id="House")
+        add_place(doc, "zona_a", type_id="Floor")
+        save_site(self.root, doc)
+        self.site_yaml = self.root / HOUSEWIRE_YAML
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
     def _session(self):
         from housewire.project.session import ProjectSession
+
         return ProjectSession(self.root)
 
     def _run(self, session, line, generate_fn=None):
         from housewire.commands import run_shell_line
+
         if generate_fn is None:
             generate_fn = lambda root, force=False: 0
         return run_shell_line(session, line, generate_fn=generate_fn)
@@ -86,13 +87,10 @@ class TestShellDispatcher(unittest.TestCase):
         from io import StringIO
         import sys
 
-        s = self._session()
-        self._run(s, "cd zona_a")
-        self._run(s, "add element MT_A --type MCB --subtype C10")
-        (self.root / "zona_a" / "subloc").mkdir()
-        from housewire.project.io import create_location_index
+        doc = abm.load_editable(self.site_yaml, self.root)
+        add_place(doc, "caja", type_id="JunctionBox")
+        save_site(self.root, doc)
 
-        create_location_index(self.root / "caja", type_id="JunctionBox")
         s = self._session()
         buf = StringIO()
         old = sys.stdout
@@ -106,9 +104,10 @@ class TestShellDispatcher(unittest.TestCase):
         self.assertIn("locations:", out)
         self.assertIn("zona_a/", out)
         self.assertIn("caja/", out)
-        self.assertNotIn("[d]", out)
-        self.assertNotIn("[f]", out)
         self.assertNotIn("housewire.yaml", out)
+
+        self._run(s, "cd zona_a")
+        self._run(s, "add element MT_A --type MCB --subtype C10")
 
     def test_use_sets_active(self) -> None:
         s = self._session()
@@ -124,10 +123,11 @@ class TestShellDispatcher(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(s.is_dirty())
         _path, doc = s.ensure_doc()
-        self.assertIn("MT_Nuevo", doc["elements"])
+        place = get_place_node(doc, ("zona_a",))
+        self.assertIn("MT_Nuevo", place["elements"])
         self._run(s, "save")
         disk = abm.load_editable(s.active_path(), self.root)
-        self.assertIn("MT_Nuevo", disk["elements"])
+        self.assertIn("MT_Nuevo", get_place_node(disk, ("zona_a",))["elements"])
 
     def test_rm_element_via_shell(self) -> None:
         s = self._session()
@@ -137,7 +137,8 @@ class TestShellDispatcher(unittest.TestCase):
         code = self._run(s, "rm element MT_Nuevo")
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
-        self.assertNotIn("MT_Nuevo", doc["elements"])
+        place = get_place_node(doc, ("zona_a",))
+        self.assertNotIn("MT_Nuevo", place["elements"])
 
     def test_add_cable_via_shell(self) -> None:
         s = self._session()
@@ -146,7 +147,8 @@ class TestShellDispatcher(unittest.TestCase):
         code = self._run(s, "add cable Linea_X --section '1.5 mm2' --colors BN,BU")
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
-        self.assertIn("Linea_X", doc["cables"])
+        place = get_place_node(doc, ("zona_a",))
+        self.assertIn("Linea_X", place["cables"])
 
     def test_add_conduit_via_shell(self) -> None:
         s = self._session()
@@ -159,7 +161,8 @@ class TestShellDispatcher(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
-        cd = doc["conduits"]["Conducto_Z"]
+        place = get_place_node(doc, ("zona_a",))
+        cd = place["conduits"]["Conducto_Z"]
         self.assertEqual(cd["from"], ".N1")
         self.assertEqual(cd["to"], "Caja_derivacion_2.S1")
         self.assertEqual(cd["contains"], ["Linea_Z"])
@@ -172,8 +175,9 @@ class TestShellDispatcher(unittest.TestCase):
         code = self._run(s, "pend B1 B2")
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
-        self.assertIn("PEND_Linea_01", doc["cables"])
-        self.assertIn("Conducto_paso_01", doc["conduits"])
+        place = get_place_node(doc, ("zona_a",))
+        self.assertIn("PEND_Linea_01", place["cables"])
+        self.assertIn("Conducto_paso_01", place["conduits"])
 
     def test_pend_with_section_via_shell(self) -> None:
         s = self._session()
@@ -181,7 +185,8 @@ class TestShellDispatcher(unittest.TestCase):
         code = self._run(s, "pend B1 B2 2.5")
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
-        self.assertEqual(doc["cables"]["PEND_Linea_01"]["section"], "2.5 mm2")
+        place = get_place_node(doc, ("zona_a",))
+        self.assertEqual(place["cables"]["PEND_Linea_01"]["section"], "2.5 mm2")
 
     def test_cd_auto_use_message_path(self) -> None:
         s = self._session()
@@ -198,8 +203,9 @@ class TestShellDispatcher(unittest.TestCase):
             code = self._run(s, "pend")
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
-        self.assertIn("PEND_Linea_01", doc["cables"])
-        self.assertIn("B1", doc["cables"]["PEND_Linea_01"]["notes"])
+        place = get_place_node(doc, ("zona_a",))
+        self.assertIn("PEND_Linea_01", place["cables"])
+        self.assertIn("B1", place["cables"]["PEND_Linea_01"]["notes"])
 
     def test_add_dir_creates_directory(self) -> None:
         s = self._session()
@@ -208,30 +214,22 @@ class TestShellDispatcher(unittest.TestCase):
         self.assertTrue((self.root / "nueva_zona").is_dir())
 
     def test_rm_file_removes_index(self) -> None:
-        from housewire.project.io import create_empty_house_file
-
         s = self._session()
-        create_empty_house_file(self.root / "solo" / "housewire.yaml") if False else None
-        (self.root / "tmp_loc").mkdir()
-        create_empty_house_file(self.root / "tmp_loc" / "housewire.yaml")
-        self._run(s, "cd tmp_loc")
         code = self._run(s, "rm file housewire.yaml")
         self.assertEqual(code, 0)
-        self.assertFalse((self.root / "tmp_loc" / "housewire.yaml").exists())
+        self.assertFalse(self.site_yaml.exists())
 
     def test_rm_file_clears_active_if_active(self) -> None:
-        from housewire.project.io import create_empty_house_file
-
-        (self.root / "tmp_loc2").mkdir()
-        create_empty_house_file(self.root / "tmp_loc2" / "housewire.yaml")
         s = self._session()
-        self._run(s, "cd tmp_loc2")
         self.assertIsNotNone(s.active_yaml)
         self._run(s, "rm file housewire.yaml")
         self.assertIsNone(s.active_yaml)
 
     def test_add_element_without_active_yaml_returns_error(self) -> None:
         s = self._session()
+        s.active_yaml = None
+        s._buffers.clear()
+        (self.root / HOUSEWIRE_YAML).unlink(missing_ok=True)
         code = self._run(s, "add element MT_X --type MCB")
         self.assertEqual(code, 1)
 
@@ -243,7 +241,9 @@ class TestShellDispatcher(unittest.TestCase):
 
     def test_rm_dir_nonempty_returns_error(self) -> None:
         s = self._session()
-        code = self._run(s, "rm dir zona_a")
+        (self.root / "full_dir").mkdir()
+        (self.root / "full_dir" / "file.txt").write_text("x", encoding="utf-8")
+        code = self._run(s, "rm dir full_dir")
         self.assertEqual(code, 1)
 
     def test_generate_calls_fn(self) -> None:
@@ -268,8 +268,10 @@ class TestShellDispatcher(unittest.TestCase):
         self._run(s, "generate", generate_fn=mock_gen)
         self.assertEqual(called, [(s.cwd_path(), False)])
 
-    def test_generate_uses_cwd_not_root(self) -> None:
-        create_location_index(self.root / "Parking", type_id="Floor", label="Parking")
+    def test_generate_uses_site_root_regardless_of_cd(self) -> None:
+        doc = abm.load_editable(self.site_yaml, self.root)
+        add_place(doc, "Parking", type_id="Floor", label="Parking")
+        save_site(self.root, doc)
         s = self._session()
         self._run(s, "cd Parking")
         called = []
@@ -279,9 +281,9 @@ class TestShellDispatcher(unittest.TestCase):
             return 0
 
         self._run(s, "generate -f", generate_fn=mock_gen)
-        self.assertEqual(called, [s.cwd_path()])
-        self.assertEqual(called[0], (self.root / "Parking").resolve())
-        self.assertNotEqual(called[0], s.root)
+        self.assertEqual(called, [s.root.resolve()])
+        self.assertEqual(called[0], s.cwd_path())
+
     def test_add_location_via_shell(self) -> None:
         s = self._session()
         code = self._run(
@@ -289,25 +291,23 @@ class TestShellDispatcher(unittest.TestCase):
             'add location "Caja X" --type JunctionBox --subtype "100x100" --notes "mount: wall"',
         )
         self.assertEqual(code, 0)
-        disk = self.root / "Caja_X" / "housewire.yaml"
-        self.assertFalse(disk.is_file())
         self.assertTrue(s.is_dirty())
         self.assertEqual(s.active_yaml.name, "housewire.yaml")
+        self.assertEqual(s.logical_parts, ["Caja_X"])
         self._run(s, "save")
-        self.assertTrue(disk.is_file())
-        doc = abm.load_editable(s.active_path(), self.root)
-        self.assertEqual(doc["type"], "JunctionBox")
-        self.assertEqual(doc["subtype"], "100x100")
-        self.assertEqual(doc["label"], "Caja X")
+        disk = abm.load_editable(s.active_path(), self.root)
+        caja = get_place_node(disk, ("Caja_X",))
+        self.assertEqual(caja["type"], "JunctionBox")
+        self.assertEqual(caja["subtype"], "100x100")
+        self.assertEqual(caja["label"], "Caja X")
 
     def test_show_includes_location(self) -> None:
-        from housewire.project.io import create_location_index
         from io import StringIO
         import sys
 
-        create_location_index(
-            self.root / "zona_b", type_id="Floor", subtype="zona", notes="meta"
-        )
+        doc = abm.load_editable(self.site_yaml, self.root)
+        add_place(doc, "zona_b", type_id="Floor", subtype="zona", notes="meta")
+        save_site(self.root, doc)
         s = self._session()
         self._run(s, "cd zona_b")
         buf = StringIO()

@@ -5,8 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import add_place, init_site, save_site
 from housewire.project import abm
-from housewire.project.io import create_location_index
+from housewire.project.io import HOUSEWIRE_YAML
+from housewire.project.tree import get_place_node
 from housewire.project.view_layout import (
     get_electrical_position,
     get_physical_page,
@@ -24,6 +26,38 @@ from housewire.ui.physical_graph import (
     list_canvas_locations,
     list_site_outline,
 )
+
+
+def _build_parking_wiring_site(root: Path) -> None:
+    doc = init_site(root, type_id="House", label="Site")
+    add_place(doc, "Parking", type_id="Floor", label="Parking")
+    add_place(
+        doc, "Caja_4", under=("Parking",), type_id="JunctionBox", label="Caja 4"
+    )
+    add_place(
+        doc, "Enchufe_1", under=("Parking",), type_id="DeviceBox", label="Enchufe 1"
+    )
+    caja = get_place_node(doc, ("Parking", "Caja_4"))
+    caja["openings"] = ["W2", "B1-1"]
+    abm.add_element(caja, "Regleta", type_id="TerminalStrip")
+    enchufe = get_place_node(doc, ("Parking", "Enchufe_1"))
+    abm.add_element(enchufe, "Socket", type_id="Socket")
+    parking = get_place_node(doc, ("Parking",))
+    abm.add_cable(parking, "Linea_1", section="1.5", colors=["BN", "BU"])
+    abm.add_conduit(
+        parking,
+        "Conducto_1",
+        contains=["Linea_1"],
+        from_ref="Caja_4.W2",
+        to_ref="Enchufe_1.N1",
+    )
+    abm.add_connection(
+        parking,
+        from_ref="Caja_4/Regleta.1",
+        via_ref="Linea_1.1",
+        to_ref="Enchufe_1/Socket.L",
+    )
+    save_site(root, doc)
 
 
 class TestViewLayout(unittest.TestCase):
@@ -69,47 +103,7 @@ class TestPhysicalGraph(unittest.TestCase):
     def test_build_graph_and_layout(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            create_location_index(root, type_id="House", label="Site")
-            parking = root / "Parking"
-            create_location_index(parking, type_id="Floor", label="Parking")
-            create_location_index(
-                parking / "Caja_4",
-                type_id="JunctionBox",
-                label="Caja 4",
-            )
-            create_location_index(
-                parking / "Enchufe_1",
-                type_id="DeviceBox",
-                label="Enchufe 1",
-            )
-            caja_yaml = parking / "Caja_4" / "housewire.yaml"
-            caja_doc = abm.load_editable(caja_yaml, root)
-            caja_doc["openings"] = ["W2", "B1-1"]
-            abm.add_element(caja_doc, "Regleta", type_id="TerminalStrip")
-            abm.persist(caja_doc, caja_yaml, root)
-
-            enchufe_yaml = parking / "Enchufe_1" / "housewire.yaml"
-            enchufe_doc = abm.load_editable(enchufe_yaml, root)
-            abm.add_element(enchufe_doc, "Socket", type_id="Socket")
-            abm.persist(enchufe_doc, enchufe_yaml, root)
-
-            parking_yaml = parking / "housewire.yaml"
-            doc = abm.load_editable(parking_yaml, root)
-            abm.add_cable(doc, "Linea_1", section="1.5", colors=["BN", "BU"])
-            abm.add_conduit(
-                doc,
-                "Conducto_1",
-                contains=["Linea_1"],
-                from_ref="Caja_4.W2",
-                to_ref="Enchufe_1.N1",
-            )
-            abm.add_connection(
-                doc,
-                from_ref="Caja_4/Regleta.1",
-                via_ref="Linea_1.1",
-                to_ref="Enchufe_1/Socket.L",
-            )
-            abm.persist(doc, parking_yaml, root)
+            _build_parking_wiring_site(root)
 
             locations = list_canvas_locations(root)
             ids = {row["id"] for row in locations}
@@ -250,30 +244,8 @@ class TestServeApi(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            create_location_index(root, type_id="House", label="Site")
-            parking = root / "Parking"
-            create_location_index(parking, type_id="Floor", label="Parking")
-            create_location_index(
-                parking / "Caja_4", type_id="JunctionBox", label="Caja 4"
-            )
-            create_location_index(
-                parking / "Enchufe_1", type_id="DeviceBox", label="Enchufe 1"
-            )
-            caja_yaml = parking / "Caja_4" / "housewire.yaml"
-            caja_doc = abm.load_editable(caja_yaml, root)
-            abm.add_element(caja_doc, "Regleta", type_id="TerminalStrip")
-            abm.persist(caja_doc, caja_yaml, root)
-            parking_yaml = parking / "housewire.yaml"
-            doc = abm.load_editable(parking_yaml, root)
-            abm.add_cable(doc, "Linea_1", section="1.5", colors=["BN"])
-            abm.add_conduit(
-                doc,
-                "Conducto_1",
-                contains=["Linea_1"],
-                from_ref="Caja_4.W2",
-                to_ref="Enchufe_1.N1",
-            )
-            abm.persist(doc, parking_yaml, root)
+            _build_parking_wiring_site(root)
+            parking_yaml = root / HOUSEWIRE_YAML
 
             client = TestClient(create_app(root))
             locations = client.get("/api/locations").json()
@@ -361,15 +333,18 @@ class TestServeApi(unittest.TestCase):
             )
             self.assertEqual(client.get("/api/status").json()["dirty"], [])
 
-            caja = abm.load_editable(
-                parking / "Caja_4" / "housewire.yaml", root
+            caja = get_place_node(
+                abm.load_editable(parking_yaml, root), ("Parking", "Caja_4")
             )
             self.assertEqual(caja["view"]["physical"]["x"], 11.0)
             self.assertEqual(
                 caja["elements"]["Regleta"]["view"]["electrical"]["x"], 5.0
             )
             loc_doc = abm.load_editable(parking_yaml, root)
-            self.assertEqual(loc_doc["views"]["physical"]["representation"], "tube")
+            parking_place = get_place_node(loc_doc, ("Parking",))
+            self.assertEqual(
+                parking_place["views"]["physical"]["representation"], "tube"
+            )
 
     def test_place_detail_and_socket_recipe(self) -> None:
         try:
@@ -381,19 +356,16 @@ class TestServeApi(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            create_location_index(root, type_id="House", label="Site")
-            parking = root / "Parking"
-            create_location_index(parking, type_id="Floor", label="Parking")
-            create_location_index(
-                parking / "Caja_4", type_id="JunctionBox", label="Caja 4"
+            doc = init_site(root, type_id="House", label="Site")
+            add_place(doc, "Parking", type_id="Floor", label="Parking")
+            add_place(
+                doc, "Caja_4", under=("Parking",), type_id="JunctionBox", label="Caja 4"
             )
-            caja_yaml = parking / "Caja_4" / "housewire.yaml"
-            caja = abm.load_editable(caja_yaml, root)
+            caja = get_place_node(doc, ("Parking", "Caja_4"))
             caja["openings"] = ["N1", "W2"]
             abm.add_element(caja, "Regleta", type_id="TerminalStrip", subtype="3")
-            abm.persist(caja, caja_yaml, root)
             set_physical_position(caja, 100, 80)
-            abm.persist(caja, caja_yaml, root)
+            save_site(root, doc)
 
             client = TestClient(create_app(root))
             detail = client.get(

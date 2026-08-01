@@ -159,7 +159,8 @@ def complete_location_path(session: ProjectSession, partial: str) -> list[str]:
 
     try:
         cursor = session._resolve_logical(parent_parts)
-        children = session._list_children(cursor.yaml_path, cursor.inline_parts)
+        children = session._list_children(list(cursor.logical_parts))
+
     except (ValueError, FileNotFoundError, OSError):
         return []
 

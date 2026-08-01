@@ -5,19 +5,24 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from housewire.project.io import create_empty_house_file, create_location_index
+from fixtures import add_place, init_site, save_site
+from housewire.project.io import create_empty_house_file
 
 
 class TestShellCompletion(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        create_location_index(self.root / "Parking", type_id="Floor", notes="zone")
-        create_location_index(
-            self.root / "Parking" / "Caja derivacion 1",
+        doc = init_site(self.root, type_id="House")
+        add_place(doc, "Parking", type_id="Floor", notes="zone")
+        add_place(
+            doc,
+            "Caja_derivacion_1",
+            under=("Parking",),
             type_id="JunctionBox",
             subtype="100x100",
         )
+        save_site(self.root, doc)
         (self.root / "out").mkdir()
 
     def tearDown(self) -> None:
@@ -63,28 +68,19 @@ class TestShellCompletion(unittest.TestCase):
         hits = complete_candidates(s, "cd Parking/", "Parking/", begidx=3)
         self.assertTrue(any("Caja" in h for h in hits), f"expected Caja… in {hits}")
 
-    def test_complete_cd_includes_inline(self) -> None:
+    def test_complete_cd_includes_nested_places(self) -> None:
         from housewire.completion import complete_candidates
-        from housewire.project.io import create_inline_location, load_yaml
-        import yaml as _yaml
 
-        parking = self.root / "Parking" / "housewire.yaml"
-        doc = load_yaml(parking)
-        create_inline_location(doc, "Caja_in", type_id="JunctionBox")
-        parking.write_text(
-            _yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8"
-        )
         s = self._session()
         s.cd("Parking")
         hits = complete_candidates(s, "cd ", "", begidx=3)
-        self.assertTrue(any("Caja_in" in h for h in hits), hits)
+        self.assertTrue(any("Caja_derivacion_1" in h for h in hits), hits)
 
     def test_complete_use_index_only(self) -> None:
         from housewire.completion import complete_candidates
 
         s = self._session()
-        s.cd("Parking")
-        create_empty_house_file(self.root / "Parking" / "fragment.yaml")
+        create_empty_house_file(self.root / "fragment.yaml")
         hits = complete_candidates(s, "use ", "", begidx=4)
         self.assertTrue(any("housewire.yaml" in h for h in hits), hits)
         self.assertFalse(any("fragment.yaml" in h for h in hits), hits)

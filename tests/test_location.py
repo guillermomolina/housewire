@@ -7,13 +7,15 @@ from pathlib import Path
 
 import yaml as _yaml
 
+from fixtures import add_place, init_site, save_site
 from housewire.house import house_document_to_wireviz, load_catalog, _walk_locations
 from housewire.project import abm
-from housewire.project.io import create_empty_house_file, create_location_index
+from housewire.project.io import HOUSEWIRE_YAML, create_empty_house_file
+from housewire.project.tree import get_place_node
 
 
 class TestDirectoryLocation(unittest.TestCase):
-    """Root place fields in housewire.yaml supply metadata for the directory."""
+    """Root place fields in housewire.yaml supply metadata for nested places."""
 
     def test_location_not_in_wireviz_connectors(self) -> None:
         doc = _yaml.safe_load(
@@ -40,47 +42,54 @@ class TestDirectoryLocation(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            caja = root / "Parking" / "Caja_derivacion_1"
-            caja.mkdir(parents=True)
-            (caja / "housewire.yaml").write_text(
-                "schema: house/v1\n"
-                "type: JunctionBox\n"
-                "label: 'Caja derivacion 1'\n"
-                "subtype: '100x100 IP40'\n"
-                "notes: 'mount: ceiling'\n"
-                "elements:\n"
-                "  Regleta:\n"
-                "    type: TerminalStrip\n",
-                encoding="utf-8",
+            doc = init_site(root, type_id="House")
+            add_place(doc, "Parking", type_id="Floor")
+            add_place(
+                doc,
+                "Caja_derivacion_1",
+                under=("Parking",),
+                type_id="JunctionBox",
+                label="Caja derivacion 1",
+                subtype="100x100 IP40",
+                notes="mount: ceiling",
             )
-            model = build_physical_model(root, [caja / "housewire.yaml"])
+            caja = get_place_node(doc, ("Parking", "Caja_derivacion_1"))
+            caja.setdefault("elements", {})["Regleta"] = {"type": "TerminalStrip"}
+            save_site(root, doc)
+
+            site_yaml = root / HOUSEWIRE_YAML
+            model = build_physical_model(root, [site_yaml])
             subtitles = {n.subtitle for n in model.nodes.values()}
             labels = {n.display_label for n in model.nodes.values()}
             self.assertTrue(any("JunctionBox" in s for s in subtitles), subtitles)
             self.assertTrue(any("100x100" in s for s in subtitles), subtitles)
             self.assertTrue(any("ceiling" in s for s in subtitles), subtitles)
-            # Canvas title uses name→id; human label is in the subtitle.
             self.assertIn("Caja_derivacion_1", labels)
             self.assertTrue(
                 any("Caja derivacion 1" in s for s in subtitles),
                 subtitles,
             )
 
-    def test_create_location_index(self) -> None:
+    def test_create_inline_location_via_fixtures(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "Cuadro_General"
-            index = create_location_index(
-                target,
+            root = Path(tmp)
+            doc = init_site(root, type_id="House")
+            add_place(
+                doc,
+                "Cuadro_General",
                 type_id="Panel",
                 subtype="Cuadro",
                 notes="IGA",
                 label="Cuadro General",
             )
+            save_site(root, doc)
+            index = root / HOUSEWIRE_YAML
             self.assertTrue(index.is_file())
-            doc = _yaml.safe_load(index.read_text(encoding="utf-8"))
-            self.assertEqual(doc["type"], "Panel")
-            self.assertEqual(doc["subtype"], "Cuadro")
-            self.assertEqual(doc["label"], "Cuadro General")
+            loaded = _yaml.safe_load(index.read_text(encoding="utf-8"))
+            panel = loaded["elements"]["Cuadro_General"]
+            self.assertEqual(panel["type"], "Panel")
+            self.assertEqual(panel["subtype"], "Cuadro")
+            self.assertEqual(panel["label"], "Cuadro General")
 
     def test_create_location_normalizes_spaced_name(self) -> None:
         from housewire.house import location_id_from_name
@@ -89,13 +98,12 @@ class TestDirectoryLocation(unittest.TestCase):
         self.assertEqual(loc_id, "Caja_derivacion_6")
         self.assertEqual(label, "Caja derivacion 6")
         with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / loc_id
-            index = create_location_index(
-                target, type_id="JunctionBox", label=label
-            )
-            doc = _yaml.safe_load(index.read_text(encoding="utf-8"))
-            self.assertEqual(doc["label"], "Caja derivacion 6")
-            self.assertEqual(target.name, "Caja_derivacion_6")
+            root = Path(tmp)
+            doc = init_site(root, type_id="House")
+            add_place(doc, loc_id, type_id="JunctionBox", label=label)
+            save_site(root, doc)
+            loaded = _yaml.safe_load((root / HOUSEWIRE_YAML).read_text(encoding="utf-8"))
+            self.assertEqual(loaded["elements"][loc_id]["label"], "Caja derivacion 6")
 
     def test_self_block_rejected(self) -> None:
         doc = _yaml.safe_load(

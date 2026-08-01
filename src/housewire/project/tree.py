@@ -1,0 +1,74 @@
+"""Single-document place tree helpers (nested ``elements:`` places)."""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Iterator
+
+from housewire.house import is_place_type
+from housewire.project.io import HOUSEWIRE_YAML
+
+
+def site_yaml_path(site_root: Path) -> Path:
+    """Path of the single site ``housewire.yaml``."""
+    return (site_root / HOUSEWIRE_YAML).resolve()
+
+
+def get_place_node(doc: dict[str, Any], parts: list[str] | tuple[str, ...]) -> dict[str, Any]:
+    """Return the place mapping at ``parts`` inside ``doc`` (doc root if empty)."""
+    node: dict[str, Any] = doc
+    walked: list[str] = []
+    for part in parts:
+        elements = node.get("elements") or {}
+        if not isinstance(elements, dict) or part not in elements:
+            path = "/".join([*walked, part])
+            raise ValueError(f"Place does not exist: {path}")
+        child = elements[part]
+        if not isinstance(child, dict) or not is_place_type(child.get("type")):
+            raise ValueError(f"Not a location (place type): {part}")
+        node = child
+        walked.append(part)
+    return node
+
+
+def iter_place_children(node: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    """Direct child places under ``node['elements']``, sorted by id."""
+    elements = node.get("elements") or {}
+    if not isinstance(elements, dict):
+        return []
+    rows: list[tuple[str, dict[str, Any]]] = []
+    for name in sorted(elements, key=lambda n: str(n).lower()):
+        defn = elements[name]
+        if isinstance(defn, dict) and is_place_type(defn.get("type")):
+            rows.append((str(name), defn))
+    return rows
+
+
+def iter_places(
+    doc: dict[str, Any],
+    *,
+    under: list[str] | tuple[str, ...] = (),
+) -> Iterator[tuple[tuple[str, ...], dict[str, Any]]]:
+    """Yield ``(relative_parts, place_node)`` for every nested place under ``under``.
+
+    Does not yield the ``under`` node itself. ``relative_parts`` is relative to
+    ``under`` (so a direct child has length 1).
+    """
+    root = get_place_node(doc, under)
+
+    def _walk(
+        node: dict[str, Any], prefix: tuple[str, ...]
+    ) -> Iterator[tuple[tuple[str, ...], dict[str, Any]]]:
+        for name, child in iter_place_children(node):
+            parts = (*prefix, name)
+            yield parts, child
+            yield from _walk(child, parts)
+
+    yield from _walk(root, ())
+
+
+def logical_parts_from_id(location_id: str) -> tuple[str, ...]:
+    """Parse a canvas/location id (``.`` or ``a/b``) into place parts."""
+    text = str(location_id).strip().replace("\\", "/")
+    if text in {".", "", "/"}:
+        return ()
+    return tuple(p for p in text.split("/") if p)

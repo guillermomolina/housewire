@@ -3,7 +3,6 @@
 from pathlib import Path
 from typing import Any
 
-from housewire.project.io import HOUSEWIRE_YAML
 from housewire.project.session import ProjectSession
 from housewire.project.view_layout import get_physical_page, set_physical_page
 from housewire.ui import physical_graph as pg
@@ -36,21 +35,22 @@ def create_app(site_root: Path) -> Any:
     def _session_docs() -> dict[Path, dict[str, Any]]:
         return {p: buf.doc for p, buf in session._buffers.items()}
 
+    def _site_yaml() -> Path:
+        return session.site_yaml()
+
     def _preload_location(location_id: str) -> Path:
-        loc_dir = pg.location_dir(root, location_id)
-        loc_yaml = loc_dir / HOUSEWIRE_YAML
-        session.ensure_doc(loc_yaml)
-        for _parts, path in pg.iter_place_yaml_under(
-            loc_dir, session_docs=_session_docs()
-        ):
-            session.ensure_doc(path)
-        return loc_dir
+        del location_id  # graph resolves logical places inside the site doc
+        session.ensure_doc(_site_yaml())
+        return root
 
     def _graph(location_id: str, depth: int = 1) -> dict[str, Any]:
         _preload_location(location_id)
         return pg.build_physical_graph(
             root, location_id, depth=depth, session_docs=_session_docs()
         )
+
+    def _touch_site() -> None:
+        session.reconcile_dirty(_site_yaml())
 
     def _depth_from(payload: dict[str, Any] | None = None, raw: int | None = None) -> int:
         value = raw if raw is not None else (payload or {}).get("depth", 1)
@@ -134,7 +134,7 @@ def create_app(site_root: Path) -> Any:
         force = bool(payload.get("force", False))
         depth = _depth_from(payload)
         try:
-            loc_dir = _preload_location(location_id)
+            _preload_location(location_id)
             docs = _session_docs()
             updated = pg.apply_auto_layout(
                 root,
@@ -145,13 +145,12 @@ def create_app(site_root: Path) -> Any:
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
-        for node_id in updated:
-            parts = tuple(p for p in node_id.split("/") if p)
-            yaml_path = (loc_dir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
-            if yaml_path in docs and yaml_path not in session._buffers:
-                session.ensure_doc(yaml_path)
-                session._buffers[yaml_path].doc = docs[yaml_path]
-            session.reconcile_dirty(yaml_path)
+        site = _site_yaml()
+        if site in docs:
+            if site not in session._buffers:
+                session.ensure_doc(site)
+            session._buffers[site].doc = docs[site]
+        _touch_site()
         return {
             "updated": updated,
             "graph": _graph(location_id, depth),
@@ -167,18 +166,14 @@ def create_app(site_root: Path) -> Any:
         if not isinstance(positions, dict):
             raise HTTPException(400, "positions must be a map")
         try:
-            loc_dir = _preload_location(location_id)
+            _preload_location(location_id)
             docs = _session_docs()
             updated = pg.apply_positions(
                 root, location_id, positions, session_docs=docs
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
-        for node_id in updated:
-            parts = tuple(p for p in node_id.split("/") if p)
-            yaml_path = (loc_dir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
-            # Undo/redo back to disk positions should clear dirty.
-            session.reconcile_dirty(yaml_path)
+        _touch_site()
         return {"updated": updated}
 
     @app.patch("/api/electrical/positions")
@@ -191,7 +186,7 @@ def create_app(site_root: Path) -> Any:
         if not isinstance(positions, dict):
             raise HTTPException(400, "positions must be a map")
         try:
-            loc_dir = _preload_location(location_id)
+            _preload_location(location_id)
             docs = _session_docs()
             updated = pg.apply_electrical_positions(
                 root, location_id, positions, session_docs=docs
@@ -200,17 +195,7 @@ def create_app(site_root: Path) -> Any:
             raise HTTPException(404, str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
-        touched: set[Path] = set()
-        for node_id in updated:
-            place_parts, _ename = pg.split_element_node_id(str(node_id))
-            yaml_path = (
-                (loc_dir / HOUSEWIRE_YAML).resolve()
-                if not place_parts
-                else (loc_dir.joinpath(*place_parts) / HOUSEWIRE_YAML).resolve()
-            )
-            touched.add(yaml_path)
-        for yaml_path in touched:
-            session.reconcile_dirty(yaml_path)
+        _touch_site()
         return {"updated": updated}
 
     @app.post("/api/electrical/auto-layout")
@@ -222,7 +207,7 @@ def create_app(site_root: Path) -> Any:
         force = bool(payload.get("force", False))
         depth = _depth_from(payload)
         try:
-            loc_dir = _preload_location(location_id)
+            _preload_location(location_id)
             docs = _session_docs()
             updated = pg.apply_electrical_auto_layout(
                 root,
@@ -233,20 +218,12 @@ def create_app(site_root: Path) -> Any:
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
-        touched: set[Path] = set()
-        for node_id in updated:
-            place_parts, _ename = pg.split_element_node_id(str(node_id))
-            yaml_path = (
-                (loc_dir / HOUSEWIRE_YAML).resolve()
-                if not place_parts
-                else (loc_dir.joinpath(*place_parts) / HOUSEWIRE_YAML).resolve()
-            )
-            if yaml_path in docs and yaml_path not in session._buffers:
-                session.ensure_doc(yaml_path)
-                session._buffers[yaml_path].doc = docs[yaml_path]
-            touched.add(yaml_path)
-        for yaml_path in touched:
-            session.reconcile_dirty(yaml_path)
+        site = _site_yaml()
+        if site in docs:
+            if site not in session._buffers:
+                session.ensure_doc(site)
+            session._buffers[site].doc = docs[site]
+        _touch_site()
         return {
             "updated": updated,
             "graph": _graph(location_id, depth),
@@ -258,12 +235,14 @@ def create_app(site_root: Path) -> Any:
         location_id = str(payload.get("location_id") or "").strip()
         if not location_id:
             raise HTTPException(400, "location_id is required")
-        loc_dir = pg.location_dir(root, location_id)
-        loc_yaml = loc_dir / HOUSEWIRE_YAML
+        loc_yaml = _site_yaml()
         _path, doc = session.ensure_doc(loc_yaml)
+        from housewire.project.tree import get_place_node, logical_parts_from_id
+
+        place = get_place_node(doc, logical_parts_from_id(location_id))
         try:
             set_physical_page(
-                doc,
+                place,
                 width=payload.get("width"),
                 height=payload.get("height"),
                 representation=payload.get("representation"),
@@ -271,7 +250,7 @@ def create_app(site_root: Path) -> Any:
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         session.mark_dirty(loc_yaml)
-        return {"page": get_physical_page(doc)}
+        return {"page": get_physical_page(place)}
 
     @app.post("/api/recipes/socket")
     async def api_recipe_socket(request: Request) -> dict[str, Any]:

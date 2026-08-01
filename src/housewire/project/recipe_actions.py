@@ -42,14 +42,17 @@ def colors_list(raw: str | None) -> list[str] | None:
 
 
 def _known_location_parts(root: Path) -> set[tuple[str, ...]]:
+    from housewire.project.tree import iter_places
+
     known: set[tuple[str, ...]] = {()}
-    root = root.resolve()
-    for yaml_path in root.rglob(HOUSEWIRE_YAML):
-        try:
-            rel = yaml_path.parent.resolve().relative_to(root)
-        except ValueError:
-            continue
-        known.add(tuple(rel.parts))
+    site = root / HOUSEWIRE_YAML
+    if not site.is_file():
+        return known
+    from housewire.project.io import load_yaml
+
+    doc = load_yaml(site)
+    for parts, _node in iter_places(doc, under=()):
+        known.add(parts)
     return known
 
 
@@ -257,6 +260,7 @@ def create_recipe_place(
     working_name: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Create destination place for socket/lamp recipes; return (leaf_id, place_map)."""
+    del want_inline, as_dir  # always nested under current place
     raw = Path(name)
     if str(raw.parent) not in (".", ""):
         raise ValueError(
@@ -264,13 +268,6 @@ def create_recipe_place(
         )
     leaf_id, auto_label = location_id_from_name(raw.name)
     resolved_label = label or auto_label
-    cursor = session.cursor()
-    use_inline = want_inline or (not as_dir and cursor.is_inline)
-    if as_dir and cursor.is_inline:
-        raise ValueError(
-            "Cannot create recipe location --dir under an inline place. "
-            "cd to the parent outline or use --inline."
-        )
 
     set_specs = [f"openings=[{', '.join(openings)}]"]
     grid = opening_grid
@@ -284,47 +281,23 @@ def create_recipe_place(
     if mount:
         set_specs.append(f"mount={mount}")
 
-    if use_inline:
-        for child in session.list_location_children():
-            if child.name == leaf_id and child.storage == "dir":
-                raise ValueError(
-                    f"Outline location {leaf_id!r} already exists; "
-                    "cannot create the same id inline"
-                )
-        path, doc = session.ensure_doc()
-        parent_place = session.place_node(doc)
-        entry = create_inline_location(
-            parent_place,
-            leaf_id,
-            type_id=type_id,
-            subtype=subtype,
-            notes=notes,
-            label=resolved_label,
-            working_name=working_name,
-        )
-        abm.apply_set_specs(entry, set_specs, target="place")
-        session.mark_dirty(path)
-        return leaf_id, entry
-
     for child in session.list_location_children():
-        if child.name == leaf_id and child.storage == "inline":
-            raise ValueError(
-                f"Inline location {leaf_id!r} already exists; "
-                "cannot create the same id as a folder"
-            )
-    target = session.resolve_under_root(leaf_id)
-    index_path = session.stage_outline_location(
-        target,
+        if child.name == leaf_id:
+            raise ValueError(f"Location already exists: {leaf_id}")
+    path, doc = session.ensure_doc()
+    parent_place = session.place_node(doc)
+    entry = create_inline_location(
+        parent_place,
+        leaf_id,
         type_id=type_id,
         subtype=subtype,
         notes=notes,
         label=resolved_label,
         working_name=working_name,
     )
-    _path, staged = session.ensure_doc(index_path)
-    abm.apply_set_specs(staged, set_specs, target="place")
-    session.mark_dirty(index_path)
-    return leaf_id, staged
+    abm.apply_set_specs(entry, set_specs, target="place")
+    session.mark_dirty(path)
+    return leaf_id, entry
 
 
 def _position_near_source(
@@ -336,7 +309,9 @@ def _position_near_source(
     offset_x: float = 160.0,
     offset_y: float = 0.0,
 ) -> None:
-    """Place new outline node near the source box on the canvas."""
+    """Place new nested node near the source box on the canvas."""
+    from housewire.project.tree import get_place_node, logical_parts_from_id
+
     try:
         box_loc, _op = split_conduit_endpoint(from_ref)
     except ValueError:
@@ -344,28 +319,22 @@ def _position_near_source(
     box_rel = str(box_loc).strip()
     if box_rel in (".", "", "self"):
         return
-    # Source is usually a sibling under the canvas root.
     leaf = box_rel.split("/")[-1]
-    canvas_dir = (
-        session.root
-        if canvas_location_id in {".", ""}
-        else (session.root / canvas_location_id)
-    )
-    source_yaml = (canvas_dir / leaf / HOUSEWIRE_YAML).resolve()
-    new_yaml = (canvas_dir / new_leaf_id / HOUSEWIRE_YAML).resolve()
+    canvas_parts = logical_parts_from_id(canvas_location_id)
     try:
-        _sp, source_doc = session.ensure_doc(source_yaml)
+        path, doc = session.ensure_doc()
     except (FileNotFoundError, ValueError, OSError):
         return
-    pos = get_physical_position(source_doc)
+    try:
+        source = get_place_node(doc, (*canvas_parts, leaf))
+        new_place = get_place_node(doc, (*canvas_parts, new_leaf_id))
+    except ValueError:
+        return
+    pos = get_physical_position(source)
     if pos is None:
         return
-    try:
-        _np, new_doc = session.ensure_doc(new_yaml)
-    except (FileNotFoundError, ValueError, OSError):
-        return
-    set_physical_position(new_doc, pos[0] + offset_x, pos[1] + offset_y)
-    session.mark_dirty(new_yaml)
+    set_physical_position(new_place, pos[0] + offset_x, pos[1] + offset_y)
+    session.mark_dirty(path)
 
 
 def run_socket_recipe(
@@ -428,7 +397,7 @@ def run_socket_recipe(
             notes=notes,
         )
         session.mark_dirty(parent_path)
-        if canvas_location_id is not None and not want_inline:
+        if canvas_location_id is not None:
             _position_near_source(
                 session,
                 canvas_location_id=canvas_location_id,
@@ -503,7 +472,7 @@ def run_lamp_recipe(
             notes=notes,
         )
         session.mark_dirty(parent_path)
-        if canvas_location_id is not None and not want_inline:
+        if canvas_location_id is not None:
             _position_near_source(
                 session,
                 canvas_location_id=canvas_location_id,
@@ -565,7 +534,9 @@ def place_detail(
     canvas_location_id: str,
     place_id: str,
 ) -> dict[str, Any]:
-    """Return show-like detail for an outline child under the canvas root."""
+    """Return show-like detail for a nested child under the canvas root."""
+    from housewire.project.tree import get_place_node
+
     parts = tuple(p for p in str(place_id).split("/") if p)
     if not parts:
         raise ValueError("place id is required")
@@ -575,13 +546,8 @@ def place_detail(
         else tuple(p for p in str(canvas_location_id).split("/") if p)
     )
     place_parts = canvas_parts + parts
-    canvas_dir = (
-        session.root
-        if not canvas_parts
-        else (session.root.joinpath(*canvas_parts)).resolve()
-    )
-    yaml_path = (canvas_dir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
-    path, doc = session.ensure_doc(yaml_path)
+    path, site_doc = session.ensure_doc()
+    doc = get_place_node(site_doc, place_parts)
     meta = place_meta_from_mapping(doc) or {}
     elements_raw = doc.get("elements") or {}
     elements: list[dict[str, Any]] = []
@@ -617,7 +583,7 @@ def place_detail(
     )
     return {
         "id": "/".join(parts),
-        "path": str(path.relative_to(session.root)),
+        "path": f"{path.relative_to(session.root)}#{'/'.join(place_parts)}",
         "type": meta.get("type"),
         "subtype": meta.get("subtype"),
         "name": meta.get("name"),

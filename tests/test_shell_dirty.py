@@ -5,14 +5,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from housewire.project.io import create_location_index, load_yaml
+from fixtures import add_place, init_site, save_site
+from housewire.project.io import HOUSEWIRE_YAML, load_yaml
+from housewire.project.tree import get_place_node
 
 
 class TestShellDirtyBuffer(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        create_location_index(self.root / "zona_a", type_id="Floor")
+        doc = init_site(self.root, type_id="House")
+        add_place(doc, "zona_a", type_id="Floor")
+        add_place(doc, "zona_b", type_id="Floor")
+        save_site(self.root, doc)
+        self.site_yaml = (self.root / HOUSEWIRE_YAML).resolve()
         self.answers: list[str] = []
 
     def tearDown(self) -> None:
@@ -41,16 +47,17 @@ class TestShellDirtyBuffer(unittest.TestCase):
         self._run(s, "cd zona_a")
         self._run(s, "add element MT_A --type MCB --subtype C10")
         self.assertTrue(s.is_dirty())
-        disk = load_yaml(self.root / "zona_a" / "housewire.yaml")
-        self.assertNotIn("MT_A", disk.get("elements") or {})
-        # In memory it is there
+        disk = load_yaml(self.site_yaml)
+        zona = get_place_node(disk, ("zona_a",))
+        self.assertNotIn("MT_A", zona.get("elements") or {})
         _path, doc = s.ensure_doc()
-        self.assertIn("MT_A", doc["elements"])
+        place = get_place_node(doc, ("zona_a",))
+        self.assertIn("MT_A", place["elements"])
         code = self._run(s, "save")
         self.assertEqual(code, 0)
         self.assertFalse(s.is_dirty())
-        disk2 = load_yaml(self.root / "zona_a" / "housewire.yaml")
-        self.assertIn("MT_A", disk2["elements"])
+        disk2 = load_yaml(self.site_yaml)
+        self.assertIn("MT_A", get_place_node(disk2, ("zona_a",))["elements"])
 
     def test_prompt_label_shows_dirty_star(self) -> None:
         s = self._session()
@@ -60,35 +67,31 @@ class TestShellDirtyBuffer(unittest.TestCase):
         self.assertTrue(s.prompt_label().endswith("*"))
 
     def test_cd_keeps_dirty_buffers_in_memory(self) -> None:
-        create_location_index(self.root / "zona_b", type_id="Floor")
         s = self._session()
         self._run(s, "cd zona_a")
         self._run(s, "add element MT_A --type MCB --subtype C10")
-        zona_a_yaml = (self.root / "zona_a" / "housewire.yaml").resolve()
-        self.assertTrue(s.is_dirty(zona_a_yaml))
+        self.assertTrue(s.is_dirty(self.site_yaml))
         code = self._run(s, "cd /zona_b")
         self.assertEqual(code, 0)
         self.assertEqual(s.logical_parts, ["zona_b"])
-        self.assertTrue(s.is_dirty(zona_a_yaml))
+        self.assertTrue(s.is_dirty(self.site_yaml))
         self.assertIn("*", s.prompt_label())
-        disk = load_yaml(self.root / "zona_a" / "housewire.yaml")
-        self.assertNotIn("MT_A", disk.get("elements") or {})
+        disk = load_yaml(self.site_yaml)
+        self.assertNotIn("MT_A", get_place_node(disk, ("zona_a",)).get("elements") or {})
         code = self._run(s, "save")
         self.assertEqual(code, 0)
-        self.assertFalse(s.is_dirty(zona_a_yaml))
-        disk2 = load_yaml(self.root / "zona_a" / "housewire.yaml")
-        self.assertIn("MT_A", disk2["elements"])
+        self.assertFalse(s.is_dirty(self.site_yaml))
+        disk2 = load_yaml(self.site_yaml)
+        self.assertIn("MT_A", get_place_node(disk2, ("zona_a",))["elements"])
 
     def test_cd_away_from_dirty_does_not_prompt(self) -> None:
-        create_location_index(self.root / "zona_b", type_id="Floor")
         s = self._session()
         self._run(s, "cd zona_a")
         self._run(s, "add element MT_A --type MCB --subtype C10")
-        # No answers queued — would fail if cd prompted
         code = self._run(s, "cd /zona_b")
         self.assertEqual(code, 0)
         self.assertEqual(s.logical_parts, ["zona_b"])
-        self.assertTrue(s.is_dirty((self.root / "zona_a" / "housewire.yaml").resolve()))
+        self.assertTrue(s.is_dirty(self.site_yaml))
 
     def test_request_leave_save(self) -> None:
         from housewire.commands import request_leave
@@ -99,8 +102,8 @@ class TestShellDirtyBuffer(unittest.TestCase):
         self.answers = ["g"]
         self.assertTrue(request_leave(s))
         self.assertFalse(s.is_dirty())
-        disk = load_yaml(self.root / "zona_a" / "housewire.yaml")
-        self.assertIn("MT_A", disk["elements"])
+        disk = load_yaml(self.site_yaml)
+        self.assertIn("MT_A", get_place_node(disk, ("zona_a",))["elements"])
 
     def test_request_leave_cancel(self) -> None:
         from housewire.commands import request_leave
@@ -121,62 +124,58 @@ class TestShellDirtyBuffer(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertFalse(s.is_dirty())
         _path, doc = s.ensure_doc()
-        self.assertNotIn("MT_A", doc.get("elements") or {})
+        place = get_place_node(doc, ("zona_a",))
+        self.assertNotIn("MT_A", place.get("elements") or {})
 
     def test_cd_within_same_yaml_no_prompt(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
-        self._run(s, "add location Caja_in --type JunctionBox --inline")
+        self._run(s, "add location Caja_in --type JunctionBox")
         self.assertTrue(s.is_dirty())
-        # Still same hosting yaml — no prompt, answers must stay unused
         code = self._run(s, "cd ..")
         self.assertEqual(code, 0)
         self.assertEqual(s.logical_parts, ["zona_a"])
         self.assertEqual(self.answers, [])
 
-    def test_add_outline_location_does_not_write_until_save(self) -> None:
+    def test_add_location_does_not_write_until_save(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
         code = self._run(s, "add location Caja_1 --type JunctionBox --label Caja")
         self.assertEqual(code, 0)
         self.assertTrue(s.is_dirty())
         self.assertEqual(s.logical_parts, ["zona_a", "Caja_1"])
-        disk_path = self.root / "zona_a" / "Caja_1" / "housewire.yaml"
-        self.assertFalse(disk_path.is_file())
-        self.assertFalse(disk_path.parent.is_dir())
+        disk = load_yaml(self.site_yaml)
+        self.assertNotIn("Caja_1", get_place_node(disk, ("zona_a",)).get("elements") or {})
         names = [c.name for c in s.list_location_children()]
-        # We're inside Caja_1; children of empty box
         self.assertEqual(names, [])
         code = self._run(s, "cd ..")
         self.assertEqual(code, 0)
         self.assertEqual(s.logical_parts, ["zona_a"])
-        # Still only in memory after cd
-        self.assertFalse(disk_path.is_file())
-        self.assertTrue(s.is_dirty(disk_path.resolve()))
         child_names = [c.name for c in s.list_location_children()]
         self.assertIn("Caja_1", child_names)
         code = self._run(s, "save")
         self.assertEqual(code, 0)
-        self.assertTrue(disk_path.is_file())
-        self.assertFalse(s.is_dirty(disk_path.resolve()))
+        saved = load_yaml(self.site_yaml)
+        self.assertIn("Caja_1", get_place_node(saved, ("zona_a",))["elements"])
 
-    def test_discard_outline_location_on_leave(self) -> None:
+    def test_discard_location_on_leave(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
         self._run(s, "add location Caja_tmp --type JunctionBox")
-        disk_path = self.root / "zona_a" / "Caja_tmp" / "housewire.yaml"
-        self.assertFalse(disk_path.is_file())
         code = self._run(s, "cd ..")
         self.assertEqual(code, 0)
         self.assertIn("Caja_tmp", [c.name for c in s.list_location_children()])
         from housewire.commands import request_leave
 
-        self.answers = ["d"]  # discard staged outline on exit
+        self.answers = ["d"]
         self.assertTrue(request_leave(s))
-        self.assertFalse(disk_path.is_file())
-        self.assertFalse(disk_path.parent.is_dir())
         child_names = [c.name for c in s.list_location_children()]
         self.assertNotIn("Caja_tmp", child_names)
+        saved = load_yaml(self.site_yaml)
+        self.assertNotIn(
+            "Caja_tmp",
+            get_place_node(saved, ("zona_a",)).get("elements") or {},
+        )
 
     def test_set_place_and_add_location_set(self) -> None:
         s = self._session()
@@ -190,18 +189,17 @@ class TestShellDirtyBuffer(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(s.is_dirty())
         _path, doc = s.ensure_doc()
-        self.assertEqual(doc["install"], "surface")
-        self.assertEqual(doc["mount"], "wall")
-        self.assertEqual(doc["openings"], ["N1"])
-        self.assertEqual(doc["opening_grid"], {"N": 1})
-        disk = self.root / "zona_a" / "Mech" / "housewire.yaml"
-        self.assertFalse(disk.is_file())
+        mech = get_place_node(doc, ("zona_a", "Mech"))
+        self.assertEqual(mech["install"], "surface")
+        self.assertEqual(mech["mount"], "wall")
+        self.assertEqual(mech["openings"], ["N1"])
+        self.assertEqual(mech["opening_grid"], {"N": 1})
         code = self._run(s, "set notes 'desde shell'")
         self.assertEqual(code, 0)
-        self.assertEqual(doc["notes"], "desde shell")
+        self.assertEqual(mech["notes"], "desde shell")
         code = self._run(s, "unset notes")
         self.assertEqual(code, 0)
-        self.assertNotIn("notes", doc)
+        self.assertNotIn("notes", mech)
         code = self._run(s, "set elements=nope")
         self.assertEqual(code, 1)
 
@@ -212,7 +210,8 @@ class TestShellDirtyBuffer(unittest.TestCase):
         code = self._run(s, "set --element SW notes cableado")
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
-        self.assertEqual(doc["elements"]["SW"]["notes"], "cableado")
+        place = get_place_node(doc, ("zona_a",))
+        self.assertEqual(place["elements"]["SW"]["notes"], "cableado")
 
     def test_set_list_with_spaces(self) -> None:
         s = self._session()
@@ -220,10 +219,11 @@ class TestShellDirtyBuffer(unittest.TestCase):
         code = self._run(s, "set openings=[W1, S2, E1, E2]")
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
-        self.assertEqual(doc["openings"], ["W1", "S2", "E1", "E2"])
+        place = get_place_node(doc, ("zona_a",))
+        self.assertEqual(place["openings"], ["W1", "S2", "E1", "E2"])
         code = self._run(s, "set openings [N1, N2]")
         self.assertEqual(code, 0)
-        self.assertEqual(doc["openings"], ["N1", "N2"])
+        self.assertEqual(place["openings"], ["N1", "N2"])
 
     def test_add_location_set_notes_two_tokens(self) -> None:
         """--set notes 'text' must not leave 'text' as a stray argparse arg."""
@@ -235,7 +235,8 @@ class TestShellDirtyBuffer(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
-        self.assertEqual(doc.get("notes"), "back to parking")
+        box = get_place_node(doc, ("zona_a", "Box_n"))
+        self.assertEqual(box.get("notes"), "back to parking")
 
 
 if __name__ == "__main__":

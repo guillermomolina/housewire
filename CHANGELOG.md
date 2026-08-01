@@ -7,9 +7,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Breaking
+
+- **Single nested site YAML only.** A site is a directory with one
+  ``housewire.yaml``; places nest under ``elements:`` (map key = id).
+  Per-place subdirectories and multi-file outline trees are removed.
+  Shell ``add location`` always nests; ``--dir`` / ``--inline`` are gone.
+  ``create_location_index`` is replaced by ``create_site_document`` +
+  ``create_inline_location``. Generate loads only the site-root YAML.
+
 ### Added
 
-- Place fields **id** / **name** / **label** are distinct: folder key is id;
+- Place fields **id** / **name** / **label** are distinct: nested map key is id;
   optional YAML ``name:`` (canvas); optional ``label:`` (human). Helpers
   ``place_name`` / ``place_label``. ``add location --name``.
 - Physical UI **depth zoom** (``depth −`` / ``depth +``, or Alt+wheel): nested

@@ -23,12 +23,18 @@ def is_excluded_path(path: Path, excluded_dirs: set[Path] | None = None) -> bool
     return any(part in EXCLUDED_DIR_NAMES or part == "out" for part in resolved.parts)
 
 
+def site_housewire_yaml(site_root: Path) -> Path | None:
+    """Return the site-root housewire.yaml / .yml if present."""
+    for name in ("housewire.yaml", "housewire.yml"):
+        candidate = (site_root / name).resolve()
+        if candidate.is_file() and not is_excluded_path(candidate):
+            return candidate
+    return None
+
+
 def collect_yaml_from_directory(directory: Path, excluded_dirs: set[Path]) -> list[Path]:
-    """Collect only housewire.yaml / housewire.yml under the site tree."""
-    return sorted(
-        path.resolve()
-        for path in directory.rglob("*")
-        if path.is_file()
-        and is_housewire_yaml(path)
-        and not is_excluded_path(path, excluded_dirs)
-    )
+    """Collect the single site housewire.yaml (no per-place YAML scan)."""
+    del excluded_dirs  # site root only; kept for call-site compatibility
+    found = site_housewire_yaml(directory)
+    return [found] if found is not None else []
+

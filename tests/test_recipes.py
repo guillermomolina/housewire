@@ -5,8 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import add_place, init_site, save_site
 from housewire.project import abm, recipes
-from housewire.project.io import create_location_index
+from housewire.project.io import HOUSEWIRE_YAML
+from housewire.project.tree import get_place_node
 
 
 class TestRecipeHelpers(unittest.TestCase):
@@ -40,16 +42,19 @@ class TestSocketRecipeABM(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        self.floor = self.root / "Parking"
-        create_location_index(self.floor, type_id="Floor", label="Parking")
+        doc = init_site(self.root, type_id="House")
+        add_place(doc, "Parking", type_id="Floor", label="Parking")
+        save_site(self.root, doc)
+        self.site_yaml = self.root / HOUSEWIRE_YAML
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
     def test_socket_wired_run(self) -> None:
-        doc = abm.load_editable(self.floor / "housewire.yaml", self.root)
+        doc = abm.load_editable(self.site_yaml, self.root)
+        place = get_place_node(doc, ("Parking",))
         result = recipes.socket_wired_run(
-            doc,
+            place,
             place_id="Enchufe_5",
             from_ref="Caja_derivacion_2.N1",
             strip="Regleta",
@@ -61,29 +66,32 @@ class TestSocketRecipeABM(unittest.TestCase):
         )
         self.assertEqual(result.via_ref, "Linea_a_Enchufe_5.[1, 2, 3]")
         self.assertEqual(result.to_terminals, "Enchufe_5/Socket.[L, PE, N]")
-        cable = doc["cables"]["Linea_a_Enchufe_5"]
+        cable = place["cables"]["Linea_a_Enchufe_5"]
         self.assertEqual(cable["colors"], ["GY", "GNYE", "BU"])
         self.assertEqual(cable["section"], "2.5 mm2")
-        conduit = doc["conduits"]["Conducto_a_Enchufe_5"]
+        conduit = place["conduits"]["Conducto_a_Enchufe_5"]
         self.assertEqual(conduit["from"], "Caja_derivacion_2.N1")
         self.assertEqual(conduit["to"], "Enchufe_5.N1")
-        self.assertEqual(len(doc["connections"]), 1)
+        self.assertEqual(len(place["connections"]), 1)
 
 
 class TestLampRecipeABM(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        self.floor = self.root / "Parking"
-        create_location_index(self.floor, type_id="Floor", label="Parking")
+        doc = init_site(self.root, type_id="House")
+        add_place(doc, "Parking", type_id="Floor", label="Parking")
+        save_site(self.root, doc)
+        self.site_yaml = self.root / HOUSEWIRE_YAML
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
     def test_lamp_wired_run_three_wire(self) -> None:
-        doc = abm.load_editable(self.floor / "housewire.yaml", self.root)
+        doc = abm.load_editable(self.site_yaml, self.root)
+        place = get_place_node(doc, ("Parking",))
         result = recipes.lamp_wired_run(
-            doc,
+            place,
             place_id="Lampara_3",
             from_ref="Caja_derivacion_3.S1",
             strip="Regleta",
@@ -93,9 +101,9 @@ class TestLampRecipeABM(unittest.TestCase):
             result.from_terminals, "Caja_derivacion_3/Regleta.[6, 5, 2]"
         )
         self.assertEqual(result.to_terminals, "Lampara_3/Luminaire.[1, 2, 3]")
-        self.assertEqual(doc["cables"][result.cable_name]["colors"], ["BN", "GNYE", "BU"])
+        self.assertEqual(place["cables"][result.cable_name]["colors"], ["BN", "GNYE", "BU"])
         self.assertEqual(
-            doc["conduits"][result.conduit_name]["to"], "Lampara_3.B1-1"
+            place["conduits"][result.conduit_name]["to"], "Lampara_3.B1-1"
         )
 
 
@@ -103,16 +111,19 @@ class TestFeedRecipeABM(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        self.floor = self.root / "Parking"
-        create_location_index(self.floor, type_id="Floor", label="Parking")
+        doc = init_site(self.root, type_id="House")
+        add_place(doc, "Parking", type_id="Floor", label="Parking")
+        save_site(self.root, doc)
+        self.site_yaml = self.root / HOUSEWIRE_YAML
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
     def test_feed_wired_run(self) -> None:
-        doc = abm.load_editable(self.floor / "housewire.yaml", self.root)
+        doc = abm.load_editable(self.site_yaml, self.root)
+        place = get_place_node(doc, ("Parking",))
         result = recipes.feed_wired_run(
-            doc,
+            place,
             name="Linea_CD4_a_CD3_fase",
             from_opening="Caja_derivacion_4.E1",
             to_opening="Caja_derivacion_3.N1",
@@ -128,15 +139,17 @@ class TestFeedRecipeABM(unittest.TestCase):
         )
         self.assertEqual(result.to_terminals, "Caja_derivacion_3/Regleta.1")
         self.assertEqual(result.via_ref, "Linea_CD4_a_CD3_fase.1")
-        self.assertEqual(doc["cables"][result.cable_name]["colors"], ["BK"])
+        self.assertEqual(place["cables"][result.cable_name]["colors"], ["BK"])
 
 
 class TestShellRecipes(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        self.floor = self.root / "Parking"
-        create_location_index(self.floor, type_id="Floor", label="Parking")
+        doc = init_site(self.root, type_id="House")
+        add_place(doc, "Parking", type_id="Floor", label="Parking")
+        save_site(self.root, doc)
+        self.site_yaml = self.root / HOUSEWIRE_YAML
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
@@ -159,11 +172,11 @@ class TestShellRecipes(unittest.TestCase):
             "add socket Enchufe_5 --from Caja_derivacion_2.N1 --strip Regleta",
         )
         self.assertEqual(code, 0)
-        _parent_path, parent_doc = s.ensure_doc()
-        self.assertIn("Linea_a_Enchufe_5", parent_doc["cables"])
-        self.assertIn("Conducto_a_Enchufe_5", parent_doc["conduits"])
-        child_yaml = self.floor / "Enchufe_5" / "housewire.yaml"
-        _cpath, child = s.ensure_doc(child_yaml)
+        _path, doc = s.ensure_doc()
+        parking = get_place_node(doc, ("Parking",))
+        self.assertIn("Linea_a_Enchufe_5", parking["cables"])
+        self.assertIn("Conducto_a_Enchufe_5", parking["conduits"])
+        child = get_place_node(doc, ("Parking", "Enchufe_5"))
         self.assertEqual(child["type"], "DeviceBox")
         self.assertIn("Socket", child["elements"])
         self.assertEqual(child["openings"], ["N1"])
@@ -176,10 +189,10 @@ class TestShellRecipes(unittest.TestCase):
             "add lamp Lampara_3 --from Caja_derivacion_3.S1 --strip Regleta --pins 6,5,2",
         )
         self.assertEqual(code, 0)
-        _path, parent = s.ensure_doc()
-        self.assertIn("Linea_a_Lampara_3", parent["cables"])
-        child_yaml = self.floor / "Lampara_3" / "housewire.yaml"
-        _cpath, child = s.ensure_doc(child_yaml)
+        _path, doc = s.ensure_doc()
+        parking = get_place_node(doc, ("Parking",))
+        self.assertIn("Linea_a_Lampara_3", parking["cables"])
+        child = get_place_node(doc, ("Parking", "Lampara_3"))
         self.assertEqual(child["type"], "LightPoint")
         self.assertIn("Luminaire", child["elements"])
 
@@ -193,6 +206,7 @@ class TestShellRecipes(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
-        self.assertIn("Linea_A_a_B", doc["cables"])
-        self.assertEqual(doc["connections"][0]["from"], "Caja_A/Regleta.1")
-        self.assertEqual(doc["connections"][0]["to"], "Caja_B/Regleta.2")
+        parking = get_place_node(doc, ("Parking",))
+        self.assertIn("Linea_A_a_B", parking["cables"])
+        self.assertEqual(parking["connections"][0]["from"], "Caja_A/Regleta.1")
+        self.assertEqual(parking["connections"][0]["to"], "Caja_B/Regleta.2")

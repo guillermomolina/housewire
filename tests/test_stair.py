@@ -5,9 +5,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import add_place, init_site, save_site
 from housewire.house import PLACE_TYPES, is_place_type
 from housewire.project import abm
-from housewire.project.io import create_location_index
+from housewire.project.io import HOUSEWIRE_YAML
+from housewire.project.tree import get_place_node
 
 
 class TestStairPlaceType(unittest.TestCase):
@@ -18,21 +20,23 @@ class TestStairPlaceType(unittest.TestCase):
     def test_create_stair_with_connects(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            create_location_index(root, type_id="House", label="Site")
-            create_location_index(root / "Parking", type_id="Floor", label="Parking")
-            create_location_index(
-                root / "Planta_baja", type_id="Floor", label="Planta baja"
-            )
-            stair_path = create_location_index(
-                root / "Escalera_Parking_Planta_baja",
+            doc = init_site(root, type_id="House", label="Site")
+            add_place(doc, "Parking", type_id="Floor", label="Parking")
+            add_place(doc, "Planta_baja", type_id="Floor", label="Planta baja")
+            add_place(
+                doc,
+                "Escalera_Parking_Planta_baja",
                 type_id="Stair",
                 label="Escalera Parking — Planta baja",
             )
-            doc = abm.load_editable(stair_path, root)
-            self.assertEqual(doc["type"], "Stair")
-            doc["connects"] = ["Parking", "Planta_baja"]
-            abm.persist(doc, stair_path, root)
-            reloaded = abm.load_editable(stair_path, root)
+            stair = get_place_node(doc, ("Escalera_Parking_Planta_baja",))
+            stair["connects"] = ["Parking", "Planta_baja"]
+            save_site(root, doc)
+
+            stair_path = root / HOUSEWIRE_YAML
+            reloaded_doc = abm.load_editable(stair_path, root)
+            reloaded = get_place_node(reloaded_doc, ("Escalera_Parking_Planta_baja",))
+            self.assertEqual(reloaded["type"], "Stair")
             self.assertEqual(reloaded["connects"], ["Parking", "Planta_baja"])
 
 

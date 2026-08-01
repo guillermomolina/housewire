@@ -6,14 +6,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import add_place, init_site, save_site
 from housewire.house.conduit_ref import (
     conduit_endpoints,
     resolve_location_ref,
     split_conduit_endpoint,
 )
 from housewire.house.physical import build_physical_model, model_to_dot
-from housewire.project.io import create_location_index
 from housewire.project import abm
+from housewire.project.io import HOUSEWIRE_YAML
+from housewire.project.tree import get_place_node
 
 
 class TestConduitEndpoints(unittest.TestCase):
@@ -54,40 +56,41 @@ class TestPhysicalConduits(unittest.TestCase):
     def test_edges_from_conduits_not_connections(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            create_location_index(root, type_id="House", label="Site")
-            parking = root / "Parking"
-            create_location_index(parking, type_id="Floor", label="Parking")
-            create_location_index(
-                parking / "Caja_4", type_id="JunctionBox", label="Caja 4"
-            )
-            create_location_index(
-                parking / "Enchufe_1", type_id="DeviceBox", label="Enchufe 1"
-            )
-            parking_yaml = parking / "housewire.yaml"
-            doc = abm.load_editable(parking_yaml, root)
-            abm.add_cable(doc, "Linea_1", section="1.5", colors=["BN", "BU"])
-            abm.add_conduit(
+            doc = init_site(root, type_id="House", label="Site")
+            add_place(doc, "Parking", type_id="Floor", label="Parking")
+            add_place(
                 doc,
+                "Caja_4",
+                under=("Parking",),
+                type_id="JunctionBox",
+                label="Caja 4",
+            )
+            add_place(
+                doc,
+                "Enchufe_1",
+                under=("Parking",),
+                type_id="DeviceBox",
+                label="Enchufe 1",
+            )
+            parking = get_place_node(doc, ("Parking",))
+            abm.add_cable(parking, "Linea_1", section="1.5", colors=["BN", "BU"])
+            abm.add_conduit(
+                parking,
                 "Conducto_1",
                 contains=["Linea_1"],
                 from_ref="Caja_4.W2",
                 to_ref="Enchufe_1.N1",
             )
             abm.add_connection(
-                doc,
+                parking,
                 from_ref="Caja_4/Regleta.1",
                 via_ref="Linea_1.1",
                 to_ref="Enchufe_1/Socket.L",
             )
-            abm.persist(doc, parking_yaml, root)
+            save_site(root, doc)
 
-            files = [
-                root / "housewire.yaml",
-                parking_yaml,
-                parking / "Caja_4" / "housewire.yaml",
-                parking / "Enchufe_1" / "housewire.yaml",
-            ]
-            model = build_physical_model(root, files)
+            site_yaml = root / HOUSEWIRE_YAML
+            model = build_physical_model(root, [site_yaml])
             self.assertEqual(len(model.edges), 1)
             edge = model.edges[0]
             self.assertIn("Conducto_1", edge.label)

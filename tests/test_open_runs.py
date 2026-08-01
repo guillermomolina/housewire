@@ -5,8 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import add_place, init_site, save_site
 from housewire.project import abm, open_runs
-from housewire.project.io import create_location_index
+from housewire.project.io import HOUSEWIRE_YAML
+from housewire.project.tree import get_place_node
 
 
 class TestOpenRunHelpers(unittest.TestCase):
@@ -36,26 +38,28 @@ class TestOpenClaimLandABM(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        self.floor = self.root / "Floor"
-        create_location_index(self.floor, type_id="Floor", label="Floor")
-        self.yaml = self.floor / "housewire.yaml"
+        doc = init_site(self.root, type_id="House")
+        add_place(doc, "Floor", type_id="Floor", label="Floor")
+        save_site(self.root, doc)
+        self.site_yaml = self.root / HOUSEWIRE_YAML
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
     def test_open_claim_land_flow(self) -> None:
-        doc = abm.load_editable(self.yaml, self.root)
+        doc = abm.load_editable(self.site_yaml, self.root)
+        floor = get_place_node(doc, ("Floor",))
         name = open_runs.add_open_cable(
-            doc, leaves="Cuadro_General.S2", colors=["BN", "BU"], section="1.5"
+            floor, leaves="Cuadro_General.S2", colors=["BN", "BU"], section="1.5"
         )
         self.assertEqual(name, "OPEN_Linea_01")
-        self.assertEqual(doc.get("conduits") or {}, {})
-        meta = open_runs.parse_open_notes(doc["cables"][name]["notes"])
+        self.assertEqual(floor.get("conduits") or {}, {})
+        meta = open_runs.parse_open_notes(floor["cables"][name]["notes"])
         self.assertEqual(meta.status, "open")
         self.assertEqual(meta.leaves, "Cuadro_General.S2")
 
         cd, meta2 = open_runs.claim_open_cable(
-            doc,
+            floor,
             name,
             enter="Caja_derivacion_1.N1",
             exit="Caja_derivacion_1.E2",
@@ -65,50 +69,52 @@ class TestOpenClaimLandABM(unittest.TestCase):
         self.assertEqual(meta2.enters, "Caja_derivacion_1.N1")
         self.assertEqual(meta2.exits, "Caja_derivacion_1.E2")
         self.assertEqual(
-            doc["conduits"][cd]["from"], "Cuadro_General.S2"
+            floor["conduits"][cd]["from"], "Cuadro_General.S2"
         )
         self.assertEqual(
-            doc["conduits"][cd]["to"], "Caja_derivacion_1.N1"
+            floor["conduits"][cd]["to"], "Caja_derivacion_1.N1"
         )
 
         final = open_runs.land_open_cable(
-            doc,
+            floor,
             name,
             from_ref="Cuadro_General/MT.2",
             to_ref="Caja_derivacion_1/Regleta.1",
             as_name="Linea_CG_a_CD1",
         )
         self.assertEqual(final, "Linea_CG_a_CD1")
-        self.assertNotIn(name, doc["cables"])
-        self.assertIn("Linea_CG_a_CD1", doc["cables"])
+        self.assertNotIn(name, floor["cables"])
+        self.assertIn("Linea_CG_a_CD1", floor["cables"])
         self.assertEqual(
-            doc["conduits"][cd]["contains"], ["Linea_CG_a_CD1"]
+            floor["conduits"][cd]["contains"], ["Linea_CG_a_CD1"]
         )
-        conn = doc["connections"][-1]
+        conn = floor["connections"][-1]
         self.assertEqual(conn["via"], "Linea_CG_a_CD1.[1, 2]")
         self.assertEqual(conn["from"], "Cuadro_General/MT.2")
         self.assertEqual(conn["to"], "Caja_derivacion_1/Regleta.1")
 
     def test_second_claim_uses_exits(self) -> None:
-        doc = abm.load_editable(self.yaml, self.root)
-        name = open_runs.add_open_cable(doc, leaves="CG.S2", colors=["BN"])
+        doc = abm.load_editable(self.site_yaml, self.root)
+        floor = get_place_node(doc, ("Floor",))
+        name = open_runs.add_open_cable(floor, leaves="CG.S2", colors=["BN"])
         open_runs.claim_open_cable(
-            doc, name, enter="CD1.N1", exit="CD1.E2"
+            floor, name, enter="CD1.N1", exit="CD1.E2"
         )
         cd2, meta = open_runs.claim_open_cable(
-            doc, name, enter="CD2.W1"
+            floor, name, enter="CD2.W1"
         )
-        self.assertEqual(doc["conduits"][cd2]["from"], "CD1.E2")
-        self.assertEqual(doc["conduits"][cd2]["to"], "CD2.W1")
+        self.assertEqual(floor["conduits"][cd2]["from"], "CD1.E2")
+        self.assertEqual(floor["conduits"][cd2]["to"], "CD2.W1")
         self.assertEqual(meta.enters, "CD2.W1")
         self.assertIsNone(meta.exits)
 
     def test_land_requires_as_for_open_id(self) -> None:
-        doc = abm.load_editable(self.yaml, self.root)
-        name = open_runs.add_open_cable(doc, leaves="CG.S2", colors=["BN"])
+        doc = abm.load_editable(self.site_yaml, self.root)
+        floor = get_place_node(doc, ("Floor",))
+        name = open_runs.add_open_cable(floor, leaves="CG.S2", colors=["BN"])
         with self.assertRaises(ValueError) as ctx:
             open_runs.land_open_cable(
-                doc, name, from_ref="A.1", to_ref="B.1"
+                floor, name, from_ref="A.1", to_ref="B.1"
             )
         self.assertIn("--as", str(ctx.exception))
 
@@ -117,19 +123,13 @@ class TestShellOpenClaimLand(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        create_location_index(self.root / "CG", type_id="Panel", label="CG")
-        create_location_index(
-            self.root / "CD1", type_id="JunctionBox", label="CD1"
-        )
-        # Declare openings used by open/claim validation when local.
-        for folder, openings in (
-            ("CG", ["S2"]),
-            ("CD1", ["N1", "E2"]),
-        ):
-            path = self.root / folder / "housewire.yaml"
-            doc = abm.load_editable(path, self.root)
-            doc["openings"] = openings
-            abm.persist(doc, path, self.root)
+        doc = init_site(self.root, type_id="House")
+        add_place(doc, "CG", type_id="Panel", label="CG")
+        add_place(doc, "CD1", type_id="JunctionBox", label="CD1")
+        get_place_node(doc, ("CG",))["openings"] = ["S2"]
+        get_place_node(doc, ("CD1",))["openings"] = ["N1", "E2"]
+        save_site(self.root, doc)
+        self.site_yaml = self.root / HOUSEWIRE_YAML
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
@@ -152,15 +152,14 @@ class TestShellOpenClaimLand(unittest.TestCase):
         code = self._run(s, "open S2 1.5 --colors BN,BU")
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
-        self.assertIn("OPEN_Linea_01", doc["cables"])
+        cg = get_place_node(doc, ("CG",))
+        self.assertIn("OPEN_Linea_01", cg["cables"])
 
-        self._run(s, "cd ../CD1")
-        code = self._run(s, "claim OPEN_Linea_01 --enter N1 --exit E2")
+        code = self._run(s, "claim OPEN_Linea_01 --enter CD1.N1 --exit CD1.E2")
         self.assertEqual(code, 0)
 
-        # Cable still lives in CG yaml
-        cg_path = self.root / "CG" / "housewire.yaml"
-        _cpath, cg = s.ensure_doc(cg_path)
+        _path, doc = s.ensure_doc()
+        cg = get_place_node(doc, ("CG",))
         self.assertTrue(cg["conduits"])
         meta = open_runs.parse_open_notes(cg["cables"]["OPEN_Linea_01"]["notes"])
         self.assertEqual(meta.status, "claimed")
@@ -172,7 +171,8 @@ class TestShellOpenClaimLand(unittest.TestCase):
             "--as Linea_CG_a_CD1",
         )
         self.assertEqual(code, 0)
-        _cpath, cg = s.ensure_doc(cg_path)
+        _path, doc = s.ensure_doc()
+        cg = get_place_node(doc, ("CG",))
         self.assertIn("Linea_CG_a_CD1", cg["cables"])
         self.assertNotIn("OPEN_Linea_01", cg["cables"])
 

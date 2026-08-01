@@ -24,7 +24,12 @@ from housewire.house.conduit_ref import (
 )
 from housewire.project.io import HOUSEWIRE_YAML, load_yaml
 from housewire.project.openings import declared_opening_ids, expand_opening_grid
-from housewire.project.paths import is_excluded_path
+from housewire.project.tree import (
+    get_place_node,
+    iter_places,
+    logical_parts_from_id,
+    site_yaml_path,
+)
 from housewire.project.view_layout import (
     get_electrical_position,
     get_electrical_rotation,
@@ -350,13 +355,24 @@ def _build_cable_edges(
 
 
 def location_dir(site_root: Path, location_id: str) -> Path:
-    """Resolve an outline location directory under the site root."""
-    root = site_root.resolve()
-    if location_id in {".", "", "/"}:
-        return root
-    candidate = (site_root / location_id).resolve()
-    candidate.relative_to(root)
-    return candidate
+    """Return the site root (places are nested in one YAML, not directories)."""
+    del location_id  # logical id; filesystem root is always the site
+    return site_root.resolve()
+
+
+def _load_site_doc(
+    site_root: Path,
+    *,
+    session_docs: dict[Path, dict[str, Any]] | None = None,
+) -> tuple[Path, dict[str, Any]]:
+    path = site_yaml_path(site_root)
+    if session_docs:
+        for key, doc in session_docs.items():
+            if key.resolve() == path:
+                return path, doc
+    if not path.is_file():
+        raise FileNotFoundError(f"No {HOUSEWIRE_YAML} at site root {site_root}")
+    return path, load_yaml(path)
 
 
 def iter_place_yaml_under(
@@ -364,72 +380,54 @@ def iter_place_yaml_under(
     *,
     session_docs: dict[Path, dict[str, Any]] | None = None,
 ) -> list[tuple[tuple[str, ...], Path]]:
-    """Child outline place yaml paths under a location (excluding itself)."""
-    rows: list[tuple[tuple[str, ...], Path]] = []
-    root_yaml = (location_dir_path / HOUSEWIRE_YAML).resolve()
-    base = location_dir_path.resolve()
-    seen: set[Path] = set()
-    for yaml_path in sorted(location_dir_path.rglob(HOUSEWIRE_YAML)):
-        resolved = yaml_path.resolve()
-        if resolved == root_yaml:
-            continue
-        if is_excluded_path(resolved):
-            continue
-        try:
-            rel = resolved.parent.relative_to(base)
-        except ValueError:
-            continue
-        parts = tuple(rel.parts)
-        if not parts:
-            continue
-        rows.append((parts, resolved))
-        seen.add(resolved)
-    if session_docs:
-        for path in session_docs:
-            resolved = path.resolve()
-            if resolved in seen or resolved == root_yaml:
-                continue
-            if resolved.name != HOUSEWIRE_YAML:
-                continue
-            try:
-                rel = resolved.parent.relative_to(base)
-            except ValueError:
-                continue
-            parts = tuple(rel.parts)
-            if not parts:
-                continue
-            rows.append((parts, resolved))
-            seen.add(resolved)
-    return sorted(rows, key=lambda row: row[0])
+    """Compatibility shim: nested places share the site YAML path.
+
+    ``location_dir_path`` must be the site root. Relative parts are logical.
+    """
+    site_root = location_dir_path.resolve()
+    try:
+        yaml_path, doc = _load_site_doc(site_root, session_docs=session_docs)
+    except FileNotFoundError:
+        return []
+    return [(parts, yaml_path) for parts, _node in iter_places(doc, under=())]
 
 
 def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
-    """Outline location tree (preorder), only nodes useful as canvas roots.
+    """Place tree (preorder), only nodes useful as canvas roots.
 
     Each row includes ``depth`` for UI indentation. A node is included if it
-    has child outline places (selectable) or is an ancestor of such a node.
+    has child places (selectable) or is an ancestor of such a node.
     """
     root = site_root.resolve()
-    places: dict[str, dict[str, Any]] = {}
+    try:
+        _path, site_doc = _load_site_doc(root)
+    except FileNotFoundError:
+        return []
 
-    for yaml_path in sorted(root.rglob(HOUSEWIRE_YAML)):
-        if is_excluded_path(yaml_path):
-            continue
-        try:
-            doc = load_yaml(yaml_path)
-        except ValueError:
-            continue
-        meta = place_meta_from_mapping(doc)
-        if meta is None:
-            continue
-        parent = yaml_path.parent
-        try:
-            rel = parent.relative_to(root)
-        except ValueError:
-            continue
-        location_id = "." if str(rel) == "." else str(rel).replace("\\", "/")
-        parts = () if location_id == "." else tuple(rel.parts)
-        place_id = root.name if location_id == "." else parent.name
+    places: dict[str, dict[str, Any]] = {}
+    root_meta = place_meta_from_mapping(site_doc)
+    if root_meta is not None:
+        places["."] = {
+            "id": ".",
+            "name": (
+                str(root_meta["name"]).strip()
+                if root_meta.get("name") is not None and str(root_meta.get("name")).strip()
+                else None
+            ),
+            "label": (
+                str(root_meta["label"]).strip()
+                if root_meta.get("label") is not None and str(root_meta.get("label")).strip()
+                else None
+            ),
+            "display_name": place_name(root_meta, root.name),
+            "type": str(root_meta.get("type") or "Location"),
+            "path": ".",
+            "parts": (),
+        }
+    for parts, node in iter_places(site_doc, under=()):
+        meta = place_meta_from_mapping(node) or {}
+        location_id = "/".join(parts)
+        place_id = parts[-1]
         raw_name = meta.get("name")
         raw_label = meta.get("label")
         places[location_id] = {
@@ -448,9 +446,7 @@ def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
     selectable: set[str] = set()
     for loc_id, info in places.items():
         parts = info["parts"]
-        if any(
-            _is_descendant(parts, other["parts"]) for other in places.values()
-        ):
+        if any(_is_descendant(parts, other["parts"]) for other in places.values()):
             selectable.add(loc_id)
 
     keep: set[str] = set(selectable)
@@ -471,7 +467,7 @@ def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
             parent_key: str | None = None
         else:
             parent_key = "." if len(parts) == 1 else "/".join(parts[:-1])
-            if parent_key not in keep:
+            if parent_key not in places:
                 parent_key = None
         children.setdefault(parent_key, []).append(loc_id)
 
@@ -498,7 +494,6 @@ def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
             _walk(loc_id, depth + 1)
 
     _walk(None, 0)
-    # Orphans that lost parent link but are still kept
     emitted = {r["id"] for r in rows}
     for loc_id in sorted(keep - emitted, key=lambda i: places[i]["parts"]):
         info = places[loc_id]
@@ -518,36 +513,22 @@ def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
 
 
 def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
-    """Full site outline: every place + electrical elements (preorder flat).
-
-    Place ids are site-relative (``.`` for the project root). Element ids are
-    ``{place_id}/{element_name}`` (or just the element name under ``.``).
-    ``selectable`` means the place can be a canvas root (has child places).
-    ``icon`` is resolved from instance → site/package catalog.
-    """
+    """Full site outline: every place + electrical elements (preorder flat)."""
     root = site_root.resolve()
     catalog = load_catalog(root)
+    try:
+        _path, site_doc = _load_site_doc(root)
+    except FileNotFoundError:
+        return []
+
     places: dict[str, dict[str, Any]] = {}
     elements_by_place: dict[str, list[dict[str, Any]]] = {}
 
-    for yaml_path in sorted(root.rglob(HOUSEWIRE_YAML)):
-        if is_excluded_path(yaml_path):
-            continue
-        try:
-            doc = load_yaml(yaml_path)
-        except ValueError:
-            continue
-        meta = place_meta_from_mapping(doc)
+    def _register(location_id: str, parts: tuple[str, ...], node: dict[str, Any]) -> None:
+        meta = place_meta_from_mapping(node)
         if meta is None:
-            continue
-        parent = yaml_path.parent
-        try:
-            rel = parent.relative_to(root)
-        except ValueError:
-            continue
-        location_id = "." if str(rel) == "." else str(rel).replace("\\", "/")
-        parts = () if location_id == "." else tuple(rel.parts)
-        place_id = root.name if location_id == "." else parent.name
+            return
+        place_id = root.name if location_id == "." else parts[-1]
         raw_name = meta.get("name")
         raw_label = meta.get("label")
         type_id = str(meta.get("type") or "Location")
@@ -565,19 +546,15 @@ def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
             ),
             "display_name": place_name(meta, place_id),
             "type": type_id,
-            "icon": catalog_icon(type_id, catalog=catalog, instance=doc),
+            "icon": catalog_icon(type_id, catalog=catalog, instance=node),
             "parts": parts,
         }
         elem_rows: list[dict[str, Any]] = []
-        for ename, defn in _iter_electrical_elements(doc):
-            eid = (
-                ename if location_id == "." else f"{location_id}/{ename}"
-            )
-            raw_name = defn.get("name")
+        for ename, defn in _iter_electrical_elements(node):
+            eid = ename if location_id == "." else f"{location_id}/{ename}"
+            raw_n = defn.get("name")
             working_name = (
-                str(raw_name).strip()
-                if raw_name is not None and str(raw_name).strip()
-                else None
+                str(raw_n).strip() if raw_n is not None and str(raw_n).strip() else None
             )
             elabel = defn.get("label")
             label_s = (
@@ -602,6 +579,10 @@ def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
                 }
             )
         elements_by_place[location_id] = elem_rows
+
+    _register(".", (), site_doc)
+    for parts, node in iter_places(site_doc, under=()):
+        _register("/".join(parts), parts, node)
 
     def _is_descendant(ancestor: tuple[str, ...], other: tuple[str, ...]) -> bool:
         return len(other) > len(ancestor) and other[: len(ancestor)] == ancestor
@@ -659,51 +640,25 @@ def build_physical_graph(
     depth: int = 1,
     session_docs: dict[Path, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Build UI graph for one location.
-
-    ``depth`` is how many outline levels under the canvas root are visible
-    (1 = direct children only; 2 = children nested inside parents; …).
-
-    Each node includes ``w``/``h`` from the full descendant window layout so a
-    parent keeps the same footprint whether or not its interior is shown.
-    """
+    """Build UI graph for one location (nested places in the site YAML)."""
     if depth < 1:
         raise ValueError("depth must be >= 1")
-    ldir = location_dir(site_root, location_id)
-    loc_yaml = (ldir / HOUSEWIRE_YAML).resolve()
+    _yaml_path, site_doc = _load_site_doc(site_root, session_docs=session_docs)
+    canvas_parts = logical_parts_from_id(location_id)
+    try:
+        loc_doc = get_place_node(site_doc, canvas_parts)
+    except ValueError as exc:
+        raise FileNotFoundError(f"No place for location {location_id!r}") from exc
 
-    def _doc_for(path: Path) -> dict[str, Any]:
-        resolved = path.resolve()
-        if session_docs and resolved in session_docs:
-            return session_docs[resolved]
-        return load_yaml(resolved)
-
-    if not loc_yaml.is_file() and not (
-        session_docs and loc_yaml in {p.resolve() for p in session_docs}
-    ):
-        raise FileNotFoundError(
-            f"No {HOUSEWIRE_YAML} for location {location_id!r}"
-        )
-
-    loc_doc = _doc_for(loc_yaml)
     loc_meta = place_meta_from_mapping(loc_doc) or {}
     page = get_physical_page(loc_doc)
 
-    all_rows = list(iter_place_yaml_under(ldir, session_docs=session_docs))
-    all_under = {parts for parts, _path in all_rows}
+    all_docs: dict[tuple[str, ...], dict[str, Any]] = {
+        parts: node for parts, node in iter_places(site_doc, under=canvas_parts)
+    }
+    all_under = set(all_docs)
     max_depth = max((len(parts) for parts in all_under), default=0)
     depth = min(depth, max(max_depth, 1))
-
-    # Full outline catalog (any depth) for window sizes and conduit resolve.
-    all_docs: dict[tuple[str, ...], dict[str, Any]] = {}
-    for parts, path in all_rows:
-        try:
-            doc = _doc_for(path)
-        except ValueError:
-            continue
-        if place_meta_from_mapping(doc) is None:
-            continue
-        all_docs[parts] = doc
 
     children_map: dict[tuple[str, ...], list[tuple[str, ...]]] = {}
     for parts in all_docs:
@@ -828,7 +783,6 @@ def build_physical_graph(
             return None
         if parts in known_full:
             return parts
-        # Collapse to nearest visible ancestor within depth window.
         for cut in range(min(len(parts), depth), 0, -1):
             anc = parts[:cut]
             if anc in known_full:
@@ -905,6 +859,11 @@ def build_physical_graph(
         conduit_edges=edges,
     )
 
+    canvas_leaf = (
+        site_root.resolve().name
+        if not canvas_parts
+        else canvas_parts[-1]
+    )
     return {
         "location": {
             "id": location_id,
@@ -920,8 +879,8 @@ def build_physical_graph(
                 and str(loc_meta.get("label")).strip()
                 else None
             ),
-            "display_name": place_name(loc_meta, ldir.name),
-            "display_label": place_label(loc_meta, ldir.name),
+            "display_name": place_name(loc_meta, canvas_leaf),
+            "display_label": place_label(loc_meta, canvas_leaf),
             "type": str(loc_meta.get("type") or "Location"),
         },
         "page": page,
@@ -947,15 +906,13 @@ def apply_auto_layout(
     origin_y: float = 80.0,
     cols: int = 4,
 ) -> list[str]:
-    """Assign grid positions to nodes missing x/y (or all if force).
-
-    Sibling groups (same parent) are laid out independently so nested depth
-    zoom keeps child coords relative to their container.
-    """
+    """Assign grid positions to nodes missing x/y (or all if force)."""
     graph = build_physical_graph(
         site_root, location_id, depth=depth, session_docs=session_docs
     )
-    ldir = location_dir(site_root, location_id)
+    yaml_path, site_doc = _load_site_doc(site_root, session_docs=session_docs)
+    session_docs[yaml_path] = site_doc
+    canvas_parts = logical_parts_from_id(location_id)
     by_parent: dict[str | None, list[dict[str, Any]]] = {}
     for node in graph["nodes"]:
         parent = node.get("parent")
@@ -966,19 +923,12 @@ def apply_auto_layout(
         index = 0
         for node in siblings:
             parts = tuple(node["parts"])
-            yaml_path = (ldir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
-            doc = session_docs.get(yaml_path)
-            if doc is None:
-                if not yaml_path.is_file():
-                    continue
-                doc = load_yaml(yaml_path)
-                session_docs[yaml_path] = doc
-            stored = get_physical_position(doc)
+            place = get_place_node(site_doc, canvas_parts + parts)
+            stored = get_physical_position(place)
             if not force and stored is not None:
                 continue
             col = index % cols
             row = index // cols
-            # Nested siblings sit closer; top-level keeps the roomier grid.
             nested = node.get("parent") is not None
             ox = 28.0 if nested else origin_x
             oy = 40.0 if nested else origin_y
@@ -986,7 +936,7 @@ def apply_auto_layout(
             gy = 110.0 if nested else gap_y
             x = ox + col * gx
             y = oy + row * gy
-            set_physical_position(doc, x, y)
+            set_physical_position(place, x, y)
             updated.append(node["id"])
             index += 1
     return updated
@@ -1000,20 +950,19 @@ def apply_positions(
     session_docs: dict[Path, dict[str, Any]],
 ) -> list[str]:
     """Write positions ``{node_id: {x,y}}``. Return updated ids."""
-    ldir = location_dir(site_root, location_id)
+    yaml_path, site_doc = _load_site_doc(site_root, session_docs=session_docs)
+    session_docs[yaml_path] = site_doc
+    canvas_parts = logical_parts_from_id(location_id)
     updated: list[str] = []
     for node_id, pos in positions.items():
         parts = tuple(p for p in str(node_id).split("/") if p)
         if not parts:
             continue
-        yaml_path = (ldir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
-        doc = session_docs.get(yaml_path)
-        if doc is None:
-            if not yaml_path.is_file():
-                raise FileNotFoundError(f"Unknown node: {node_id}")
-            doc = load_yaml(yaml_path)
-            session_docs[yaml_path] = doc
-        set_physical_position(doc, float(pos["x"]), float(pos["y"]))
+        try:
+            place = get_place_node(site_doc, canvas_parts + parts)
+        except ValueError as exc:
+            raise FileNotFoundError(f"Unknown node: {node_id}") from exc
+        set_physical_position(place, float(pos["x"]), float(pos["y"]))
         updated.append(str(node_id))
     return updated
 
@@ -1026,22 +975,14 @@ def apply_electrical_positions(
     session_docs: dict[Path, dict[str, Any]],
 ) -> list[str]:
     """Write ``view.electrical`` for ``{place/element: {x,y}}``. Return ids."""
-    ldir = location_dir(site_root, location_id)
+    yaml_path, site_doc = _load_site_doc(site_root, session_docs=session_docs)
+    session_docs[yaml_path] = site_doc
+    canvas_parts = logical_parts_from_id(location_id)
     updated: list[str] = []
     for node_id, pos in positions.items():
         place_parts, element_name = split_element_node_id(str(node_id))
-        yaml_path = (
-            (ldir / HOUSEWIRE_YAML).resolve()
-            if not place_parts
-            else (ldir.joinpath(*place_parts) / HOUSEWIRE_YAML).resolve()
-        )
-        doc = session_docs.get(yaml_path)
-        if doc is None:
-            if not yaml_path.is_file():
-                raise FileNotFoundError(f"Unknown element host: {node_id}")
-            doc = load_yaml(yaml_path)
-            session_docs[yaml_path] = doc
-        elements = doc.get("elements")
+        host = get_place_node(site_doc, canvas_parts + place_parts)
+        elements = host.get("elements")
         if not isinstance(elements, dict) or element_name not in elements:
             raise FileNotFoundError(f"Unknown element: {node_id}")
         elem = elements[element_name]
@@ -1064,7 +1005,9 @@ def apply_electrical_auto_layout(
     graph = build_physical_graph(
         site_root, location_id, depth=depth, session_docs=session_docs
     )
-    ldir = location_dir(site_root, location_id)
+    yaml_path, site_doc = _load_site_doc(site_root, session_docs=session_docs)
+    session_docs[yaml_path] = site_doc
+    canvas_parts = logical_parts_from_id(location_id)
     by_parent: dict[str | None, list[dict[str, Any]]] = {}
     for elem in graph.get("elements") or []:
         by_parent.setdefault(elem.get("parent"), []).append(elem)
@@ -1075,18 +1018,8 @@ def apply_electrical_auto_layout(
         for elem in siblings:
             place_parts = tuple(elem.get("place_parts") or [])
             element_name = str(elem.get("leaf_id") or elem.get("name") or "")
-            yaml_path = (
-                (ldir / HOUSEWIRE_YAML).resolve()
-                if not place_parts
-                else (ldir.joinpath(*place_parts) / HOUSEWIRE_YAML).resolve()
-            )
-            doc = session_docs.get(yaml_path)
-            if doc is None:
-                if not yaml_path.is_file():
-                    continue
-                doc = load_yaml(yaml_path)
-                session_docs[yaml_path] = doc
-            elements = doc.get("elements")
+            host = get_place_node(site_doc, canvas_parts + place_parts)
+            elements = host.get("elements")
             if not isinstance(elements, dict):
                 continue
             defn = elements.get(element_name)

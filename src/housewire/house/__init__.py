@@ -363,10 +363,21 @@ def expand_conduit(
 
 
 def path_location_parts(project_path: Path, yaml_file: Path) -> list[str]:
-    relative_parent = yaml_file.relative_to(project_path).parent
+    """Location prefix for a YAML file.
+
+    Sites use a single root ``housewire.yaml``; nested places live under
+    ``elements:`` and get their path from ``_walk_locations``, so the file
+    itself always contributes an empty prefix when it sits at the site root.
+    """
+    relative = yaml_file.resolve().relative_to(project_path.resolve())
+    # Nested files are not supported; ignore parent dirs other than ``.``.
+    if relative.name.lower() in {"housewire.yaml", "housewire.yml"} and len(relative.parts) == 1:
+        return []
+    relative_parent = relative.parent
     if str(relative_parent) == ".":
         return []
     return list(relative_parent.parts)
+
 
 
 def _as_location_list(value: object) -> list[str]:
@@ -955,7 +966,7 @@ def _convert_flat_fragment(
     }
 
 
-def _inject_directory_location(
+def _inject_place_meta(
     node: dict[str, Any],
     flat_elements: dict[str, Any],
     base: list[str],
@@ -972,14 +983,13 @@ def _walk_locations(
     node: dict[str, Any],
     base: list[str],
 ) -> list[tuple[list[str], dict[str, Any]]]:
-    """Yield (location_parts, fragment) for nested locations trees.
+    """Yield (location_parts, fragment) for nested place trees.
 
     Supports:
-    1. Place fields on the node root (``type: JunctionBox``, …) — directory YAML
-       or nested place object (same shape).
+    1. Place fields on the node root (``type: JunctionBox``, …).
     2. Legacy ``location: { type: … }`` map (via place_meta_from_mapping).
     3. ``locations: { Name: { … } }`` — explicit location map.
-    4. ``elements: { Name: { type: Room|…, elements: … } }`` — inline nested place.
+    4. ``elements: { Name: { type: Room|…, elements: … } }`` — nested places.
     """
     fragments: list[tuple[list[str], dict[str, Any]]] = []
 
@@ -1018,7 +1028,7 @@ def _walk_locations(
                 k: v for k, v in defn.items() if k not in location_child_keys
             } or defn
 
-    _inject_directory_location(node, flat_node.setdefault("elements", {}), base)
+    _inject_place_meta(node, flat_node.setdefault("elements", {}), base)
     if not flat_node.get("elements"):
         flat_node.pop("elements", None)
 
@@ -1059,7 +1069,7 @@ def house_document_to_wireviz(
     """Convert a house/v1 document into a WireViz-compatible dict.
 
     Names are already location-prefixed; merge step must not prefix again.
-    Location path comes only from the file's directory.
+    Nested place paths come from ``elements:`` under the single site document.
     """
     base_location = list(file_location_parts)
 

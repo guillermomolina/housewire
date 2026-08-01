@@ -58,11 +58,11 @@ housewire shell "$SITE"
 ```
 
 Commands: `cd`, `ls`, `pwd`, `use`, `show`, `pend`, `add` (incl. `add location`, recipes), `rm`, `generate`, `help`, `exit`.
-Tab completes commands, subcommands, and paths. **Places are directories** with a single `housewire.yaml` (root `type:` place). `add location NAME --type JunctionBox` creates that directory and file.
+Tab completes commands, subcommands, and paths. **One nested `housewire.yaml`** at the site root holds the whole place tree under `elements:`. `add location NAME --type JunctionBox` inserts a place under the current location (in memory → `save`).
 
 ```bash
 housewire shell "$SITE"
-cd "Ground floor/Hall"     # auto-use housewire.yaml
+cd "Ground floor/Hall"     # logical path inside the site YAML
 show
 cd "Main panel"
 show
@@ -94,7 +94,7 @@ Fast capture at a junction box (pending cable, destination unknown):
 
 ```bash
 housewire shell "$SITE"
-cd "Garage/Junction box 2"   # auto-activates housewire.yaml
+cd "Garage/Junction box 2"   # logical path in the site YAML
 pend N1 S1                 # creates PEND_Linea_01 + Conducto_paso_01
 pend N1 S1 2.5
 ```
@@ -106,10 +106,10 @@ Non-interactive subcommands:
 ```bash
 housewire generate -f "$SITE"
 housewire ls "$SITE" "Garage"
-housewire show "$SITE" "Ground floor/Hall/housewire.yaml"
-housewire add element "$SITE" "…/housewire.yaml" MT_New --type MCB --subtype C10
-housewire add pend "$SITE" "…/housewire.yaml" N1 S1
-housewire rm element "$SITE" "…/housewire.yaml" MT_New
+housewire show "$SITE" housewire.yaml
+housewire add element "$SITE" housewire.yaml MT_New --type MCB --subtype C10
+housewire add location "$SITE" Junction_9 --type JunctionBox --under Garage
+housewire rm element "$SITE" housewire.yaml MT_New
 ```
 
 ## Generate diagrams
@@ -120,7 +120,7 @@ housewire generate -f "$SITE"
 python -m housewire -f "$SITE"
 ```
 
-Output under `$SITE/out/` (or under the directory you pass / shell `cd` into):
+Output under `$SITE/out/`:
 
 | Path | Content |
 |---|---|

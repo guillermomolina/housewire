@@ -71,15 +71,16 @@ Every editable `housewire.yaml` must declare:
 schema: house/v1
 ```
 
-The file **is** the place object: the same fields as a nested place (`type`, `label`,
-`mount`, `openings`, …), plus `schema: house/v1`. Hierarchy is the directory tree
-(and/or inline places under `elements:`).
+The site root document **is** the top place (`type: House` / `Floor` / …): the same
+fields as a nested place (`type`, `label`, `mount`, `openings`, …), plus
+`schema: house/v1`. Hierarchy is **only** nested places under `elements:` (map key = place id).
+There is one `housewire.yaml` per site; no per-place subdirectories.
 
 ### Place id, name, and label
 
 | Field | What | Where | Used for |
 |-------|------|-------|----------|
-| **id** | Technical key `[A-Za-z0-9_]+` | Directory name / inline key under `elements:` | Refs, paths, `cd`, conduits |
+| **id** | Technical key `[A-Za-z0-9_]+` | Map key under `elements:` | Refs, paths, `cd`, conduits |
 | **name** | Short working name (optional) | YAML `name:` on the place | Canvas, selectors, lists |
 | **label** | Human text (optional) | YAML `label:` on the place | Inspector, docs, long tooltips |
 
@@ -95,59 +96,37 @@ conduits. Canvas and outline prefer ``name`` → id; inspector shows all three.
 
 - **Id**: e.g. `Caja_derivacion_4`. No spaces. Used in refs.
 - **`name`**: e.g. `CD4` (canvas).
-- **`label`**: e.g. `Caja derivacion 4`. `add location "Caja derivacion 6"` → folder
-  `Caja_derivacion_6/` with `label: Caja derivacion 6` (no automatic `name`).
+- **`label`**: e.g. `Caja derivacion 4`. `add location "Caja derivacion 6"` → key
+  `Caja_derivacion_6` with `label: Caja derivacion 6` (no automatic `name`).
 
-Outline place example:
+Nested place example (under the site `housewire.yaml`):
 
 ```yaml
-# Garage/Junction_box_1/housewire.yaml
 schema: house/v1
-type: JunctionBox
-name: JB1
-label: "Junction box 1"
-subtype: "100x100 IP40"
-mount: ceiling
-opening_grid: { NS: 2, WE: 2, B: 1 }
-openings: [B1-1, N1]
+type: House
 elements:
-  Regleta_1:
-    type: TerminalStrip
-    label: "3-pair strip"
-```
-
-Equivalent inline place (under a parent `housewire.yaml`):
-
-```yaml
-elements:
-  Junction_box_1:
-    type: JunctionBox
-    label: "Junction box 1"
-    openings: [B1-1, N1]
+  Garage:
+    type: Floor
+    label: Garage
     elements:
-      Regleta_1:
-        type: TerminalStrip
+      Junction_box_1:
+        type: JunctionBox
+        name: JB1
+        label: "Junction box 1"
+        subtype: "100x100 IP40"
+        mount: ceiling
+        opening_grid: { NS: 2, WE: 2, B: 1 }
+        openings: [B1-1, N1]
+        elements:
+          Regleta_1:
+            type: TerminalStrip
+            label: "3-pair strip"
 ```
 
-## Locations = logical tree (outline and/or inline)
+## Locations = nested place tree
 
-**Outline** (recommended on site):
-
-```text
-Garage/
-  housewire.yaml                 # type: Floor + …
-  Junction_box_1/
-    housewire.yaml               # type: JunctionBox + …
-```
-
-**Inline**: a place nested under the ancestor’s `elements:` (shell: `add location … --inline`).
-
-The shell (`cd` / `ls` / `pwd`) walks the **location tree**: outline children
-(folder + `housewire.yaml`) and inline place-typed children appear together.
-Devices (`Socket`, `MCB`, …) stay under `elements:` of the current place.
-
-Mixing outline and inline is allowed; the **same id** must not exist both as a
-sibling folder and as an inline key.
+The shell (`cd` / `ls` / `pwd`) walks place-typed children under `elements:`.
+Devices (`Socket`, `MCB`, …) stay under `elements:` of the current place (non-place types).
 
 Place types (catalog, `wireviz_skip`):
 
@@ -165,8 +144,8 @@ Place types (catalog, `wireviz_skip`):
 
 ### Stair (`connects`)
 
-A stair is a place in the tree (sibling of the floors it links — the filesystem
-has a single parent). Use ``connects`` to name the two ends:
+A stair is a place in the tree (sibling of the floors it links). Use ``connects``
+to name the two ends:
 
 ```yaml
 type: Stair
@@ -176,17 +155,16 @@ connects: [Parking, Planta_baja]
 
 - ``connects``: list of two location refs (usually sibling ``Floor`` ids).
 - Optional for generate today; used by docs/UI to show what the stair joins.
-- Children (junction boxes, switches, light points) live under the stair folder.
+- Children (junction boxes, switches, light points) nest under the stair’s `elements:`.
 
-The **tree root** is the directory you pass to `housewire` (`project_path`), not a
-particular `type`. You can point at a subtree or insert folders above
-(e.g. `Building/…/House/…`) without changing types.
+The **site root** is the directory you pass to `housewire` (`project_path`), containing
+one `housewire.yaml`. Logical paths (`Garage/Junction_1`) are keys under nested
+`elements:`, not filesystem folders.
 
-- One outline directory → one `housewire.yaml` (no sibling fragment YAMLs).
-- `cd` enters outline or inline; `show` / `add element` act on the current place.
-- `add location NAME --type T` → outline when the current place is outline; inline
-  when already inline. Force with `--inline` / `--dir` (`--dir` under inline is forbidden).
-- Dirty YAML stay in memory across `cd`; `save` writes all dirty buffers; `exit`
+- One site directory → one `housewire.yaml` (nested places under `elements:`).
+- `cd` / `ls` navigate place keys; `show` / `add element` act on the current place.
+- `add location NAME --type T` nests under the current place (memory → `save`).
+- Dirty YAML stay in memory across `cd`; `save` writes dirty buffers; `exit`
   prompts per dirty file.
 
 ### `install` (surface vs flush)
@@ -396,7 +374,7 @@ views:
 - **`views.physical`**: page size and preferred conduit drawing mode for the
   canvas root location (often a `Floor` or `Room`, but any place type works).
 - Canvas zoom (pan/wheel) is independent of `representation` (line vs tube).
-- **Depth zoom** (`depth` query / toolbar) controls how many nested outline
+- **Depth zoom** (`depth` query / toolbar) controls how many nested place
   levels are drawn inside parent boxes; it does not change representation.
 - **Elements / Cables** toolbar toggles show or hide the electrical LOD on the
   same canvas (session UI state; not persisted). Conduit `line`/`tube` is
@@ -500,8 +478,8 @@ noisy without helping L/N tracing.
 ### Capture recipes
 
 Run from the **parent** place (floor/room) that owns `cables` / `conduits` /
-`connections`. Recipes create the destination place (outline by default) plus
-wiring in the current YAML.
+`connections`. Recipes create the destination place (nested under the current
+place) plus wiring in the current place node.
 
 ```text
 cd Garage
@@ -516,8 +494,8 @@ add feed Linea_A_a_B --from Junction_4.E1 --to Junction_3.N1 \
   --from-pin Regleta_2.1 --to-pin Regleta.1 --colors BK
 ```
 
-Overrides: `--pins`, `--colors`, `--section`, `--to-opening`, `--inline` /
-`--dir`, `--label`, `--notes`. Socket strip default pins are `3,2,1` (L, PE, N).
+Overrides: `--pins`, `--colors`, `--section`, `--to-opening`, `--label`,
+`--notes`. Socket strip default pins are `3,2,1` (L, PE, N).
 
 ### Pending runs (incremental capture)
 
@@ -597,25 +575,25 @@ connections:
 
 ### Cross-location references
 
-Connections in a `housewire.yaml` may only refer to elements in **that location and
-its sublocations** (paths relative to the current directory).
+Connections declared on a place may only refer to elements in **that place and
+its nested sublocations** (paths relative to the current place).
 
 - Local: `MT_Luces.1`
 - Sublocation: `Cuadro_General/Fuente_portero.+`
-- Absolute **within the same tree**: `/Parking/Caja_derivacion_1/Regleta.1` (from under `Parking/`)
+- Absolute **within the same tree**: `/Parking/Caja_derivacion_1/Regleta.1` (from under `Parking`)
 
 Not allowed (lift the connection to the common ancestor):
 
 - `../Salon/Caja_Luces.L` (walks upward)
-- `/Parking/Caja_2/Regleta.1` declared inside `Parking/Caja_1/` (sibling)
+- `/Parking/Caja_2/Regleta.1` declared inside `Parking/Caja_1` (sibling)
 
-The `via` cable must be defined in the **same** location document as the connection.
+The `via` cable must be defined in the **same** place node as the connection.
 
 ## WireViz name prefixes
 
-The folder path defines the export prefix:
+The logical place path defines the export prefix:
 
-- `Parking/Caja_derivacion_1/housewire.yaml` → element `Regleta` →
+- Place `Parking/Caja_derivacion_1` → element `Regleta` →
   `Parking__Caja_derivacion_1__Regleta`
 
 ## Conduits

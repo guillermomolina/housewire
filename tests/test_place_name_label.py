@@ -5,14 +5,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fixtures import add_place, init_site, save_site
 from housewire.house import (
     location_id_from_name,
     place_label,
     place_meta_from_mapping,
     place_name,
 )
-from housewire.project.io import create_location_index
 from housewire.project import abm
+from housewire.project.io import HOUSEWIRE_YAML
+from housewire.project.tree import get_place_node
 
 
 class TestPlaceNameLabel(unittest.TestCase):
@@ -37,16 +39,20 @@ class TestPlaceNameLabel(unittest.TestCase):
 
     def test_create_with_name_and_label(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "Box_1"
-            create_location_index(
-                root,
+            root = Path(tmp)
+            doc = init_site(root, type_id="House")
+            add_place(
+                doc,
+                "Box_1",
                 type_id="JunctionBox",
                 working_name="B1",
                 label="Box one",
             )
-            doc = abm.load_editable(root / "housewire.yaml", Path(tmp))
-            self.assertEqual(doc["name"], "B1")
-            self.assertEqual(doc["label"], "Box one")
+            save_site(root, doc)
+            loaded = abm.load_editable(root / HOUSEWIRE_YAML, root)
+            box = get_place_node(loaded, ("Box_1",))
+            self.assertEqual(box["name"], "B1")
+            self.assertEqual(box["label"], "Box one")
 
     def test_spaced_name_sets_label_not_working_name(self) -> None:
         leaf_id, auto_label = location_id_from_name("Caja derivacion 6")

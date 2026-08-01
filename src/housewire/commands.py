@@ -16,10 +16,10 @@ if TYPE_CHECKING:
 HELP_TEXT = """housewire shell commands:
   (Tab completes commands, add/rm subcommands, and cd/use/… paths)
   pwd                          logical location path and host YAML (* = any dirty buffer)
-  cd [path]                    navigate locations (outline folder or inline place);
+  cd [path]                    navigate nested places under elements:;
                                dirty YAML stay in memory (no save prompt on cd)
-  ls                           child locations (outline+inline) and elements (non-place)
-  use housewire.yaml           set active housewire.yaml for the current location
+  ls                           child places and elements (non-place)
+  use housewire.yaml           activate the site housewire.yaml
   show                         current place: electrical layer + physical layer
   show --element NAME | --cable NAME
   pend [<enter> <exit>] [section] [--colors C1,C2] [--notes ...]
@@ -37,20 +37,19 @@ HELP_TEXT = """housewire shell commands:
   set --element NAME KEY VALUE property of an element in the place
   unset KEY | unset --element NAME KEY
   add location NAME --type T [--subtype ...] [--name ...] [--label ...] [--notes ...]
-                               [--inline | --dir] [--set KEY=VALUE | --set KEY VALUE …]
+                               [--set KEY=VALUE | --set KEY VALUE …]
                                T=Room|Stair|JunctionBox|DeviceBox|LightPoint|Panel|Floor|House
-                               default: outline if you are in outline; inline if you are inline
-                               (memory → save; outline creates folder on save)
+                               nests under current place elements: (memory → save)
                                NAME with spaces → technical id + automatic label
                                --name = short working name (canvas); --label = human text
   add socket NAME --from BOX.Op --strip ELEMENT [--pins 3,2,1]
                                [--to-opening N1] [--colors GY,GNYE,BU] [--section 2.5]
-                               [--inline | --dir] [--label ...] [--notes …]
+                               [--label ...] [--notes …]
                                DeviceBox+Socket + cable+conduit+connection (run from parent)
   add lamp NAME --from BOX.Op --strip ELEMENT --pins P1,P2[,P3]
                                [--to-pins 1,2,3] [--to-opening B1-1]
                                [--colors BN,GNYE,BU] [--section 1.5]
-                               [--inline | --dir] [--label ...] [--notes …]
+                               [--label ...] [--notes …]
                                LightPoint+Luminaire + cable+conduit+connection
   add feed NAME --from BOX.Op --to BOX2.Op --from-pin PATH --to-pin PATH
                                [--colors BN,BU] [--section 1.5] [--notes …]
@@ -106,11 +105,12 @@ def _create_recipe_place(
     opening_grid: dict[str, int] | None,
     install: str | None,
     mount: str | None,
-    want_inline: bool,
-    as_dir: bool,
+    want_inline: bool = False,
+    as_dir: bool = False,
 ) -> tuple[str, dict]:
     from housewire.project.recipe_actions import create_recipe_place
 
+    del want_inline, as_dir
     return create_recipe_place(
         session,
         name,
@@ -122,8 +122,6 @@ def _create_recipe_place(
         opening_grid=opening_grid,
         install=install,
         mount=mount,
-        want_inline=want_inline,
-        as_dir=as_dir,
     )
 
 
@@ -141,9 +139,6 @@ def cmd_add_socket(session: ProjectSession, rest: list[str]) -> int:
     p.add_argument("--section", default=None)
     p.add_argument("--label")
     p.add_argument("--notes")
-    mode = p.add_mutually_exclusive_group()
-    mode.add_argument("--inline", action="store_true")
-    mode.add_argument("--dir", dest="as_dir", action="store_true")
     args = p.parse_args(rest)
 
     result = run_socket_recipe(
@@ -157,8 +152,6 @@ def cmd_add_socket(session: ProjectSession, rest: list[str]) -> int:
         section=args.section,
         label=args.label,
         notes=args.notes,
-        want_inline=args.inline,
-        as_dir=args.as_dir,
     )
     print(
         f"Socket {result['place_id']}: {result['cable_name']} + {result['conduit_name']}; "
@@ -182,9 +175,6 @@ def cmd_add_lamp(session: ProjectSession, rest: list[str]) -> int:
     p.add_argument("--section", default=None)
     p.add_argument("--label")
     p.add_argument("--notes")
-    mode = p.add_mutually_exclusive_group()
-    mode.add_argument("--inline", action="store_true")
-    mode.add_argument("--dir", dest="as_dir", action="store_true")
     args = p.parse_args(rest)
 
     result = run_lamp_recipe(
@@ -199,8 +189,6 @@ def cmd_add_lamp(session: ProjectSession, rest: list[str]) -> int:
         section=args.section,
         label=args.label,
         notes=args.notes,
-        want_inline=args.inline,
-        as_dir=args.as_dir,
     )
     print(
         f"Lamp {result['place_id']}: {result['cable_name']} + {result['conduit_name']}; "
@@ -334,8 +322,7 @@ def cmd_ls(session: ProjectSession) -> int:
         print("locations:")
         for child in children:
             type_bit = child.place_type or "?"
-            storage_bit = " · inline" if child.storage == "inline" else ""
-            print(f"  {child.name}/  ({type_bit}{storage_bit})")
+            print(f"  {child.name}/  ({type_bit})")
     if elements:
         print("elements:")
         for name, type_id in elements:
@@ -348,8 +335,7 @@ def cmd_pwd(session: ProjectSession) -> int:
     print(logical)
     cursor = session.cursor()
     if cursor.yaml_path:
-        where = "inline" if cursor.is_inline else "dir"
-        print(f"active: {cursor.yaml_path.relative_to(session.root)} ({where})")
+        print(f"active: {cursor.yaml_path.relative_to(session.root)}")
     return 0
 
 
@@ -428,59 +414,30 @@ def cmd_pend(session: ProjectSession, argv: list[str]) -> int:
 
 
 def _iter_search_docs(session: ProjectSession) -> list[tuple[Path, dict]]:
-    """Current place, ancestors, root, buffers, then all outline housewire.yaml."""
-    from housewire.project.io import HOUSEWIRE_YAML
-    from housewire.project.paths import is_excluded_path
+    """Current place and ancestor places inside the single site document."""
     from housewire.project.session import place_node_at
 
-    seen: set[Path] = set()
+    seen: set[tuple[str, ...]] = set()
     rows: list[tuple[Path, dict]] = []
-
-    def add(path: Path, doc: dict, inline_parts: list[str] | None = None) -> None:
-        resolved = path.resolve()
-        if resolved in seen:
-            return
-        seen.add(resolved)
-        place = place_node_at(doc, inline_parts or [])
-        rows.append((resolved, place))
 
     try:
         path, doc = session.ensure_doc()
-        cursor = session.cursor()
-        add(path, doc, cursor.inline_parts)
     except (ValueError, FileNotFoundError):
-        pass
+        return rows
 
+    def add(parts: list[str]) -> None:
+        key = tuple(parts)
+        if key in seen:
+            return
+        seen.add(key)
+        place = place_node_at(doc, parts)
+        rows.append((path, place))
+
+    add(list(session.logical_parts))
     parts = list(session.logical_parts)
     while parts:
         parts.pop()
-        try:
-            cursor = session._resolve_logical(parts)
-        except (ValueError, FileNotFoundError):
-            continue
-        if cursor.yaml_path is None:
-            continue
-        path, doc = session.ensure_doc(cursor.yaml_path)
-        add(path, doc, [])
-
-    root_yaml = session.root / HOUSEWIRE_YAML
-    if root_yaml.is_file() or root_yaml.resolve() in session._buffers:
-        path, doc = session.ensure_doc(root_yaml)
-        add(path, doc, [])
-
-    for path, buf in session._buffers.items():
-        add(path, buf.doc, [])
-
-    # Full outline scan so claim finds OPEN_* opened in a sibling box.
-    for yaml_path in session.root.rglob(HOUSEWIRE_YAML):
-        if is_excluded_path(yaml_path, session._excluded):
-            continue
-        try:
-            path, doc = session.ensure_doc(yaml_path)
-        except (ValueError, OSError):
-            continue
-        add(path, doc, [])
-
+        add(parts)
     return rows
 
 
@@ -642,18 +599,6 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
             help="Short working name for canvas/lists (YAML name:)",
         )
         p.add_argument("--label", help="Human-readable label (YAML label:)")
-        mode = p.add_mutually_exclusive_group()
-        mode.add_argument(
-            "--inline",
-            action="store_true",
-            help="Create place under elements: of the current location",
-        )
-        mode.add_argument(
-            "--dir",
-            dest="as_dir",
-            action="store_true",
-            help="Create subdirectory + housewire.yaml (outline)",
-        )
         p.add_argument(
             "--set",
             dest="set_specs",
@@ -664,58 +609,22 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
         )
         args = p.parse_args(normalize_set_argv(rest))
         raw = _Path(args.name)
+        if str(raw.parent) not in (".", ""):
+            raise ValueError(
+                "add location only accepts a leaf name "
+                "(no path); cd to the parent location first"
+            )
         leaf_id, auto_label = location_id_from_name(raw.name)
         label = args.label or auto_label
         working_name = args.working_name
-        cursor = session.cursor()
-        want_inline = args.inline or (not args.as_dir and cursor.is_inline)
-        if args.as_dir and cursor.is_inline:
-            raise ValueError(
-                "Cannot create location --dir under an inline place. "
-                "cd to the parent outline or use --inline."
-            )
-        if want_inline:
-            if str(raw.parent) not in (".", ""):
-                raise ValueError(
-                    "add location --inline only accepts a leaf name "
-                    "(no path); cd to the parent location first"
-                )
-            path, doc = session.ensure_doc()
-            place = session.place_node(doc)
-            # Collision with outline sibling
-            for child in session.list_location_children():
-                if child.name == leaf_id and child.storage == "dir":
-                    raise ValueError(
-                        f"Outline location {leaf_id!r} already exists; "
-                        "cannot create the same id inline"
-                    )
-            entry = create_inline_location(
-                place,
-                leaf_id,
-                type_id=args.type_id,
-                subtype=args.subtype,
-                notes=args.notes,
-                label=label,
-                working_name=working_name,
-            )
-            if args.set_specs:
-                abm.apply_set_specs(entry, args.set_specs, target="place")
-            session.mark_dirty(path)
-            session.cd(leaf_id)
-            print(f"Inline location created: {'/'.join(session.logical_parts)} (in memory → save)")
-            return 0
-
-        rel = raw.parent / leaf_id if str(raw.parent) not in (".", "") else _Path(leaf_id)
-        # Collision with inline sibling at current place
+        path, doc = session.ensure_doc()
+        place = session.place_node(doc)
         for child in session.list_location_children():
-            if child.name == leaf_id and child.storage == "inline":
-                raise ValueError(
-                    f"Inline location {leaf_id!r} already exists; "
-                    "cannot create the same id as a folder"
-                )
-        target = session.resolve_under_root(str(rel))
-        index_path = session.stage_outline_location(
-            target,
+            if child.name == leaf_id:
+                raise ValueError(f"Location already exists: {leaf_id}")
+        entry = create_inline_location(
+            place,
+            leaf_id,
             type_id=args.type_id,
             subtype=args.subtype,
             notes=args.notes,
@@ -723,16 +632,11 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
             working_name=working_name,
         )
         if args.set_specs:
-            _path, staged = session.ensure_doc(index_path)
-            abm.apply_set_specs(staged, args.set_specs, target="place")
-            session.mark_dirty(index_path)
-        # Move logical cwd to the new outline location.
-        session.logical_parts = list(session.logical_parts) + list(rel.parts)
-        session._sync_from_logical()
-        session.active_yaml = index_path
+            abm.apply_set_specs(entry, args.set_specs, target="place")
+        session.mark_dirty(path)
+        session.cd(leaf_id)
         print(
-            f"Outline location created: {index_path.relative_to(session.root)} "
-            f"(in memory → save)"
+            f"Location created: {'/'.join(session.logical_parts)} (in memory → save)"
         )
         return 0
     if kind == "pend":

@@ -134,25 +134,18 @@ def build_location_document(
     return doc
 
 
-def create_location_index(
-    dir_path: Path,
+def create_site_document(
+    site_root: Path,
     *,
-    type_id: str,
+    type_id: str = "House",
     subtype: str | None = None,
     notes: str | None = None,
     label: str | None = None,
     working_name: str | None = None,
 ) -> Path:
-    """Create directory + housewire.yaml whose root *is* the place object.
-
-    ``dir_path.name`` is the technical location id (prefer ``[A-Za-z0-9_]+``).
-    Optional ``working_name`` (YAML ``name:``) is the short canvas name;
-    optional ``label`` is human-readable text.
-    Writes immediately (CLI one-shot). The interactive shell stages in memory
-    via ``ProjectSession.stage_outline_location`` instead.
-    """
-    dir_path.mkdir(parents=True, exist_ok=True)
-    yaml_path = dir_path / HOUSEWIRE_YAML
+    """Create the single site ``housewire.yaml`` at ``site_root`` (no nested dirs)."""
+    site_root.mkdir(parents=True, exist_ok=True)
+    yaml_path = site_root / HOUSEWIRE_YAML
     if yaml_path.exists():
         raise FileExistsError(f"Already exists: {yaml_path}")
     doc = build_location_document(

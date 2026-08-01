@@ -591,10 +591,10 @@ def _build_parser() -> argparse.ArgumentParser:
     add_cd.add_argument("--notes")
 
     add_loc = add_sub.add_parser(
-        "location", help="Create place (outline dir, or inline with --inline)"
+        "location", help="Create nested place under parent elements:"
     )
     add_loc.add_argument("project_path")
-    add_loc.add_argument("name")
+    add_loc.add_argument("name", help="New place id (leaf)")
     add_loc.add_argument(
         "--type",
         dest="type_id",
@@ -613,15 +613,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Human-readable label (default: derived if NAME has spaces)",
     )
     add_loc.add_argument(
-        "--inline",
-        action="store_true",
-        help="Create under elements: of --yaml (required with --inline)",
-    )
-    add_loc.add_argument(
-        "--yaml",
-        dest="yaml_path",
-        default=None,
-        help="Host housewire.yaml for --inline (relative to project)",
+        "--under",
+        default="",
+        help="Parent place path inside the site YAML (e.g. Parking)",
     )
     add_loc.add_argument(
         "--set",
@@ -709,35 +703,26 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
         project_path = Path(args.project_path).resolve()
         if args.add_kind == "location":
             from housewire.house import location_id_from_name
-            from housewire.project.io import create_inline_location, create_location_index
+            from housewire.project.io import HOUSEWIRE_YAML, create_inline_location
+            from housewire.project.tree import get_place_node, site_yaml_path
 
             raw = Path(args.name)
+            if str(raw.parent) not in (".", ""):
+                raise ValueError("add location NAME must be a leaf (use --under for parent)")
             leaf_id, auto_label = location_id_from_name(raw.name)
             label = args.label or auto_label
             working_name = getattr(args, "working_name", None)
-            if args.inline:
-                if not args.yaml_path:
-                    raise ValueError("add location --inline requires --yaml PATH")
-                yaml_path = (project_path / args.yaml_path).resolve()
-                doc = abm.load_editable(yaml_path, project_path)
-                entry = create_inline_location(
-                    doc,
-                    leaf_id,
-                    type_id=args.type_id,
-                    subtype=args.subtype,
-                    notes=args.notes,
-                    label=label,
-                    working_name=working_name,
-                )
-                if getattr(args, "set_specs", None):
-                    abm.apply_set_specs(entry, args.set_specs, target="place")
-                abm.persist(doc, yaml_path, project_path)
-                print(f"OK inline {leaf_id} in {yaml_path.relative_to(project_path)}")
-                return 0
-            rel = raw.parent / leaf_id if str(raw.parent) not in (".", "") else Path(leaf_id)
-            target = (project_path / rel).resolve()
-            index_path = create_location_index(
-                target,
+            yaml_path = site_yaml_path(project_path)
+            if not yaml_path.is_file():
+                raise FileNotFoundError(f"No {HOUSEWIRE_YAML} at site root: {project_path}")
+            doc = abm.load_editable(yaml_path, project_path)
+            under = [
+                p for p in str(getattr(args, "under", "") or "").replace("\\", "/").split("/") if p
+            ]
+            parent = get_place_node(doc, under)
+            entry = create_inline_location(
+                parent,
+                leaf_id,
                 type_id=args.type_id,
                 subtype=args.subtype,
                 notes=args.notes,
@@ -745,10 +730,10 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
                 working_name=working_name,
             )
             if getattr(args, "set_specs", None):
-                loc_doc = abm.load_editable(index_path, project_path)
-                abm.apply_set_specs(loc_doc, args.set_specs, target="place")
-                abm.persist(loc_doc, index_path, project_path)
-            print(f"OK {index_path.relative_to(project_path)}")
+                abm.apply_set_specs(entry, args.set_specs, target="place")
+            abm.persist(doc, yaml_path, project_path)
+            where = "/".join([*under, leaf_id])
+            print(f"OK {where} in {yaml_path.relative_to(project_path)}")
             return 0
         if args.add_kind == "dir":
             target = (project_path / args.dir_path).resolve()
