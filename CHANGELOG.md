@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Breaking
 
+- **External type catalog.** Types are no longer shipped inside the package
+  (``src/housewire/catalog/`` removed). Clone
+  [housewire-catalog](https://github.com/guillermomolina/housewire-catalog) into
+  ``catalogs/default``, or set ``HOUSEWIRE_CATALOG`` / ``--catalog``. Optional
+  site field ``catalog:`` (name or path). ``$SITE/catalog/`` remains an overlay.
 - **Single nested site YAML only.** A site is a directory with one
   ``housewire.yaml``; places nest under ``elements:`` (map key = id).
   Per-place subdirectories and multi-file outline trees are removed.

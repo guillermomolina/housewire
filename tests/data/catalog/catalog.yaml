@@ -1,0 +1,4 @@
+schema: catalog/v1
+id: default
+title: Default housewire type catalog
+description: Element, place, cable and conduit types for house/v1 sites.

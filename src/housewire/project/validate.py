@@ -18,7 +18,7 @@ def validate_house_document(
     meta = place_meta_from_mapping(doc)
     if meta is not None:
         validate_location_openings(meta)
-    catalog = load_catalog()
+    catalog = load_catalog(project_path)
     house_document_to_wireviz(
         doc,
         catalog=catalog,

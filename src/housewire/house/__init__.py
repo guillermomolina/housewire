@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import re
 import unicodedata
 from pathlib import Path
@@ -168,12 +169,145 @@ def is_house_document(data: object) -> bool:
 
 
 def package_dir() -> Path:
-    """Directory of the installed housewire package (contains catalog/)."""
+    """Directory of the installed housewire package."""
     return Path(__file__).resolve().parent.parent
 
 
-def catalog_dir() -> Path:
-    return package_dir() / "catalog"
+def _program_repo_root() -> Path:
+    """Checkout root when running from a source tree (…/src/housewire → …)."""
+    return package_dir().parent.parent
+
+
+DEFAULT_CATALOG_NAME = "default"
+ENV_CATALOG = "HOUSEWIRE_CATALOG"
+ENV_CATALOGS_DIR = "HOUSEWIRE_CATALOGS_DIR"
+CATALOG_HINT = (
+    "Clone the catalog into catalogs/default, set HOUSEWIRE_CATALOG to a catalog "
+    "root (or types/ dir), or set HOUSEWIRE_CATALOGS_DIR. "
+    "See https://github.com/guillermomolina/housewire-catalog"
+)
+
+
+def catalogs_search_root() -> Path:
+    """Parent directory that contains named catalogs (e.g. ``…/catalogs``)."""
+    env = os.environ.get(ENV_CATALOGS_DIR)
+    if env:
+        return Path(env).expanduser().resolve()
+    cwd = (Path.cwd() / "catalogs").resolve()
+    if cwd.is_dir():
+        return cwd
+    return (_program_repo_root() / "catalogs").resolve()
+
+
+def _types_dir_from_catalog_root(root: Path) -> Path | None:
+    """Return a directory that contains type YAML files, or None."""
+    if not root.is_dir():
+        return None
+    nested = root / "types"
+    if nested.is_dir() and (
+        any(nested.glob("*.yaml")) or any(nested.glob("*.yml"))
+    ):
+        return nested
+    if any(root.glob("*.yaml")) or any(root.glob("*.yml")):
+        # Flat catalog root (or types/ itself passed as path).
+        return root
+    if nested.is_dir():
+        return nested
+    return None
+
+
+def _site_catalog_ref(site_root: Path | None) -> str | Path | None:
+    """Read optional ``catalog:`` from the site housewire.yaml."""
+    if site_root is None:
+        return None
+    for name in ("housewire.yaml", "housewire.yml"):
+        path = Path(site_root) / name
+        if not path.is_file():
+            continue
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                data = yaml.safe_load(handle) or {}
+        except OSError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        ref = data.get("catalog")
+        if ref is None:
+            return None
+        if isinstance(ref, (str, Path)):
+            return ref
+        if isinstance(ref, dict):
+            if ref.get("path"):
+                return Path(str(ref["path"]))
+            if ref.get("id") or ref.get("name"):
+                return str(ref.get("id") or ref.get("name"))
+        return None
+    return None
+
+
+def resolve_catalog_types_dir(
+    catalog: str | Path | None = None,
+    *,
+    site_root: Path | None = None,
+) -> Path:
+    """Resolve the directory of type YAML files for the base catalog.
+
+    Order:
+    1. Explicit ``catalog`` argument (name or path)
+    2. ``HOUSEWIRE_CATALOG`` env
+    3. Site ``catalog:`` field (name or path relative to site root)
+    4. Named catalog ``default`` under ``HOUSEWIRE_CATALOGS_DIR`` / ``./catalogs``
+    """
+    candidates: list[Path] = []
+
+    def add_path(raw: str | Path, *, base: Path | None = None) -> None:
+        path = Path(raw).expanduser()
+        if not path.is_absolute() and base is not None:
+            path = (base / path).resolve()
+        else:
+            path = path.resolve()
+        types = _types_dir_from_catalog_root(path)
+        if types is not None:
+            candidates.append(types)
+        # Also try path itself as types/ already.
+        elif path.is_dir():
+            candidates.append(path)
+
+    def add_named(name: str) -> None:
+        add_path(catalogs_search_root() / name)
+
+    if catalog is not None:
+        text = str(catalog).strip()
+        if text:
+            as_path = Path(text).expanduser()
+            if as_path.is_absolute() or "/" in text or "\\" in text or text.startswith("."):
+                add_path(text, base=Path(site_root).resolve() if site_root else Path.cwd())
+            else:
+                add_named(text)
+
+    env_catalog = os.environ.get(ENV_CATALOG)
+    if env_catalog:
+        add_path(env_catalog, base=Path.cwd())
+
+    site_ref = _site_catalog_ref(site_root)
+    if site_ref is not None:
+        ref_text = str(site_ref).strip()
+        if ref_text:
+            if isinstance(site_ref, Path) or "/" in ref_text or "\\" in ref_text or ref_text.startswith("."):
+                add_path(ref_text, base=Path(site_root).resolve() if site_root else Path.cwd())
+            else:
+                add_named(ref_text)
+
+    add_named(DEFAULT_CATALOG_NAME)
+
+    for path in candidates:
+        if any(path.glob("*.yaml")) or any(path.glob("*.yml")):
+            return path
+
+    searched = catalogs_search_root() / DEFAULT_CATALOG_NAME
+    raise FileNotFoundError(
+        f"No housewire type catalog found (looked for {searched}). {CATALOG_HINT}"
+    )
 
 
 def _load_catalog_dir(root: Path) -> dict[str, dict[str, Any]]:
@@ -181,6 +315,8 @@ def _load_catalog_dir(root: Path) -> dict[str, dict[str, Any]]:
     if not root.is_dir():
         return catalog
     for path in sorted(root.glob("*.yaml")) + sorted(root.glob("*.yml")):
+        if path.name in {"catalog.yaml", "catalog.yml"}:
+            continue
         with path.open("r", encoding="utf-8") as handle:
             data = yaml.safe_load(handle) or {}
         if not isinstance(data, dict):
@@ -190,24 +326,43 @@ def _load_catalog_dir(root: Path) -> dict[str, dict[str, Any]]:
     return catalog
 
 
-def load_catalog(repo_root: Path | None = None) -> dict[str, dict[str, Any]]:
-    """Load package catalog, optionally merged with ``$SITE/catalog/*.yaml``.
+def catalog_dir(
+    catalog: str | Path | None = None,
+    *,
+    site_root: Path | None = None,
+) -> Path:
+    """Return the resolved types directory for the base catalog."""
+    return resolve_catalog_types_dir(catalog, site_root=site_root)
 
-    Site files overlay package entries by ``id`` (shallow key merge). A site
-    file may contain only ``id`` + ``icon`` to customize the UI glyph.
+
+def load_catalog(
+    site_root: Path | None = None,
+    *,
+    catalog: str | Path | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Load external type catalog, optionally merged with ``$SITE/catalog/*.yaml``.
+
+    Base catalog comes from ``HOUSEWIRE_CATALOG``, a named tree under
+    ``catalogs/<name>``, or the site document ``catalog:`` field. Site files
+    overlay base entries by ``id`` (shallow key merge).
     """
-    catalog = _load_catalog_dir(catalog_dir())
-    if repo_root is not None:
-        site_dir = Path(repo_root).resolve() / "catalog"
+    types_dir = resolve_catalog_types_dir(catalog, site_root=site_root)
+    result = _load_catalog_dir(types_dir)
+    if not result:
+        raise FileNotFoundError(
+            f"Catalog types directory is empty: {types_dir}. {CATALOG_HINT}"
+        )
+    if site_root is not None:
+        site_dir = Path(site_root).resolve() / "catalog"
         for type_id, data in _load_catalog_dir(site_dir).items():
-            base = catalog.get(type_id)
+            base = result.get(type_id)
             if base is None:
-                catalog[type_id] = dict(data)
+                result[type_id] = dict(data)
             else:
                 merged = dict(base)
                 merged.update(data)
-                catalog[type_id] = merged
-    return catalog
+                result[type_id] = merged
+    return result
 
 
 def normalize_icon_class(raw: object, *, default: str = "fa-circle") -> str:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import os
 import shutil
 import sys
 import unicodedata
@@ -235,7 +236,7 @@ def _merge_wireviz_piece(
 def merge_yaml_files(project_path: Path, input_files: list[Path]) -> dict:
     merged: dict[str, object] = {}
     options_already_set = False
-    catalog = load_catalog()
+    catalog = load_catalog(project_path)
 
     connectors: dict[str, object] = {}
     cables: dict[str, object] = {}
@@ -473,6 +474,26 @@ def _add_generate_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Overwrite existing output without prompting",
     )
+    parser.add_argument(
+        "--catalog",
+        default=None,
+        help="Type catalog name or path (default: catalogs/default or HOUSEWIRE_CATALOG)",
+    )
+
+
+def _catalog_parent() -> argparse.ArgumentParser:
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument(
+        "--catalog",
+        default=None,
+        help="Type catalog name or path (default: catalogs/default or HOUSEWIRE_CATALOG)",
+    )
+    return parent
+
+
+def _apply_catalog_option(catalog: str | None) -> None:
+    if catalog:
+        os.environ["HOUSEWIRE_CATALOG"] = str(catalog)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -491,13 +512,18 @@ def _build_parser() -> argparse.ArgumentParser:
     gen = sub.add_parser("generate", help="Merge YAML and generate diagrams")
     _add_generate_arguments(gen)
 
-    sh = sub.add_parser("shell", help="REPL: cd, ls, use, add, rm, generate")
+    sh = sub.add_parser(
+        "shell",
+        parents=[_catalog_parent()],
+        help="REPL: cd, ls, use, add, rm, generate",
+    )
     sh.add_argument("project_path", help="Site project path")
 
     sub.add_parser("version", help="Show housewire version")
 
     serve_p = sub.add_parser(
         "serve",
+        parents=[_catalog_parent()],
         help="Interactive physical location UI (requires housewire[ui])",
     )
     serve_p.add_argument("project_path", help="Site project path")
@@ -870,6 +896,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command is None:
         parser.print_help()
         return 0
+    _apply_catalog_option(getattr(args, "catalog", None))
     return _dispatch_subcommand(args)
 
 

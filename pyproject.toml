@@ -30,4 +30,4 @@ Homepage = "https://github.com/local/housewire"
 where = ["src"]
 
 [tool.setuptools.package-data]
-housewire = ["catalog/*.yaml", "catalog/*.yml", "ui/static/*"]
+housewire = ["ui/static/*"]

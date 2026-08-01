@@ -26,6 +26,26 @@ python -m pip install -e '.[dev,ui]'
 # or: make prepare
 ```
 
+### Type catalog (required)
+
+Element / place / cable types live in a **separate** data repo
+([housewire-catalog](https://github.com/guillermomolina/housewire-catalog)), not in this package:
+
+```bash
+mkdir -p catalogs
+git clone https://github.com/guillermomolina/housewire-catalog.git catalogs/default
+```
+
+Or:
+
+```bash
+export HOUSEWIRE_CATALOG=/path/to/housewire-catalog
+# or: housewire generate --catalog /path/to/housewire-catalog "$SITE"
+```
+
+Site-specific overlays: `$SITE/catalog/*.yaml` (shallow merge by `id`). Optional
+site field `catalog: default` (or a path) in the root `housewire.yaml`.
+
 Point the CLI at any site directory (outside this repo):
 
 ```bash
