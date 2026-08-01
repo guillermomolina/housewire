@@ -47,6 +47,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   item to move the whole selection together. Pan with middle mouse, Space+drag,
   or Alt+drag. Wheel zoom anchors on the cursor.
 
+### Fixed
+
+- Physical UI depth changes no longer reset pan/zoom; Fit still runs when
+  changing location.
+
 ### Changed
 
 - Physical canvas / location selector show ``name`` → id (not ``label``).

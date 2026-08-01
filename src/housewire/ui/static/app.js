@@ -1942,7 +1942,7 @@
     }
   }
 
-  async function loadLocation() {
+  async function loadLocation({ fit = true } = {}) {
     clearSelectionState();
     document.getElementById("panel-empty").classList.remove("hidden");
     document.getElementById("panel-show").classList.add("hidden");
@@ -1963,7 +1963,8 @@
     }
     render();
     resetLayoutHistory();
-    fitView();
+    if (fit) fitView();
+    else applyWorldTransform();
     highlightOutline(locationId);
     await refreshStatus();
     const bits = [];
@@ -1985,7 +1986,7 @@
       return;
     }
     depthLevel = capped;
-    await loadLocation();
+    await loadLocation({ fit: false });
   }
 
   representationSelect.addEventListener("change", async () => {
