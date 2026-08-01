@@ -6,6 +6,8 @@ description_es: >
   Interruptor de mecanismo (luz / carga). Subtypes: unipolar (1↔2),
   crossover / conmutador (C comun + bornes 1 y 2), intermediate (cruzamiento).
 qet_hint: switch
+terminal_grid:
+  NS: 1
 terminals:
   "1":
     label: "1"
@@ -25,6 +27,8 @@ subtypes:
   crossover:
     title: 3-way / conmutador
     # C = punto comun; 1 y 2 = bornes de conmutacion (travellers).
+    terminal_grid:
+      NS: 3
     terminals:
       C:
         label: C
@@ -41,6 +45,8 @@ subtypes:
     wireviz_collapse: []
   intermediate:
     title: Intermediate / cruzamiento
+    terminal_grid:
+      NS: 2
     terminals:
       "1":
         label: "1"

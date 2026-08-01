@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.21] — 2026-08-01
+
+### Added
+
+- Element ``terminal_grid`` (same grammar as location ``opening_grid``:
+  ``NS: 2`` = 2 on N and 2 on S). Catalog defaults for MCB/MCB2P/RCD/strips;
+  canvas routes connection pins to cells (``N1``, ``S2``, …).
+
 ## [0.28.20] — 2026-08-01
 
 ### Changed

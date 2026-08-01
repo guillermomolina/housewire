@@ -25,6 +25,7 @@ from housewire.house.conduit_ref import (
 )
 from housewire.project.io import load_yaml
 from housewire.project.openings import declared_opening_ids, expand_opening_grid
+from housewire.project.terminals import element_terminal_layout, grid_to_api
 from housewire.project.tree import (
     get_place_node,
     iter_places,
@@ -213,6 +214,18 @@ def _connection_end_element_id(
     return _element_node_id(tuple(loc_parts), elem_name)
 
 
+def _connection_end_pin(endpoint: str) -> str | None:
+    """Return the terminal pin id from a connection endpoint, if any."""
+    try:
+        tokens = _expand_endpoint_token(str(endpoint))
+        if not tokens:
+            return None
+        _elem_ref, terminal = _split_element_terminal(tokens[0])
+        return str(terminal)
+    except ValueError:
+        return None
+
+
 def _build_element_nodes(
     *,
     places: list[tuple[tuple[str, ...], dict[str, Any]]],
@@ -239,10 +252,11 @@ def _build_element_nodes(
                 ex, ey = _default_element_pos(index)
             else:
                 ex, ey = stored
-            terminals_raw = defn.get("terminals") or {}
-            terminals: list[str] = []
-            if isinstance(terminals_raw, dict):
-                terminals = [str(k) for k in terminals_raw.keys()]
+            terminals_merged, tgrid, pin_cells = element_terminal_layout(
+                defn if isinstance(defn, dict) else {},
+                catalog if isinstance(catalog, dict) else None,
+            )
+            terminals = [str(k) for k in terminals_merged.keys()]
             raw_name = defn.get("name")
             working_name = (
                 str(raw_name).strip()
@@ -262,6 +276,11 @@ def _build_element_nodes(
                 else None
             )
             etype = str(defn.get("type") or "Element")
+            max_cols = 1
+            for cols, _rows in tgrid.values():
+                max_cols = max(max_cols, int(cols))
+            ew = max(ELEM_W, 28 + max_cols * 14)
+            eh = ELEM_H
             nodes.append(
                 {
                     "id": eid,
@@ -277,10 +296,12 @@ def _build_element_nodes(
                     "display_name": working_name or name,
                     "display_label": label_s or working_name or name,
                     "terminals": terminals,
+                    "terminal_grid": grid_to_api(tgrid) if tgrid else None,
+                    "terminal_pins": pin_cells or None,
                     "x": ex,
                     "y": ey,
-                    "w": ELEM_W,
-                    "h": ELEM_H,
+                    "w": ew,
+                    "h": eh,
                     "rotation": get_electrical_rotation(defn),
                 }
             )
@@ -386,7 +407,7 @@ def _build_cable_edges(
         *places,
     ]
     edges: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str, str, str, str]] = set()
     for current_parts, doc in sources:
         connections = doc.get("connections") or []
         if not isinstance(connections, list):
@@ -397,11 +418,13 @@ def _build_cable_edges(
         for index, conn in enumerate(connections):
             if not isinstance(conn, dict):
                 continue
+            from_raw = str(conn.get("from") or "")
+            to_raw = str(conn.get("to") or "")
             from_id = _connection_end_element_id(
-                str(conn.get("from") or ""), current_parts=current_parts
+                from_raw, current_parts=current_parts
             )
             to_id = _connection_end_element_id(
-                str(conn.get("to") or ""), current_parts=current_parts
+                to_raw, current_parts=current_parts
             )
             if not from_id or not to_id:
                 continue
@@ -409,9 +432,17 @@ def _build_cable_edges(
                 continue
             if from_id == to_id:
                 continue
+            from_pin = _connection_end_pin(from_raw) or ""
+            to_pin = _connection_end_pin(to_raw) or ""
             via = str(conn.get("via") or "")
             cable_name = _via_cable_name(via)
-            key = (cable_name or f"conn-{index}", from_id, to_id)
+            key = (
+                cable_name or f"conn-{index}",
+                from_id,
+                to_id,
+                from_pin,
+                to_pin,
+            )
             if key in seen:
                 continue
             seen.add(key)
@@ -435,6 +466,8 @@ def _build_cable_edges(
                 "label": cable_label,
                 "from": from_id,
                 "to": to_id,
+                "from_pin": from_pin or None,
+                "to_pin": to_pin or None,
                 "via": via,
                 "colors": colors,
                 "via_indices": _via_wire_indices(via),

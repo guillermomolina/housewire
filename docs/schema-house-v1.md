@@ -265,6 +265,33 @@ elements:
 
 Terminal fields: `label`, `direction` (`in` | `out` | `inout`), `role`.
 
+### Terminal grid (canvas layout)
+
+Same face-grid grammar as location `opening_grid`. Declared on the catalog
+type (and optionally overridden on the instance):
+
+```yaml
+# catalog MCB2P — 2 inputs on N, 2 outputs on S
+terminal_grid:
+  NS: 2
+
+# instance: 6-way strip (3 is the catalog default)
+Regleta_1:
+  type: TerminalStrip
+  terminal_grid: { NS: 6 }
+  terminals:
+    "1": { direction: inout }
+    # …
+    "6": { direction: inout }
+```
+
+- `NS: 2` ≡ `N: 2` **and** `S: 2` (not “2 total”).
+- `N: 2` ≡ only the north face.
+- Cell ids: `N1`, `S2`, `W1`, … (same tokens as openings).
+- Pins map to cells via `wireviz_collapse` pairs (column = pair index; first
+  pin → entry face, second → exit) or, for `inout`, one column shared by both
+  faces. The canvas routes each connection pin to that cell.
+
 Catalog `wireviz_collapse` pairs terminals for the **WireViz export**: each pair
 becomes one visual pin (cables left and right). That is layout only, not WireViz
 `loops`, and not necessarily electrical continuity.

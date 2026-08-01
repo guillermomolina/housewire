@@ -1500,7 +1500,7 @@
 
   /** Stable key for one cable_edge row (id alone can repeat across pairs). */
   function cableEdgeKey(edge) {
-    return `${edge.id || ""}|${edge.from || ""}|${edge.to || ""}`;
+    return `${edge.id || ""}|${edge.from || ""}|${edge.to || ""}|${edge.from_pin || ""}|${edge.to_pin || ""}`;
   }
 
   /** Road stroke width from how many cables ride the conduit. */
@@ -1509,6 +1509,62 @@
     if (n <= 0) return 8;
     // Per-cable band ≈ jacket; high ceiling so 3 vs 15 stay visually distinct.
     return Math.min(96, 6 + n * 4);
+  }
+
+  /** Side opening-style cell on an element (``N1``, ``S2``, …). */
+  function terminalCellAnchor(elem, cellId, placeById) {
+    const p = elementAbsXY(elem, placeById);
+    const w = elem.w ?? ELEM_W;
+    const h = elem.h ?? ELEM_H;
+    const side = parseSideOpening(cellId);
+    const face = (side?.face || String(cellId || "?")[0] || "?").toUpperCase();
+    const index = side?.index || 1;
+    const raw = elem.terminal_grid && elem.terminal_grid[face];
+    let n = index;
+    if (Array.isArray(raw) && raw.length >= 1) {
+      n = Math.max(1, Number(raw[0]) || 1);
+      if (raw.length >= 2) n = Math.max(n, (Number(raw[0]) || 1) * (Number(raw[1]) || 1));
+    }
+    n = Math.max(n, index);
+    const t = index / (n + 1);
+    if (face === "N") return { x: p.x + t * w, y: p.y };
+    if (face === "S") return { x: p.x + t * w, y: p.y + h };
+    if (face === "W") return { x: p.x, y: p.y + t * h };
+    if (face === "E") return { x: p.x + w, y: p.y + t * h };
+    return {
+      x: p.x + w / 2,
+      y: p.y + h / 2,
+    };
+  }
+
+  function pickPinCell(elem, pin, toward, placeById) {
+    if (!pin || !elem || !elem.terminal_pins) return null;
+    const cells =
+      elem.terminal_pins[pin] || elem.terminal_pins[String(pin)] || null;
+    if (!cells || !cells.length) return null;
+    if (cells.length === 1) return cells[0];
+    const face = elementAttachFace(elem, toward, placeById);
+    const match = cells.find(
+      (c) => String(c || "")[0]?.toUpperCase() === face
+    );
+    return match || cells[0];
+  }
+
+  /**
+   * Attach for a connection pin when ``terminal_grid`` is known; otherwise
+   * fall back to fanned mid-face slots.
+   */
+  function resolveElementAttach(
+    elem,
+    pin,
+    toward,
+    placeById,
+    slot = 0,
+    slotCount = 1
+  ) {
+    const cell = pickPinCell(elem, pin, toward, placeById);
+    if (cell) return terminalCellAnchor(elem, cell, placeById);
+    return elementAttachPoint(elem, toward, placeById, slot, slotCount);
   }
 
   function pathDToPoints(d) {
@@ -1774,12 +1830,20 @@
     openingId,
     placeById,
     slot = 0,
-    slotCount = 1
+    slotCount = 1,
+    pin = null
   ) {
     if (!elem || !place || !openingId) return null;
     if (elem.parent && place.id && elem.parent !== place.id) return null;
     const op = openingAnchorAbs(place, openingId, openingId?.[0], placeById);
-    const attach = elementAttachPoint(elem, op, placeById, slot, slotCount);
+    const attach = resolveElementAttach(
+      elem,
+      pin,
+      op,
+      placeById,
+      slot,
+      slotCount
+    );
     return simpleOrthoPts(attach, op);
   }
 
@@ -1828,7 +1892,7 @@
 
   /**
    * Base polylines for a cable edge.
-   * @param {{fromSlot?:{slot:number,count:number}, toSlot?:{slot:number,count:number}, laneDist?:number}|undefined} opts
+   * @param {{fromSlot?:{slot:number,count:number}, toSlot?:{slot:number,count:number}, laneDist?:number, fromPin?:string|null, toPin?:string|null}|undefined} opts
    * @returns {number[][][]}
    */
   function cableBaseSubpaths(edge, placeById, elemById, occupied, opts) {
@@ -1840,6 +1904,8 @@
     const fromSlot = opts?.fromSlot || { slot: 0, count: 1 };
     const toSlot = opts?.toSlot || { slot: 0, count: 1 };
     const laneDist = opts?.laneDist || 0;
+    const fromPin = opts?.fromPin != null ? opts.fromPin : edge.from_pin;
+    const toPin = opts?.toPin != null ? opts.toPin : edge.to_pin;
     /** Offset only conduit runs — tails keep slotted terminals on the element. */
     const offsetMids = (subs) => {
       if (Math.abs(laneDist) < 1e-9 || subs.length <= 2) {
@@ -1852,21 +1918,31 @@
       });
     };
 
-    // Same box: per-connection L with slotted terminals.
+    // Same box: per-connection L with pin cells or slotted terminals.
     if (a.parent && b.parent && a.parent === b.parent) {
-      const p1 = elementAttachPoint(
+      const p1 = resolveElementAttach(
         a,
+        fromPin,
         c2,
         placeById,
         fromSlot.slot,
         fromSlot.count
       );
-      const p2 = elementAttachPoint(b, c1, placeById, toSlot.slot, toSlot.count);
+      const p2 = resolveElementAttach(
+        b,
+        toPin,
+        c1,
+        placeById,
+        toSlot.slot,
+        toSlot.count
+      );
       const pts = simpleOrthoPts(p1, p2);
-      // Jacket (unslotted) may use a slight lane; strands rely on slots only.
+      // Jacket (unslotted) may use a slight lane; strands rely on slots/pins.
       if (
         fromSlot.count <= 1 &&
         toSlot.count <= 1 &&
+        !fromPin &&
+        !toPin &&
         Math.abs(laneDist) >= 1e-9
       ) {
         return [offsetOrthoPts(pts, laneDist)];
@@ -1913,7 +1989,8 @@
         first.from_opening,
         placeById,
         fromSlot.slot,
-        fromSlot.count
+        fromSlot.count,
+        fromPin
       );
       if (startTail && startTail.length >= 2) subs.push(startTail);
 
@@ -1975,7 +2052,8 @@
         last.to_opening,
         placeById,
         toSlot.slot,
-        toSlot.count
+        toSlot.count,
+        toPin
       );
       if (endTail && endTail.length >= 2) subs.push(endTail);
       return offsetMids(subs);
