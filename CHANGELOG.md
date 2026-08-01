@@ -16,11 +16,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   children appear inside their parent boxes. Independent of canvas zoom
   (``+`` / ``−`` / wheel). ``GET /api/physical?depth=N``.
 - Physical UI layout **Undo** / **Redo** / **Reset** (positions only;
-  Ctrl+Z / Ctrl+Y). Reset restores the snapshot from the last location load.
-  Missing ``x``/``y`` are filled automatically on location load (marks dirty;
-  **Save** enabled only when there are unsaved changes). Manual **Auto-layout**
-  repositions all visible places. Canvas **Fit** frames all places in the
-  viewport (also runs after load).
+  Ctrl+Z / Ctrl+Y). Reset restores positions from the last **Save** (or
+  location load if nothing was saved yet). Missing ``x``/``y`` are filled
+  automatically on location load (marks dirty; **Save** enabled only when
+  there are unsaved changes). Manual **Auto-layout** repositions all visible
+  places. Canvas **Fit** frames all places in the viewport (also runs after
+  load). After **Save**, only the Reset baseline moves to the saved positions
+  (Reset greys out; undo/redo history is kept).
 
 ### Changed
 
