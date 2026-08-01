@@ -1206,11 +1206,22 @@
     fillElementInspector(elem);
   }
 
+  function setInspectorMode(mode) {
+    const elements = document.getElementById("show-elements-block");
+    const conduits = document.getElementById("show-conduits-block");
+    const cables = document.getElementById("show-cables-block");
+    const placeMode = mode === "place";
+    elements.classList.toggle("hidden", !placeMode);
+    conduits.classList.toggle("hidden", !placeMode);
+    cables.classList.toggle("hidden", placeMode);
+  }
+
   function fillElementInspector(elem) {
     const empty = document.getElementById("panel-empty");
     const show = document.getElementById("panel-show");
     empty.classList.add("hidden");
     show.classList.remove("hidden");
+    setInspectorMode("element");
     const meta = document.getElementById("show-meta");
     meta.innerHTML = "";
     const rows = [
@@ -1231,9 +1242,6 @@
       meta.appendChild(dt);
       meta.appendChild(dd);
     }
-    document.getElementById("show-elements").innerHTML = "";
-    document.getElementById("show-conduits").innerHTML = "";
-    document.getElementById("show-cables").innerHTML = "";
     fillCablesForElement(elem);
   }
 
@@ -1267,25 +1275,6 @@
       li.textContent = ends ? `${head}: ${ends}` : head;
       const contains = (c.contains || []).join(", ");
       appendSub(li, contains ? `contains: ${contains}` : "");
-      appendSub(li, c.notes ? String(c.notes).trim() : "");
-      ul.appendChild(li);
-    }
-  }
-
-  function fillCablesList(cables) {
-    const ul = document.getElementById("show-cables");
-    ul.innerHTML = "";
-    if (!cables || !cables.length) {
-      fillListEmpty(ul, "—");
-      return;
-    }
-    for (const c of cables) {
-      const li = document.createElement("li");
-      const bits = [c.id];
-      if (c.subtype || c.type) bits.push(c.subtype || c.type);
-      if (c.section) bits.push(String(c.section));
-      if ((c.colors || []).length) bits.push((c.colors || []).join(", "));
-      li.textContent = bits.join(" · ");
       appendSub(li, c.notes ? String(c.notes).trim() : "");
       ul.appendChild(li);
     }
@@ -1332,6 +1321,7 @@
       );
       empty.classList.add("hidden");
       show.classList.remove("hidden");
+      setInspectorMode("place");
       const meta = document.getElementById("show-meta");
       meta.innerHTML = "";
       const rows = [
@@ -1369,7 +1359,6 @@
         }
       }
       fillConduitsList(detail.conduits || []);
-      fillCablesList(detail.cables || []);
       prefillRecipesFromSelection(detail);
     } catch (err) {
       setStatus(String(err.message || err));

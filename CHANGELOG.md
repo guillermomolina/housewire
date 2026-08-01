@@ -51,9 +51,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 - Physical UI depth changes no longer reset pan/zoom; Fit still runs when
   changing location.
-- Physical UI inspector lists **Conduits** and **Cables** for the selected
-  place (local defs plus ancestor conduits that attach to it). Selecting an
-  element shows its cable edges when Cables LOD data is loaded.
+- Physical UI inspector: **locations** list Elements + Conduits; **elements**
+  list Cables (connection edges). Place detail API still returns both
+  ``conduits`` and ``cables`` for reuse.
 
 ### Changed
 
