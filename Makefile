@@ -3,13 +3,16 @@ PIP := .venv/bin/pip
 
 .PHONY: all prepare install test
 
+# Editable install with dev tools + UI extras (see pyproject.toml).
+EXTRAS := .[dev,ui]
+
 install:
-	$(PYTHON) -m pip install -r dev-requirements.txt
+	$(PYTHON) -m pip install -U pip
+	$(PYTHON) -m pip install -e "$(EXTRAS)"
 
 prepare:
 	python -m venv .venv --prompt housewire
-	$(PYTHON) -m pip install -U pip
-	$(PYTHON) -m pip install -r dev-requirements.txt
+	$(MAKE) install
 
 all:
 

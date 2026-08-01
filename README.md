@@ -22,8 +22,7 @@ sudo pacman -S graphviz   # Arch
 ```bash
 python -m venv .venv --prompt housewire
 source .venv/bin/activate
-python -m pip install -e .
-python -m pip install -e '.[ui]'   # optional: interactive physical canvas
+python -m pip install -e '.[dev,ui]'
 # or: make prepare
 ```
 
@@ -43,7 +42,7 @@ housewire serve "$SITE"
 Drag places on a location canvas (any place with child locations), auto-layout,
 toggle conduit `line`/`tube`, then **Save**. Positions go to `view.physical` on
 places; page settings to `views.physical` on the canvas root.
-Requires the `ui` optional dependency (`fastapi`, `uvicorn`).
+Requires the `ui` optional dependency (included in `.[dev,ui]` / `make prepare`).
 
 ## Shell and ABM
 
@@ -127,7 +126,7 @@ Scope is the path argument (or the shell current location’s directory). Exampl
 `housewire generate "$SITE/Parking"` or `cd Parking` then `generate` in the shell.
 
 ```bash
-make prepare          # venv + editable install + pytest (dev-requirements.txt)
+make prepare          # venv + pip install -e '.[dev,ui]'
 make test
 ```
 

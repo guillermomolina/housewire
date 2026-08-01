@@ -7,7 +7,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-_Changes not yet released in a tagged version._
+### Removed
+
+- ``requirements.txt`` and ``dev-requirements.txt`` (use ``pip install -e '.[dev,ui]'``
+  or ``make prepare`` / ``make install`` from ``pyproject.toml`` extras).
 
 ## [0.20.1] — 2026-08-01
 
