@@ -7,6 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.1] — 2026-08-01
+
+### Added
+
+- Status bar zoom slider (5%–300%) synced with wheel zoom and toolbar zoom.
+
 ## [0.28.0] — 2026-08-01
 
 ### Changed

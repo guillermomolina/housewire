@@ -918,6 +918,38 @@
     return node;
   }
 
+  function syncZoomUi() {
+    const pct = Math.round(scale * 100);
+    const slider = document.getElementById("zoom-slider");
+    const label = document.getElementById("zoom-label");
+    if (slider && Number(slider.value) !== pct) {
+      slider.value = String(Math.min(300, Math.max(5, pct)));
+    }
+    if (label) label.textContent = `${pct}%`;
+  }
+
+  function setScale(next, { anchorClientX, anchorClientY } = {}) {
+    const clamped = Math.min(3, Math.max(0.05, next));
+    if (clamped === scale) {
+      syncZoomUi();
+      return;
+    }
+    if (
+      anchorClientX != null &&
+      anchorClientY != null &&
+      viewport
+    ) {
+      const rect = viewport.getBoundingClientRect();
+      const mx = anchorClientX - rect.left;
+      const my = anchorClientY - rect.top;
+      const ratio = clamped / scale;
+      panX = mx - (mx - panX) * ratio;
+      panY = my - (my - panY) * ratio;
+    }
+    scale = clamped;
+    applyWorldTransform();
+  }
+
   function applyWorldTransform() {
     if (worldEl) {
       worldEl.setAttribute(
@@ -925,6 +957,7 @@
         `translate(${panX},${panY}) scale(${scale})`
       );
     }
+    syncZoomUi();
   }
 
   function contentBounds() {
@@ -2572,13 +2605,11 @@
   }
 
   function zoomIn() {
-    scale = Math.min(3, scale * 1.15);
-    applyWorldTransform();
+    setScale(scale * 1.15);
   }
 
   function zoomOut() {
-    scale = Math.max(0.05, scale / 1.15);
-    applyWorldTransform();
+    setScale(scale / 1.15);
   }
 
   async function runAutoLayout() {
@@ -3519,6 +3550,25 @@
   document.getElementById("btn-zoom-reset")?.addEventListener("click", () => {
     fitView();
   });
+  document.getElementById("status-zoom-in")?.addEventListener("click", () => {
+    zoomIn();
+  });
+  document.getElementById("status-zoom-out")?.addEventListener("click", () => {
+    zoomOut();
+  });
+
+  const zoomSlider = document.getElementById("zoom-slider");
+  if (zoomSlider) {
+    zoomSlider.addEventListener("input", () => {
+      const pct = Number(zoomSlider.value);
+      if (!Number.isFinite(pct)) return;
+      const rect = viewport.getBoundingClientRect();
+      setScale(pct / 100, {
+        anchorClientX: rect.left + rect.width / 2,
+        anchorClientY: rect.top + rect.height / 2,
+      });
+    });
+  }
 
   document.getElementById("btn-depth-in")?.addEventListener("click", () => {
     setDepth(depthLevel + 1).catch((err) => setStatus(String(err.message || err)));
@@ -3567,16 +3617,10 @@
         return;
       }
       const factor = ev.deltaY > 0 ? 1 / 1.08 : 1.08;
-      const next = Math.min(3, Math.max(0.05, scale * factor));
-      if (next === scale) return;
-      const rect = viewport.getBoundingClientRect();
-      const mx = ev.clientX - rect.left;
-      const my = ev.clientY - rect.top;
-      const ratio = next / scale;
-      panX = mx - (mx - panX) * ratio;
-      panY = my - (my - panY) * ratio;
-      scale = next;
-      applyWorldTransform();
+      setScale(scale * factor, {
+        anchorClientX: ev.clientX,
+        anchorClientY: ev.clientY,
+      });
     },
     { passive: false }
   );
