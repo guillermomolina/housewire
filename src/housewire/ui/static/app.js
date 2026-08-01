@@ -1503,17 +1503,40 @@
     return `${edge.id || ""}|${edge.from || ""}|${edge.to || ""}|${edge.from_pin || ""}|${edge.to_pin || ""}`;
   }
 
-  /** Clear gap between parallel strand centers (px). */
-  const LANE_SPACING = 7;
-  const JACKET_WIDTH = 3.5;
-  const STRAND_WIDTH = 2.2;
+  /**
+   * Highway cross-section (px):
+   *   [gap][strand][gap][strand]…[gap][strand][gap]
+   * gap == strand width so every transparent separator matches a wire.
+   */
+  const STRAND_WIDTH = 2.5;
+  const LANE_GAP = STRAND_WIDTH;
+  const JACKET_OPACITY_WIDTH_PAD = 1.2;
 
-  /** Road stroke width: transparent highway that fits spaced cable lanes. */
-  function conduitRoadWidth(containsCount, laneCount) {
-    const cables = Math.max(0, Number(containsCount) || 0);
-    const lanes = Math.max(cables, Number(laneCount) || 0, 1);
-    // Padding + one lane pitch per strand/cable so parallel runs stay readable.
-    return Math.min(140, Math.max(16, 12 + lanes * LANE_SPACING));
+  /** Conduit road width from strand count (not a fixed stroke). */
+  function highwayRoadWidth(strandCount) {
+    const n = Math.max(1, strandCount | 0);
+    return n * STRAND_WIDTH + (n + 1) * LANE_GAP;
+  }
+
+  /** Perpendicular offset of lane ``i`` from the conduit centerline. */
+  function highwayLaneOffset(laneIndex, strandCount) {
+    const n = Math.max(1, strandCount | 0);
+    const i = Math.max(0, Math.min(n - 1, laneIndex | 0));
+    const pitch = STRAND_WIDTH + LANE_GAP;
+    const content = n * STRAND_WIDTH + (n - 1) * LANE_GAP;
+    const first = -content / 2 + STRAND_WIDTH / 2;
+    return first + i * pitch;
+  }
+
+  /** Span width of consecutive lanes [i0..i1] (for cable jackets). */
+  function highwaySpanWidth(laneCountInGroup) {
+    const k = Math.max(1, laneCountInGroup | 0);
+    return k * STRAND_WIDTH + (k - 1) * LANE_GAP + JACKET_OPACITY_WIDTH_PAD;
+  }
+
+  /** @deprecated alias — road width from strand lanes */
+  function conduitRoadWidth(_containsCount, laneCount) {
+    return highwayRoadWidth(laneCount || _containsCount || 1);
   }
 
   /** Local (element-space) anchor for a terminal cell id. */
@@ -1732,34 +1755,33 @@
   }
 
   function laneOffset(laneIndex, laneCount) {
-    const n = Math.max(laneCount, 1);
-    const mid = (n - 1) / 2;
-    return (laneIndex - mid) * LANE_SPACING;
+    return highwayLaneOffset(laneIndex, laneCount);
   }
 
-  /**
-   * Offset a polyline but pin the endpoints (terminal / opening stay put).
-   * Short segments get synthetic midpoints so a visible parallel gap remains.
-   */
-  function offsetKeepEnds(pts, dist) {
-    if (!pts || pts.length < 2) return pts ? pts.map((p) => [p[0], p[1]]) : [];
-    if (Math.abs(dist) < 1e-9) return pts.map((p) => [p[0], p[1]]);
+  /** Point as ``{x,y}`` from ``[x,y]``. */
+  function xyOf(pt) {
+    if (Array.isArray(pt)) return { x: pt[0], y: pt[1] };
+    return { x: pt.x, y: pt.y };
+  }
+
+  /** Route from an element attach to a lane-join point (inbox stub + ortho). */
+  function routeAttachToJoin(attach, join, preferCenter) {
+    const face = attach.face || "N";
+    const fo = faceOutwardDelta(face);
+    const aStub = stubPoint(attach, fo.x, fo.y, INBOX_STUB);
+    const j = xyOf(join);
+    const mid = orthoPtsPrefer(aStub, j, preferCenter);
     /** @type {number[][]} */
-    let work = pts.map((p) => [p[0], p[1]]);
-    if (work.length === 2) {
-      const a = work[0];
-      const b = work[1];
-      work = [
-        a,
-        [a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25],
-        [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75],
-        b,
-      ];
+    const pts = [[attach.x, attach.y], [aStub.x, aStub.y]];
+    for (let i = 1; i < mid.length; i++) pts.push(mid[i]);
+    /** @type {number[][]} */
+    const clean = [];
+    for (const p of pts) {
+      const prev = clean[clean.length - 1];
+      if (prev && Math.hypot(prev[0] - p[0], prev[1] - p[1]) < 1e-6) continue;
+      clean.push(p);
     }
-    const out = offsetOrthoPts(work, dist);
-    out[0] = [pts[0][0], pts[0][1]];
-    out[out.length - 1] = [pts[pts.length - 1][0], pts[pts.length - 1][1]];
-    return out;
+    return clean;
   }
 
   function cableRouteKey(edge, elemById) {
@@ -2050,13 +2072,15 @@
     const laneDist = opts?.laneDist || 0;
     const fromPin = opts?.fromPin != null ? opts.fromPin : edge.from_pin;
     const toPin = opts?.toPin != null ? opts.toPin : edge.to_pin;
-    /** Parallel lanes with endpoints pinned to terminals / openings. */
-    const applyLane = (subs) => {
-      if (Math.abs(laneDist) < 1e-9) return subs;
-      return subs.map((sub) => offsetKeepEnds(sub, laneDist));
+    /** Full parallel offset of a polyline (stays parallel to conduit walls). */
+    const parallel = (pts) => {
+      if (!pts || pts.length < 2 || Math.abs(laneDist) < 1e-9) {
+        return pts ? pts.map((p) => [p[0], p[1]]) : [];
+      }
+      return offsetOrthoPts(pts, laneDist);
     };
 
-    // Same box: stub out of each terminal, then ortho through the box.
+    // Same box: parallel corridor between stubs; short leads to terminals.
     if (a.parent && b.parent && a.parent === b.parent) {
       const p1 = resolveElementAttach(
         a,
@@ -2083,15 +2107,22 @@
           y: pa.y + nodeH(parent) / 2,
         };
       }
-      const pts = inboxRoutePts(
-        p1,
-        p1.face || elementAttachFace(a, c2, placeById),
-        p2,
-        p2.face || elementAttachFace(b, c1, placeById),
-        prefer,
-        "element"
-      );
-      return applyLane([pts]);
+      const f1 = p1.face || elementAttachFace(a, c2, placeById);
+      const f2 = p2.face || elementAttachFace(b, c1, placeById);
+      const o1 = faceOutwardDelta(f1);
+      const o2 = faceOutwardDelta(f2);
+      const s1 = stubPoint(p1, o1.x, o1.y, INBOX_STUB);
+      const s2 = stubPoint(p2, o2.x, o2.y, INBOX_STUB);
+      const corridor = orthoPtsPrefer(s1, s2, prefer);
+      const corridorOff = parallel(corridor);
+      if (!corridorOff.length) return [];
+      return [
+        [
+          [p1.x, p1.y],
+          ...corridorOff,
+          [p2.x, p2.y],
+        ],
+      ];
     }
 
     const parentExclude = [a.parent, b.parent].filter(Boolean);
@@ -2122,29 +2153,45 @@
         !last.to_opening
       ) {
         const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
-        return applyLane(d ? pathDToSubpaths(d) : []);
+        return d ? pathDToSubpaths(d).map(parallel) : [];
       }
 
-      /** @type {number[][][]} */
-      const subs = [];
-      const startTail = hopEndpointTailPts(
+      const pStart = resolveElementAttach(
         a,
-        startPlace,
-        first.from_opening,
+        fromPin,
+        openingAnchorAbs(
+          startPlace,
+          first.from_opening,
+          first.from_opening?.[0],
+          placeById
+        ),
         placeById,
         fromSlot.slot,
-        fromSlot.count,
-        fromPin
+        fromSlot.count
       );
-      if (startTail && startTail.length >= 2) subs.push(startTail);
+      const pEnd = resolveElementAttach(
+        b,
+        toPin,
+        openingAnchorAbs(
+          endPlace,
+          last.to_opening,
+          last.to_opening?.[0],
+          placeById
+        ),
+        placeById,
+        toSlot.slot,
+        toSlot.count
+      );
 
+      /** @type {number[][][]} */
+      const exteriors = [];
       for (let i = 0; i < hops.length; i++) {
         const hop = hops[i];
         const pf = placeById[hop.from];
         const pt = placeById[hop.to];
         if (!pf || !pt || !hop.from_opening || !hop.to_opening) {
           const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
-          return applyLane(d ? pathDToSubpaths(d) : []);
+          return d ? pathDToSubpaths(d).map(parallel) : [];
         }
         const tubeD = hopTubePathD(hop);
         let ext = null;
@@ -2186,24 +2233,66 @@
           ext = exteriorPathD(pointsToPathD(routed), leafObstacles);
         }
         if (ext) {
-          for (const sub of pathDToSubpaths(ext)) subs.push(sub);
+          for (const sub of pathDToSubpaths(ext)) {
+            const off = parallel(sub);
+            if (off.length >= 2) exteriors.push(off);
+          }
         }
       }
 
-      const endTail = hopEndpointTailPts(
-        b,
-        endPlace,
-        last.to_opening,
-        placeById,
-        toSlot.slot,
-        toSlot.count,
-        toPin
-      );
-      if (endTail && endTail.length >= 2) subs.push(endTail);
-      return applyLane(subs);
+      /** @type {number[][][]} */
+      const subs = [];
+      if (exteriors.length) {
+        const startJoin = exteriors[0][0];
+        const endJoin = exteriors[exteriors.length - 1][
+          exteriors[exteriors.length - 1].length - 1
+        ];
+        const startAbs = absXY(startPlace, placeById);
+        const endAbs = absXY(endPlace, placeById);
+        const preferStart = {
+          x: startAbs.x + nodeW(startPlace) / 2,
+          y: startAbs.y + nodeH(startPlace) / 2,
+        };
+        const preferEnd = {
+          x: endAbs.x + nodeW(endPlace) / 2,
+          y: endAbs.y + nodeH(endPlace) / 2,
+        };
+        const startTail = routeAttachToJoin(pStart, startJoin, preferStart);
+        if (startTail.length >= 2) subs.push(startTail);
+        for (const ext of exteriors) subs.push(ext);
+        const endTail = routeAttachToJoin(pEnd, endJoin, preferEnd);
+        // endTail is attach→join; reverse so it continues the path join→attach.
+        if (endTail.length >= 2) {
+          const rev = endTail.slice().reverse();
+          subs.push(rev);
+        }
+      } else {
+        // No exterior geometry — fall back to opening-centered tails.
+        const startTail = hopEndpointTailPts(
+          a,
+          startPlace,
+          first.from_opening,
+          placeById,
+          fromSlot.slot,
+          fromSlot.count,
+          fromPin
+        );
+        if (startTail) subs.push(parallel(startTail));
+        const endTail = hopEndpointTailPts(
+          b,
+          endPlace,
+          last.to_opening,
+          placeById,
+          toSlot.slot,
+          toSlot.count,
+          toPin
+        );
+        if (endTail) subs.push(parallel(endTail));
+      }
+      return subs;
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
-    return applyLane(d ? pathDToSubpaths(d) : []);
+    return d ? pathDToSubpaths(d).map(parallel) : [];
   }
 
   /** How many strand lanes ride a conduit edge (for road width). */
@@ -2227,30 +2316,45 @@
     const colors = edge.colors || [];
     const wireIdx = cableWireIndices(edge);
     const edgeName = edge.name || edge.id || edge.via || "";
-    const jInfo = layout ? layout.jacket(edge) : { index: 0, count: 1 };
-    const jacketSubs = cableBaseSubpaths(edge, placeById, elemById, occupied, {
-      // Jackets share the highway but stay thinner / slightly separated.
-      laneDist: laneOffset(jInfo.index, jInfo.count) * 0.55,
-    });
-    if (!jacketSubs.length) return null;
     /** @type {SVGElement[]} */
     const paths = [];
 
-    // White jacket (sheath) along the cable route (not fanned to terminals).
-    for (const sub of jacketSubs) {
-      const jacket = el("path", {
-        class: "cable-jacket",
-        d: pointsToPathD(sub),
+    // Jacket: one translucent band spanning this cable's strand lanes.
+    if (layout && wireIdx.length) {
+      const laneInfos = wireIdx.map((wi) => layout.lane(edge, wi));
+      const count = laneInfos[0]?.count || wireIdx.length;
+      const indices = laneInfos.map((l) => l.index);
+      const i0 = Math.min(...indices);
+      const i1 = Math.max(...indices);
+      const midOff =
+        i0 === i1
+          ? highwayLaneOffset(i0, count)
+          : (highwayLaneOffset(i0, count) + highwayLaneOffset(i1, count)) / 2;
+      const jacketSubs = cableBaseSubpaths(edge, placeById, elemById, occupied, {
+        laneDist: midOff,
       });
-      jacket.setAttribute("stroke-width", String(JACKET_WIDTH));
-      jacket.appendChild(
-        el("title", null, `${edgeName}${colors.length ? ` [${colors.join(",")}]` : ""}`)
-      );
-      cablesG.appendChild(jacket);
-      paths.push(jacket);
+      const jw = highwaySpanWidth(i1 - i0 + 1);
+      for (const sub of jacketSubs) {
+        // Jacket only on conduit-parallel runs (skip very short tails).
+        if (sub.length < 2) continue;
+        const jacket = el("path", {
+          class: "cable-jacket",
+          d: pointsToPathD(sub),
+        });
+        jacket.setAttribute("stroke-width", String(jw));
+        jacket.appendChild(
+          el(
+            "title",
+            null,
+            `${edgeName}${colors.length ? ` [${colors.join(",")}]` : ""}`
+          )
+        );
+        cablesG.appendChild(jacket);
+        paths.push(jacket);
+      }
     }
 
-    // Colored strands: slotted terminals + global route lanes.
+    // Colored strands: true parallel lanes on the highway.
     for (const wi of wireIdx) {
       const code = colors[wi] || colors[0] || "GY";
       const fromT = layout
@@ -2259,11 +2363,13 @@
       const toT = layout
         ? layout.terminal(edge, wi, "to")
         : { slot: 0, count: 1 };
-      const lane = layout ? layout.lane(edge, wi) : { index: wi, count: wireIdx.length };
+      const lane = layout
+        ? layout.lane(edge, wi)
+        : { index: wi, count: wireIdx.length };
       const strandSubs = cableBaseSubpaths(edge, placeById, elemById, occupied, {
         fromSlot: fromT,
         toSlot: toT,
-        laneDist: laneOffset(lane.index, lane.count),
+        laneDist: highwayLaneOffset(lane.index, lane.count),
       });
       const stroke = wireColorCss(code);
       for (const sub of strandSubs) {
@@ -2289,7 +2395,8 @@
         paths.push(hit, strand);
       }
     }
-    return { edge, paths, subs: jacketSubs, wireIdx };
+    if (!paths.length) return null;
+    return { edge, paths, subs: [], wireIdx };
   }
 
   function refreshEdges() {

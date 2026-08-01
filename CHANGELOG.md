@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.25] — 2026-08-01
+
+### Changed
+
+- Conduit highway width is derived from strand count: ``[gap][wire][gap]…``
+  with gap = strand width, margins to the road walls included. Strands follow
+  true parallel offsets of the conduit centerline (no stacked zig-zags).
+
 ## [0.28.24] — 2026-08-01
 
 ### Changed

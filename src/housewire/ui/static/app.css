@@ -1193,9 +1193,9 @@ button:hover {
 
 .edge-tube {
   fill: none;
-  stroke: #8b949e;
+  stroke: #9da5b0;
   stroke-width: 8;
-  stroke-opacity: 0.22;
+  stroke-opacity: 0.2;
   stroke-linecap: round;
   stroke-linejoin: round;
   pointer-events: none;
@@ -1204,8 +1204,8 @@ button:hover {
 .edge-tube-core {
   fill: none;
   stroke: #c9d1d9;
-  stroke-width: 1;
-  stroke-opacity: 0.35;
+  stroke-width: 0.75;
+  stroke-opacity: 0.25;
   stroke-linecap: round;
   stroke-linejoin: round;
   pointer-events: none;
@@ -1214,8 +1214,8 @@ button:hover {
 .cable-jacket {
   fill: none;
   stroke: #e6edf3;
-  stroke-width: 3.5;
-  stroke-opacity: 0.4;
+  stroke-width: 4;
+  stroke-opacity: 0.28;
   stroke-linejoin: round;
   stroke-linecap: round;
   pointer-events: none;
@@ -1223,7 +1223,7 @@ button:hover {
 
 .cable-strand {
   fill: none;
-  stroke-width: 2.2;
+  stroke-width: 2.5;
   stroke-linejoin: round;
   stroke-linecap: round;
   pointer-events: none;
