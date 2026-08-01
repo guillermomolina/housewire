@@ -1526,41 +1526,6 @@
     };
   }
 
-  /**
-   * Point just inside a contour opening so in-box cable runs stay off the border.
-   * B/F openings are already interior — return the anchor unchanged.
-   */
-  function openingInteriorPoint(node, openingId, face, byId, inset) {
-    const op = openingAnchorAbs(node, openingId, face, byId);
-    const f = routeFace(node, openingId, face, byId);
-    const m = inset ?? 16;
-    if (f === "N") return { x: op.x, y: op.y + m };
-    if (f === "S") return { x: op.x, y: op.y - m };
-    if (f === "W") return { x: op.x + m, y: op.y };
-    if (f === "E") return { x: op.x - m, y: op.y };
-    return op;
-  }
-
-  function appendOrtho(d, p1, p2, fromFace, toFace, occupied, obstacles) {
-    const pts = orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles);
-    const seg = pointsToPathD(pts);
-    if (!d) return { d: seg, segs: segsFromPoints(pts) };
-    // Drop leading M; continue with L segments.
-    return {
-      d: d + seg.replace(/^M\s+[-\d.]+(?:\s+|,)[-\d.]+\s*/, " "),
-      segs: segsFromPoints(pts),
-    };
-  }
-
-  /** Start a new subpath (keep M). */
-  function appendOrthoSubpath(d, p1, p2, fromFace, toFace, occupied, obstacles) {
-    const pts = orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles);
-    const seg = pointsToPathD(pts);
-    if (!d) return { d: seg, segs: segsFromPoints(pts) };
-    return { d: `${d} ${seg}`, segs: segsFromPoints(pts) };
-  }
-
-  /** In-box wiring: straight or single L — never C / lane detours. */
   function simpleOrthoPts(p1, p2) {
     const x1 = p1.x;
     const y1 = p1.y;
@@ -1580,19 +1545,6 @@
       [x2, y1],
       [x2, y2],
     ];
-  }
-
-  function appendSimple(d, p1, p2) {
-    const pts = simpleOrthoPts(p1, p2);
-    const seg = pointsToPathD(pts);
-    if (!d) return seg;
-    return d + seg.replace(/^M\s+[-\d.]+(?:\s+|,)[-\d.]+\s*/, " ");
-  }
-
-  function appendSimpleSubpath(d, p1, p2) {
-    const seg = pointsToPathD(simpleOrthoPts(p1, p2));
-    if (!d) return seg;
-    return `${d} ${seg}`;
   }
 
   /** Side midpoint of an element facing ``toward`` (same-box cable endpoints). */
