@@ -962,6 +962,43 @@
     }
   }
 
+  function syncOpeningMarks(node) {
+    const g = nodesById[node.id];
+    if (!g || !node.openings?.length) return;
+    const w = nodeW(node);
+    const h = nodeH(node);
+    for (const op of node.openings) {
+      const face = (op.face || op.id?.[0] || "?").toUpperCase();
+      const anchor = openingAnchorLocal(node, op.id, face);
+      const sel = `[data-opening="${CSS.escape(String(op.id))}"]`;
+      if (face === "B" || face === "F") {
+        const circle = g.querySelector(`circle${sel}`);
+        const text = g.querySelector(`text${sel}`);
+        if (circle) {
+          circle.setAttribute("cx", String(anchor.x));
+          circle.setAttribute("cy", String(anchor.y));
+        }
+        if (text) {
+          text.setAttribute("x", String(anchor.x));
+          text.setAttribute("y", String(anchor.y + 3));
+        }
+        continue;
+      }
+      const text = g.querySelector(`text.opening-side${sel}`);
+      if (!text) continue;
+      const labelX =
+        face === "W" ? 4 : face === "E" ? w - 4 : anchor.x;
+      const labelY =
+        face === "N" ? 10 : face === "S" ? h - 3 : anchor.y + 3;
+      text.setAttribute("x", String(labelX));
+      text.setAttribute("y", String(labelY));
+      text.setAttribute(
+        "text-anchor",
+        face === "W" ? "start" : face === "E" ? "end" : "middle"
+      );
+    }
+  }
+
   function updateElementVisual(elem, placeById) {
     const g = elementsById[elem.id];
     if (!g) return;
@@ -976,12 +1013,29 @@
       const g = nodesById[n.id];
       if (!g) continue;
       const a = absXY(n, byId);
+      const w = nodeW(n);
+      const h = nodeH(n);
       g.setAttribute("transform", `translate(${a.x},${a.y})`);
       const box = g.querySelector(".node-box");
       if (box) {
-        box.setAttribute("width", String(nodeW(n)));
-        box.setAttribute("height", String(nodeH(n)));
+        box.setAttribute("width", String(w));
+        box.setAttribute("height", String(h));
       }
+      const label = g.querySelector("text.node-label");
+      if (label) {
+        label.textContent = fitLabel(
+          n.display_name || n.name || n.id,
+          w
+        );
+      }
+      const typeEl = g.querySelector("text.node-type");
+      if (typeEl) {
+        typeEl.textContent = fitLabel(
+          (n.type || "") + (n.expandable ? " · +" : ""),
+          w
+        );
+      }
+      syncOpeningMarks(n);
     }
     for (const e of graph.elements || []) {
       updateElementVisual(e, byId);
@@ -1048,6 +1102,7 @@
             "text",
             {
               class: "opening-side",
+              "data-opening": op.id,
               x: labelX,
               y: labelY,
               "text-anchor":
@@ -1066,6 +1121,7 @@
         g.appendChild(
           el("circle", {
             class: markClass,
+            "data-opening": op.id,
             cx: anchor.x,
             cy: anchor.y,
             r: PLANE_R,
@@ -1076,6 +1132,7 @@
             "text",
             {
               class: textClass,
+              "data-opening": op.id,
               x: anchor.x,
               y: anchor.y + 3,
               "text-anchor": "middle",
@@ -1653,19 +1710,9 @@
       } else if (item.kind === "element") {
         const elem = (graph?.elements || []).find((e) => e.id === item.id);
         if (!elem) continue;
-        let nx = Math.max(0, Math.round(item.origX + dx));
-        let ny = Math.max(0, Math.round(item.origY + dy));
-        if (elem.parent) {
-          const parent = graph.nodes.find((n) => n.id === elem.parent);
-          if (parent) {
-            const innerW = Math.max(ELEM_W, nodeW(parent) - 2 * PAD);
-            const innerH = Math.max(ELEM_H, nodeH(parent) - HEADER - PAD);
-            nx = Math.min(nx, Math.max(0, innerW - (elem.w ?? ELEM_W)));
-            ny = Math.min(ny, Math.max(0, innerH - (elem.h ?? ELEM_H)));
-          }
-        }
-        elem.x = nx;
-        elem.y = ny;
+        // Keep x/y >= 0; parent place grows via measureVisibleSizes.
+        elem.x = Math.max(0, Math.round(item.origX + dx));
+        elem.y = Math.max(0, Math.round(item.origY + dy));
       }
     }
     updateNodeVisual(null);
