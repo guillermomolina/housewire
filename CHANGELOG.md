@@ -7,6 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.26.2] — 2026-08-01
+
+### Fixed
+
+- Closing the last view tab (×) closes the document, same as File → Close.
+
 ## [0.26.1] — 2026-08-01
 
 ### Fixed

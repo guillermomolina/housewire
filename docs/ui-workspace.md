@@ -39,6 +39,9 @@ handle), Save may download a copy so you keep your changes.
 **View tabs** open locations (canvas roots) **inside** the active document — like
 Figma pages, not like separate Atom files.
 
+- Closing a view tab removes that canvas location from the tab strip.
+- Closing the **last** view tab closes the **document** (same as File → Close).
+
 - Opening `Parking` and `Planta_baja` as tabs = two views of the same YAML.
 - Opening another YAML = another **document** (future multi-doc workspace).
 

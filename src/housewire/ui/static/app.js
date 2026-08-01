@@ -2252,12 +2252,18 @@
       const close = document.createElement("button");
       close.type = "button";
       close.className = "view-tab-close";
-      close.title = "Close view";
-      close.setAttribute("aria-label", `Close ${tab.title}`);
+      const lastTab = viewTabs.length <= 1;
+      close.title = lastTab ? "Close document" : "Close view";
+      close.setAttribute(
+        "aria-label",
+        lastTab ? `Close document (${tab.title})` : `Close ${tab.title}`
+      );
       close.textContent = "×";
       close.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        closeViewTab(tab.id);
+        closeViewTab(tab.id).catch((err) =>
+          setStatus(String(err.message || err))
+        );
       });
       btn.appendChild(close);
       btn.addEventListener("click", () => {
@@ -2307,16 +2313,13 @@
   async function closeViewTab(id) {
     const idx = viewTabs.findIndex((t) => t.id === id);
     if (idx < 0) return;
-    const wasActive = locationId === id;
-    viewTabs.splice(idx, 1);
-    if (!viewTabs.length) {
-      locationId = null;
-      graph = null;
-      renderViewTabs();
-      svg.innerHTML = "";
-      setStatus("No view open — pick a place in the outline");
+    // Last view tab closes the whole document (same as File → Close).
+    if (viewTabs.length <= 1) {
+      await fileClose();
       return;
     }
+    const wasActive = locationId === id;
+    viewTabs.splice(idx, 1);
     if (wasActive) {
       const next = viewTabs[Math.max(0, idx - 1)];
       await activateViewTab(next.id);
