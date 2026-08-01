@@ -121,6 +121,11 @@ class Workspace:
             "document": None if active is None else self._doc_payload(active),
             "dirty": dirty,
             "site": None if active is None else str(active.root),
+            **(
+                active.session.edit_flags()
+                if active is not None
+                else {"can_undo": False, "can_redo": False, "can_reset": False}
+            ),
         }
 
     def yaml_export(self) -> dict[str, str]:

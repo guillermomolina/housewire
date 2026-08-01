@@ -66,6 +66,21 @@ def create_app(site_root: Path | None = None) -> Any:
     def _touch_site() -> None:
         _session().reconcile_dirty(_site_yaml())
 
+    def _edit_meta() -> dict[str, Any]:
+        session = _session()
+        flags = session.edit_flags(_site_yaml())
+        dirty = bool(session.dirty_paths())
+        return {**flags, "dirty": dirty}
+
+    def _begin_edit() -> None:
+        _session().prepare_edit(_site_yaml())
+
+    def _end_edit() -> dict[str, Any]:
+        session = _session()
+        session.commit_edit(_site_yaml())
+        _touch_site()
+        return _edit_meta()
+
     def _depth_from(payload: dict[str, Any] | None = None, raw: int | None = None) -> int:
         value = raw if raw is not None else (payload or {}).get("depth", 1)
         try:
@@ -258,6 +273,7 @@ def create_app(site_root: Path | None = None) -> Any:
         depth = _depth_from(payload)
         try:
             _preload_location(location_id)
+            _begin_edit()
             detail = update_place_properties(
                 _session(),
                 canvas_location_id=location_id,
@@ -269,10 +285,53 @@ def create_app(site_root: Path | None = None) -> Any:
             raise HTTPException(404, str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
-        _touch_site()
+        meta = _end_edit()
         return {
             "detail": detail,
             "graph": _graph(location_id, depth),
+            **meta,
+        }
+
+    @app.post("/api/edit/undo")
+    async def api_edit_undo(request: Request) -> dict[str, Any]:
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or "").strip() or "."
+        depth = _depth_from(payload)
+        session = _session()
+        _preload_location(location_id)
+        changed = session.undo_edit(_site_yaml())
+        return {
+            "changed": changed,
+            "graph": _graph(location_id, depth),
+            **_edit_meta(),
+        }
+
+    @app.post("/api/edit/redo")
+    async def api_edit_redo(request: Request) -> dict[str, Any]:
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or "").strip() or "."
+        depth = _depth_from(payload)
+        session = _session()
+        _preload_location(location_id)
+        changed = session.redo_edit(_site_yaml())
+        return {
+            "changed": changed,
+            "graph": _graph(location_id, depth),
+            **_edit_meta(),
+        }
+
+    @app.post("/api/edit/reset")
+    async def api_edit_reset(request: Request) -> dict[str, Any]:
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or "").strip() or "."
+        depth = _depth_from(payload)
+        session = _session()
+        _preload_location(location_id)
+        changed = session.reset_edits(_site_yaml())
+        return {
+            "changed": changed,
+            "graph": _graph(location_id, depth),
+            **_edit_meta(),
         }
 
     @app.post("/api/physical/auto-layout")
@@ -287,6 +346,7 @@ def create_app(site_root: Path | None = None) -> Any:
         root = _root()
         try:
             _preload_location(location_id)
+            _begin_edit()
             docs = _session_docs()
             updated = pg.apply_auto_layout(
                 root,
@@ -302,10 +362,11 @@ def create_app(site_root: Path | None = None) -> Any:
             if site not in session._buffers:
                 session.ensure_doc(site)
             session._buffers[site].doc = docs[site]
-        _touch_site()
+        meta = _end_edit()
         return {
             "updated": updated,
             "graph": _graph(location_id, depth),
+            **meta,
         }
 
     @app.patch("/api/physical/positions")
@@ -319,14 +380,15 @@ def create_app(site_root: Path | None = None) -> Any:
             raise HTTPException(400, "positions must be a map")
         try:
             _preload_location(location_id)
+            _begin_edit()
             docs = _session_docs()
             updated = pg.apply_positions(
                 _root(), location_id, positions, session_docs=docs
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
-        _touch_site()
-        return {"updated": updated}
+        meta = _end_edit()
+        return {"updated": updated, **meta}
 
     @app.patch("/api/electrical/positions")
     async def api_electrical_positions(request: Request) -> dict[str, Any]:
@@ -339,6 +401,7 @@ def create_app(site_root: Path | None = None) -> Any:
             raise HTTPException(400, "positions must be a map")
         try:
             _preload_location(location_id)
+            _begin_edit()
             docs = _session_docs()
             updated = pg.apply_electrical_positions(
                 _root(), location_id, positions, session_docs=docs
@@ -347,8 +410,8 @@ def create_app(site_root: Path | None = None) -> Any:
             raise HTTPException(404, str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
-        _touch_site()
-        return {"updated": updated}
+        meta = _end_edit()
+        return {"updated": updated, **meta}
 
     @app.post("/api/electrical/auto-layout")
     async def api_electrical_auto_layout(request: Request) -> dict[str, Any]:
@@ -361,6 +424,7 @@ def create_app(site_root: Path | None = None) -> Any:
         session = _session()
         try:
             _preload_location(location_id)
+            _begin_edit()
             docs = _session_docs()
             updated = pg.apply_electrical_auto_layout(
                 _root(),
@@ -376,10 +440,11 @@ def create_app(site_root: Path | None = None) -> Any:
             if site not in session._buffers:
                 session.ensure_doc(site)
             session._buffers[site].doc = docs[site]
-        _touch_site()
+        meta = _end_edit()
         return {
             "updated": updated,
             "graph": _graph(location_id, depth),
+            **meta,
         }
 
     @app.patch("/api/physical/page")
@@ -390,6 +455,7 @@ def create_app(site_root: Path | None = None) -> Any:
             raise HTTPException(400, "location_id is required")
         session = _session()
         loc_yaml = _site_yaml()
+        _begin_edit()
         _path, doc = session.ensure_doc(loc_yaml)
         from housewire.project.tree import get_place_node, logical_parts_from_id
 
@@ -404,7 +470,8 @@ def create_app(site_root: Path | None = None) -> Any:
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         session.mark_dirty(loc_yaml)
-        return {"page": get_physical_page(place)}
+        meta = _end_edit()
+        return {"page": get_physical_page(place), **meta}
 
     @app.post("/api/recipes/socket")
     async def api_recipe_socket(request: Request) -> dict[str, Any]:
@@ -421,6 +488,7 @@ def create_app(site_root: Path | None = None) -> Any:
             )
         try:
             _preload_location(location_id)
+            _begin_edit()
             result = run_socket_recipe(
                 _session(),
                 name=name,
@@ -434,9 +502,11 @@ def create_app(site_root: Path | None = None) -> Any:
                 notes=payload.get("notes"),
                 canvas_location_id=location_id,
             )
+            meta = _end_edit()
             return {
                 "result": result,
                 "graph": _graph(location_id, _depth_from(payload)),
+                **meta,
             }
         except (ValueError, FileExistsError, FileNotFoundError) as exc:
             raise HTTPException(400, str(exc)) from exc
@@ -457,6 +527,7 @@ def create_app(site_root: Path | None = None) -> Any:
             )
         try:
             _preload_location(location_id)
+            _begin_edit()
             result = run_lamp_recipe(
                 _session(),
                 name=name,
@@ -471,9 +542,11 @@ def create_app(site_root: Path | None = None) -> Any:
                 notes=payload.get("notes"),
                 canvas_location_id=location_id,
             )
+            meta = _end_edit()
             return {
                 "result": result,
                 "graph": _graph(location_id, _depth_from(payload)),
+                **meta,
             }
         except (ValueError, FileExistsError, FileNotFoundError) as exc:
             raise HTTPException(400, str(exc)) from exc
@@ -496,6 +569,7 @@ def create_app(site_root: Path | None = None) -> Any:
             )
         try:
             _preload_location(location_id)
+            _begin_edit()
             result = run_feed_recipe(
                 _session(),
                 name=name,
@@ -508,9 +582,11 @@ def create_app(site_root: Path | None = None) -> Any:
                 notes=payload.get("notes"),
                 canvas_location_id=location_id,
             )
+            meta = _end_edit()
             return {
                 "result": result,
                 "graph": _graph(location_id, _depth_from(payload)),
+                **meta,
             }
         except (ValueError, FileExistsError, FileNotFoundError) as exc:
             raise HTTPException(400, str(exc)) from exc
@@ -523,6 +599,8 @@ def create_app(site_root: Path | None = None) -> Any:
             saved = [str(p.relative_to(root)) for p in session.save_all()]
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
+        # Even if nothing was dirty, align baseline with the on-disk doc.
+        session.mark_edit_baseline(_site_yaml())
         yaml_path = session.site_yaml()
         try:
             text = yaml_path.read_text(encoding="utf-8")
@@ -534,6 +612,7 @@ def create_app(site_root: Path | None = None) -> Any:
             "filename": yaml_path.name,
             "yaml": text,
             "browser_origin": bool(doc and doc.browser_origin),
+            **_edit_meta(),
         }
 
     @app.get("/api/status")

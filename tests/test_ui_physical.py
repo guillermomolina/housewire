@@ -553,6 +553,101 @@ class TestServeApi(unittest.TestCase):
             dirty = client.get("/api/workspace").json()
             self.assertTrue(dirty.get("dirty"))
 
+    def test_unified_edit_undo_redo_reset(self) -> None:
+        try:
+            from fastapi.testclient import TestClient
+        except (ImportError, RuntimeError):
+            self.skipTest("fastapi/httpx not installed")
+
+        from housewire.ui.app import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = init_site(root, type_id="House", label="Site")
+            add_place(doc, "Parking", type_id="Floor", label="Parking")
+            add_place(
+                doc, "Caja_4", under=("Parking",), type_id="JunctionBox", label="Caja 4"
+            )
+            save_site(root, doc)
+
+            client = TestClient(create_app(root))
+            # Seed graph / session buffer.
+            client.get("/api/physical?location=Parking&depth=1")
+
+            props = client.patch(
+                "/api/place/properties",
+                json={
+                    "location_id": "Parking",
+                    "id": "Caja_4",
+                    "fields": {"label": "Moved label"},
+                    "depth": 1,
+                },
+            )
+            self.assertEqual(props.status_code, 200, props.text)
+            self.assertTrue(props.json().get("can_undo"))
+            self.assertEqual(props.json()["detail"]["label"], "Moved label")
+
+            pos = client.patch(
+                "/api/physical/positions",
+                json={
+                    "location_id": "Parking",
+                    "positions": {"Caja_4": {"x": 120, "y": 80}},
+                },
+            )
+            self.assertEqual(pos.status_code, 200, pos.text)
+            self.assertTrue(pos.json().get("can_undo"))
+
+            undo_layout = client.post(
+                "/api/edit/undo",
+                json={"location_id": "Parking", "depth": 1},
+            )
+            self.assertEqual(undo_layout.status_code, 200, undo_layout.text)
+            self.assertTrue(undo_layout.json().get("changed"))
+            # Position undone; label edit still present.
+            graph = undo_layout.json()["graph"]
+            caja = next(n for n in graph["nodes"] if n["id"] == "Caja_4")
+            self.assertNotEqual((caja.get("x"), caja.get("y")), (120, 80))
+
+            detail = client.get(
+                "/api/place?location=Parking&id=Caja_4"
+            ).json()
+            self.assertEqual(detail["label"], "Moved label")
+
+            undo_props = client.post(
+                "/api/edit/undo",
+                json={"location_id": "Parking", "depth": 1},
+            )
+            self.assertEqual(undo_props.status_code, 200, undo_props.text)
+            self.assertTrue(undo_props.json().get("changed"))
+            detail = client.get(
+                "/api/place?location=Parking&id=Caja_4"
+            ).json()
+            self.assertEqual(detail["label"], "Caja 4")
+
+            redo = client.post(
+                "/api/edit/redo",
+                json={"location_id": "Parking", "depth": 1},
+            )
+            self.assertEqual(redo.status_code, 200, redo.text)
+            self.assertTrue(redo.json().get("changed"))
+            detail = client.get(
+                "/api/place?location=Parking&id=Caja_4"
+            ).json()
+            self.assertEqual(detail["label"], "Moved label")
+
+            reset = client.post(
+                "/api/edit/reset",
+                json={"location_id": "Parking", "depth": 1},
+            )
+            self.assertEqual(reset.status_code, 200, reset.text)
+            self.assertTrue(reset.json().get("changed"))
+            detail = client.get(
+                "/api/place?location=Parking&id=Caja_4"
+            ).json()
+            self.assertEqual(detail["label"], "Caja 4")
+            self.assertFalse(reset.json().get("can_undo"))
+            self.assertFalse(reset.json().get("can_reset"))
+
 
 if __name__ == "__main__":
     unittest.main()

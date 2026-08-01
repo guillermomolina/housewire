@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.17] — 2026-08-01
+
+### Changed
+
+- Unified edit history on the server: Undo / Redo / Reset revert layout moves,
+  Properties edits, auto-layout, and Insert recipes in one stack. File → Save
+  sets the new baseline. UI “Reset layout” renamed to **Reset**.
+
 ## [0.28.16] — 2026-08-01
 
 ### Fixed

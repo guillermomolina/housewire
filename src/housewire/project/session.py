@@ -1,6 +1,7 @@
 """Interactive project session: nested place navigation in one housewire.yaml."""
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,8 @@ from housewire.house import is_house_document, is_place_type
 from housewire.project.io import HOUSEWIRE_YAML, load_yaml
 from housewire.project.paths import find_site_yaml, is_excluded_path, is_yaml
 from housewire.project.tree import get_place_node, iter_place_children, site_yaml_path
+
+EDIT_HISTORY_MAX = 50
 
 
 @dataclass
@@ -34,6 +37,10 @@ def _docs_equivalent(a: Any, b: Any) -> bool:
             return False
         return all(_docs_equivalent(x, y) for x, y in zip(a, b, strict=True))
     return a == b
+
+
+def _clone_doc(doc: dict[str, Any]) -> dict[str, Any]:
+    return copy.deepcopy(doc)
 
 
 @dataclass(frozen=True)
@@ -82,6 +89,10 @@ class ProjectSession:
         self._buffers: dict[Path, DocBuffer] = {}
         self.input_fn = input
         self._site_yaml = self._resolve_initial_site_yaml(site_yaml)
+        # Unified edit history (layout + properties + recipes): deep-copied docs.
+        self._edit_baseline: dict[Path, dict[str, Any]] = {}
+        self._edit_history: dict[Path, list[dict[str, Any]]] = {}
+        self._edit_index: dict[Path, int] = {}
         self._sync_from_logical()
 
     def _resolve_initial_site_yaml(self, site_yaml: Path | None) -> Path:
@@ -132,7 +143,116 @@ class ProjectSession:
             mtime = resolved.stat().st_mtime if resolved.is_file() else None
             buf = DocBuffer(path=resolved, doc=doc, dirty=False, mtime=mtime)
             self._buffers[resolved] = buf
+            self._init_edit_history(resolved, doc)
         return resolved, buf.doc
+
+    def _init_edit_history(self, path: Path, doc: dict[str, Any]) -> None:
+        snap = _clone_doc(doc)
+        self._edit_baseline[path] = _clone_doc(doc)
+        self._edit_history[path] = [snap]
+        self._edit_index[path] = 0
+
+    def _clear_edit_history(self, path: Path) -> None:
+        self._edit_baseline.pop(path, None)
+        self._edit_history.pop(path, None)
+        self._edit_index.pop(path, None)
+
+    def _ensure_edit_history(self, path: Path, doc: dict[str, Any]) -> None:
+        if path not in self._edit_history or not self._edit_history[path]:
+            self._init_edit_history(path, doc)
+
+    def prepare_edit(self, path: Path | None = None) -> None:
+        """Ensure the edit stack exists (redo is truncated on ``commit_edit``)."""
+        resolved, doc = self.ensure_doc(path)
+        self._ensure_edit_history(resolved, doc)
+
+    def commit_edit(self, path: Path | None = None) -> bool:
+        """Append a snapshot after a mutation if the doc changed. Return True if recorded."""
+        resolved, doc = self.ensure_doc(path)
+        self._ensure_edit_history(resolved, doc)
+        hist = self._edit_history[resolved]
+        idx = self._edit_index[resolved]
+        if _docs_equivalent(hist[idx], doc):
+            return False
+        del hist[idx + 1 :]
+        hist.append(_clone_doc(doc))
+        if len(hist) > EDIT_HISTORY_MAX:
+            del hist[: len(hist) - EDIT_HISTORY_MAX]
+        self._edit_index[resolved] = len(hist) - 1
+        return True
+
+    def can_undo_edit(self, path: Path | None = None) -> bool:
+        resolved = (path or self.site_yaml()).resolve()
+        return self._edit_index.get(resolved, 0) > 0
+
+    def can_redo_edit(self, path: Path | None = None) -> bool:
+        resolved = (path or self.site_yaml()).resolve()
+        hist = self._edit_history.get(resolved) or []
+        idx = self._edit_index.get(resolved, 0)
+        return bool(hist) and idx < len(hist) - 1
+
+    def can_reset_edits(self, path: Path | None = None) -> bool:
+        resolved = (path or self.site_yaml()).resolve()
+        baseline = self._edit_baseline.get(resolved)
+        buf = self._buffers.get(resolved)
+        if baseline is None or buf is None:
+            return False
+        return not _docs_equivalent(buf.doc, baseline)
+
+    def edit_flags(self, path: Path | None = None) -> dict[str, bool]:
+        return {
+            "can_undo": self.can_undo_edit(path),
+            "can_redo": self.can_redo_edit(path),
+            "can_reset": self.can_reset_edits(path),
+        }
+
+    def undo_edit(self, path: Path | None = None) -> bool:
+        """Restore previous history snapshot. Return False if nothing to undo."""
+        resolved, _doc = self.ensure_doc(path)
+        self._ensure_edit_history(resolved, self._buffers[resolved].doc)
+        idx = self._edit_index[resolved]
+        if idx <= 0:
+            return False
+        idx -= 1
+        self._buffers[resolved].doc = _clone_doc(self._edit_history[resolved][idx])
+        self._edit_index[resolved] = idx
+        self.reconcile_dirty(resolved)
+        return True
+
+    def redo_edit(self, path: Path | None = None) -> bool:
+        """Restore next history snapshot. Return False if nothing to redo."""
+        resolved, _doc = self.ensure_doc(path)
+        self._ensure_edit_history(resolved, self._buffers[resolved].doc)
+        hist = self._edit_history[resolved]
+        idx = self._edit_index[resolved]
+        if idx >= len(hist) - 1:
+            return False
+        idx += 1
+        self._buffers[resolved].doc = _clone_doc(hist[idx])
+        self._edit_index[resolved] = idx
+        self.reconcile_dirty(resolved)
+        return True
+
+    def reset_edits(self, path: Path | None = None) -> bool:
+        """Restore baseline (last open/save). Return False if already at baseline."""
+        resolved, _doc = self.ensure_doc(path)
+        self._ensure_edit_history(resolved, self._buffers[resolved].doc)
+        baseline = self._edit_baseline.get(resolved)
+        if baseline is None:
+            return False
+        if _docs_equivalent(self._buffers[resolved].doc, baseline):
+            return False
+        restored = _clone_doc(baseline)
+        self._buffers[resolved].doc = restored
+        self._edit_history[resolved] = [_clone_doc(restored)]
+        self._edit_index[resolved] = 0
+        self.reconcile_dirty(resolved)
+        return True
+
+    def mark_edit_baseline(self, path: Path | None = None) -> None:
+        """Set baseline + history tip to the current doc (after Save)."""
+        resolved, doc = self.ensure_doc(path)
+        self._init_edit_history(resolved, doc)
 
     def mark_dirty(self, path: Path | None = None) -> None:
         resolved, _ = self.ensure_doc(path)
@@ -185,6 +305,7 @@ class ProjectSession:
         abm.persist(doc, resolved, self.root)
         buf.dirty = False
         buf.mtime = resolved.stat().st_mtime if resolved.is_file() else None
+        self.mark_edit_baseline(resolved)
         return resolved
 
     def save_all(self, *, force: bool = False) -> list[Path]:
@@ -200,6 +321,7 @@ class ProjectSession:
         resolved = (path or self.ensure_active_yaml()).resolve()
         if not resolved.is_file():
             self._buffers.pop(resolved, None)
+            self._clear_edit_history(resolved)
             raise ValueError(
                 f"{resolved.relative_to(self.root)} does not exist on disk yet. "
                 "Use discard or save."
@@ -209,6 +331,7 @@ class ProjectSession:
         self._buffers[resolved] = DocBuffer(
             path=resolved, doc=doc, dirty=False, mtime=mtime
         )
+        self._init_edit_history(resolved, doc)
         return resolved
 
     def discard(self, path: Path | None = None) -> None:
@@ -218,7 +341,9 @@ class ProjectSession:
             if cursor.yaml_path is None:
                 return
             path = cursor.yaml_path
-        self._buffers.pop(path.resolve(), None)
+        key = path.resolve()
+        self._buffers.pop(key, None)
+        self._clear_edit_history(key)
 
     @property
     def cwd(self) -> Path:

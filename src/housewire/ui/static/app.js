@@ -39,15 +39,14 @@
   let edgePaths = [];
   let cablePaths = [];
   let lastTap = { id: null, t: 0 };
-  let layoutHistory = [];
-  let layoutIndex = -1;
-  let layoutBaseline = null;
+  let canUndo = false;
+  let canRedo = false;
+  let canReset = false;
   let showElectrical = false;
   let outlineNodes = [];
   let canvasLocations = [];
   let collapsedOutline = new Set();
   let outlineCollapseReady = false;
-  const HISTORY_MAX = 50;
   const DRAG_THRESHOLD = 4;
   const DBLCLICK_MS = 400;
   const ELEM_W = 72;
@@ -229,89 +228,31 @@
     return null;
   }
 
-  function snapshotPositions() {
-    const places = {};
-    for (const n of graph?.nodes || []) {
-      places[n.id] = { x: n.x ?? 0, y: n.y ?? 0 };
-    }
-    const elements = {};
-    for (const e of graph?.elements || []) {
-      elements[e.id] = { x: e.x ?? 0, y: e.y ?? 0 };
-    }
-    return { places, elements };
-  }
-
-  function cloneSnap(snap) {
-    return JSON.parse(JSON.stringify(snap || { places: {}, elements: {} }));
-  }
-
-  function xyMapEqual(a, b) {
-    const ka = Object.keys(a || {}).sort();
-    const kb = Object.keys(b || {}).sort();
-    if (ka.length !== kb.length) return false;
-    for (let i = 0; i < ka.length; i++) {
-      if (ka[i] !== kb[i]) return false;
-      const pa = a[ka[i]];
-      const pb = b[kb[i]];
-      if ((pa?.x ?? 0) !== (pb?.x ?? 0) || (pa?.y ?? 0) !== (pb?.y ?? 0)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  function snapsEqual(a, b) {
-    if (!a || !b) return false;
-    // Legacy flat snaps (places only) from older sessions — not used after load.
-    if (!a.places && !a.elements) {
-      return xyMapEqual(a, b.places || b);
-    }
-    return (
-      xyMapEqual(a.places, b.places) && xyMapEqual(a.elements, b.elements)
-    );
-  }
-
   function updateHistoryButtons() {
-    const undoDisabled = layoutIndex <= 0;
-    const redoDisabled =
-      layoutIndex < 0 || layoutIndex >= layoutHistory.length - 1;
-    const resetDisabled =
-      !layoutBaseline || snapsEqual(snapshotPositions(), layoutBaseline);
     for (const id of ["btn-undo", "menu-undo"]) {
       const el = document.getElementById(id);
-      if (el) el.disabled = undoDisabled;
+      if (el) el.disabled = !canUndo;
     }
     for (const id of ["btn-redo", "menu-redo"]) {
       const el = document.getElementById(id);
-      if (el) el.disabled = redoDisabled;
+      if (el) el.disabled = !canRedo;
     }
     for (const id of ["btn-layout-reset", "menu-layout-reset"]) {
       const el = document.getElementById(id);
-      if (el) el.disabled = resetDisabled;
+      if (el) el.disabled = !canReset;
     }
   }
 
-  function resetLayoutHistory() {
-    layoutBaseline = snapshotPositions();
-    layoutHistory = [cloneSnap(layoutBaseline)];
-    layoutIndex = 0;
-    syncLayoutDirty();
+  function applyEditFlags(meta) {
+    if (!meta) return;
+    if (meta.can_undo != null) canUndo = Boolean(meta.can_undo);
+    if (meta.can_redo != null) canRedo = Boolean(meta.can_redo);
+    if (meta.can_reset != null) canReset = Boolean(meta.can_reset);
     updateHistoryButtons();
-  }
-
-  /** Update Reset target only; leave undo/redo stack intact. */
-  function markLayoutBaseline() {
-    layoutBaseline = cloneSnap(snapshotPositions());
-    syncLayoutDirty();
-    updateHistoryButtons();
-  }
-
-  function syncLayoutDirty() {
-    if (!hasDocument || !locationId || !graph || !layoutBaseline) {
-      dirtyLocal = false;
-      return;
+    if (typeof meta.dirty === "boolean") {
+      dirtyLocal = meta.dirty;
+      updateFileMenuState({ dirty: dirtyLocal });
     }
-    dirtyLocal = !snapsEqual(snapshotPositions(), layoutBaseline);
   }
 
   function updateFileMenuState({ dirty } = {}) {
@@ -333,100 +274,70 @@
     activeDocId = (st && st.active) || (st.document && st.document.id) || null;
     if (!hasDocument) {
       dirtyLocal = false;
-      layoutBaseline = null;
-      layoutHistory = [];
-      layoutIndex = -1;
+      canUndo = false;
+      canRedo = false;
+      canReset = false;
       activeDocId = null;
+      updateHistoryButtons();
     }
     const serverDirty = ((st && st.dirty) || []).length > 0;
-    if (hasDocument) syncLayoutDirty();
-    else dirtyLocal = false;
-    updateFileMenuState({ dirty: serverDirty || dirtyLocal });
+    dirtyLocal = hasDocument ? serverDirty : false;
+    applyEditFlags(st);
+    updateFileMenuState({ dirty: dirtyLocal });
     renderDocTabs(st);
     return st;
   }
 
-  function pushLayoutHistory() {
-    const snap = snapshotPositions();
-    if (layoutIndex >= 0 && snapsEqual(snap, layoutHistory[layoutIndex])) {
-      updateHistoryButtons();
-      return;
+  async function applyEditGraph(res, status) {
+    if (res && res.graph) {
+      graph = res.graph;
+      depthLevel = graph.depth || depthLevel;
+      maxDepth = graph.max_depth || maxDepth;
+      render();
     }
-    layoutHistory = layoutHistory.slice(0, layoutIndex + 1);
-    layoutHistory.push(cloneSnap(snap));
-    if (layoutHistory.length > HISTORY_MAX) {
-      layoutHistory.shift();
-    }
-    layoutIndex = layoutHistory.length - 1;
-    updateHistoryButtons();
-  }
-
-  async function persistSnapshot(snap) {
-    if (!locationId || !snap) return;
-    const places = snap.places || {};
-    const elements = snap.elements || {};
-    if (Object.keys(places).length) {
-      await api(`/api/physical/positions`, {
-        method: "PATCH",
-        body: JSON.stringify({ location_id: locationId, positions: places }),
-      });
-    }
-    if (Object.keys(elements).length) {
-      await api(`/api/electrical/positions`, {
-        method: "PATCH",
-        body: JSON.stringify({ location_id: locationId, positions: elements }),
-      });
-    }
-    syncLayoutDirty();
-    updateSaveButton(dirtyLocal);
+    applyEditFlags(res);
+    await syncInspectorFromSelection();
+    if (status) setStatus(status);
     scheduleStatusRefresh();
   }
 
-  async function applyLayoutSnapshot(snap, status) {
-    if (!graph || !snap) return;
-    const places = snap.places || snap;
-    const elements = snap.elements || {};
-    for (const n of graph.nodes || []) {
-      const p = places[n.id];
-      if (!p) continue;
-      n.x = p.x;
-      n.y = p.y;
+  async function undoEdit() {
+    if (!locationId || !canUndo) return;
+    const res = await api("/api/edit/undo", {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, depth: depthLevel }),
+    });
+    if (!res.changed) {
+      applyEditFlags(res);
+      return;
     }
-    for (const e of graph.elements || []) {
-      const p = elements[e.id];
-      if (!p) continue;
-      e.x = p.x;
-      e.y = p.y;
-    }
-    updateNodeVisual(graph.nodes[0] || null);
-    try {
-      await persistSnapshot({ places, elements });
-      setStatus(
-        dirtyLocal ? status || "layout" : status ? `${status} · saved` : "saved"
-      );
-    } catch (err) {
-      setStatus(String(err.message || err));
-    }
-    updateHistoryButtons();
+    await applyEditGraph(res, "undo");
   }
 
-  async function undoLayout() {
-    if (layoutIndex <= 0) return;
-    layoutIndex -= 1;
-    await applyLayoutSnapshot(layoutHistory[layoutIndex], "undo layout");
+  async function redoEdit() {
+    if (!locationId || !canRedo) return;
+    const res = await api("/api/edit/redo", {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, depth: depthLevel }),
+    });
+    if (!res.changed) {
+      applyEditFlags(res);
+      return;
+    }
+    await applyEditGraph(res, "redo");
   }
 
-  async function redoLayout() {
-    if (layoutIndex >= layoutHistory.length - 1) return;
-    layoutIndex += 1;
-    await applyLayoutSnapshot(layoutHistory[layoutIndex], "redo layout");
-  }
-
-  async function resetLayout() {
-    if (!layoutBaseline) return;
-    layoutHistory = [cloneSnap(layoutBaseline)];
-    layoutIndex = 0;
-    await applyLayoutSnapshot(layoutBaseline, "reset layout");
+  async function resetEdits() {
+    if (!locationId || !canReset) return;
+    const res = await api("/api/edit/reset", {
+      method: "POST",
+      body: JSON.stringify({ location_id: locationId, depth: depthLevel }),
+    });
+    if (!res.changed) {
+      applyEditFlags(res);
+      return;
+    }
+    await applyEditGraph(res, "reset");
   }
 
   function updateDepthLabel() {
@@ -2263,8 +2174,10 @@
       maxDepth = graph.max_depth || maxDepth;
       render();
     }
-    dirtyLocal = true;
-    setStatus("properties updated · unsaved");
+    applyEditFlags(res);
+    setStatus(
+      res.dirty ? "properties updated · unsaved" : "properties updated"
+    );
     scheduleStatusRefresh();
     if (propsTarget.kind === "element" && selectedId) {
       const elem = (graph?.elements || []).find((e) => e.id === selectedId);
@@ -2650,8 +2563,15 @@
           if (elem) elemPositions[item.id] = { x: elem.x, y: elem.y };
         }
       }
+      if (
+        !Object.keys(placePositions).length &&
+        !Object.keys(elemPositions).length
+      ) {
+        return;
+      }
+      let lastMeta = null;
       if (Object.keys(placePositions).length) {
-        await api(`/api/physical/positions`, {
+        lastMeta = await api(`/api/physical/positions`, {
           method: "PATCH",
           body: JSON.stringify({
             location_id: locationId,
@@ -2660,7 +2580,7 @@
         });
       }
       if (Object.keys(elemPositions).length) {
-        await api(`/api/electrical/positions`, {
+        lastMeta = await api(`/api/electrical/positions`, {
           method: "PATCH",
           body: JSON.stringify({
             location_id: locationId,
@@ -2668,19 +2588,11 @@
           }),
         });
       }
-      if (
-        !Object.keys(placePositions).length &&
-        !Object.keys(elemPositions).length
-      ) {
-        return;
-      }
-      pushLayoutHistory();
-      syncLayoutDirty();
-      updateSaveButton(dirtyLocal);
+      applyEditFlags(lastMeta);
       const n =
         Object.keys(placePositions).length + Object.keys(elemPositions).length;
       setStatus(
-        dirtyLocal
+        lastMeta && lastMeta.dirty
           ? `Moved ${n} · unsaved`
           : `Moved ${n}`
       );
@@ -2861,9 +2773,9 @@
       downloadYamlBlob(data.filename || "housewire.yaml", data.yaml);
     }
     setStatus(`saved ${(data.saved || []).length} file(s)`);
+    applyEditFlags(data);
     dirtyLocal = false;
     updateSaveButton(false);
-    markLayoutBaseline();
     await refreshDocumentLabel();
     return data;
   }
@@ -2881,9 +2793,9 @@
     graph = null;
     clearSelectionState();
     dirtyLocal = false;
-    layoutHistory = [];
-    layoutIndex = -1;
-    layoutBaseline = null;
+    canUndo = false;
+    canRedo = false;
+    canReset = false;
     outlineCollapseReady = false;
     collapsedOutline = new Set();
     svg.innerHTML = "";
@@ -3015,7 +2927,7 @@
       elemUpdated = elData.updated || [];
     }
     render();
-    if (data.updated.length || elemUpdated.length) pushLayoutHistory();
+    applyEditFlags(data);
     setStatus(
       `auto-layout: ${data.updated.length} place(s)` +
         (elemUpdated.length ? `, ${elemUpdated.length} element(s)` : "")
@@ -3200,7 +3112,6 @@
       dirty = Boolean(row && row.dirty);
       if (row && (row.title || row.yaml)) title = row.title || row.yaml;
       if (docId === activeDocId) {
-        syncLayoutDirty();
         dirty = dirty || dirtyLocal || (st.dirty || []).length > 0;
       }
     } catch {
@@ -3307,6 +3218,7 @@
       depthLevel = graph.depth || depthLevel;
       maxDepth = graph.max_depth || maxDepth;
     }
+    applyEditFlags(data);
     return data.updated || [];
   }
 
@@ -3325,6 +3237,7 @@
       depthLevel = graph.depth || depthLevel;
       maxDepth = graph.max_depth || maxDepth;
     }
+    applyEditFlags(data);
     return data.updated || [];
   }
 
@@ -3707,7 +3620,6 @@
       setStatus(String(err.message || err));
     }
     render();
-    resetLayoutHistory();
     if (fit) fitView();
     else applyWorldTransform();
     highlightOutline(locationId);
@@ -3748,13 +3660,13 @@
   });
 
   document.getElementById("btn-undo")?.addEventListener("click", () => {
-    undoLayout().catch((err) => setStatus(String(err.message || err)));
+    undoEdit().catch((err) => setStatus(String(err.message || err)));
   });
   document.getElementById("btn-redo")?.addEventListener("click", () => {
-    redoLayout().catch((err) => setStatus(String(err.message || err)));
+    redoEdit().catch((err) => setStatus(String(err.message || err)));
   });
   document.getElementById("btn-layout-reset")?.addEventListener("click", () => {
-    resetLayout().catch((err) => setStatus(String(err.message || err)));
+    resetEdits().catch((err) => setStatus(String(err.message || err)));
   });
 
   document.addEventListener("keydown", (ev) => {
@@ -3775,10 +3687,10 @@
     }
     if (key === "z" && !ev.shiftKey) {
       ev.preventDefault();
-      undoLayout().catch((err) => setStatus(String(err.message || err)));
+      undoEdit().catch((err) => setStatus(String(err.message || err)));
     } else if (key === "y" || (key === "z" && ev.shiftKey)) {
       ev.preventDefault();
-      redoLayout().catch((err) => setStatus(String(err.message || err)));
+      redoEdit().catch((err) => setStatus(String(err.message || err)));
     }
   });
 
@@ -3920,11 +3832,11 @@
       const action = item.getAttribute("data-edit-action");
       closeAllMenus();
       if (action === "undo") {
-        undoLayout().catch((err) => setStatus(String(err.message || err)));
+        undoEdit().catch((err) => setStatus(String(err.message || err)));
       } else if (action === "redo") {
-        redoLayout().catch((err) => setStatus(String(err.message || err)));
+        redoEdit().catch((err) => setStatus(String(err.message || err)));
       } else if (action === "reset") {
-        resetLayout().catch((err) => setStatus(String(err.message || err)));
+        resetEdits().catch((err) => setStatus(String(err.message || err)));
       } else if (action === "auto-layout") {
         runAutoLayout().catch((err) => setStatus(String(err.message || err)));
       }

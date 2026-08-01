@@ -6,7 +6,7 @@
   <title>HouseWire — physical</title>
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <link rel="stylesheet" href="/static/app.css?v=0.28.16" />
+  <link rel="stylesheet" href="/static/app.css?v=0.28.17" />
 </head>
 <body>
   <nav class="menubar" aria-label="Application">
@@ -45,7 +45,7 @@
           <span class="menu-shortcut">Ctrl+Y</span>
         </button>
         <button type="button" role="menuitem" data-edit-action="reset" id="menu-layout-reset" disabled>
-          <span class="menu-item-main"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i><span>Reset layout</span></span>
+          <span class="menu-item-main"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i><span>Reset</span></span>
         </button>
         <hr class="menu-sep" />
         <button type="button" role="menuitem" data-edit-action="auto-layout" id="menu-auto-layout">
@@ -133,7 +133,7 @@
       <button type="button" class="tool-btn" id="btn-redo" title="Redo (Ctrl+Y)" aria-label="Redo" disabled>
         <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
       </button>
-      <button type="button" class="tool-btn" id="btn-layout-reset" title="Reset layout" aria-label="Reset layout" disabled>
+      <button type="button" class="tool-btn" id="btn-layout-reset" title="Reset edits" aria-label="Reset edits" disabled>
         <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
       </button>
       <button type="button" class="tool-btn" id="btn-auto-force" title="Auto-layout" aria-label="Auto-layout">
@@ -285,6 +285,6 @@
     </div>
   </div>
   <input type="file" id="file-open-input" accept=".yaml,.yml,text/yaml,application/x-yaml" hidden />
-  <script src="/static/app.js?v=0.28.16"></script>
+  <script src="/static/app.js?v=0.28.17"></script>
 </body>
 </html>
