@@ -1580,6 +1580,18 @@
   }
 
   /**
+   * In-box hop tail: element edge → contour opening (full L to the face, not a
+   * short mid-box stub).
+   */
+  function hopEndpointTailD(elem, place, openingId, placeById) {
+    if (!elem || !place || !openingId) return null;
+    if (elem.parent && place.id && elem.parent !== place.id) return null;
+    const op = openingAnchorAbs(place, openingId, openingId?.[0], placeById);
+    const attach = elementAttachPoint(elem, op, placeById);
+    return pointsToPathD(simpleOrthoPts(attach, op));
+  }
+
+  /**
    * Drop polyline runs that cut through leaf places so cable overlays do not
    * paint a green lattice inside junction boxes when a tube route misbehaves.
    */
@@ -1629,10 +1641,8 @@
     const c1 = elementCenter(a, placeById);
     const c2 = elementCenter(b, placeById);
 
-    // Same box: local bridges only (edge-to-edge L). Hop cables do not paint
-    // inside — stubs/tails stacked into a lattice and floating fragments.
-    // Canonical endpoint order so A→B and B→A share one L (otherwise HV + VH
-    // close into a hollow rectangle — the green "mesh" between two devices).
+    // Same box: local bridges only (edge-to-edge L). Canonical endpoint order
+    // so A→B and B→A share one L (otherwise HV + VH close into a rectangle).
     if (a.parent && b.parent && a.parent === b.parent) {
       let e1 = a;
       let e2 = b;
@@ -1649,7 +1659,9 @@
 
     const parentExclude = [a.parent, b.parent].filter(Boolean);
     const outsideObstacles = placeObstacles(placeById, parentExclude);
-    const leafObstacles = placeObstacles(placeById, [], 0);
+    // Slight inset so face stubs at openings are not treated as inside the leaf
+    // (inset 0 clipped E-face exits and left floating exterior overlays).
+    const leafObstacles = placeObstacles(placeById, [], 2);
 
     let hops = edge.conduit_hops;
     if ((!hops || !hops.length) && edge.conduit && edge.conduit_from && edge.conduit_to) {
@@ -1664,10 +1676,31 @@
       ];
     }
     if (hops && hops.length) {
-      // Exterior tube overlay only (teal tubes already show the run; green
-      // rides the conduit outside leaf boxes).
+      // Endpoint tails to the box contour + exterior tube overlay (no in-box
+      // transit between entry/exit openings — that drew the green lattice).
+      const first = hops[0];
+      const last = hops[hops.length - 1];
+      const startPlace = placeById[first.from];
+      const endPlace = placeById[last.to];
+      if (
+        !startPlace ||
+        !endPlace ||
+        !first.from_opening ||
+        !last.to_opening
+      ) {
+        return orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
+      }
+
       /** @type {string[]} */
       const parts = [];
+      const startTail = hopEndpointTailD(
+        a,
+        startPlace,
+        first.from_opening,
+        placeById
+      );
+      if (startTail) parts.push(startTail);
+
       for (let i = 0; i < hops.length; i++) {
         const hop = hops[i];
         const pf = placeById[hop.from];
@@ -1716,6 +1749,10 @@
         const ext = exteriorPathD(pointsToPathD(routed), leafObstacles);
         if (ext) parts.push(ext);
       }
+
+      const endTail = hopEndpointTailD(b, endPlace, last.to_opening, placeById);
+      if (endTail) parts.push(endTail);
+
       return parts.length ? parts.join(" ") : null;
     }
     return orthoPathD(c1, c2, null, null, occupied, outsideObstacles);

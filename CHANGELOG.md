@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.16] — 2026-08-01
+
+### Fixed
+
+- Hop cables again draw element→contour opening tails inside junction boxes
+  (full L to N/E/S/W), plus exterior tube overlay — without in-box transit that
+  caused the green lattice. Slightly inset exterior clipping so face exits
+  (e.g. E2) are not left floating.
+
 ## [0.28.15] — 2026-08-01
 
 ### Fixed
