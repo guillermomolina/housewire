@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.23.1] — 2026-08-01
+
+### Fixed
+
+- File menu opens and stays open (document click no longer closes it
+  immediately); cache-bust static assets.
+
 ## [0.23.0] — 2026-08-01
 
 ### Added

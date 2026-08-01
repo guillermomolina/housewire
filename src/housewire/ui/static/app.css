@@ -45,10 +45,14 @@ body {
   background: var(--panel);
   border-bottom: 1px solid var(--border);
   font-size: 0.85rem;
+  position: relative;
+  z-index: 30;
+  overflow: visible;
 }
 
 .menu {
   position: relative;
+  overflow: visible;
 }
 
 .menu-btn {
@@ -70,7 +74,7 @@ body {
   position: absolute;
   top: 100%;
   left: 0;
-  z-index: 40;
+  z-index: 50;
   min-width: 11rem;
   padding: 0.25rem;
   background: var(--panel);

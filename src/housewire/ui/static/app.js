@@ -1882,9 +1882,9 @@
     const menu = document.getElementById("menu-file");
     const btn = document.getElementById("menu-file-btn");
     if (!menu || !btn) return;
-    const open = menu.classList.contains("hidden");
-    menu.classList.toggle("hidden", !open);
-    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    const willOpen = menu.classList.contains("hidden");
+    menu.classList.toggle("hidden", !willOpen);
+    btn.setAttribute("aria-expanded", willOpen ? "true" : "false");
   }
 
   function promptPath({ title, hint, defaultPath, showForce }) {
@@ -2665,6 +2665,7 @@
   const menuFileBtn = document.getElementById("menu-file-btn");
   if (menuFileBtn) {
     menuFileBtn.addEventListener("click", (ev) => {
+      ev.preventDefault();
       ev.stopPropagation();
       toggleFileMenu();
     });
@@ -2674,13 +2675,16 @@
     menuFile.addEventListener("click", (ev) => {
       ev.stopPropagation();
       const item = ev.target.closest("[data-file-action]");
-      if (!item) return;
+      if (!item || item.disabled) return;
       handleFileAction(item.getAttribute("data-file-action")).catch((err) =>
         setStatus(String(err.message || err))
       );
     });
   }
-  document.addEventListener("click", () => closeFileMenu());
+  document.addEventListener("click", (ev) => {
+    if (ev.target && ev.target.closest && ev.target.closest(".menu")) return;
+    closeFileMenu();
+  });
 
   document.getElementById("btn-zoom-in").addEventListener("click", () => {
     scale = Math.min(3, scale * 1.15);
