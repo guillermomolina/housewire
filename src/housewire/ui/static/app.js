@@ -930,8 +930,12 @@
       depthLevel = graph.depth || depthLevel;
       maxDepth = graph.max_depth || maxDepth;
       render();
-      pushLayoutHistory();
-      setStatus(`auto-layout: ${data.updated.length} node(s)`);
+      if (data.updated.length) pushLayoutHistory();
+      setStatus(
+        data.updated.length
+          ? `auto-layout gaps: ${data.updated.length} node(s)`
+          : "auto-layout gaps: nothing to do (all places already have x/y)"
+      );
       scheduleStatusRefresh();
     } catch (err) {
       setStatus(String(err.message || err));
@@ -952,8 +956,8 @@
       depthLevel = graph.depth || depthLevel;
       maxDepth = graph.max_depth || maxDepth;
       render();
-      pushLayoutHistory();
-      setStatus(`auto-layout force: ${data.updated.length} node(s)`);
+      if (data.updated.length) pushLayoutHistory();
+      setStatus(`auto-layout all: ${data.updated.length} node(s)`);
       scheduleStatusRefresh();
     } catch (err) {
       setStatus(String(err.message || err));
