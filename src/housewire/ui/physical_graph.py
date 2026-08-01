@@ -500,6 +500,130 @@ def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
+    """Full site outline: every place + electrical elements (preorder flat).
+
+    Place ids are site-relative (``.`` for the project root). Element ids are
+    ``{place_id}/{element_name}`` (or just the element name under ``.``).
+    ``selectable`` means the place can be a canvas root (has child places).
+    """
+    root = site_root.resolve()
+    places: dict[str, dict[str, Any]] = {}
+    elements_by_place: dict[str, list[dict[str, Any]]] = {}
+
+    for yaml_path in sorted(root.rglob(HOUSEWIRE_YAML)):
+        if is_excluded_path(yaml_path):
+            continue
+        try:
+            doc = load_yaml(yaml_path)
+        except ValueError:
+            continue
+        meta = place_meta_from_mapping(doc)
+        if meta is None:
+            continue
+        parent = yaml_path.parent
+        try:
+            rel = parent.relative_to(root)
+        except ValueError:
+            continue
+        location_id = "." if str(rel) == "." else str(rel).replace("\\", "/")
+        parts = () if location_id == "." else tuple(rel.parts)
+        place_id = root.name if location_id == "." else parent.name
+        raw_name = meta.get("name")
+        raw_label = meta.get("label")
+        places[location_id] = {
+            "id": location_id,
+            "name": (
+                str(raw_name).strip()
+                if raw_name is not None and str(raw_name).strip()
+                else None
+            ),
+            "label": (
+                str(raw_label).strip()
+                if raw_label is not None and str(raw_label).strip()
+                else None
+            ),
+            "display_name": place_name(meta, place_id),
+            "type": str(meta.get("type") or "Location"),
+            "parts": parts,
+        }
+        elem_rows: list[dict[str, Any]] = []
+        for ename, defn in _iter_electrical_elements(doc):
+            eid = (
+                ename if location_id == "." else f"{location_id}/{ename}"
+            )
+            elabel = defn.get("label")
+            elem_rows.append(
+                {
+                    "kind": "element",
+                    "id": eid,
+                    "name": ename,
+                    "parent": location_id,
+                    "type": str(defn.get("type") or "Element"),
+                    "subtype": defn.get("subtype"),
+                    "label": (
+                        str(elabel).strip()
+                        if elabel is not None and str(elabel).strip()
+                        else None
+                    ),
+                    "display_name": (
+                        str(elabel).strip()
+                        if elabel is not None and str(elabel).strip()
+                        else ename
+                    ),
+                }
+            )
+        elements_by_place[location_id] = elem_rows
+
+    def _is_descendant(ancestor: tuple[str, ...], other: tuple[str, ...]) -> bool:
+        return len(other) > len(ancestor) and other[: len(ancestor)] == ancestor
+
+    selectable: set[str] = set()
+    for loc_id, info in places.items():
+        parts = info["parts"]
+        if any(_is_descendant(parts, other["parts"]) for other in places.values()):
+            selectable.add(loc_id)
+
+    children: dict[str | None, list[str]] = {}
+    for loc_id, info in places.items():
+        parts = info["parts"]
+        if not parts:
+            parent_key: str | None = None
+        else:
+            parent_key = "." if len(parts) == 1 else "/".join(parts[:-1])
+            if parent_key not in places:
+                parent_key = None
+        children.setdefault(parent_key, []).append(loc_id)
+
+    for kids in children.values():
+        kids.sort(key=lambda i: places[i]["display_name"].lower())
+
+    rows: list[dict[str, Any]] = []
+
+    def _walk(parent_key: str | None, depth: int) -> None:
+        for loc_id in children.get(parent_key, []):
+            info = places[loc_id]
+            rows.append(
+                {
+                    "kind": "place",
+                    "id": info["id"],
+                    "name": info["name"],
+                    "label": info["label"],
+                    "display_name": info["display_name"],
+                    "type": info["type"],
+                    "depth": depth,
+                    "selectable": loc_id in selectable,
+                }
+            )
+            for elem in elements_by_place.get(loc_id, []):
+                rows.append({**elem, "depth": depth + 1})
+            _walk(loc_id, depth + 1)
+
+    _walk(None, 0)
+    return rows
+    return rows
+
+
 def build_physical_graph(
     site_root: Path,
     location_id: str,

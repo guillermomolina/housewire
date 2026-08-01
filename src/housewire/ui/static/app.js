@@ -36,6 +36,7 @@
   let layoutBaseline = null;
   let showElements = false;
   let showCables = false;
+  let outlineNodes = [];
   const HISTORY_MAX = 50;
   const DRAG_THRESHOLD = 4;
   const DBLCLICK_MS = 400;
@@ -921,13 +922,13 @@
     for (const [nid, g] of Object.entries(nodesById)) {
       const box = g.querySelector(".node-box");
       if (!box) continue;
-      if (nid === id) box.classList.add("selected");
+      if (id != null && nid === id) box.classList.add("selected");
       else box.classList.remove("selected");
     }
     for (const [eid, g] of Object.entries(elementsById)) {
       const box = g.querySelector(".element-box");
       if (!box) continue;
-      if (eid === id) box.classList.add("selected");
+      if (id != null && eid === id) box.classList.add("selected");
       else box.classList.remove("selected");
     }
   }
@@ -935,6 +936,7 @@
   function selectElement(elem) {
     selectedId = elem.id;
     setSelectedVisual(elem.id);
+    highlightOutline(canvasToSiteId(elem.id));
     const empty = document.getElementById("panel-empty");
     const show = document.getElementById("panel-show");
     empty.classList.add("hidden");
@@ -963,6 +965,12 @@
     ul.innerHTML = "";
   }
 
+  function canvasToSiteId(relId) {
+    if (!relId) return locationId;
+    if (!locationId || locationId === "." || locationId === "") return relId;
+    return `${locationId}/${relId}`;
+  }
+
   async function selectNode(id) {
     const elem = (graph?.elements || []).find((e) => e.id === id);
     if (elem) {
@@ -971,6 +979,7 @@
     }
     selectedId = id;
     setSelectedVisual(id);
+    highlightOutline(id ? canvasToSiteId(id) : locationId);
     const empty = document.getElementById("panel-empty");
     const show = document.getElementById("panel-show");
     if (!id || !locationId) {
@@ -1313,6 +1322,7 @@
       }
       locationSelect.appendChild(opt);
     }
+    await loadOutline();
     const first =
       rows.find((r) => r.selectable !== false && r.id === ".") ||
       rows.find((r) => r.selectable !== false);
@@ -1322,6 +1332,180 @@
       await loadLocation();
     } else {
       setStatus("No locations with children found");
+    }
+  }
+
+  async function loadOutline() {
+    try {
+      const data = await api("/api/outline");
+      outlineNodes = data.nodes || [];
+      renderOutline();
+    } catch (err) {
+      setStatus(String(err.message || err));
+    }
+  }
+
+  function renderOutline() {
+    const host = document.getElementById("outline-tree");
+    if (!host) return;
+    host.innerHTML = "";
+    for (const node of outlineNodes) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className =
+        "outline-item" + (node.kind === "element" ? " element" : "");
+      btn.dataset.kind = node.kind || "place";
+      btn.dataset.id = node.id;
+      if (node.parent) btn.dataset.parent = node.parent;
+      btn.style.paddingLeft = `${0.45 + (node.depth || 0) * 0.75}rem`;
+      const label = document.createElement("span");
+      label.className = "outline-label";
+      label.textContent =
+        node.display_name || node.name || node.label || node.id;
+      btn.appendChild(label);
+      if (node.type) {
+        const typ = document.createElement("span");
+        typ.className = "outline-type";
+        typ.textContent = node.type;
+        btn.appendChild(typ);
+      }
+      btn.addEventListener("click", () => {
+        onOutlineClick(node).catch((err) =>
+          setStatus(String(err.message || err))
+        );
+      });
+      host.appendChild(btn);
+    }
+    highlightOutline(selectedId || locationId);
+  }
+
+  function highlightOutline(activeId) {
+    const host = document.getElementById("outline-tree");
+    if (!host) return;
+    for (const btn of host.querySelectorAll(".outline-item")) {
+      const id = btn.dataset.id;
+      btn.classList.toggle(
+        "active",
+        id === activeId || (activeId == null && id === locationId)
+      );
+    }
+  }
+
+  function siteToCanvasRelative(siteId) {
+    if (!siteId || !locationId) return null;
+    if (siteId === locationId) return null;
+    if (locationId === "." || locationId === "") {
+      return siteId === "." ? null : siteId;
+    }
+    const prefix = `${locationId}/`;
+    if (siteId.startsWith(prefix)) return siteId.slice(prefix.length);
+    return null;
+  }
+
+  function nearestSelectableAncestor(placeId) {
+    const places = outlineNodes.filter((n) => n.kind === "place");
+    const byId = Object.fromEntries(places.map((p) => [p.id, p]));
+    let cur = placeId;
+    while (cur) {
+      const row = byId[cur];
+      if (row?.selectable) return cur;
+      if (cur === "." || !cur.includes("/")) {
+        const root = byId["."];
+        return root?.selectable ? "." : null;
+      }
+      const parent = cur.includes("/")
+        ? cur.slice(0, cur.lastIndexOf("/"))
+        : ".";
+      cur = parent;
+    }
+    return null;
+  }
+
+  function placeDepthUnderCanvas(placeSiteId, canvasId) {
+    if (!placeSiteId || placeSiteId === canvasId) return 1;
+    const prefix =
+      canvasId === "." || canvasId === "" ? "" : `${canvasId}/`;
+    const rel =
+      canvasId === "." || canvasId === ""
+        ? placeSiteId
+        : placeSiteId.startsWith(prefix)
+          ? placeSiteId.slice(prefix.length)
+          : null;
+    if (!rel) return 1;
+    return Math.max(1, rel.split("/").filter(Boolean).length);
+  }
+
+  async function onOutlineClick(node) {
+    if (node.kind === "element") {
+      await focusOutlineElement(node);
+      return;
+    }
+    await focusOutlinePlace(node);
+  }
+
+  async function focusOutlinePlace(node) {
+    const placeId = node.id;
+    if (node.selectable) {
+      if (locationSelect.value !== placeId) {
+        locationSelect.value = placeId;
+        depthLevel = 1;
+        await loadLocation();
+      }
+      highlightOutline(placeId);
+      selectedId = null;
+      setSelectedVisual(null);
+      return;
+    }
+    const canvasRoot = nearestSelectableAncestor(placeId);
+    if (!canvasRoot) {
+      setStatus(`No canvas view for ${placeId}`);
+      return;
+    }
+    const needDepth = placeDepthUnderCanvas(placeId, canvasRoot);
+    const switched = locationSelect.value !== canvasRoot;
+    if (switched) {
+      locationSelect.value = canvasRoot;
+      depthLevel = needDepth;
+      await loadLocation();
+    } else if (needDepth > depthLevel) {
+      await setDepth(needDepth);
+    }
+    const rel = siteToCanvasRelative(placeId);
+    if (rel) {
+      await selectNode(rel);
+    } else {
+      highlightOutline(placeId);
+    }
+  }
+
+  async function focusOutlineElement(node) {
+    const parentPlace = node.parent;
+    if (!parentPlace) return;
+    const canvasRoot = nearestSelectableAncestor(parentPlace);
+    if (!canvasRoot) {
+      setStatus(`No canvas view for ${parentPlace}`);
+      return;
+    }
+    const needDepth = placeDepthUnderCanvas(parentPlace, canvasRoot);
+    const switched = locationSelect.value !== canvasRoot;
+    if (switched) {
+      locationSelect.value = canvasRoot;
+      depthLevel = needDepth;
+      await loadLocation();
+    } else if (needDepth > depthLevel) {
+      await setDepth(needDepth);
+    }
+    if (!showElements) {
+      showElements = true;
+      const toggle = document.getElementById("toggle-elements");
+      if (toggle) toggle.checked = true;
+      render();
+    }
+    const rel = siteToCanvasRelative(node.id);
+    if (rel) {
+      await selectNode(rel);
+    } else {
+      highlightOutline(node.id);
     }
   }
 
@@ -1348,6 +1532,7 @@
     render();
     resetLayoutHistory();
     fitView();
+    highlightOutline(locationId);
     await refreshStatus();
     const bits = [];
     if (filled.length) {
@@ -1563,6 +1748,7 @@
       depthLevel = graph.depth || depthLevel;
       maxDepth = graph.max_depth || maxDepth;
       render();
+      await loadOutline();
       const newId = res.result?.place_id;
       if (newId) await selectNode(newId);
       recipeMsg(

@@ -22,6 +22,7 @@ from housewire.ui.physical_graph import (
     apply_positions,
     build_physical_graph,
     list_canvas_locations,
+    list_site_outline,
 )
 
 
@@ -226,6 +227,13 @@ class TestPhysicalGraph(unittest.TestCase):
             self.assertEqual(regleta["x"], 12.0)
             self.assertEqual(regleta["y"], 34.0)
 
+            outline = list_site_outline(root)
+            kinds = {(row["kind"], row["id"]) for row in outline}
+            self.assertIn(("place", "Parking"), kinds)
+            self.assertIn(("place", "Parking/Caja_4"), kinds)
+            self.assertIn(("element", "Parking/Caja_4/Regleta"), kinds)
+            self.assertIn(("element", "Parking/Enchufe_1/Socket"), kinds)
+
 
 class TestServeApi(unittest.TestCase):
     def test_create_app_endpoints(self) -> None:
@@ -274,6 +282,12 @@ class TestServeApi(unittest.TestCase):
             self.assertEqual(len(graph["nodes"]), 2)
             self.assertEqual(graph["location"]["id"], "Parking")
             self.assertIn("Caja_4/Regleta", {e["id"] for e in graph["elements"]})
+
+            outline = client.get("/api/outline").json()
+            oids = {n["id"] for n in outline["nodes"]}
+            self.assertIn("Parking", oids)
+            self.assertIn("Parking/Caja_4", oids)
+            self.assertIn("Parking/Caja_4/Regleta", oids)
 
             house = client.get(
                 "/api/physical", params={"location": ".", "depth": 2}

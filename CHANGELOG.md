@@ -33,6 +33,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   conduit ``contains`` follow the conduit path (element→opening→tube→opening→
   element). Element boxes enlarge their host place like nested locations;
   Elements draw only inside leaf places in the current depth view.
+- Physical UI left **Outline** tree (all places + elements). Click a place to
+  switch the canvas view (or open the nearest canvas ancestor and select it);
+  click an element to focus it (enables Elements if needed). ``GET /api/outline``.
 
 ### Changed
 

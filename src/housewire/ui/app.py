@@ -81,6 +81,10 @@ def create_app(site_root: Path) -> Any:
     def api_locations() -> dict[str, Any]:
         return {"locations": pg.list_canvas_locations(root)}
 
+    @app.get("/api/outline")
+    def api_outline() -> dict[str, Any]:
+        return {"nodes": pg.list_site_outline(root)}
+
     @app.get("/api/physical")
     def api_physical(location: str, depth: int = 1) -> dict[str, Any]:
         try:
