@@ -1083,11 +1083,49 @@
     return cost;
   }
 
+  /** Shrunk leaf-place rects as routing obstacles (skip rooms/containers). */
+  function placeObstacles(byId, excludeIds) {
+    const ex = new Set(excludeIds || []);
+    const inset = 8;
+    /** @type {{x:number,y:number,w:number,h:number}[]} */
+    const rects = [];
+    for (const n of Object.values(byId)) {
+      if (!n || ex.has(n.id)) continue;
+      if (childrenOf(n.id).length) continue;
+      const a = absXY(n, byId);
+      const w = nodeW(n) - 2 * inset;
+      const h = nodeH(n) - 2 * inset;
+      if (w < 10 || h < 10) continue;
+      rects.push({ x: a.x + inset, y: a.y + inset, w, h });
+    }
+    return rects;
+  }
+
+  function pathObstacleCost(pts, obstacles) {
+    if (!obstacles || !obstacles.length) return 0;
+    let cost = 0;
+    for (const s of segsFromPoints(pts)) {
+      for (const r of obstacles) {
+        if (s.axis === "H") {
+          if (s.y <= r.y || s.y >= r.y + r.h) continue;
+          const ov = rangeOverlapLen(s.a, s.b, r.x, r.x + r.w);
+          if (ov > 1) cost += 180 + ov;
+        } else {
+          if (s.x <= r.x || s.x >= r.x + r.w) continue;
+          const ov = rangeOverlapLen(s.a, s.b, r.y, r.y + r.h);
+          if (ov > 1) cost += 180 + ov;
+        }
+      }
+    }
+    return cost;
+  }
+
   /**
    * Orthogonal route points from p1 to p2. When ``occupied`` is set, prefer
    * candidates that avoid colinear overlap (and lightly avoid crossings).
+   * ``obstacles`` are place rects to go around (C / outer rails).
    */
-  function orthoRoute(p1, p2, fromFace, toFace, occupied) {
+  function orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles) {
     const x1 = p1.x;
     const y1 = p1.y;
     const x2 = p2.x;
@@ -1135,7 +1173,8 @@
       STUB,
       LANE,
       occupied,
-      OVERLAP_EPS
+      OVERLAP_EPS,
+      obstacles
     );
     for (const p of mid) {
       pts.push(p);
@@ -1146,8 +1185,10 @@
     return cleanOrthoPoly(pts);
   }
 
-  function orthoPathD(p1, p2, fromFace, toFace, occupied) {
-    return pointsToPathD(orthoRoute(p1, p2, fromFace, toFace, occupied));
+  function orthoPathD(p1, p2, fromFace, toFace, occupied, obstacles) {
+    return pointsToPathD(
+      orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles)
+    );
   }
 
   /** First step from the exit stub must not reverse back into the box. */
@@ -1249,6 +1290,7 @@
    * Manhattan connectors from exit stub to entry stub with the fewest bends.
    * Returns intermediate points including the entry stub (bx, by).
    * When ``occupied`` is set, also minimize conflict with prior routes.
+   * ``obstacles`` (place rects) push the choice toward outer rails / side C.
    */
   function minBendOrtho(
     ax,
@@ -1261,12 +1303,16 @@
     stub,
     lane,
     occupied,
-    overlapEps
+    overlapEps,
+    obstacles
   ) {
     const start = [ax, ay];
     const end = [bx, by];
     /** @type {number[][][]} */
     const raw = [];
+    const needLanes =
+      lane &&
+      ((occupied && occupied.length) || (obstacles && obstacles.length));
 
     const push = (pts) => {
       const cleaned = cleanOrthoPoly([start, ...pts, end]);
@@ -1287,11 +1333,11 @@
     push([[bx, ay]]);
     push([[ax, by]]);
 
-    // 2 bends (Z through mid) + parallel lanes to dodge prior routes
+    // 2 bends (Z through mid) + parallel lanes to dodge prior routes / boxes
     const mx = (ax + bx) / 2;
     const my = (ay + by) / 2;
     const laneOffs = [0];
-    if (occupied && occupied.length && lane) {
+    if (needLanes) {
       for (let k = 1; k <= 4; k++) {
         laneOffs.push(k * lane, -k * lane);
       }
@@ -1327,22 +1373,53 @@
       }
     }
 
+    // Always emit outer rails on all four sides when dodging boxes (true C).
+    if (obstacles && obstacles.length) {
+      for (const off of laneOffs) {
+        const yHi = Math.max(ay, by) + detour + Math.max(0, off);
+        const yLo = Math.min(ay, by) - detour - Math.max(0, off);
+        const xHi = Math.max(ax, bx) + detour + Math.max(0, off);
+        const xLo = Math.min(ax, bx) - detour - Math.max(0, off);
+        push([[ax, yHi], [bx, yHi]]);
+        push([[ax, yLo], [bx, yLo]]);
+        push([[xHi, ay], [xHi, by]]);
+        push([[xLo, ay], [xLo, by]]);
+      }
+    }
+
     // 3 bends: side C loops
-    for (const off of laneOffs) {
-      const right = Math.max(ax, bx) + detour + Math.max(0, off);
-      const left = Math.min(ax, bx) - detour - Math.max(0, off);
-      push([[right, ay], [right, by]]);
-      push([[left, ay], [left, by]]);
-      push([
-        [right, ay],
-        [right, Math.max(ay, by) + stub],
-        [bx, Math.max(ay, by) + stub],
-      ]);
-      push([
-        [left, ay],
-        [left, Math.min(ay, by) - stub],
-        [bx, Math.min(ay, by) - stub],
-      ]);
+    const detours = obstacles && obstacles.length ? [detour, detour * 2] : [detour];
+    for (const d0 of detours) {
+      for (const off of laneOffs) {
+        const right = Math.max(ax, bx) + d0 + Math.max(0, off);
+        const left = Math.min(ax, bx) - d0 - Math.max(0, off);
+        const top = Math.min(ay, by) - d0 - Math.max(0, off);
+        const bot = Math.max(ay, by) + d0 + Math.max(0, off);
+        push([[right, ay], [right, by]]);
+        push([[left, ay], [left, by]]);
+        push([[ax, top], [bx, top]]);
+        push([[ax, bot], [bx, bot]]);
+        push([
+          [right, ay],
+          [right, bot],
+          [bx, bot],
+        ]);
+        push([
+          [left, ay],
+          [left, top],
+          [bx, top],
+        ]);
+        push([
+          [ax, bot],
+          [right, bot],
+          [right, by],
+        ]);
+        push([
+          [ax, top],
+          [left, top],
+          [left, by],
+        ]);
+      }
     }
 
     if (!raw.length) {
@@ -1356,27 +1433,29 @@
 
     let best = raw[0];
     let bestBendEquiv = Infinity;
-    let bestConflict = Infinity;
+    let bestHard = Infinity;
     let bestLen = Infinity;
     const eps = overlapEps ?? 6;
     for (const pts of raw) {
       const full = [[ax, ay], ...pts];
       const bends = polyBends(full);
       const conflict = pathConflictCost(full, occupied, eps);
+      const obstacle = pathObstacleCost(full, obstacles);
       const len = polyLength(full);
-      // ~150 conflict ≈ one bend: dodge stacked corridors with a lane/Z.
-      const bendEquiv = bends + conflict / 150;
+      // Obstacle hits dominate: ~50 cost ≈ one bend → crossing a box (~180)
+      // costs more than a 3-bend C. Conflict ~150 ≈ one bend for stacked tubes.
+      const bendEquiv = bends + conflict / 150 + obstacle / 50;
+      const hard = obstacle + conflict;
       if (
         bendEquiv < bestBendEquiv - 1e-9 ||
+        (Math.abs(bendEquiv - bestBendEquiv) < 1e-9 && hard < bestHard) ||
         (Math.abs(bendEquiv - bestBendEquiv) < 1e-9 &&
-          conflict < bestConflict) ||
-        (Math.abs(bendEquiv - bestBendEquiv) < 1e-9 &&
-          conflict === bestConflict &&
+          hard === bestHard &&
           len < bestLen)
       ) {
         best = pts;
         bestBendEquiv = bendEquiv;
-        bestConflict = conflict;
+        bestHard = hard;
         bestLen = len;
       }
     }
@@ -1391,7 +1470,9 @@
     const toFace = routeFace(b, edge.to_opening, edge.to_opening?.[0], byId);
     const p1 = openingAnchorAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
     const p2 = openingAnchorAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
-    const pts = orthoRoute(p1, p2, fromFace, toFace, occupied);
+    // Exclude endpoints: stubs already leave their faces; go around other leaves.
+    const obstacles = placeObstacles(byId, [edge.from, edge.to]);
+    const pts = orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles);
     return { d: pointsToPathD(pts), segs: segsFromPoints(pts) };
   }
 
@@ -1430,8 +1511,8 @@
     return op;
   }
 
-  function appendOrtho(d, p1, p2, fromFace, toFace, occupied) {
-    const pts = orthoRoute(p1, p2, fromFace, toFace, occupied);
+  function appendOrtho(d, p1, p2, fromFace, toFace, occupied, obstacles) {
+    const pts = orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles);
     const seg = pointsToPathD(pts);
     if (!d) return { d: seg, segs: segsFromPoints(pts) };
     // Drop leading M; continue with L segments.
@@ -1442,8 +1523,8 @@
   }
 
   /** Start a new subpath (keep M). */
-  function appendOrthoSubpath(d, p1, p2, fromFace, toFace, occupied) {
-    const pts = orthoRoute(p1, p2, fromFace, toFace, occupied);
+  function appendOrthoSubpath(d, p1, p2, fromFace, toFace, occupied, obstacles) {
+    const pts = orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles);
     const seg = pointsToPathD(pts);
     if (!d) return { d: seg, segs: segsFromPoints(pts) };
     return { d: `${d} ${seg}`, segs: segsFromPoints(pts) };
@@ -1482,6 +1563,9 @@
     if (!a || !b) return null;
     const c1 = elementCenter(a, placeById);
     const c2 = elementCenter(b, placeById);
+    // Direct element↔element: go around other leaf boxes (not parents — tails stay inside).
+    const parentExclude = [a.parent, b.parent].filter(Boolean);
+    const outsideObstacles = placeObstacles(placeById, parentExclude);
 
     let hops = edge.conduit_hops;
     if ((!hops || !hops.length) && edge.conduit && edge.conduit_from && edge.conduit_to) {
@@ -1506,7 +1590,7 @@
         !first.from_opening ||
         !last.to_opening
       ) {
-        return orthoPathD(c1, c2, null, null, occupied);
+        return orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
       }
       const opStart = openingAnchorAbs(
         startPlace,
@@ -1520,16 +1604,15 @@
         first.from_opening?.[0],
         placeById
       );
-      // Element → opening, then ride each tube hop. Do not draw cross-box
-      // transit between openings (that became a green mesh inside junction boxes).
-      let d = appendOrthoSubpath("", c1, innerStart, null, null, null).d;
-      d = appendOrtho(d, innerStart, opStart, null, null, null).d;
+      // Element → opening stays inside the parent box (no place obstacles).
+      let d = appendOrthoSubpath("", c1, innerStart, null, null, null, null).d;
+      d = appendOrtho(d, innerStart, opStart, null, null, null, null).d;
       for (let i = 0; i < hops.length; i++) {
         const hop = hops[i];
         const pf = placeById[hop.from];
         const pt = placeById[hop.to];
         if (!pf || !pt || !hop.from_opening || !hop.to_opening) {
-          return orthoPathD(c1, c2, null, null, occupied);
+          return orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
         }
         const opA = openingAnchorAbs(
           pf,
@@ -1559,7 +1642,8 @@
             hop.to_opening?.[0],
             placeById
           );
-          d = appendOrthoSubpath(d, opA, opB, fromFace, toFace, null).d;
+          const hopObs = placeObstacles(placeById, [hop.from, hop.to]);
+          d = appendOrthoSubpath(d, opA, opB, fromFace, toFace, null, hopObs).d;
         }
       }
       const opEnd = openingAnchorAbs(
@@ -1574,11 +1658,11 @@
         last.to_opening?.[0],
         placeById
       );
-      d = appendOrthoSubpath(d, opEnd, innerEnd, null, null, null).d;
-      d = appendOrtho(d, innerEnd, c2, null, null, null).d;
+      d = appendOrthoSubpath(d, opEnd, innerEnd, null, null, null, null).d;
+      d = appendOrtho(d, innerEnd, c2, null, null, null, null).d;
       return d;
     }
-    return orthoPathD(c1, c2, null, null, occupied);
+    return orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
   }
 
   function refreshEdges() {

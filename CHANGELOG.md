@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.4] — 2026-08-01
+
+### Fixed
+
+- Orthogonal routing treats leaf places as obstacles so tubes (and cable
+  overlays that follow them) prefer side-C / outer rails instead of cutting
+  through junction boxes.
+
 ## [0.28.3] — 2026-08-01
 
 ### Fixed
