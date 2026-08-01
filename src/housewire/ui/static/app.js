@@ -2363,6 +2363,26 @@
     return `${locationId}/${relId}`;
   }
 
+  /**
+   * Map a place id to the /api/place ``id`` query value.
+   * The canvas location itself is ``.`` — ``location=Parking&id=Parking``
+   * wrongly means Parking/Parking and 400s.
+   */
+  function resolvePlaceApiId(id) {
+    if (!id || id === ".") return ".";
+    if (id === locationId) return ".";
+    if (locationId && locationId !== "." && locationId !== "") {
+      const onCanvas = (graph?.nodes || []).some((n) => n.id === id);
+      if (!onCanvas) {
+        const leaf = locationId.includes("/")
+          ? locationId.slice(locationId.lastIndexOf("/") + 1)
+          : locationId;
+        if (id === leaf || locationId.endsWith(`/${id}`)) return ".";
+      }
+    }
+    return id;
+  }
+
   async function fillPlaceInspector(id, detailOpt) {
     const empty = document.getElementById("panel-empty");
     const panel = document.getElementById("panel-props");
@@ -2376,17 +2396,18 @@
       panel.classList.add("hidden");
       return;
     }
+    const placeKey = resolvePlaceApiId(id);
     try {
       const detail =
         detailOpt ||
         (await api(
-          `/api/place?location=${encodeURIComponent(locationId)}&id=${encodeURIComponent(id)}`
+          `/api/place?location=${encodeURIComponent(locationId)}&id=${encodeURIComponent(placeKey)}`
         ));
       ensurePropertiesVisible();
       empty.classList.add("hidden");
       panel.classList.remove("hidden");
       setInspectorMode("place");
-      propsTarget = { kind: "place", placeId: id };
+      propsTarget = { kind: "place", placeId: placeKey };
       const meta = document.getElementById("props-meta");
       if (!meta) return;
       meta.innerHTML = "";
@@ -3564,6 +3585,8 @@
       highlightOutline(placeId);
       clearSelectionState();
       setSelectedVisual();
+      // Canvas root: properties for this place (id=. under the canvas location).
+      await fillPlaceInspector(".");
       return;
     }
     const canvasRoot = nearestSelectableAncestor(placeId);
@@ -3582,6 +3605,10 @@
     const rel = siteToCanvasRelative(placeId);
     if (rel) {
       await selectNode(rel);
+    } else if (placeId === locationId || placeId === canvasRoot) {
+      clearSelectionState();
+      setSelectedVisual();
+      await fillPlaceInspector(".");
     } else {
       highlightOutline(placeId);
     }
@@ -4062,7 +4089,7 @@
       form.reset();
       if (selectedId) {
         const detail = await api(
-          `/api/place?location=${encodeURIComponent(locationId)}&id=${encodeURIComponent(selectedId)}`
+          `/api/place?location=${encodeURIComponent(locationId)}&id=${encodeURIComponent(resolvePlaceApiId(selectedId))}`
         );
         prefillInsertForms(detail);
       }

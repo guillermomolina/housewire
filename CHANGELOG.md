@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.13] — 2026-08-01
+
+### Fixed
+
+- ``GET /api/place?location=Parking&id=Parking`` 400: the canvas place itself
+  is requested as ``id=.`` (not repeating the location name). Outline click on
+  the current canvas also opens its Properties.
+
 ## [0.28.12] — 2026-08-01
 
 ### Fixed
