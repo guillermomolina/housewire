@@ -4,7 +4,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from housewire.house import is_place_type, place_meta_from_mapping
+from housewire.house import (
+    is_place_type,
+    place_label,
+    place_meta_from_mapping,
+    place_name,
+)
 from housewire.house.conduit_ref import (
     conduit_endpoints,
     resolve_location_ref,
@@ -30,9 +35,9 @@ LABEL_CHAR_W = 6.6  # approx. 11px sans glyph width
 LABEL_INSET = 16.0
 
 
-def _leaf_size(label: str) -> tuple[float, float]:
-    """Leaf window size wide enough for the label (capped)."""
-    text = str(label or "").strip() or "?"
+def _leaf_size(display_name: str) -> tuple[float, float]:
+    """Leaf window size wide enough for the canvas name (capped)."""
+    text = str(display_name or "").strip() or "?"
     width = LABEL_INSET + len(text) * LABEL_CHAR_W
     return (max(LEAF_W, min(LEAF_W_MAX, width)), LEAF_H)
 
@@ -53,7 +58,7 @@ def _content_size(
     parts: tuple[str, ...],
     children_map: dict[tuple[str, ...], list[tuple[str, ...]]],
     pos_map: dict[tuple[str, ...], tuple[float, float]],
-    label_map: dict[tuple[str, ...], str],
+    name_map: dict[tuple[str, ...], str],
     cache: dict[tuple[str, ...], tuple[float, float]],
 ) -> tuple[float, float]:
     """Bounding window size for a place from its full descendant layout."""
@@ -61,12 +66,13 @@ def _content_size(
         return cache[parts]
     kids = children_map.get(parts, [])
     if not kids:
-        cache[parts] = _leaf_size(label_map.get(parts, parts[-1] if parts else "?"))
+        place_id = parts[-1] if parts else "?"
+        cache[parts] = _leaf_size(name_map.get(parts, place_id))
         return cache[parts]
     max_r = 0.0
     max_b = 0.0
     for kid in kids:
-        kw, kh = _content_size(kid, children_map, pos_map, label_map, cache)
+        kw, kh = _content_size(kid, children_map, pos_map, name_map, cache)
         kx, ky = pos_map[kid]
         max_r = max(max_r, kx + kw)
         max_b = max(max_b, ky + kh)
@@ -165,9 +171,14 @@ def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
             continue
         location_id = "." if str(rel) == "." else str(rel).replace("\\", "/")
         parts = () if location_id == "." else tuple(rel.parts)
+        place_id = root.name if location_id == "." else parent.name
+        raw_name = meta.get("name")
+        raw_label = meta.get("label")
         places[location_id] = {
             "id": location_id,
-            "label": str(meta.get("label") or (root.name if location_id == "." else parent.name)),
+            "name": str(raw_name).strip() if raw_name is not None and str(raw_name).strip() else None,
+            "label": str(raw_label).strip() if raw_label is not None and str(raw_label).strip() else None,
+            "display_name": place_name(meta, place_id),
             "type": str(meta.get("type") or "Location"),
             "path": location_id,
             "parts": parts,
@@ -207,7 +218,7 @@ def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
         children.setdefault(parent_key, []).append(loc_id)
 
     for kids in children.values():
-        kids.sort(key=lambda i: places[i]["label"].lower())
+        kids.sort(key=lambda i: places[i]["display_name"].lower())
 
     rows: list[dict[str, Any]] = []
 
@@ -217,7 +228,9 @@ def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
             rows.append(
                 {
                     "id": info["id"],
+                    "name": info["name"],
                     "label": info["label"],
+                    "display_name": info["display_name"],
                     "type": info["type"],
                     "path": info["path"],
                     "depth": depth,
@@ -234,7 +247,9 @@ def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
         rows.append(
             {
                 "id": info["id"],
+                "name": info["name"],
                 "label": info["label"],
+                "display_name": info["display_name"],
                 "type": info["type"],
                 "path": info["path"],
                 "depth": len(info["parts"]),
@@ -305,10 +320,11 @@ def build_physical_graph(
         kids.sort()
 
     pos_map: dict[tuple[str, ...], tuple[float, float]] = {}
-    label_map: dict[tuple[str, ...], str] = {}
+    name_map: dict[tuple[str, ...], str] = {}
     for parts, doc in all_docs.items():
         meta = place_meta_from_mapping(doc) or {}
-        label_map[parts] = str(meta.get("label") or parts[-1])
+        place_id = parts[-1] if parts else ""
+        name_map[parts] = place_name(meta, place_id)
     for parent, kids in children_map.items():
         nested = len(parent) > 0
         for index, kid in enumerate(kids):
@@ -353,16 +369,30 @@ def build_physical_graph(
             for other in all_under
         )
         width, height = _content_size(
-            parts, children_map, pos_map, label_map, size_cache
+            parts, children_map, pos_map, name_map, size_cache
         )
         px, py = pos_map[parts]
+        place_id = parts[-1]
+        raw_name = meta.get("name")
+        raw_label = meta.get("label")
         nodes.append(
             {
                 "id": "/".join(parts),
                 "parts": list(parts),
                 "parent": parent_id,
                 "type": type_id,
-                "label": label_map[parts],
+                "name": (
+                    str(raw_name).strip()
+                    if raw_name is not None and str(raw_name).strip()
+                    else None
+                ),
+                "label": (
+                    str(raw_label).strip()
+                    if raw_label is not None and str(raw_label).strip()
+                    else None
+                ),
+                "display_name": place_name(meta, place_id),
+                "display_label": place_label(meta, place_id),
                 "openings": [
                     {"id": oid, "face": _opening_face(oid)} for oid in openings
                 ],
@@ -438,7 +468,20 @@ def build_physical_graph(
     return {
         "location": {
             "id": location_id,
-            "label": str(loc_meta.get("label") or ldir.name),
+            "name": (
+                str(loc_meta.get("name")).strip()
+                if loc_meta.get("name") is not None
+                and str(loc_meta.get("name")).strip()
+                else None
+            ),
+            "label": (
+                str(loc_meta.get("label")).strip()
+                if loc_meta.get("label") is not None
+                and str(loc_meta.get("label")).strip()
+                else None
+            ),
+            "display_name": place_name(loc_meta, ldir.name),
+            "display_label": place_label(loc_meta, ldir.name),
             "type": str(loc_meta.get("type") or "Location"),
         },
         "page": page,

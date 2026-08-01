@@ -44,8 +44,8 @@ def is_place_type(type_id: object) -> bool:
 def place_meta_from_mapping(node: dict[str, Any]) -> dict[str, Any] | None:
     """Extract place metadata from a house node (file root or inline element).
 
-    Canonical form: place fields live on the object itself (``type``, ``label``,
-    ``openings``, …) beside ``elements`` / ``cables`` / ….
+    Canonical form: place fields live on the object itself (``type``, ``name``,
+    ``label``, ``openings``, …) beside ``elements`` / ``cables`` / ….
 
     Legacy: a nested ``location: { type: … }`` map is still accepted.
     """
@@ -116,7 +116,8 @@ def location_id_from_name(raw_name: str) -> tuple[str, str | None]:
     """Return ``(technical_id, label_or_none)`` for a location leaf name.
 
     If ``raw_name`` is already a technical id, label is ``None``.
-    Otherwise id is ``normalize_token(raw_name)`` and label is the original text.
+    Otherwise id is ``normalize_token(raw_name)`` and label is the original text
+    (human ``label``, not working ``name``).
     """
     name = raw_name.strip()
     if not name:
@@ -125,6 +126,30 @@ def location_id_from_name(raw_name: str) -> tuple[str, str | None]:
         return name, None
     return normalize_token(name), name
 
+
+def place_id_from_parts(parts: tuple[str, ...] | list[str]) -> str:
+    """Leaf technical id from location parts (last segment, or empty for root)."""
+    if not parts:
+        return ""
+    return str(parts[-1])
+
+
+def place_name(meta: dict[str, Any] | None, place_id: str) -> str:
+    """Working display name: YAML ``name`` → technical ``place_id``."""
+    if meta:
+        raw = meta.get("name")
+        if raw is not None and str(raw).strip():
+            return str(raw).strip()
+    return str(place_id or "")
+
+
+def place_label(meta: dict[str, Any] | None, place_id: str) -> str:
+    """Human label: YAML ``label`` → ``name`` → technical ``place_id``."""
+    if meta:
+        raw = meta.get("label")
+        if raw is not None and str(raw).strip():
+            return str(raw).strip()
+    return place_name(meta, place_id)
 
 def location_prefix(parts: list[str]) -> str:
     tokens = [normalize_token(part) for part in parts if part]

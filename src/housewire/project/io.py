@@ -64,8 +64,13 @@ def create_inline_location(
     subtype: str | None = None,
     notes: str | None = None,
     label: str | None = None,
+    working_name: str | None = None,
 ) -> dict[str, Any]:
-    """Create an inline place under ``parent_place['elements'][name]``."""
+    """Create an inline place under ``parent_place['elements'][name]``.
+
+    ``name`` is the technical id (map key). Optional ``working_name`` is YAML
+    ``name:`` (canvas); ``label`` is human text.
+    """
     if not is_place_type(type_id):
         raise ValueError(
             "type must be one of: "
@@ -84,6 +89,8 @@ def create_inline_location(
         "cables": {},
         "connections": [],
     }
+    if working_name:
+        entry["name"] = working_name
     if label:
         entry["label"] = label
     if subtype:
@@ -100,6 +107,7 @@ def build_location_document(
     subtype: str | None = None,
     notes: str | None = None,
     label: str | None = None,
+    working_name: str | None = None,
 ) -> dict[str, Any]:
     """Build a place-root house/v1 document (no I/O)."""
     if not is_place_type(type_id):
@@ -112,6 +120,8 @@ def build_location_document(
         "schema": HOUSE_SCHEMA,
         "type": str(type_id),
     }
+    if working_name:
+        doc["name"] = working_name
     if label:
         doc["label"] = label
     if subtype:
@@ -131,11 +141,13 @@ def create_location_index(
     subtype: str | None = None,
     notes: str | None = None,
     label: str | None = None,
+    working_name: str | None = None,
 ) -> Path:
     """Create directory + housewire.yaml whose root *is* the place object.
 
     ``dir_path.name`` is the technical location id (prefer ``[A-Za-z0-9_]+``).
-    Optional ``label`` is the human-readable name for diagrams / UI.
+    Optional ``working_name`` (YAML ``name:``) is the short canvas name;
+    optional ``label`` is human-readable text.
     Writes immediately (CLI one-shot). The interactive shell stages in memory
     via ``ProjectSession.stage_outline_location`` instead.
     """
@@ -144,7 +156,11 @@ def create_location_index(
     if yaml_path.exists():
         raise FileExistsError(f"Already exists: {yaml_path}")
     doc = build_location_document(
-        type_id=type_id, subtype=subtype, notes=notes, label=label
+        type_id=type_id,
+        subtype=subtype,
+        notes=notes,
+        label=label,
+        working_name=working_name,
     )
     save_yaml(yaml_path, doc, backup=False)
     return yaml_path

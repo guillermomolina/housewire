@@ -98,7 +98,7 @@
       const kids = childrenOf(node.id);
       if (!kids.length) {
         // Keep server size when children are hidden (depth zoom).
-        if (node.w == null) node.w = leafWidthForLabel(node.label || node.id);
+        if (node.w == null) node.w = leafWidthForLabel(node.display_name || node.name || node.id);
         if (node.h == null) node.h = LEAF_H;
         return;
       }
@@ -342,7 +342,8 @@
       rx: 6,
     });
     g.appendChild(box);
-    const fullLabel = node.label || node.id;
+    const fullLabel = node.display_label || node.label || node.display_name || node.name || node.id;
+    const canvasName = node.display_name || node.name || node.id;
     const typeText =
       (node.type || "") + (node.expandable ? " · +" : "");
     g.appendChild(el("title", null, fullLabel));
@@ -350,7 +351,7 @@
       el(
         "text",
         { class: "node-label", x: 8, y: 18 },
-        fitLabel(fullLabel, w)
+        fitLabel(canvasName, w)
       )
     );
     g.appendChild(
@@ -527,9 +528,10 @@
       meta.innerHTML = "";
       const rows = [
         ["id", detail.id],
+        ["name", detail.name || detail.display_name],
+        ["label", detail.label || detail.display_label],
         ["type", detail.type],
         ["subtype", detail.subtype],
-        ["label", detail.label],
         ["install", detail.install],
         ["mount", detail.mount],
         ["openings", (detail.openings || []).join(", ")],
@@ -733,7 +735,7 @@
       opt.textContent =
         pad +
         branch +
-        (loc.label || loc.id) +
+        (loc.display_name || loc.name || loc.label || loc.id) +
         (loc.type ? ` (${loc.type})` : "");
       if (loc.selectable === false) {
         opt.disabled = true;

@@ -6,7 +6,12 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterator
 
-from housewire.house import location_id_from_name, place_meta_from_mapping
+from housewire.house import (
+    location_id_from_name,
+    place_label,
+    place_meta_from_mapping,
+    place_name,
+)
 from housewire.house.conduit_ref import split_conduit_endpoint
 from housewire.project import abm, recipes
 from housewire.project.io import HOUSEWIRE_YAML, create_inline_location
@@ -65,6 +70,7 @@ def create_recipe_place(
     mount: str | None,
     want_inline: bool = False,
     as_dir: bool = False,
+    working_name: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Create destination place for socket/lamp recipes; return (leaf_id, place_map)."""
     raw = Path(name)
@@ -110,6 +116,7 @@ def create_recipe_place(
             subtype=subtype,
             notes=notes,
             label=resolved_label,
+            working_name=working_name,
         )
         abm.apply_set_specs(entry, set_specs, target="place")
         session.mark_dirty(path)
@@ -128,6 +135,7 @@ def create_recipe_place(
         subtype=subtype,
         notes=notes,
         label=resolved_label,
+        working_name=working_name,
     )
     _path, staged = session.ensure_doc(index_path)
     abm.apply_set_specs(staged, set_specs, target="place")
@@ -410,7 +418,10 @@ def place_detail(
         "path": str(path.relative_to(session.root)),
         "type": meta.get("type"),
         "subtype": meta.get("subtype"),
+        "name": meta.get("name"),
         "label": meta.get("label"),
+        "display_name": place_name(meta, parts[-1]),
+        "display_label": place_label(meta, parts[-1]),
         "notes": meta.get("notes"),
         "install": meta.get("install"),
         "mount": meta.get("mount"),

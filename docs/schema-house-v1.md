@@ -47,17 +47,27 @@ The file **is** the place object: the same fields as a nested place (`type`, `la
 `mount`, `openings`, …), plus `schema: house/v1`. Hierarchy is the directory tree
 (and/or inline places under `elements:`).
 
-### Technical ids vs `label`
+### Place id, name, and label
 
-| Role | Id | Display |
-|------|----|---------|
-| Place (folder) | directory name | optional root `label` |
-| Inline place | key under `elements:` | `label` on that map |
-| Element / cable | YAML key | optional `label` |
+| Field | What | Where | Used for |
+|-------|------|-------|----------|
+| **id** | Technical key `[A-Za-z0-9_]+` | Directory name / inline key under `elements:` | Refs, paths, `cd`, conduits |
+| **name** | Short working name (optional) | YAML `name:` on the place | Canvas, selectors, lists |
+| **label** | Human text (optional) | YAML `label:` on the place | Inspector, docs, long tooltips |
 
-- **Id**: `[A-Za-z0-9_]+` (e.g. `Caja_derivacion_4`). No spaces. Used in refs.
-- **`label`**: human text. `add location "Caja derivacion 6"` → folder
-  `Caja_derivacion_6/` with `label: Caja derivacion 6`.
+Fallbacks:
+
+- Canvas / selectors → `name` → **id**
+- Inspector / human display → `label` → `name` → **id**
+- Graphviz physical node title → `name` → **id**; `label` may appear in the subtitle if different
+
+Elements / cables / terminals still use their YAML key as id and optional `label` only
+(not covered by place `name`).
+
+- **Id**: e.g. `Caja_derivacion_4`. No spaces. Used in refs.
+- **`name`**: e.g. `CD4` (canvas).
+- **`label`**: e.g. `Caja derivacion 4`. `add location "Caja derivacion 6"` → folder
+  `Caja_derivacion_6/` with `label: Caja derivacion 6` (no automatic `name`).
 
 Outline place example:
 
@@ -65,6 +75,7 @@ Outline place example:
 # Garage/Junction_box_1/housewire.yaml
 schema: house/v1
 type: JunctionBox
+name: JB1
 label: "Junction box 1"
 subtype: "100x100 IP40"
 mount: ceiling

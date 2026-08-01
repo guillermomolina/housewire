@@ -102,6 +102,9 @@ class TestPhysicalGraph(unittest.TestCase):
             )
             self.assertTrue(parking_node["expandable"])
             self.assertIsNone(parking_node["parent"])
+            # No YAML name → canvas display is the leaf id
+            self.assertEqual(parking_node["display_name"], "Parking")
+            self.assertEqual(parking_node["display_label"], "Parking")
             # Window size includes hidden descendants (same at deeper depth).
             self.assertGreater(parking_node["w"], 120)
             self.assertGreater(parking_node["h"], 56)

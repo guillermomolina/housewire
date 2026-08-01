@@ -603,7 +603,15 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     add_loc.add_argument("--subtype")
     add_loc.add_argument("--notes")
-    add_loc.add_argument("--label", help="Human-readable name (default: derived if name has spaces)")
+    add_loc.add_argument(
+        "--name",
+        dest="working_name",
+        help="Short working name for canvas/lists (YAML name:)",
+    )
+    add_loc.add_argument(
+        "--label",
+        help="Human-readable label (default: derived if NAME has spaces)",
+    )
     add_loc.add_argument(
         "--inline",
         action="store_true",
@@ -706,6 +714,7 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
             raw = Path(args.name)
             leaf_id, auto_label = location_id_from_name(raw.name)
             label = args.label or auto_label
+            working_name = getattr(args, "working_name", None)
             if args.inline:
                 if not args.yaml_path:
                     raise ValueError("add location --inline requires --yaml PATH")
@@ -718,6 +727,7 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
                     subtype=args.subtype,
                     notes=args.notes,
                     label=label,
+                    working_name=working_name,
                 )
                 if getattr(args, "set_specs", None):
                     abm.apply_set_specs(entry, args.set_specs, target="place")
@@ -732,6 +742,7 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
                 subtype=args.subtype,
                 notes=args.notes,
                 label=label,
+                working_name=working_name,
             )
             if getattr(args, "set_specs", None):
                 loc_doc = abm.load_editable(index_path, project_path)

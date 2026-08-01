@@ -215,6 +215,7 @@ class ProjectSession:
         subtype: str | None = None,
         notes: str | None = None,
         label: str | None = None,
+        working_name: str | None = None,
     ) -> Path:
         """Create an outline location in the dirty buffer (no disk write yet)."""
         from housewire.project.io import build_location_document
@@ -226,7 +227,11 @@ class ProjectSession:
         if dir_path.is_dir() and _housewire_in_dir(dir_path, buffers=self._buffers):
             raise FileExistsError(f"Outline location already exists: {dir_path.name}")
         doc = build_location_document(
-            type_id=type_id, subtype=subtype, notes=notes, label=label
+            type_id=type_id,
+            subtype=subtype,
+            notes=notes,
+            label=label,
+            working_name=working_name,
         )
         self._buffers[yaml_path] = DocBuffer(
             path=yaml_path, doc=doc, dirty=True, mtime=None

@@ -9,12 +9,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Place fields **id** / **name** / **label** are distinct: folder key is id;
+  optional YAML ``name:`` (canvas); optional ``label:`` (human). Helpers
+  ``place_name`` / ``place_label``. ``add location --name``.
 - Physical UI **depth zoom** (``depth −`` / ``depth +``, or Alt+wheel): nested
   children appear inside their parent boxes. Independent of canvas zoom
   (``+`` / ``−`` / wheel). ``GET /api/physical?depth=N``.
 
 ### Changed
 
+- Physical canvas / location selector show ``name`` → id (not ``label``).
+  Inspector lists id, name, and label separately.
 - Physical UI location selector shows the outline **tree** (indented), not a
   flat list; defaults to the site **root** (``.``) when present.
 - Physical canvas defaults to **direct** children (depth 1). Higher depth nests
@@ -30,7 +35,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   box of its full descendant layout (same whether interior is drawn), and
   children sit at natural size in parent-local coordinates. Inner padding
   leaves a margin so children do not touch the parent border; leaf width
-  grows with the label (ellipsis + tooltip if still too long).
+  grows with the canvas name (ellipsis + tooltip with label if still too long).
 
 ## [0.22.0] — 2026-08-01
 

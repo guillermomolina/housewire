@@ -59,9 +59,11 @@ class TestDirectoryLocation(unittest.TestCase):
             self.assertTrue(any("JunctionBox" in s for s in subtitles), subtitles)
             self.assertTrue(any("100x100" in s for s in subtitles), subtitles)
             self.assertTrue(any("ceiling" in s for s in subtitles), subtitles)
+            # Canvas title uses name→id; human label is in the subtitle.
+            self.assertIn("Caja_derivacion_1", labels)
             self.assertTrue(
-                any("Caja derivacion 1" in lab for lab in labels),
-                labels,
+                any("Caja derivacion 1" in s for s in subtitles),
+                subtitles,
             )
 
     def test_create_location_index(self) -> None:

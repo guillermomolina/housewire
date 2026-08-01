@@ -193,28 +193,32 @@ def build_physical_model(
 
     # Pass 1: one node per location (place), not per electrical element.
     for location_parts, fragment in pieces:
+        from housewire.house import place_label, place_name
+
         place_meta = _leaf_place_meta(fragment, location_parts)
-        leaf_label = str(place_meta["label"]) if place_meta.get("label") else None
-        if not location_parts and leaf_label is None:
-            leaf_label = root_name
+        place_id = location_parts[-1] if location_parts else root_name
+        canvas_name = place_name(place_meta, place_id)
+        human = place_label(place_meta, place_id)
         type_id = str(place_meta.get("type") or "Location")
-        subtitle = ""
+        bits: list[str] = []
         if place_meta.get("type"):
-            bits = [str(place_meta.get("type"))]
+            bits.append(str(place_meta.get("type")))
             if place_meta.get("subtype"):
                 bits.append(str(place_meta["subtype"]))
             if place_meta.get("notes"):
                 bits.append(str(place_meta["notes"]).replace("\n", " "))
             if place_meta.get("install"):
                 bits.append(f"install={place_meta['install']}")
-            subtitle = " | ".join(bits)
+        if human and human != canvas_name:
+            bits.insert(0, human)
+        subtitle = " | ".join(bits)
         parts = tuple(location_parts)
         _ensure_ancestor_nodes(model, parts, root_name=root_name)
         _ensure_location_node(
             model,
             parts,
             type_id=type_id if is_place_type(type_id) else "Location",
-            label=leaf_label,
+            label=canvas_name,
             subtitle=subtitle,
             root_name=root_name,
         )

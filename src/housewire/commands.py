@@ -36,12 +36,13 @@ HELP_TEXT = """housewire shell commands:
                                nested: opening_grid.N=1
   set --element NAME KEY VALUE property of an element in the place
   unset KEY | unset --element NAME KEY
-  add location NAME --type T [--subtype ...] [--label ...] [--notes ...]
+  add location NAME --type T [--subtype ...] [--name ...] [--label ...] [--notes ...]
                                [--inline | --dir] [--set KEY=VALUE | --set KEY VALUE …]
                                T=Room|Stair|JunctionBox|DeviceBox|LightPoint|Panel|Floor|House
                                default: outline if you are in outline; inline if you are inline
                                (memory → save; outline creates folder on save)
                                NAME with spaces → technical id + automatic label
+                               --name = short working name (canvas); --label = human text
   add socket NAME --from BOX.Op --strip ELEMENT [--pins 3,2,1]
                                [--to-opening N1] [--colors GY,GNYE,BU] [--section 2.5]
                                [--inline | --dir] [--label ...] [--notes …]
@@ -635,7 +636,12 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
         p.add_argument("--type", dest="type_id", required=True)
         p.add_argument("--subtype")
         p.add_argument("--notes")
-        p.add_argument("--label")
+        p.add_argument(
+            "--name",
+            dest="working_name",
+            help="Short working name for canvas/lists (YAML name:)",
+        )
+        p.add_argument("--label", help="Human-readable label (YAML label:)")
         mode = p.add_mutually_exclusive_group()
         mode.add_argument(
             "--inline",
@@ -660,6 +666,7 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
         raw = _Path(args.name)
         leaf_id, auto_label = location_id_from_name(raw.name)
         label = args.label or auto_label
+        working_name = args.working_name
         cursor = session.cursor()
         want_inline = args.inline or (not args.as_dir and cursor.is_inline)
         if args.as_dir and cursor.is_inline:
@@ -689,6 +696,7 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
                 subtype=args.subtype,
                 notes=args.notes,
                 label=label,
+                working_name=working_name,
             )
             if args.set_specs:
                 abm.apply_set_specs(entry, args.set_specs, target="place")
@@ -712,6 +720,7 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
             subtype=args.subtype,
             notes=args.notes,
             label=label,
+            working_name=working_name,
         )
         if args.set_specs:
             _path, staged = session.ensure_doc(index_path)
