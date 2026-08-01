@@ -1,6 +1,5 @@
 (() => {
   const svg = document.getElementById("canvas");
-  const locationSelect = document.getElementById("location-select");
   const representationSelect = document.getElementById("representation");
   const depthLabel = document.getElementById("depth-label");
   const statusEl = document.getElementById("status");
@@ -37,11 +36,62 @@
   let showElements = false;
   let showCables = false;
   let outlineNodes = [];
+  let canvasLocations = [];
+  let collapsedOutline = loadCollapsedOutline();
   const HISTORY_MAX = 50;
   const DRAG_THRESHOLD = 4;
   const DBLCLICK_MS = 400;
   const ELEM_W = 72;
   const ELEM_H = 28;
+  const TYPE_ICONS = {
+    House: "fa-house",
+    Floor: "fa-layer-group",
+    Room: "fa-door-open",
+    Stair: "fa-stairs",
+    Panel: "fa-server",
+    JunctionBox: "fa-cube",
+    DeviceBox: "fa-box",
+    LightPoint: "fa-lightbulb",
+    Location: "fa-location-dot",
+    Socket: "fa-plug",
+    Switch: "fa-toggle-on",
+    Luminaire: "fa-lightbulb",
+    TerminalStrip: "fa-grip-lines",
+    PETerminal: "fa-earth-europe",
+    MCB: "fa-bolt",
+    MCB2P: "fa-bolt",
+    RCD: "fa-shield-halved",
+    Supply: "fa-plug-circle-bolt",
+    EarthElectrode: "fa-arrow-down-long",
+    PowerSupply: "fa-battery-full",
+    Intercom: "fa-phone",
+    Relay: "fa-diagram-project",
+  };
+
+  function loadCollapsedOutline() {
+    try {
+      const raw = sessionStorage.getItem("housewire-outline-collapsed");
+      const arr = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(arr) ? arr : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function saveCollapsedOutline() {
+    try {
+      sessionStorage.setItem(
+        "housewire-outline-collapsed",
+        JSON.stringify([...collapsedOutline])
+      );
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function iconClassForType(typeId) {
+    return TYPE_ICONS[typeId] || "fa-circle";
+  }
 
   const ns = "http://www.w3.org/2000/svg";
 
@@ -1056,11 +1106,12 @@
   async function enterNode(node) {
     if (!node || !locationId) return;
     const nextId = canvasLocationIdForNode(node);
-    const opt = [...locationSelect.options].find((o) => o.value === nextId);
-    if (opt && !opt.disabled) {
-      locationSelect.value = nextId;
+    const opt = canvasLocations.find(
+      (r) => r.selectable !== false && r.id === nextId
+    );
+    if (opt) {
       depthLevel = 1;
-      await loadLocation();
+      await setCanvasLocation(nextId);
       setStatus(`Entered ${nextId}`);
       return;
     }
@@ -1305,34 +1356,23 @@
 
   async function loadLocations() {
     const data = await api("/api/locations");
-    locationSelect.innerHTML = "";
-    const rows = data.locations || [];
-    for (const loc of rows) {
-      const opt = document.createElement("option");
-      opt.value = loc.id;
-      const pad = "\u00A0\u00A0".repeat(loc.depth || 0);
-      const branch = (loc.depth || 0) > 0 ? "└ " : "";
-      opt.textContent =
-        pad +
-        branch +
-        (loc.display_name || loc.name || loc.label || loc.id) +
-        (loc.type ? ` (${loc.type})` : "");
-      if (loc.selectable === false) {
-        opt.disabled = true;
-      }
-      locationSelect.appendChild(opt);
-    }
+    canvasLocations = data.locations || [];
     await loadOutline();
     const first =
-      rows.find((r) => r.selectable !== false && r.id === ".") ||
-      rows.find((r) => r.selectable !== false);
+      canvasLocations.find((r) => r.selectable !== false && r.id === ".") ||
+      canvasLocations.find((r) => r.selectable !== false);
     if (first) {
-      locationId = first.id;
-      locationSelect.value = locationId;
-      await loadLocation();
+      await setCanvasLocation(first.id);
     } else {
       setStatus("No locations with children found");
     }
+  }
+
+  async function setCanvasLocation(id, { resetDepth = true } = {}) {
+    if (!id) return;
+    if (resetDepth) depthLevel = 1;
+    locationId = id;
+    await loadLocation();
   }
 
   async function loadOutline() {
@@ -1345,41 +1385,106 @@
     }
   }
 
+  function outlineParentId(node) {
+    if (node.kind === "element") return node.parent || null;
+    if (!node.id || node.id === ".") return null;
+    if (!node.id.includes("/")) return ".";
+    return node.id.slice(0, node.id.lastIndexOf("/"));
+  }
+
+  function outlineHasKids(nodeId) {
+    return outlineNodes.some((n) => outlineParentId(n) === nodeId);
+  }
+
+  function isOutlineHidden(node) {
+    let parent = outlineParentId(node);
+    while (parent) {
+      if (collapsedOutline.has(parent)) return true;
+      if (parent === ".") break;
+      parent = parent.includes("/")
+        ? parent.slice(0, parent.lastIndexOf("/"))
+        : ".";
+    }
+    return false;
+  }
+
+  function expandOutlineAncestors(siteId) {
+    if (!siteId) return;
+    let parent =
+      siteId === "."
+        ? null
+        : siteId.includes("/")
+          ? siteId.slice(0, siteId.lastIndexOf("/"))
+          : ".";
+    while (parent) {
+      collapsedOutline.delete(parent);
+      if (parent === ".") break;
+      parent = parent.includes("/")
+        ? parent.slice(0, parent.lastIndexOf("/"))
+        : ".";
+    }
+    saveCollapsedOutline();
+  }
+
   function renderOutline() {
     const host = document.getElementById("outline-tree");
     if (!host) return;
     host.innerHTML = "";
     for (const node of outlineNodes) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className =
+      if (isOutlineHidden(node)) continue;
+      const row = document.createElement("div");
+      row.className =
         "outline-item" + (node.kind === "element" ? " element" : "");
-      btn.dataset.kind = node.kind || "place";
-      btn.dataset.id = node.id;
-      if (node.parent) btn.dataset.parent = node.parent;
-      btn.style.paddingLeft = `${0.45 + (node.depth || 0) * 0.75}rem`;
+      row.dataset.kind = node.kind || "place";
+      row.dataset.id = node.id;
+      if (node.parent) row.dataset.parent = node.parent;
+      row.style.paddingLeft = `${0.25 + (node.depth || 0) * 0.75}rem`;
+      row.title = [node.type, node.id].filter(Boolean).join(" · ");
+
+      const twist = document.createElement("button");
+      twist.type = "button";
+      twist.className = "outline-twist";
+      const hasKids = node.kind === "place" && outlineHasKids(node.id);
+      if (hasKids) {
+        const open = !collapsedOutline.has(node.id);
+        twist.innerHTML = open
+          ? '<i class="fa-solid fa-caret-down"></i>'
+          : '<i class="fa-solid fa-caret-right"></i>';
+        twist.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          if (collapsedOutline.has(node.id)) collapsedOutline.delete(node.id);
+          else collapsedOutline.add(node.id);
+          saveCollapsedOutline();
+          renderOutline();
+        });
+      } else {
+        twist.disabled = true;
+        twist.innerHTML = "";
+      }
+      row.appendChild(twist);
+
+      const icon = document.createElement("i");
+      icon.className = `fa-solid ${iconClassForType(node.type)} outline-icon`;
+      icon.setAttribute("aria-hidden", "true");
+      row.appendChild(icon);
+
       const label = document.createElement("span");
       label.className = "outline-label";
       label.textContent =
         node.display_name || node.name || node.label || node.id;
-      btn.appendChild(label);
-      if (node.type) {
-        const typ = document.createElement("span");
-        typ.className = "outline-type";
-        typ.textContent = node.type;
-        btn.appendChild(typ);
-      }
-      btn.addEventListener("click", () => {
+      row.appendChild(label);
+
+      row.addEventListener("click", () => {
         onOutlineClick(node).catch((err) =>
           setStatus(String(err.message || err))
         );
       });
-      host.appendChild(btn);
+      host.appendChild(row);
     }
-    highlightOutline(selectedId || locationId);
+    applyOutlineActive(selectedId ? canvasToSiteId(selectedId) : locationId);
   }
 
-  function highlightOutline(activeId) {
+  function applyOutlineActive(activeId) {
     const host = document.getElementById("outline-tree");
     if (!host) return;
     for (const btn of host.querySelectorAll(".outline-item")) {
@@ -1389,6 +1494,22 @@
         id === activeId || (activeId == null && id === locationId)
       );
     }
+  }
+
+  function highlightOutline(activeId) {
+    if (activeId) {
+      const before = collapsedOutline.size;
+      expandOutlineAncestors(activeId);
+      const needPaint =
+        before !== collapsedOutline.size ||
+        outlineNodes.some((n) => n.id === activeId && isOutlineHidden(n));
+      if (needPaint) {
+        renderOutline();
+        applyOutlineActive(activeId);
+        return;
+      }
+    }
+    applyOutlineActive(activeId);
   }
 
   function siteToCanvasRelative(siteId) {
@@ -1446,10 +1567,8 @@
   async function focusOutlinePlace(node) {
     const placeId = node.id;
     if (node.selectable) {
-      if (locationSelect.value !== placeId) {
-        locationSelect.value = placeId;
-        depthLevel = 1;
-        await loadLocation();
+      if (locationId !== placeId) {
+        await setCanvasLocation(placeId);
       }
       highlightOutline(placeId);
       selectedId = null;
@@ -1462,11 +1581,10 @@
       return;
     }
     const needDepth = placeDepthUnderCanvas(placeId, canvasRoot);
-    const switched = locationSelect.value !== canvasRoot;
+    const switched = locationId !== canvasRoot;
     if (switched) {
-      locationSelect.value = canvasRoot;
       depthLevel = needDepth;
-      await loadLocation();
+      await setCanvasLocation(canvasRoot, { resetDepth: false });
     } else if (needDepth > depthLevel) {
       await setDepth(needDepth);
     }
@@ -1487,11 +1605,10 @@
       return;
     }
     const needDepth = placeDepthUnderCanvas(parentPlace, canvasRoot);
-    const switched = locationSelect.value !== canvasRoot;
+    const switched = locationId !== canvasRoot;
     if (switched) {
-      locationSelect.value = canvasRoot;
       depthLevel = needDepth;
-      await loadLocation();
+      await setCanvasLocation(canvasRoot, { resetDepth: false });
     } else if (needDepth > depthLevel) {
       await setDepth(needDepth);
     }
@@ -1510,7 +1627,6 @@
   }
 
   async function loadLocation() {
-    locationId = locationSelect.value;
     selectedId = null;
     document.getElementById("panel-empty").classList.remove("hidden");
     document.getElementById("panel-show").classList.add("hidden");
@@ -1555,11 +1671,6 @@
     depthLevel = capped;
     await loadLocation();
   }
-
-  locationSelect.addEventListener("change", () => {
-    depthLevel = 1;
-    loadLocation().catch((err) => setStatus(String(err.message || err)));
-  });
 
   representationSelect.addEventListener("change", async () => {
     const value = representationSelect.value;

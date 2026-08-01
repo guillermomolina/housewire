@@ -189,11 +189,33 @@ button:hover {
   color: var(--element);
 }
 
-.outline-item .outline-type {
-  color: var(--muted);
-  font-size: 0.7rem;
-  margin-left: auto;
+.outline-twist {
+  width: 1.1rem;
   flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.65rem;
+  line-height: 1;
+}
+
+.outline-twist:disabled {
+  visibility: hidden;
+  cursor: default;
+}
+
+.outline-icon {
+  width: 1rem;
+  text-align: center;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.outline-item.element .outline-icon {
+  color: var(--element);
 }
 
 .outline-item .outline-label {
