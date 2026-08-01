@@ -592,6 +592,12 @@ def place_detail(
             elements.append(
                 {
                     "id": str(name),
+                    "name": (
+                        str(defn["name"]).strip()
+                        if defn.get("name") is not None
+                        and str(defn.get("name")).strip()
+                        else None
+                    ),
                     "type": defn.get("type"),
                     "subtype": defn.get("subtype"),
                     "label": defn.get("label"),

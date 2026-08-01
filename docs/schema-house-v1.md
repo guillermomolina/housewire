@@ -89,10 +89,9 @@ Fallbacks:
 - Inspector / human display → `label` → `name` → **id**
 - Graphviz physical node title → `name` → **id**; `label` may appear in the subtitle if different
 
-Elements still use their YAML key as id and optional ``label`` (and optional
-``name`` where useful). **Cables** and **conduits** follow the same id / name /
-label pattern as places: map key = id; optional ``name:`` for short display;
-optional ``label:`` for longer human text.
+Elements use their YAML map key as **id**, optional ``name:`` (short display),
+and optional ``label:`` (longer human text) — same pattern as places / cables /
+conduits. Canvas and outline prefer ``name`` → id; inspector shows all three.
 
 - **Id**: e.g. `Caja_derivacion_4`. No spaces. Used in refs.
 - **`name`**: e.g. `CD4` (canvas).

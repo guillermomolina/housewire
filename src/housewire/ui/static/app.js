@@ -1193,14 +1193,14 @@
     });
     g.appendChild(box);
     const title =
-      (elem.display_label || elem.label || elem.name || elem.id) +
+      (elem.display_label || elem.label || elem.display_name || elem.name || elem.id) +
       (elem.type ? ` · ${elem.type}` : "");
     g.appendChild(el("title", null, title));
     g.appendChild(
       el(
         "text",
         { class: "element-label", x: 4, y: 12 },
-        fitLabel(elem.name || elem.id, w - 4)
+        fitLabel(elem.display_name || elem.name || elem.leaf_id || elem.id, w - 4)
       )
     );
     g.appendChild(
@@ -1368,8 +1368,8 @@
     const meta = document.getElementById("show-meta");
     meta.innerHTML = "";
     const rows = [
-      ["id", elem.id],
-      ["name", elem.name],
+      ["id", elem.leaf_id || elem.id],
+      ["name", elem.name || elem.display_name],
       ["type", elem.type],
       ["subtype", elem.subtype],
       ["label", elem.label],
@@ -1504,7 +1504,8 @@
       } else {
         for (const elItem of detail.elements || []) {
           const li = document.createElement("li");
-          li.textContent = `${elItem.id} (${elItem.type || "?"}${
+          const title = elItem.name || elItem.id;
+          li.textContent = `${title} (${elItem.type || "?"}${
             elItem.subtype ? " / " + elItem.subtype : ""
           })`;
           ul.appendChild(li);

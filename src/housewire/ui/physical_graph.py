@@ -214,25 +214,30 @@ def _build_element_nodes(
             terminals: list[str] = []
             if isinstance(terminals_raw, dict):
                 terminals = [str(k) for k in terminals_raw.keys()]
+            raw_name = defn.get("name")
+            working_name = (
+                str(raw_name).strip()
+                if raw_name is not None and str(raw_name).strip()
+                else None
+            )
             label = defn.get("label")
+            label_s = (
+                str(label).strip()
+                if label is not None and str(label).strip()
+                else None
+            )
             nodes.append(
                 {
                     "id": eid,
-                    "name": name,
+                    "leaf_id": name,
+                    "name": working_name,
                     "parent": parent_id,
                     "place_parts": list(place_parts),
                     "type": str(defn.get("type") or "Element"),
                     "subtype": defn.get("subtype"),
-                    "label": (
-                        str(label).strip()
-                        if label is not None and str(label).strip()
-                        else None
-                    ),
-                    "display_label": (
-                        str(label).strip()
-                        if label is not None and str(label).strip()
-                        else name
-                    ),
+                    "label": label_s,
+                    "display_name": working_name or name,
+                    "display_label": label_s or working_name or name,
                     "terminals": terminals,
                     "x": ex,
                     "y": ey,
@@ -568,27 +573,32 @@ def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
             eid = (
                 ename if location_id == "." else f"{location_id}/{ename}"
             )
+            raw_name = defn.get("name")
+            working_name = (
+                str(raw_name).strip()
+                if raw_name is not None and str(raw_name).strip()
+                else None
+            )
             elabel = defn.get("label")
+            label_s = (
+                str(elabel).strip()
+                if elabel is not None and str(elabel).strip()
+                else None
+            )
             etype = str(defn.get("type") or "Element")
             elem_rows.append(
                 {
                     "kind": "element",
                     "id": eid,
-                    "name": ename,
+                    "leaf_id": ename,
+                    "name": working_name,
                     "parent": location_id,
                     "type": etype,
                     "icon": catalog_icon(etype, catalog=catalog, instance=defn),
                     "subtype": defn.get("subtype"),
-                    "label": (
-                        str(elabel).strip()
-                        if elabel is not None and str(elabel).strip()
-                        else None
-                    ),
-                    "display_name": (
-                        str(elabel).strip()
-                        if elabel is not None and str(elabel).strip()
-                        else ename
-                    ),
+                    "label": label_s,
+                    "display_name": working_name or ename,
+                    "display_label": label_s or working_name or ename,
                 }
             )
         elements_by_place[location_id] = elem_rows
@@ -1064,7 +1074,7 @@ def apply_electrical_auto_layout(
         index = 0
         for elem in siblings:
             place_parts = tuple(elem.get("place_parts") or [])
-            element_name = str(elem["name"])
+            element_name = str(elem.get("leaf_id") or elem.get("name") or "")
             yaml_path = (
                 (ldir / HOUSEWIRE_YAML).resolve()
                 if not place_parts

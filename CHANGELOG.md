@@ -58,6 +58,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   ``label:``; UI lists and tooltips prefer ``name`` → id.
 - Physical UI draws each back/front opening (``B2-1``, …) on its face grid
   near the box border; conduit paths terminate at that circle.
+- Elements support optional YAML ``name:`` like places/cables; UI prefers
+  ``name`` → id (outline, canvas labels, inspector).
 
 ### Changed
 
