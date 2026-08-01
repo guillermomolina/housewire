@@ -484,6 +484,59 @@ class TestServeApi(unittest.TestCase):
             self.assertTrue(enchufe["conduits"])
             self.assertTrue(enchufe["cables"])
 
+    def test_place_properties_patch(self) -> None:
+        try:
+            from fastapi.testclient import TestClient
+        except (ImportError, RuntimeError):
+            self.skipTest("fastapi/httpx not installed")
+
+        from housewire.ui.app import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = init_site(root, type_id="House", label="Site")
+            add_place(doc, "Parking", type_id="Floor", label="Parking")
+            add_place(
+                doc, "Caja_4", under=("Parking",), type_id="JunctionBox", label="Caja 4"
+            )
+            caja = get_place_node(doc, ("Parking", "Caja_4"))
+            abm.add_element(caja, "Regleta", type_id="TerminalStrip", subtype="3")
+            save_site(root, doc)
+
+            client = TestClient(create_app(root))
+            edited = client.patch(
+                "/api/place/properties",
+                json={
+                    "location_id": "Parking",
+                    "id": "Caja_4",
+                    "fields": {"label": "Caja cuatro", "notes": "UI edit"},
+                    "depth": 1,
+                },
+            )
+            self.assertEqual(edited.status_code, 200, edited.text)
+            body = edited.json()
+            self.assertEqual(body["detail"]["label"], "Caja cuatro")
+            self.assertEqual(body["detail"]["notes"], "UI edit")
+            elem_edit = client.patch(
+                "/api/place/properties",
+                json={
+                    "location_id": "Parking",
+                    "id": "Caja_4",
+                    "element": "Regleta",
+                    "fields": {"label": "Strip A"},
+                    "depth": 1,
+                },
+            )
+            self.assertEqual(elem_edit.status_code, 200, elem_edit.text)
+            reg = next(
+                e
+                for e in elem_edit.json()["detail"]["elements"]
+                if e["id"] == "Regleta"
+            )
+            self.assertEqual(reg["label"], "Strip A")
+            dirty = client.get("/api/workspace").json()
+            self.assertTrue(dirty.get("dirty"))
+
 
 if __name__ == "__main__":
     unittest.main()

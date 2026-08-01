@@ -6,7 +6,7 @@
   <title>HouseWire — physical</title>
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <link rel="stylesheet" href="/static/app.css?v=0.28.10" />
+  <link rel="stylesheet" href="/static/app.css?v=0.28.11" />
 </head>
 <body>
   <nav class="menubar" aria-label="Application">
@@ -184,21 +184,21 @@
         <button type="button" class="panel-collapse" id="btn-collapse-inspector" title="Collapse inspector" aria-expanded="true" aria-controls="side-panel">»</button>
       </div>
       <div class="panel-body">
-        <div id="panel-empty" class="panel-empty">Selecciona una caja</div>
-        <div id="panel-show" class="panel-block hidden">
-          <h3>Show</h3>
-          <dl id="show-meta" class="show-meta"></dl>
-          <div id="show-elements-block">
+        <div id="panel-empty" class="panel-empty">Selecciona una caja o elemento</div>
+        <div id="panel-props" class="panel-block hidden">
+          <h3>Properties</h3>
+          <dl id="props-meta" class="props-meta"></dl>
+          <div id="props-elements-block">
             <h4>Elements</h4>
-            <ul id="show-elements" class="show-list"></ul>
+            <ul id="props-elements" class="props-list"></ul>
           </div>
-          <div id="show-conduits-block">
+          <div id="props-conduits-block">
             <h4>Conduits</h4>
-            <ul id="show-conduits" class="show-list"></ul>
+            <ul id="props-conduits" class="props-list"></ul>
           </div>
-          <div id="show-cables-block" class="hidden">
+          <div id="props-cables-block" class="hidden">
             <h4>Cables</h4>
-            <ul id="show-cables" class="show-list"></ul>
+            <ul id="props-cables" class="props-list"></ul>
           </div>
         </div>
       </div>
@@ -285,6 +285,6 @@
     </div>
   </div>
   <input type="file" id="file-open-input" accept=".yaml,.yml,text/yaml,application/x-yaml" hidden />
-  <script src="/static/app.js?v=0.28.10"></script>
+  <script src="/static/app.js?v=0.28.11"></script>
 </body>
 </html>

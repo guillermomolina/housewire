@@ -528,24 +528,50 @@ def run_feed_recipe(
         }
 
 
+def _resolve_place_parts(
+    canvas_location_id: str, place_id: str
+) -> tuple[str, ...]:
+    canvas_parts = (
+        tuple()
+        if canvas_location_id in {".", ""}
+        else tuple(p for p in str(canvas_location_id).split("/") if p)
+    )
+    # ``.`` / ``@`` = the canvas location itself (elements drawn on a leaf view).
+    if str(place_id).strip() in {".", "", "@"}:
+        if not canvas_parts:
+            raise ValueError("place id is required")
+        return canvas_parts
+    parts = tuple(p for p in str(place_id).split("/") if p)
+    if not parts:
+        raise ValueError("place id is required")
+    return canvas_parts + parts
+
+
+def _relative_place_id(
+    canvas_location_id: str, place_parts: tuple[str, ...]
+) -> str:
+    canvas_parts = (
+        tuple()
+        if canvas_location_id in {".", ""}
+        else tuple(p for p in str(canvas_location_id).split("/") if p)
+    )
+    if place_parts == canvas_parts:
+        return "."
+    if len(place_parts) >= len(canvas_parts) and place_parts[: len(canvas_parts)] == canvas_parts:
+        return "/".join(place_parts[len(canvas_parts) :])
+    return "/".join(place_parts)
+
+
 def place_detail(
     session: ProjectSession,
     *,
     canvas_location_id: str,
     place_id: str,
 ) -> dict[str, Any]:
-    """Return show-like detail for a nested child under the canvas root."""
+    """Return detail for a nested child under the canvas root (or the canvas itself)."""
     from housewire.project.tree import get_place_node
 
-    parts = tuple(p for p in str(place_id).split("/") if p)
-    if not parts:
-        raise ValueError("place id is required")
-    canvas_parts = (
-        tuple()
-        if canvas_location_id in {".", ""}
-        else tuple(p for p in str(canvas_location_id).split("/") if p)
-    )
-    place_parts = canvas_parts + parts
+    place_parts = _resolve_place_parts(canvas_location_id, place_id)
     path, site_doc = session.ensure_doc()
     doc = get_place_node(site_doc, place_parts)
     meta = place_meta_from_mapping(doc) or {}
@@ -581,15 +607,17 @@ def place_detail(
         place_doc=doc,
         place_yaml=path,
     )
+    rel_id = _relative_place_id(canvas_location_id, place_parts)
+    leaf = place_parts[-1] if place_parts else rel_id
     return {
-        "id": "/".join(parts),
+        "id": rel_id,
         "path": f"{path.relative_to(session.root)}#{'/'.join(place_parts)}",
         "type": meta.get("type"),
         "subtype": meta.get("subtype"),
         "name": meta.get("name"),
         "label": meta.get("label"),
-        "display_name": place_name(meta, parts[-1]),
-        "display_label": place_label(meta, parts[-1]),
+        "display_name": place_name(meta, leaf),
+        "display_label": place_label(meta, leaf),
         "notes": meta.get("notes"),
         "install": meta.get("install"),
         "mount": meta.get("mount"),
@@ -599,3 +627,72 @@ def place_detail(
         "cables": cables,
         "conduits": conduits,
     }
+
+
+# Fields the Properties panel may edit (shell ``set`` allows more).
+_EDITABLE_PLACE_FIELDS = frozenset(
+    {"name", "label", "type", "subtype", "notes", "install", "mount"}
+)
+_EDITABLE_ELEMENT_FIELDS = frozenset(
+    {"name", "label", "type", "subtype", "notes"}
+)
+
+
+def update_place_properties(
+    session: ProjectSession,
+    *,
+    canvas_location_id: str,
+    place_id: str,
+    fields: dict[str, Any],
+    element: str | None = None,
+) -> dict[str, Any]:
+    """Apply property edits to a place or nested element; return place detail."""
+    from housewire.project import abm
+    from housewire.project.tree import get_place_node
+
+    if not isinstance(fields, dict) or not fields:
+        raise ValueError("fields must be a non-empty object")
+
+    place_parts = _resolve_place_parts(canvas_location_id, place_id)
+    path, site_doc = session.ensure_doc()
+    doc = get_place_node(site_doc, place_parts)
+    if not isinstance(doc, dict):
+        raise ValueError(f"Invalid place: {place_id}")
+
+    if element:
+        allowed = _EDITABLE_ELEMENT_FIELDS
+        elements = doc.get("elements") or {}
+        if not isinstance(elements, dict) or element not in elements:
+            raise ValueError(f"Element does not exist: {element}")
+        target = elements[element]
+        if not isinstance(target, dict):
+            raise ValueError(f"Invalid element: {element}")
+        target_kind: abm.SetTarget = "element"
+    else:
+        allowed = _EDITABLE_PLACE_FIELDS
+        target = doc
+        target_kind = "place"
+
+    unknown = [k for k in fields if k not in allowed]
+    if unknown:
+        raise ValueError(
+            "Unsupported field(s): "
+            + ", ".join(sorted(str(k) for k in unknown))
+            + f". Editable: {', '.join(sorted(allowed))}"
+        )
+
+    for key, raw in fields.items():
+        if raw is None or (isinstance(raw, str) and raw.strip() == ""):
+            if key in target:
+                abm.unset_field(target, key)
+            continue
+        if isinstance(raw, str):
+            value = abm.parse_set_value(raw)
+        else:
+            value = raw
+        abm.set_field(target, key, value, target=target_kind)
+
+    session.mark_dirty(path)
+    return place_detail(
+        session, canvas_location_id=canvas_location_id, place_id=place_id
+    )

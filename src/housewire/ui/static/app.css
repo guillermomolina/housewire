@@ -968,6 +968,56 @@ button:hover {
   word-break: break-word;
 }
 
+.props-meta {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.35rem 0.65rem;
+  margin: 0 0 0.75rem;
+  align-items: start;
+}
+
+.props-meta dt {
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  padding-top: 0.4rem;
+}
+
+.props-meta dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.props-meta input,
+.props-meta textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.3rem 0.4rem;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.props-meta textarea {
+  resize: vertical;
+  min-height: 3.2rem;
+  line-height: 1.35;
+}
+
+.props-meta .props-readonly {
+  padding: 0.3rem 0;
+  word-break: break-word;
+}
+
+.props-meta input:focus,
+.props-meta textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .show-list {
   margin: 0 0 0.75rem;
   padding-left: 1.1rem;
@@ -985,6 +1035,30 @@ button:hover {
 }
 
 .show-list .show-empty {
+  color: var(--muted);
+  list-style: none;
+  margin-left: -1.1rem;
+}
+
+.props-list {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+}
+
+.props-list li {
+  margin: 0.35rem 0;
+  line-height: 1.35;
+}
+
+.props-list .props-sub,
+.props-list .show-sub {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8em;
+}
+
+.props-list .props-empty,
+.props-list .show-empty {
   color: var(--muted);
   list-style: none;
   margin-left: -1.1rem;

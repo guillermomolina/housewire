@@ -66,7 +66,8 @@ children inside parent boxes. **Electrical** (View menu / toolbar bolt) toggles 
 the same canvas (off by default). Edit/View menus and an icon toolbar cover
 open/save, undo/redo, zoom, and depth. **Edit → Insert** opens a modal for
 socket / lamp / feed (Element / Cable / Conduit placeholders for later).
-Click a box or element for the inspector side panel. Place positions go to
+Click a box or element for the **Properties** inspector (editable name, label,
+type, notes, …). Place positions go to
 `view.physical`; element positions to `view.electrical`; page settings to
 `views.physical` on the canvas root.
 Requires the `ui` optional dependency (included in `.[dev,ui]` / `make prepare`).

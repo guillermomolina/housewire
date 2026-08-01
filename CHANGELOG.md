@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.11] — 2026-08-01
+
+### Changed
+
+- Inspector panel title **Show** → **Properties**, with editable fields
+  (name, label, type, subtype, notes, install/mount for places). Saves via
+  ``PATCH /api/place/properties`` (session dirty until File → Save).
+
 ## [0.28.10] — 2026-08-01
 
 ### Fixed

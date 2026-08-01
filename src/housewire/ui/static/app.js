@@ -2116,48 +2116,173 @@
   }
 
   function setInspectorMode(mode) {
-    const elements = document.getElementById("show-elements-block");
-    const conduits = document.getElementById("show-conduits-block");
-    const cables = document.getElementById("show-cables-block");
+    const elements = document.getElementById("props-elements-block");
+    const conduits = document.getElementById("props-conduits-block");
+    const cables = document.getElementById("props-cables-block");
     const placeMode = mode === "place";
     elements.classList.toggle("hidden", !placeMode);
     conduits.classList.toggle("hidden", !placeMode);
     cables.classList.toggle("hidden", placeMode);
   }
 
+  /** @type {{kind:"place"|"element", placeId:string, element?:string}|null} */
+  let propsTarget = null;
+  let propsSaveTimer = null;
+
+  function appendPropsRow(meta, spec) {
+    const dt = document.createElement("dt");
+    dt.textContent = spec.key;
+    const dd = document.createElement("dd");
+    const value = spec.value == null ? "" : String(spec.value);
+    if (!spec.editable) {
+      const span = document.createElement("span");
+      span.className = "props-readonly";
+      span.textContent = value || "—";
+      dd.appendChild(span);
+    } else if (spec.multiline) {
+      const ta = document.createElement("textarea");
+      ta.dataset.prop = spec.key;
+      ta.value = value;
+      ta.rows = 3;
+      ta.spellcheck = false;
+      dd.appendChild(ta);
+    } else {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.dataset.prop = spec.key;
+      input.value = value;
+      input.spellcheck = false;
+      dd.appendChild(input);
+    }
+    meta.appendChild(dt);
+    meta.appendChild(dd);
+  }
+
+  function bindPropsEditors(meta) {
+    meta.querySelectorAll("[data-prop]").forEach((el) => {
+      el.addEventListener("change", () => {
+        scheduleSaveProps();
+      });
+      el.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" && el.tagName === "INPUT") {
+          ev.preventDefault();
+          el.blur();
+        }
+      });
+    });
+  }
+
+  function scheduleSaveProps() {
+    if (propsSaveTimer) clearTimeout(propsSaveTimer);
+    propsSaveTimer = setTimeout(() => {
+      propsSaveTimer = null;
+      savePropsFromPanel().catch((err) => setStatus(String(err.message || err)));
+    }, 350);
+  }
+
+  async function savePropsFromPanel() {
+    if (!propsTarget || !locationId) return;
+    const meta = document.getElementById("props-meta");
+    if (!meta) return;
+    /** @type {Record<string, string>} */
+    const fields = {};
+    meta.querySelectorAll("[data-prop]").forEach((el) => {
+      const key = el.getAttribute("data-prop");
+      if (!key) return;
+      fields[key] = el.value;
+    });
+    if (!Object.keys(fields).length) return;
+    const body = {
+      location_id: locationId,
+      id: propsTarget.placeId,
+      fields,
+      depth: depthLevel,
+    };
+    if (propsTarget.element) body.element = propsTarget.element;
+    const res = await api("/api/place/properties", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+    if (res.graph) {
+      graph = res.graph;
+      depthLevel = graph.depth || depthLevel;
+      maxDepth = graph.max_depth || maxDepth;
+      render();
+    }
+    dirtyLocal = true;
+    setStatus("properties updated · unsaved");
+    scheduleStatusRefresh();
+    if (propsTarget.kind === "element" && selectedId) {
+      const elem = (graph?.elements || []).find((e) => e.id === selectedId);
+      if (elem) fillElementInspector(elem);
+    } else if (propsTarget.kind === "place" && selectedId) {
+      await fillPlaceInspector(selectedId, res.detail);
+    }
+  }
+
   function fillElementInspector(elem) {
     const empty = document.getElementById("panel-empty");
-    const show = document.getElementById("panel-show");
+    const panel = document.getElementById("panel-props");
     empty.classList.add("hidden");
-    show.classList.remove("hidden");
+    panel.classList.remove("hidden");
     setInspectorMode("element");
-    const meta = document.getElementById("show-meta");
+    const leaf = elem.leaf_id || String(elem.id || "").split("/").pop();
+    propsTarget = {
+      kind: "element",
+      placeId: elem.parent || ".",
+      element: leaf,
+    };
+    const meta = document.getElementById("props-meta");
     meta.innerHTML = "";
-    const rows = [
-      ["id", elem.leaf_id || elem.id],
-      ["name", elem.name || elem.display_name],
-      ["type", elem.type],
-      ["subtype", elem.subtype],
-      ["label", elem.label],
-      ["parent", elem.parent || "(canvas root)"],
-      ["terminals", (elem.terminals || []).join(", ")],
-    ];
-    for (const [k, v] of rows) {
-      if (v == null || v === "") continue;
-      const dt = document.createElement("dt");
-      dt.textContent = k;
-      const dd = document.createElement("dd");
-      dd.textContent = String(v);
-      meta.appendChild(dt);
-      meta.appendChild(dd);
-    }
+    appendPropsRow(meta, {
+      key: "id",
+      value: leaf,
+      editable: false,
+    });
+    appendPropsRow(meta, {
+      key: "parent",
+      value: elem.parent || "(canvas root)",
+      editable: false,
+    });
+    appendPropsRow(meta, {
+      key: "name",
+      value: elem.name || "",
+      editable: true,
+    });
+    appendPropsRow(meta, {
+      key: "label",
+      value: elem.label || "",
+      editable: true,
+    });
+    appendPropsRow(meta, {
+      key: "type",
+      value: elem.type || "",
+      editable: true,
+    });
+    appendPropsRow(meta, {
+      key: "subtype",
+      value: elem.subtype || "",
+      editable: true,
+    });
+    appendPropsRow(meta, {
+      key: "notes",
+      value: elem.notes || "",
+      editable: true,
+      multiline: true,
+    });
+    appendPropsRow(meta, {
+      key: "terminals",
+      value: (elem.terminals || []).join(", "),
+      editable: false,
+    });
+    bindPropsEditors(meta);
     fillCablesForElement(elem);
   }
 
   function fillListEmpty(ul, label) {
     ul.innerHTML = "";
     const li = document.createElement("li");
-    li.className = "show-empty";
+    li.className = "props-empty";
     li.textContent = label;
     ul.appendChild(li);
   }
@@ -2165,13 +2290,13 @@
   function appendSub(li, text) {
     if (!text) return;
     const span = document.createElement("span");
-    span.className = "show-sub";
+    span.className = "props-sub";
     span.textContent = text;
     li.appendChild(span);
   }
 
   function fillConduitsList(conduits) {
-    const ul = document.getElementById("show-conduits");
+    const ul = document.getElementById("props-conduits");
     ul.innerHTML = "";
     if (!conduits || !conduits.length) {
       fillListEmpty(ul, "—");
@@ -2195,7 +2320,7 @@
   }
 
   function fillCablesForElement(elem) {
-    const ul = document.getElementById("show-cables");
+    const ul = document.getElementById("props-cables");
     const edges = (graph?.cable_edges || []).filter(
       (e) => e.from === elem.id || e.to === elem.id
     );
@@ -2225,45 +2350,76 @@
     return `${locationId}/${relId}`;
   }
 
-  async function fillPlaceInspector(id) {
+  async function fillPlaceInspector(id, detailOpt) {
     const empty = document.getElementById("panel-empty");
-    const show = document.getElementById("panel-show");
+    const panel = document.getElementById("panel-props");
     if (!id || !locationId) {
+      propsTarget = null;
       empty.classList.remove("hidden");
-      show.classList.add("hidden");
+      panel.classList.add("hidden");
       return;
     }
     try {
-      const detail = await api(
-        `/api/place?location=${encodeURIComponent(locationId)}&id=${encodeURIComponent(id)}`
-      );
+      const detail =
+        detailOpt ||
+        (await api(
+          `/api/place?location=${encodeURIComponent(locationId)}&id=${encodeURIComponent(id)}`
+        ));
       empty.classList.add("hidden");
-      show.classList.remove("hidden");
+      panel.classList.remove("hidden");
       setInspectorMode("place");
-      const meta = document.getElementById("show-meta");
+      propsTarget = { kind: "place", placeId: id };
+      const meta = document.getElementById("props-meta");
       meta.innerHTML = "";
-      const rows = [
-        ["id", detail.id],
-        ["name", detail.name || detail.display_name],
-        ["label", detail.label || detail.display_label],
-        ["type", detail.type],
-        ["subtype", detail.subtype],
-        ["install", detail.install],
-        ["mount", detail.mount],
-        ["openings", (detail.openings || []).join(", ")],
-        ["connects", (detail.connects || []).join(" ↔ ")],
-        ["notes", detail.notes],
-      ];
-      for (const [k, v] of rows) {
-        if (v == null || v === "") continue;
-        const dt = document.createElement("dt");
-        dt.textContent = k;
-        const dd = document.createElement("dd");
-        dd.textContent = String(v);
-        meta.appendChild(dt);
-        meta.appendChild(dd);
-      }
-      const ul = document.getElementById("show-elements");
+      appendPropsRow(meta, { key: "id", value: detail.id, editable: false });
+      appendPropsRow(meta, {
+        key: "name",
+        value: detail.name || "",
+        editable: true,
+      });
+      appendPropsRow(meta, {
+        key: "label",
+        value: detail.label || "",
+        editable: true,
+      });
+      appendPropsRow(meta, {
+        key: "type",
+        value: detail.type || "",
+        editable: true,
+      });
+      appendPropsRow(meta, {
+        key: "subtype",
+        value: detail.subtype || "",
+        editable: true,
+      });
+      appendPropsRow(meta, {
+        key: "install",
+        value: detail.install || "",
+        editable: true,
+      });
+      appendPropsRow(meta, {
+        key: "mount",
+        value: detail.mount || "",
+        editable: true,
+      });
+      appendPropsRow(meta, {
+        key: "openings",
+        value: (detail.openings || []).join(", "),
+        editable: false,
+      });
+      appendPropsRow(meta, {
+        key: "connects",
+        value: (detail.connects || []).join(" ↔ "),
+        editable: false,
+      });
+      appendPropsRow(meta, {
+        key: "notes",
+        value: detail.notes || "",
+        editable: true,
+        multiline: true,
+      });
+      bindPropsEditors(meta);
+      const ul = document.getElementById("props-elements");
       ul.innerHTML = "";
       if (!(detail.elements || []).length) {
         fillListEmpty(ul, "—");
@@ -3442,7 +3598,7 @@
   async function loadLocation({ fit = true } = {}) {
     clearSelectionState();
     document.getElementById("panel-empty").classList.remove("hidden");
-    document.getElementById("panel-show").classList.add("hidden");
+    document.getElementById("panel-props").classList.add("hidden");
     graph = await api(
       `/api/physical?location=${encodeURIComponent(locationId)}&depth=${depthLevel}`
     );

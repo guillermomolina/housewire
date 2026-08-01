@@ -232,6 +232,42 @@ def create_app(site_root: Path | None = None) -> Any:
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
 
+    @app.patch("/api/place/properties")
+    async def api_place_properties(request: Request) -> dict[str, Any]:
+        from housewire.project.recipe_actions import update_place_properties
+
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or "").strip()
+        place_id = str(payload.get("id") or "").strip()
+        if not location_id or not place_id:
+            raise HTTPException(400, "location_id and id are required")
+        fields = payload.get("fields")
+        if not isinstance(fields, dict):
+            raise HTTPException(400, "fields must be an object")
+        element = payload.get("element")
+        element_id = str(element).strip() if element is not None else None
+        if element_id == "":
+            element_id = None
+        depth = _depth_from(payload)
+        try:
+            _preload_location(location_id)
+            detail = update_place_properties(
+                _session(),
+                canvas_location_id=location_id,
+                place_id=place_id,
+                fields=fields,
+                element=element_id,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        _touch_site()
+        return {
+            "detail": detail,
+            "graph": _graph(location_id, depth),
+        }
+
     @app.post("/api/physical/auto-layout")
     async def api_auto_layout(request: Request) -> dict[str, Any]:
         payload = await _json_body(request)

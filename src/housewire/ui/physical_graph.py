@@ -233,6 +233,12 @@ def _build_element_nodes(
                 if label is not None and str(label).strip()
                 else None
             )
+            notes = defn.get("notes")
+            notes_s = (
+                str(notes).strip()
+                if notes is not None and str(notes).strip()
+                else None
+            )
             etype = str(defn.get("type") or "Element")
             nodes.append(
                 {
@@ -245,6 +251,7 @@ def _build_element_nodes(
                     "subtype": defn.get("subtype"),
                     "icon": catalog_icon(etype, catalog=catalog, instance=defn),
                     "label": label_s,
+                    "notes": notes_s,
                     "display_name": working_name or name,
                     "display_label": label_s or working_name or name,
                     "terminals": terminals,
@@ -634,6 +641,12 @@ def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
                 if elabel is not None and str(elabel).strip()
                 else None
             )
+            notes = defn.get("notes")
+            notes_s = (
+                str(notes).strip()
+                if notes is not None and str(notes).strip()
+                else None
+            )
             etype = str(defn.get("type") or "Element")
             elem_rows.append(
                 {
@@ -646,6 +659,7 @@ def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
                     "icon": catalog_icon(etype, catalog=catalog, instance=defn),
                     "subtype": defn.get("subtype"),
                     "label": label_s,
+                    "notes": notes_s,
                     "display_name": working_name or ename,
                     "display_label": label_s or working_name or ename,
                 }
