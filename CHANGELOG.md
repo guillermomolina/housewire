@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.2] — 2026-08-01
+
+### Fixed
+
+- Unify Outline / Inspector panel title typography; keep the first outline
+  row from sitting under the title bar.
+- Orthogonal routing: opposite faces that would reverse on the same line
+  (e.g. exit North then enter South) take a C-shaped detour instead of
+  overlapping the outbound path.
+
 ## [0.27.1] — 2026-08-01
 
 ### Changed

@@ -936,9 +936,26 @@
       return `M ${x1} ${y1}`;
     }
     if (x1 === x2 || y1 === y2) {
-      return `M ${x1} ${y1} L ${x2} ${y2}`;
+      // Still may need a C when faces force a U-turn through a node.
+      const STUB0 = 20;
+      let ax0 = x1;
+      let ay0 = y1;
+      let bx0 = x2;
+      let by0 = y2;
+      if (fromFace === "E") ax0 = x1 + STUB0;
+      else if (fromFace === "W") ax0 = x1 - STUB0;
+      else if (fromFace === "S") ay0 = y1 + STUB0;
+      else if (fromFace === "N") ay0 = y1 - STUB0;
+      if (toFace === "E") bx0 = x2 + STUB0;
+      else if (toFace === "W") bx0 = x2 - STUB0;
+      else if (toFace === "S") by0 = y2 + STUB0;
+      else if (toFace === "N") by0 = y2 - STUB0;
+      if (!needsCDetour(fromFace, toFace, ax0, ay0, bx0, by0)) {
+        return `M ${x1} ${y1} L ${x2} ${y2}`;
+      }
     }
     const STUB = 20;
+    const DETOUR = 40;
     const parts = [`M ${x1} ${y1}`];
     let ax = x1;
     let ay = y1;
@@ -962,27 +979,59 @@
     else if (toFace === "S") by = y2 + STUB;
     else if (toFace === "N") by = y2 - STUB;
 
-    // S / Z: two elbows through a mid line (not a single L corner).
-    let horizontalBridge;
-    if (fromFace === "E" || fromFace === "W") horizontalBridge = true;
-    else if (fromFace === "N" || fromFace === "S") horizontalBridge = false;
-    else if (toFace === "E" || toFace === "W") horizontalBridge = true;
-    else if (toFace === "N" || toFace === "S") horizontalBridge = false;
-    else horizontalBridge = Math.abs(bx - ax) >= Math.abs(by - ay);
-
-    if (ax === bx || ay === by) {
+    if (needsCDetour(fromFace, toFace, ax, ay, bx, by)) {
+      // C-shaped detour: exit, offset sideways, then approach (avoid U-turn overlap).
+      if (fromFace === "N" || fromFace === "S") {
+        const side = ax + DETOUR;
+        parts.push(`L ${side} ${ay}`, `L ${side} ${by}`, `L ${bx} ${by}`);
+      } else {
+        const mid = ay + DETOUR;
+        parts.push(`L ${ax} ${mid}`, `L ${bx} ${mid}`, `L ${bx} ${by}`);
+      }
+    } else if (ax === bx || ay === by) {
       parts.push(`L ${bx} ${by}`);
-    } else if (horizontalBridge) {
-      const mx = (ax + bx) / 2;
-      parts.push(`L ${mx} ${ay}`, `L ${mx} ${by}`, `L ${bx} ${by}`);
     } else {
-      const my = (ay + by) / 2;
-      parts.push(`L ${ax} ${my}`, `L ${bx} ${my}`, `L ${bx} ${by}`);
+      // S / Z: two elbows through a mid line (not a single L corner).
+      let horizontalBridge;
+      if (fromFace === "E" || fromFace === "W") horizontalBridge = true;
+      else if (fromFace === "N" || fromFace === "S") horizontalBridge = false;
+      else if (toFace === "E" || toFace === "W") horizontalBridge = true;
+      else if (toFace === "N" || toFace === "S") horizontalBridge = false;
+      else horizontalBridge = Math.abs(bx - ax) >= Math.abs(by - ay);
+
+      if (horizontalBridge) {
+        const mx = (ax + bx) / 2;
+        parts.push(`L ${mx} ${ay}`, `L ${mx} ${by}`, `L ${bx} ${by}`);
+      } else {
+        const my = (ay + by) / 2;
+        parts.push(`L ${ax} ${my}`, `L ${bx} ${my}`, `L ${bx} ${by}`);
+      }
     }
     if (bx !== x2 || by !== y2) {
       parts.push(`L ${x2} ${y2}`);
     }
     return parts.join(" ");
+  }
+
+  /** True when opposite faces would reverse back through the same corridor. */
+  function needsCDetour(fromFace, toFace, ax, ay, bx, by) {
+    const ns =
+      (fromFace === "N" || fromFace === "S") &&
+      (toFace === "N" || toFace === "S") &&
+      fromFace !== toFace;
+    const ew =
+      (fromFace === "E" || fromFace === "W") &&
+      (toFace === "E" || toFace === "W") &&
+      fromFace !== toFace;
+    if (ns && Math.abs(ax - bx) < 0.5) {
+      if (fromFace === "N" && by > ay) return true;
+      if (fromFace === "S" && by < ay) return true;
+    }
+    if (ew && Math.abs(ay - by) < 0.5) {
+      if (fromFace === "E" && bx < ax) return true;
+      if (fromFace === "W" && bx > ax) return true;
+    }
+    return false;
   }
 
   function edgePathD(edge, byId) {
