@@ -937,13 +937,13 @@
     }
 
     const STUB = 20;
+    const DETOUR = 48;
     const parts = [`M ${x1} ${y1}`];
     let ax = x1;
     let ay = y1;
     let bx = x2;
     let by = y2;
 
-    // Leave the opening outward, then later enter from the far stub.
     if (fromFace === "E") {
       ax = x1 + STUB;
       parts.push(`L ${ax} ${ay}`);
@@ -962,37 +962,9 @@
     else if (toFace === "S") by = y2 + STUB;
     else if (toFace === "N") by = y2 - STUB;
 
-    if (needsCDetour(fromFace, ax, ay, bx, by)) {
-      // C: offset sideways so the return does not reuse the exit corridor.
-      const detour = Math.max(48, STUB * 2);
-      if (fromFace === "N" || fromFace === "S" || !fromFace) {
-        const mid = (ax + bx) / 2;
-        // Prefer the side away from the chord so the loop is visible.
-        const side = mid >= ax ? Math.max(ax, bx) + detour : Math.min(ax, bx) - detour;
-        parts.push(`L ${side} ${ay}`, `L ${side} ${by}`, `L ${bx} ${by}`);
-      } else {
-        const mid = (ay + by) / 2;
-        const side = mid >= ay ? Math.max(ay, by) + detour : Math.min(ay, by) - detour;
-        parts.push(`L ${ax} ${side}`, `L ${bx} ${side}`, `L ${bx} ${by}`);
-      }
-    } else if (ax === bx || ay === by) {
-      parts.push(`L ${bx} ${by}`);
-    } else {
-      // S / Z: two elbows through a mid line (forward progress only).
-      let horizontalBridge;
-      if (fromFace === "E" || fromFace === "W") horizontalBridge = true;
-      else if (fromFace === "N" || fromFace === "S") horizontalBridge = false;
-      else if (toFace === "E" || toFace === "W") horizontalBridge = true;
-      else if (toFace === "N" || toFace === "S") horizontalBridge = false;
-      else horizontalBridge = Math.abs(bx - ax) >= Math.abs(by - ay);
-
-      if (horizontalBridge) {
-        const mx = (ax + bx) / 2;
-        parts.push(`L ${mx} ${ay}`, `L ${mx} ${by}`, `L ${bx} ${by}`);
-      } else {
-        const my = (ay + by) / 2;
-        parts.push(`L ${ax} ${my}`, `L ${bx} ${my}`, `L ${bx} ${by}`);
-      }
+    const mid = minBendOrtho(ax, ay, bx, by, fromFace, toFace, DETOUR, STUB);
+    for (const [x, y] of mid) {
+      parts.push(`L ${x} ${y}`);
     }
     if (bx !== x2 || by !== y2) {
       parts.push(`L ${x2} ${y2}`);
@@ -1000,18 +972,194 @@
     return parts.join(" ");
   }
 
-  /**
-   * After leaving ``fromFace``, true if the run to the entry stub goes
-   * backwards along that exit axis (would overlap the outbound stub).
-   */
-  function needsCDetour(fromFace, ax, ay, bx, by) {
-    const dx = bx - ax;
-    const dy = by - ay;
-    if (fromFace === "N" && dy > 1) return true;
-    if (fromFace === "S" && dy < -1) return true;
-    if (fromFace === "E" && dx < -1) return true;
-    if (fromFace === "W" && dx > 1) return true;
+  /** First step from the exit stub must not reverse back into the box. */
+  function leavesOutward(fromFace, ax, ay, x, y) {
+    const dx = x - ax;
+    const dy = y - ay;
+    if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) return true;
+    if (fromFace === "N") return dy <= 1e-6; // north or horizontal
+    if (fromFace === "S") return dy >= -1e-6;
+    if (fromFace === "E") return dx >= -1e-6;
+    if (fromFace === "W") return dx <= 1e-6;
+    return true;
+  }
+
+  function polyBends(pts) {
+    let bends = 0;
+    for (let i = 2; i < pts.length; i++) {
+      const ax = pts[i - 1][0] - pts[i - 2][0];
+      const ay = pts[i - 1][1] - pts[i - 2][1];
+      const bx = pts[i][0] - pts[i - 1][0];
+      const by = pts[i][1] - pts[i - 1][1];
+      if (Math.abs(ax) < 1e-6 && Math.abs(ay) < 1e-6) continue;
+      if (Math.abs(bx) < 1e-6 && Math.abs(by) < 1e-6) continue;
+      const turn = ax * by - ay * bx;
+      if (Math.abs(turn) > 1e-6) bends += 1;
+    }
+    return bends;
+  }
+
+  /** Reject corridors that reverse 180° on the same axis (overlapping stub). */
+  function hasUTurn(pts) {
+    for (let i = 2; i < pts.length; i++) {
+      const ax = pts[i - 1][0] - pts[i - 2][0];
+      const ay = pts[i - 1][1] - pts[i - 2][1];
+      const bx = pts[i][0] - pts[i - 1][0];
+      const by = pts[i][1] - pts[i - 1][1];
+      if (Math.abs(ax) < 1e-6 && Math.abs(ay) < 1e-6) continue;
+      if (Math.abs(bx) < 1e-6 && Math.abs(by) < 1e-6) continue;
+      const turn = ax * by - ay * bx;
+      const dot = ax * bx + ay * by;
+      if (Math.abs(turn) < 1e-6 && dot < -1e-6) return true;
+    }
     return false;
+  }
+
+  function polyLength(pts) {
+    let len = 0;
+    for (let i = 1; i < pts.length; i++) {
+      len += Math.abs(pts[i][0] - pts[i - 1][0]) + Math.abs(pts[i][1] - pts[i - 1][1]);
+    }
+    return len;
+  }
+
+  /** True if every consecutive segment is axis-aligned (Manhattan). */
+  function isOrthoPoly(pts) {
+    for (let i = 1; i < pts.length; i++) {
+      const dx = pts[i][0] - pts[i - 1][0];
+      const dy = pts[i][1] - pts[i - 1][1];
+      if (Math.abs(dx) > 1e-6 && Math.abs(dy) > 1e-6) return false;
+    }
+    return true;
+  }
+
+  /** Drop duplicate points and merge colinear runs. */
+  function cleanOrthoPoly(pts) {
+    const out = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      const p = pts[i];
+      const q = out[out.length - 1];
+      if (Math.abs(p[0] - q[0]) < 1e-6 && Math.abs(p[1] - q[1]) < 1e-6) {
+        continue;
+      }
+      out.push(p);
+    }
+    let i = 1;
+    while (i < out.length - 1) {
+      const a = out[i - 1];
+      const b = out[i];
+      const c = out[i + 1];
+      const abx = b[0] - a[0];
+      const aby = b[1] - a[1];
+      const bcx = c[0] - b[0];
+      const bcy = c[1] - b[1];
+      const cross = abx * bcy - aby * bcx;
+      const sameDir =
+        abx * bcx + aby * bcy > 0 ||
+        (Math.abs(abx) < 1e-6 && Math.abs(aby) < 1e-6) ||
+        (Math.abs(bcx) < 1e-6 && Math.abs(bcy) < 1e-6);
+      if (Math.abs(cross) < 1e-6 && sameDir) {
+        out.splice(i, 1);
+        continue;
+      }
+      i += 1;
+    }
+    return out;
+  }
+
+  /**
+   * Manhattan connectors from exit stub to entry stub with the fewest bends.
+   * Returns intermediate points including the entry stub (bx, by).
+   */
+  function minBendOrtho(ax, ay, bx, by, fromFace, toFace, detour, stub) {
+    const start = [ax, ay];
+    const end = [bx, by];
+    /** @type {number[][][]} */
+    const raw = [];
+
+    const push = (pts) => {
+      const cleaned = cleanOrthoPoly([start, ...pts, end]);
+      if (cleaned.length < 2) return;
+      if (!isOrthoPoly(cleaned)) return;
+      if (hasUTurn(cleaned)) return;
+      const next = cleaned[1];
+      if (!leavesOutward(fromFace, ax, ay, next[0], next[1])) return;
+      raw.push(cleaned.slice(1)); // intermediates through end
+    };
+
+    // 0 bends — only when already aligned (same x or same y)
+    if (Math.abs(ax - bx) < 1e-6 || Math.abs(ay - by) < 1e-6) {
+      push([]);
+    }
+
+    // 1 bend (L)
+    push([[bx, ay]]);
+    push([[ax, by]]);
+
+    // 2 bends (Z through mid)
+    const mx = (ax + bx) / 2;
+    const my = (ay + by) / 2;
+    push([[mx, ay], [mx, by]]);
+    push([[ax, my], [bx, my]]);
+
+    // 2 bends: outer rails (approach from beyond the entry stub)
+    if (toFace === "S" || fromFace === "S") {
+      const yOut = Math.max(ay, by) + stub;
+      push([[ax, yOut], [bx, yOut]]);
+    }
+    if (toFace === "N" || fromFace === "N") {
+      const yOut = Math.min(ay, by) - stub;
+      push([[ax, yOut], [bx, yOut]]);
+    }
+    if (toFace === "E" || fromFace === "E") {
+      const xOut = Math.max(ax, bx) + stub;
+      push([[xOut, ay], [xOut, by]]);
+    }
+    if (toFace === "W" || fromFace === "W") {
+      const xOut = Math.min(ax, bx) - stub;
+      push([[xOut, ay], [xOut, by]]);
+    }
+
+    // 3 bends: side C loops (only when reverse on the exit axis would overlap)
+    push([[Math.max(ax, bx) + detour, ay], [Math.max(ax, bx) + detour, by]]);
+    push([[Math.min(ax, bx) - detour, ay], [Math.min(ax, bx) - detour, by]]);
+    push([
+      [Math.max(ax, bx) + detour, ay],
+      [Math.max(ax, bx) + detour, Math.max(ay, by) + stub],
+      [bx, Math.max(ay, by) + stub],
+    ]);
+    push([
+      [Math.min(ax, bx) - detour, ay],
+      [Math.min(ax, bx) - detour, Math.min(ay, by) - stub],
+      [bx, Math.min(ay, by) - stub],
+    ]);
+
+    if (!raw.length) {
+      // Fallback: forced side C
+      return [
+        [ax + detour, ay],
+        [ax + detour, by],
+        [bx, by],
+      ];
+    }
+
+    let best = raw[0];
+    let bestBends = Infinity;
+    let bestLen = Infinity;
+    for (const pts of raw) {
+      const full = [[ax, ay], ...pts];
+      const bends = polyBends(full);
+      const len = polyLength(full);
+      if (
+        bends < bestBends ||
+        (bends === bestBends && len < bestLen)
+      ) {
+        best = pts;
+        bestBends = bends;
+        bestLen = len;
+      }
+    }
+    return best;
   }
 
   function edgePathD(edge, byId) {

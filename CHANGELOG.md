@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.4] — 2026-08-01
+
+### Fixed
+
+- Orthogonal routing picks the Manhattan path with the fewest bends
+  (then shortest length), rejects diagonals and 180° U-turns on the same
+  corridor, and keeps exit stubs leaving the box outward.
+
 ## [0.27.3] — 2026-08-01
 
 ### Fixed
