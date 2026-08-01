@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-08-01
+
+### Added
+
+- UI **workspace model**: a document is a full site; view tabs are canvas
+  locations inside the active document (see ``docs/ui-workspace.md``).
+  API: ``GET /api/workspace``, ``POST …/open|close|save-as``.
+  **File** menu: Open site… / Save / Save as… / Close (Ctrl+O / Ctrl+S).
+  Toolbar Save remains.
+
 ### Breaking
 
 - **External type catalog.** Types are no longer shipped inside the package

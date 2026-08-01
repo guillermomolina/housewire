@@ -41,6 +41,8 @@
   let canvasLocations = [];
   let collapsedOutline = new Set();
   let outlineCollapseReady = false;
+  /** @type {{ id: string, title: string, depth: number }[]} */
+  let viewTabs = [];
   const HISTORY_MAX = 50;
   const DRAG_THRESHOLD = 4;
   const DBLCLICK_MS = 400;
@@ -1840,6 +1842,234 @@
   function updateSaveButton(dirty) {
     const btn = document.getElementById("btn-save");
     if (btn) btn.disabled = !dirty;
+    const menuSave = document.getElementById("menu-save");
+    if (menuSave) menuSave.disabled = !dirty;
+  }
+
+  async function saveDocument() {
+    const data = await api("/api/save", { method: "POST", body: "{}" });
+    setStatus(`saved ${(data.saved || []).length} file(s)`);
+    dirtyLocal = false;
+    updateSaveButton(false);
+    markLayoutBaseline();
+    await refreshDocumentLabel();
+    return data;
+  }
+
+  async function reloadAfterDocumentChange() {
+    viewTabs = [];
+    locationId = null;
+    graph = null;
+    clearSelectionState();
+    dirtyLocal = false;
+    layoutHistory = [];
+    layoutIndex = -1;
+    layoutBaseline = null;
+    outlineCollapseReady = false;
+    collapsedOutline = new Set();
+    svg.innerHTML = "";
+    await loadLocations();
+  }
+
+  function closeFileMenu() {
+    const menu = document.getElementById("menu-file");
+    const btn = document.getElementById("menu-file-btn");
+    if (menu) menu.classList.add("hidden");
+    if (btn) btn.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleFileMenu() {
+    const menu = document.getElementById("menu-file");
+    const btn = document.getElementById("menu-file-btn");
+    if (!menu || !btn) return;
+    const open = menu.classList.contains("hidden");
+    menu.classList.toggle("hidden", !open);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function promptPath({ title, hint, defaultPath, showForce }) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById("path-modal");
+      const titleEl = document.getElementById("path-modal-title");
+      const hintEl = document.getElementById("path-modal-hint");
+      const input = document.getElementById("path-modal-input");
+      const forceWrap = document.getElementById("path-modal-force-wrap");
+      const forceEl = document.getElementById("path-modal-force");
+      const errEl = document.getElementById("path-modal-error");
+      const okBtn = document.getElementById("path-modal-ok");
+      if (!modal || !input) {
+        resolve(null);
+        return;
+      }
+      titleEl.textContent = title;
+      hintEl.textContent = hint || "";
+      input.value = defaultPath || "";
+      forceEl.checked = false;
+      forceWrap.classList.toggle("hidden", !showForce);
+      errEl.classList.add("hidden");
+      errEl.textContent = "";
+      modal.classList.remove("hidden");
+      modal.setAttribute("aria-hidden", "false");
+      setTimeout(() => {
+        input.focus();
+        input.select();
+      }, 0);
+
+      function cleanup(result) {
+        modal.classList.add("hidden");
+        modal.setAttribute("aria-hidden", "true");
+        okBtn.removeEventListener("click", onOk);
+        document.removeEventListener("keydown", onKey);
+        modal
+          .querySelectorAll("[data-modal-dismiss]")
+          .forEach((el) => el.removeEventListener("click", onCancel));
+        resolve(result);
+      }
+
+      function onCancel() {
+        cleanup(null);
+      }
+
+      function onOk() {
+        const path = input.value.trim();
+        if (!path) {
+          errEl.textContent = "Path is required";
+          errEl.classList.remove("hidden");
+          return;
+        }
+        cleanup({ path, force: Boolean(forceEl.checked) });
+      }
+
+      function onKey(ev) {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          onCancel();
+        } else if (ev.key === "Enter") {
+          ev.preventDefault();
+          onOk();
+        }
+      }
+
+      okBtn.addEventListener("click", onOk);
+      document.addEventListener("keydown", onKey);
+      modal
+        .querySelectorAll("[data-modal-dismiss]")
+        .forEach((el) => el.addEventListener("click", onCancel));
+    });
+  }
+
+  async function isDocumentDirty() {
+    syncLayoutDirty();
+    if (dirtyLocal) return true;
+    try {
+      const st = await api("/api/workspace");
+      return (st.dirty || []).length > 0;
+    } catch {
+      return dirtyLocal;
+    }
+  }
+
+  async function fileOpen() {
+    let defaultPath = "";
+    try {
+      const st = await api("/api/workspace");
+      defaultPath = (st.document && st.document.path) || "";
+    } catch {
+      /* ignore */
+    }
+    const dirty = await isDocumentDirty();
+    const choice = await promptPath({
+      title: "Open site",
+      hint: "Absolute path to a site directory (contains housewire.yaml).",
+      defaultPath,
+      showForce: dirty,
+    });
+    if (!choice) return;
+    try {
+      await api("/api/workspace/open", {
+        method: "POST",
+        body: JSON.stringify({ path: choice.path, force: choice.force }),
+      });
+      await reloadAfterDocumentChange();
+      setStatus(`opened ${choice.path}`);
+    } catch (err) {
+      if (String(err.message || err).includes("unsaved") && !choice.force) {
+        setStatus("Unsaved changes — tick “Discard” or Save first");
+      }
+      setStatus(String(err.message || err));
+    }
+  }
+
+  async function fileSaveAs() {
+    let defaultPath = "";
+    try {
+      const st = await api("/api/workspace");
+      const cur = (st.document && st.document.path) || "";
+      defaultPath = cur ? `${cur}_copy` : "";
+    } catch {
+      /* ignore */
+    }
+    const choice = await promptPath({
+      title: "Save site as",
+      hint: "New directory path. Copies the site (without out/) and opens it.",
+      defaultPath,
+      showForce: false,
+    });
+    if (!choice) return;
+    try {
+      await api("/api/workspace/save-as", {
+        method: "POST",
+        body: JSON.stringify({ path: choice.path, force: false }),
+      });
+      dirtyLocal = false;
+      updateSaveButton(false);
+      await reloadAfterDocumentChange();
+      setStatus(`saved as ${choice.path}`);
+    } catch (err) {
+      setStatus(String(err.message || err));
+    }
+  }
+
+  async function fileClose() {
+    const dirty = await isDocumentDirty();
+    if (dirty) {
+      const discard = window.confirm(
+        "There are unsaved changes. Close and discard them?"
+      );
+      if (!discard) return;
+    }
+    try {
+      await api("/api/workspace/close", {
+        method: "POST",
+        body: JSON.stringify({ force: true }),
+      });
+      viewTabs = [];
+      locationId = null;
+      graph = null;
+      clearSelectionState();
+      dirtyLocal = false;
+      updateSaveButton(false);
+      svg.innerHTML = "";
+      document.getElementById("outline-tree").innerHTML = "";
+      renderViewTabs();
+      await refreshDocumentLabel();
+      setStatus("document closed — File → Open site…");
+    } catch (err) {
+      setStatus(String(err.message || err));
+    }
+  }
+
+  async function handleFileAction(action) {
+    closeFileMenu();
+    if (action === "open") await fileOpen();
+    else if (action === "save") {
+      try {
+        await saveDocument();
+      } catch (err) {
+        setStatus(String(err.message || err));
+      }
+    } else if (action === "save-as") await fileSaveAs();
+    else if (action === "close") await fileClose();
   }
 
   async function fillMissingLayout() {
@@ -1879,6 +2109,7 @@
   }
 
   async function loadLocations() {
+    await refreshDocumentLabel();
     const data = await api("/api/locations");
     canvasLocations = data.locations || [];
     await loadOutline();
@@ -1886,17 +2117,130 @@
       canvasLocations.find((r) => r.selectable !== false && r.id === ".") ||
       canvasLocations.find((r) => r.selectable !== false);
     if (first) {
-      await setCanvasLocation(first.id);
+      await openViewTab(first.id, { activate: true, resetDepth: true });
     } else {
       setStatus("No locations with children found");
+      renderViewTabs();
+    }
+  }
+
+  async function refreshDocumentLabel() {
+    const el = document.getElementById("doc-label");
+    if (!el) return;
+    try {
+      const st = await api("/api/workspace");
+      const name = st.document && st.document.name;
+      el.textContent = name ? String(name) : "(no document)";
+      el.title = st.document && st.document.path
+        ? String(st.document.path)
+        : "Active site document";
+    } catch {
+      el.textContent = "";
+    }
+  }
+
+  function viewTitleFor(id) {
+    const row = canvasLocations.find((r) => r.id === id);
+    if (row) {
+      return row.display_name || row.name || row.id || id;
+    }
+    if (id === "." || id === "") return "Site";
+    return String(id).split("/").pop() || id;
+  }
+
+  function renderViewTabs() {
+    const bar = document.getElementById("view-tabs");
+    if (!bar) return;
+    bar.innerHTML = "";
+    for (const tab of viewTabs) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "view-tab" + (tab.id === locationId ? " active" : "");
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("aria-selected", tab.id === locationId ? "true" : "false");
+      btn.dataset.viewId = tab.id;
+      const label = document.createElement("span");
+      label.textContent = tab.title;
+      btn.appendChild(label);
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "view-tab-close";
+      close.title = "Close view";
+      close.setAttribute("aria-label", `Close ${tab.title}`);
+      close.textContent = "×";
+      close.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        closeViewTab(tab.id);
+      });
+      btn.appendChild(close);
+      btn.addEventListener("click", () => {
+        activateViewTab(tab.id);
+      });
+      bar.appendChild(btn);
+    }
+  }
+
+  function rememberActiveViewDepth() {
+    if (!locationId) return;
+    const tab = viewTabs.find((t) => t.id === locationId);
+    if (tab) tab.depth = depthLevel;
+  }
+
+  async function openViewTab(id, { activate = true, resetDepth = true } = {}) {
+    if (!id) return;
+    let tab = viewTabs.find((t) => t.id === id);
+    if (!tab) {
+      tab = { id, title: viewTitleFor(id), depth: 1 };
+      viewTabs.push(tab);
+    } else {
+      tab.title = viewTitleFor(id);
+    }
+    if (activate) {
+      await activateViewTab(id, { resetDepth });
+    } else {
+      renderViewTabs();
+    }
+  }
+
+  async function activateViewTab(id, { resetDepth = false } = {}) {
+    if (!id) return;
+    rememberActiveViewDepth();
+    const tab = viewTabs.find((t) => t.id === id);
+    if (!tab) {
+      await openViewTab(id, { activate: true, resetDepth: true });
+      return;
+    }
+    if (!resetDepth && tab.depth) depthLevel = tab.depth;
+    else if (resetDepth) depthLevel = 1;
+    locationId = id;
+    renderViewTabs();
+    await loadLocation();
+  }
+
+  async function closeViewTab(id) {
+    const idx = viewTabs.findIndex((t) => t.id === id);
+    if (idx < 0) return;
+    const wasActive = locationId === id;
+    viewTabs.splice(idx, 1);
+    if (!viewTabs.length) {
+      locationId = null;
+      graph = null;
+      renderViewTabs();
+      svg.innerHTML = "";
+      setStatus("No view open — pick a place in the outline");
+      return;
+    }
+    if (wasActive) {
+      const next = viewTabs[Math.max(0, idx - 1)];
+      await activateViewTab(next.id);
+    } else {
+      renderViewTabs();
     }
   }
 
   async function setCanvasLocation(id, { resetDepth = true } = {}) {
     if (!id) return;
-    if (resetDepth) depthLevel = 1;
-    locationId = id;
-    await loadLocation();
+    await openViewTab(id, { activate: true, resetDepth });
   }
 
   async function loadOutline() {
@@ -2181,6 +2525,8 @@
     else applyWorldTransform();
     highlightOutline(locationId);
     await refreshStatus();
+    rememberActiveViewDepth();
+    renderViewTabs();
     const bits = [];
     if (filled.length) {
       bits.push(`${filled.length} place(s)`);
@@ -2289,6 +2635,16 @@
     const mod = ev.ctrlKey || ev.metaKey;
     if (!mod) return;
     const key = ev.key.toLowerCase();
+    if (key === "s") {
+      ev.preventDefault();
+      saveDocument().catch((err) => setStatus(String(err.message || err)));
+      return;
+    }
+    if (key === "o") {
+      ev.preventDefault();
+      fileOpen().catch((err) => setStatus(String(err.message || err)));
+      return;
+    }
     if (key === "z" && !ev.shiftKey) {
       ev.preventDefault();
       undoLayout().catch((err) => setStatus(String(err.message || err)));
@@ -2300,15 +2656,31 @@
 
   document.getElementById("btn-save").addEventListener("click", async () => {
     try {
-      const data = await api("/api/save", { method: "POST", body: "{}" });
-      setStatus(`saved ${data.saved.length} file(s)`);
-      dirtyLocal = false;
-      updateSaveButton(false);
-      markLayoutBaseline();
+      await saveDocument();
     } catch (err) {
       setStatus(String(err.message || err));
     }
   });
+
+  const menuFileBtn = document.getElementById("menu-file-btn");
+  if (menuFileBtn) {
+    menuFileBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      toggleFileMenu();
+    });
+  }
+  const menuFile = document.getElementById("menu-file");
+  if (menuFile) {
+    menuFile.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const item = ev.target.closest("[data-file-action]");
+      if (!item) return;
+      handleFileAction(item.getAttribute("data-file-action")).catch((err) =>
+        setStatus(String(err.message || err))
+      );
+    });
+  }
+  document.addEventListener("click", () => closeFileMenu());
 
   document.getElementById("btn-zoom-in").addEventListener("click", () => {
     scale = Math.min(3, scale * 1.15);

@@ -8,8 +8,20 @@
   <link rel="stylesheet" href="/static/app.css" />
 </head>
 <body>
+  <nav class="menubar" aria-label="Application">
+    <div class="menu">
+      <button type="button" class="menu-btn" id="menu-file-btn" aria-haspopup="true" aria-expanded="false">File</button>
+      <div class="menu-dropdown hidden" id="menu-file" role="menu">
+        <button type="button" role="menuitem" data-file-action="open">Open site…</button>
+        <button type="button" role="menuitem" data-file-action="save" id="menu-save" disabled>Save</button>
+        <button type="button" role="menuitem" data-file-action="save-as">Save as…</button>
+        <button type="button" role="menuitem" data-file-action="close">Close</button>
+      </div>
+    </div>
+  </nav>
   <header class="toolbar">
     <div class="brand">housewire</div>
+    <div id="doc-label" class="doc-label" title="Active site document"></div>
     <label class="field">
       Representation
       <select id="representation">
@@ -46,6 +58,7 @@
     </div>
     <div id="status" class="status" aria-live="polite"></div>
   </header>
+  <div id="view-tabs" class="view-tabs" role="tablist" aria-label="Canvas views"></div>
   <div class="workspace">
     <aside id="nav-tree" class="nav-tree" aria-label="Site outline">
       <h2>Outline</h2>
@@ -107,6 +120,26 @@
         <p id="recipe-msg" class="recipe-msg"></p>
       </div>
     </aside>
+  </div>
+  <div id="path-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-dismiss></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="path-modal-title">
+      <h2 id="path-modal-title">Site path</h2>
+      <p id="path-modal-hint" class="modal-hint"></p>
+      <label class="modal-field">
+        Path
+        <input type="text" id="path-modal-input" spellcheck="false" autocomplete="off" />
+      </label>
+      <label class="modal-check hidden" id="path-modal-force-wrap">
+        <input type="checkbox" id="path-modal-force" />
+        Discard unsaved changes
+      </label>
+      <div class="modal-actions">
+        <button type="button" id="path-modal-cancel" data-modal-dismiss>Cancel</button>
+        <button type="button" id="path-modal-ok" class="primary">OK</button>
+      </div>
+      <p id="path-modal-error" class="modal-error hidden"></p>
+    </div>
   </div>
   <script src="/static/app.js"></script>
 </body>

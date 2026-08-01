@@ -68,6 +68,7 @@ edges). Click a box or element for the side panel (inspector + socket/lamp/feed
 recipes). Place positions go to `view.physical`; element positions to
 `view.electrical`; page settings to `views.physical` on the canvas root.
 Requires the `ui` optional dependency (included in `.[dev,ui]` / `make prepare`).
+Document vs view model: [docs/ui-workspace.md](docs/ui-workspace.md).
 
 ## Shell and ABM
 

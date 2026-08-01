@@ -3,9 +3,10 @@
 from pathlib import Path
 from typing import Any
 
-from housewire.project.session import ProjectSession
+from housewire import __version__
 from housewire.project.view_layout import get_physical_page, set_physical_page
 from housewire.ui import physical_graph as pg
+from housewire.ui.workspace import Workspace, create_workspace
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -21,36 +22,49 @@ except ImportError:  # pragma: no cover - optional extra
     StaticFiles = None  # type: ignore[misc, assignment]
 
 
-def create_app(site_root: Path) -> Any:
-    """Build FastAPI app bound to one site directory."""
+def create_app(site_root: Path | None = None) -> Any:
+    """Build FastAPI app with an in-process workspace (optional initial site)."""
     if FastAPI is None:
         raise RuntimeError(
             "UI extras not installed. Run: pip install 'housewire[ui]'"
         )
 
-    root = site_root.resolve()
-    session = ProjectSession(root)
-    app = FastAPI(title="housewire UI", version="0.22.0")
+    workspace: Workspace = create_workspace(site_root)
+    app = FastAPI(title="housewire UI", version=__version__)
+
+    def _session():
+        try:
+            return workspace.require_session()
+        except FileNotFoundError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    def _root() -> Path:
+        try:
+            return workspace.require_root()
+        except FileNotFoundError as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     def _session_docs() -> dict[Path, dict[str, Any]]:
+        session = _session()
         return {p: buf.doc for p, buf in session._buffers.items()}
 
     def _site_yaml() -> Path:
-        return session.site_yaml()
+        return _session().site_yaml()
 
     def _preload_location(location_id: str) -> Path:
-        del location_id  # graph resolves logical places inside the site doc
+        del location_id
+        session = _session()
         session.ensure_doc(_site_yaml())
-        return root
+        return _root()
 
     def _graph(location_id: str, depth: int = 1) -> dict[str, Any]:
-        _preload_location(location_id)
+        root = _preload_location(location_id)
         return pg.build_physical_graph(
             root, location_id, depth=depth, session_docs=_session_docs()
         )
 
     def _touch_site() -> None:
-        session.reconcile_dirty(_site_yaml())
+        _session().reconcile_dirty(_site_yaml())
 
     def _depth_from(payload: dict[str, Any] | None = None, raw: int | None = None) -> int:
         value = raw if raw is not None else (payload or {}).get("depth", 1)
@@ -77,18 +91,69 @@ def create_app(site_root: Path) -> Any:
             raise HTTPException(404, "UI static files missing")
         return FileResponse(index_path)
 
+    @app.get("/api/workspace")
+    def api_workspace() -> dict[str, Any]:
+        return workspace.status()
+
+    @app.post("/api/workspace/open")
+    async def api_workspace_open(request: Request) -> dict[str, Any]:
+        payload = await _json_body(request)
+        path = str(payload.get("path") or "").strip()
+        if not path:
+            raise HTTPException(400, "path is required")
+        force = bool(payload.get("force", False))
+        try:
+            workspace.open_site(Path(path), force=force)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except NotADirectoryError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return workspace.status()
+
+    @app.post("/api/workspace/close")
+    async def api_workspace_close(request: Request) -> dict[str, Any]:
+        payload = await _json_body(request)
+        force = bool(payload.get("force", False))
+        try:
+            workspace.close(force=force)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return workspace.status()
+
+    @app.post("/api/workspace/save-as")
+    async def api_workspace_save_as(request: Request) -> dict[str, Any]:
+        payload = await _json_body(request)
+        path = str(payload.get("path") or "").strip()
+        if not path:
+            raise HTTPException(400, "path is required")
+        force = bool(payload.get("force", False))
+        try:
+            workspace.save_as(Path(path), force=force)
+        except FileNotFoundError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return workspace.status()
+
     @app.get("/api/locations")
     def api_locations() -> dict[str, Any]:
-        return {"locations": pg.list_canvas_locations(root)}
+        return {"locations": pg.list_canvas_locations(_root())}
 
     @app.get("/api/outline")
     def api_outline() -> dict[str, Any]:
-        return {"nodes": pg.list_site_outline(root)}
+        return {"nodes": pg.list_site_outline(_root())}
 
     @app.get("/api/catalog")
     def api_catalog() -> dict[str, Any]:
         from housewire.house import load_catalog
 
+        root = _root()
         cat = load_catalog(root)
         types = {
             type_id: {
@@ -118,7 +183,7 @@ def create_app(site_root: Path) -> Any:
         try:
             _preload_location(location)
             return place_detail(
-                session, canvas_location_id=location, place_id=id
+                _session(), canvas_location_id=location, place_id=id
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
@@ -133,6 +198,8 @@ def create_app(site_root: Path) -> Any:
             raise HTTPException(400, "location_id is required")
         force = bool(payload.get("force", False))
         depth = _depth_from(payload)
+        session = _session()
+        root = _root()
         try:
             _preload_location(location_id)
             docs = _session_docs()
@@ -169,7 +236,7 @@ def create_app(site_root: Path) -> Any:
             _preload_location(location_id)
             docs = _session_docs()
             updated = pg.apply_positions(
-                root, location_id, positions, session_docs=docs
+                _root(), location_id, positions, session_docs=docs
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
@@ -189,7 +256,7 @@ def create_app(site_root: Path) -> Any:
             _preload_location(location_id)
             docs = _session_docs()
             updated = pg.apply_electrical_positions(
-                root, location_id, positions, session_docs=docs
+                _root(), location_id, positions, session_docs=docs
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
@@ -206,11 +273,12 @@ def create_app(site_root: Path) -> Any:
             raise HTTPException(400, "location_id is required")
         force = bool(payload.get("force", False))
         depth = _depth_from(payload)
+        session = _session()
         try:
             _preload_location(location_id)
             docs = _session_docs()
             updated = pg.apply_electrical_auto_layout(
-                root,
+                _root(),
                 location_id,
                 session_docs=docs,
                 depth=depth,
@@ -235,6 +303,7 @@ def create_app(site_root: Path) -> Any:
         location_id = str(payload.get("location_id") or "").strip()
         if not location_id:
             raise HTTPException(400, "location_id is required")
+        session = _session()
         loc_yaml = _site_yaml()
         _path, doc = session.ensure_doc(loc_yaml)
         from housewire.project.tree import get_place_node, logical_parts_from_id
@@ -268,7 +337,7 @@ def create_app(site_root: Path) -> Any:
         try:
             _preload_location(location_id)
             result = run_socket_recipe(
-                session,
+                _session(),
                 name=name,
                 from_ref=from_ref,
                 strip=strip,
@@ -304,7 +373,7 @@ def create_app(site_root: Path) -> Any:
         try:
             _preload_location(location_id)
             result = run_lamp_recipe(
-                session,
+                _session(),
                 name=name,
                 from_ref=from_ref,
                 strip=strip,
@@ -343,7 +412,7 @@ def create_app(site_root: Path) -> Any:
         try:
             _preload_location(location_id)
             result = run_feed_recipe(
-                session,
+                _session(),
                 name=name,
                 from_ref=from_ref,
                 to_ref=to_ref,
@@ -363,6 +432,8 @@ def create_app(site_root: Path) -> Any:
 
     @app.post("/api/save")
     def api_save() -> dict[str, Any]:
+        session = _session()
+        root = _root()
         try:
             saved = [str(p.relative_to(root)) for p in session.save_all()]
         except ValueError as exc:
@@ -371,8 +442,7 @@ def create_app(site_root: Path) -> Any:
 
     @app.get("/api/status")
     def api_status() -> dict[str, Any]:
-        dirty = [str(p.relative_to(root)) for p in session.dirty_paths()]
-        return {"dirty": dirty, "site": str(root)}
+        return workspace.status()
 
     if STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
