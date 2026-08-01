@@ -42,6 +42,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   Outline opens only the first level by default; elements appear in the tree
   only when the Elements toggle is on. Orthogonal conduit/cable paths use
   S/Z mid elbows (not a single L corner).
+- Physical UI **multi-select**: Ctrl/Cmd+click to toggle; drag a box on empty
+  canvas to select everything inside (Ctrl/Cmd+box adds). Drag any selected
+  item to move the whole selection together. Pan with middle mouse, Space+drag,
+  or Alt+drag. Wheel zoom anchors on the cursor.
 
 ### Changed
 

@@ -226,6 +226,7 @@ button:hover {
 }
 
 #viewport {
+  position: relative;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -236,6 +237,22 @@ button:hover {
 
 #viewport.panning {
   cursor: grabbing;
+}
+
+#viewport.marqueeing {
+  cursor: crosshair;
+}
+
+.marquee {
+  position: absolute;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.marquee.hidden {
+  display: none;
 }
 
 #canvas {
@@ -249,11 +266,13 @@ button:hover {
   cursor: move;
 }
 
-#canvas.dragging .node-box {
+#canvas.dragging .node-box,
+#canvas.dragging .element-box {
   pointer-events: none;
 }
 
-#canvas.dragging .node-box.selected {
+#canvas.dragging .node-box.selected,
+#canvas.dragging .element-box.selected {
   pointer-events: auto;
 }
 

@@ -15,6 +15,7 @@
   let graph = null;
   let locationId = null;
   let selectedId = null;
+  let selectedIds = new Set();
   let depthLevel = 1;
   let maxDepth = 1;
   let scale = 1;
@@ -23,6 +24,8 @@
   let dirtyLocal = false;
   let drag = null;
   let panDrag = null;
+  let marquee = null;
+  let spacePan = false;
   let saveTimer = null;
   let worldEl = null;
   let nodesById = {};
@@ -288,6 +291,169 @@
   function childrenOf(parentId) {
     const key = parentId || null;
     return (graph?.nodes || []).filter((n) => (n.parent || null) === key);
+  }
+
+  function isModClick(ev) {
+    return !!(ev && (ev.ctrlKey || ev.metaKey));
+  }
+
+  function clearSelectionState() {
+    selectedIds.clear();
+    selectedId = null;
+  }
+
+  function setSelectedVisual() {
+    for (const [nid, g] of Object.entries(nodesById)) {
+      const box = g.querySelector(".node-box");
+      if (!box) continue;
+      box.classList.toggle("selected", selectedIds.has(nid));
+    }
+    for (const [eid, g] of Object.entries(elementsById)) {
+      const box = g.querySelector(".element-box");
+      if (!box) continue;
+      box.classList.toggle("selected", selectedIds.has(eid));
+    }
+  }
+
+  function toggleSelectionId(id) {
+    if (selectedIds.has(id)) {
+      selectedIds.delete(id);
+      if (selectedId === id) {
+        selectedId = [...selectedIds].slice(-1)[0] ?? null;
+      }
+    } else {
+      selectedIds.add(id);
+      selectedId = id;
+    }
+    setSelectedVisual();
+  }
+
+  function replaceSelection(id) {
+    selectedIds = id == null ? new Set() : new Set([id]);
+    selectedId = id;
+    setSelectedVisual();
+  }
+
+  function clientToWorld(clientX, clientY) {
+    const rect = viewport.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left - panX) / scale,
+      y: (clientY - rect.top - panY) / scale,
+    };
+  }
+
+  function rectsIntersect(a, b) {
+    return !(a.x2 < b.x1 || a.x1 > b.x2 || a.y2 < b.y1 || a.y1 > b.y2);
+  }
+
+  function placeWorldRect(node, byId) {
+    const a = absXY(node, byId);
+    return {
+      x1: a.x,
+      y1: a.y,
+      x2: a.x + nodeW(node),
+      y2: a.y + nodeH(node),
+    };
+  }
+
+  function elementWorldRect(elem, byId) {
+    const a = elementAbsXY(elem, byId);
+    const w = elem.w ?? ELEM_W;
+    const h = elem.h ?? ELEM_H;
+    return { x1: a.x, y1: a.y, x2: a.x + w, y2: a.y + h };
+  }
+
+  function selectionHasAncestorPlace(placeId, placeIds) {
+    const byId = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
+    let cur = byId[placeId];
+    while (cur?.parent) {
+      if (placeIds.has(cur.parent)) return true;
+      cur = byId[cur.parent];
+    }
+    return false;
+  }
+
+  function buildDragItems() {
+    const placeIds = new Set();
+    const elemIds = new Set();
+    for (const id of selectedIds) {
+      if ((graph?.nodes || []).some((n) => n.id === id)) placeIds.add(id);
+      else if ((graph?.elements || []).some((e) => e.id === id)) elemIds.add(id);
+    }
+    const items = [];
+    for (const id of placeIds) {
+      if (selectionHasAncestorPlace(id, placeIds)) continue;
+      const node = graph.nodes.find((n) => n.id === id);
+      if (!node) continue;
+      items.push({
+        kind: "place",
+        id,
+        origX: node.x ?? 0,
+        origY: node.y ?? 0,
+      });
+    }
+    for (const id of elemIds) {
+      const elem = (graph.elements || []).find((e) => e.id === id);
+      if (!elem) continue;
+      if (
+        elem.parent &&
+        (placeIds.has(elem.parent) ||
+          selectionHasAncestorPlace(elem.parent, placeIds))
+      ) {
+        continue;
+      }
+      items.push({
+        kind: "element",
+        id,
+        origX: elem.x ?? 0,
+        origY: elem.y ?? 0,
+      });
+    }
+    return items;
+  }
+
+  function marqueeEl() {
+    return document.getElementById("marquee");
+  }
+
+  function hideMarquee() {
+    const box = marqueeEl();
+    if (box) box.classList.add("hidden");
+    viewport.classList.remove("marqueeing");
+  }
+
+  function updateMarqueeDom(x0, y0, x1, y1) {
+    const box = marqueeEl();
+    if (!box) return;
+    const left = Math.min(x0, x1);
+    const top = Math.min(y0, y1);
+    const w = Math.abs(x1 - x0);
+    const h = Math.abs(y1 - y0);
+    box.classList.remove("hidden");
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+    box.style.width = `${w}px`;
+    box.style.height = `${h}px`;
+  }
+
+  function idsInMarqueeWorld(worldRect, additive) {
+    const byId = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
+    const hit = additive ? new Set(selectedIds) : new Set();
+    for (const node of graph?.nodes || []) {
+      if (!nodesById[node.id]) continue;
+      if (rectsIntersect(placeWorldRect(node, byId), worldRect)) {
+        hit.add(node.id);
+      }
+    }
+    if (showElements) {
+      for (const elem of graph?.elements || []) {
+        if (!elementsById[elem.id]) continue;
+        if (rectsIntersect(elementWorldRect(elem, byId), worldRect)) {
+          hit.add(elem.id);
+        }
+      }
+    }
+    return hit;
   }
 
   function idMap(byId) {
@@ -761,7 +927,7 @@
     const box = el("rect", {
       class:
         "node-box" +
-        (selectedId === node.id ? " selected" : "") +
+        (selectedIds.has(node.id) ? " selected" : "") +
         (hasKids ? " container" : "") +
         (node.expandable ? " expandable" : ""),
       width: w,
@@ -842,17 +1008,28 @@
       if (ev.button !== 0) return;
       ev.stopPropagation();
       raiseNode(node.id);
+      if (isModClick(ev)) {
+        toggleSelectionId(node.id);
+      } else if (!selectedIds.has(node.id)) {
+        replaceSelection(node.id);
+      }
+      if (!selectedIds.has(node.id)) {
+        drag = null;
+        syncInspectorFromSelection();
+        return;
+      }
       // Defer capture until real drag — early capture kills dblclick.
       drag = {
-        kind: "place",
-        id: node.id,
+        kind: "multi",
+        anchorId: node.id,
+        anchorKind: "place",
         pointerId: ev.pointerId,
         startClientX: ev.clientX,
         startClientY: ev.clientY,
-        origX: node.x,
-        origY: node.y,
+        items: buildDragItems(),
         moved: false,
         captured: false,
+        modClick: isModClick(ev),
       };
     });
 
@@ -870,7 +1047,7 @@
       transform: `translate(${a.x},${a.y})`,
     });
     const box = el("rect", {
-      class: "element-box" + (selectedId === elem.id ? " selected" : ""),
+      class: "element-box" + (selectedIds.has(elem.id) ? " selected" : ""),
       width: w,
       height: h,
       rx: 3,
@@ -899,16 +1076,27 @@
       ev.stopPropagation();
       const gEl = elementsById[elem.id];
       if (gEl && gEl.parentNode) gEl.parentNode.appendChild(gEl);
+      if (isModClick(ev)) {
+        toggleSelectionId(elem.id);
+      } else if (!selectedIds.has(elem.id)) {
+        replaceSelection(elem.id);
+      }
+      if (!selectedIds.has(elem.id)) {
+        drag = null;
+        syncInspectorFromSelection();
+        return;
+      }
       drag = {
-        kind: "element",
-        id: elem.id,
+        kind: "multi",
+        anchorId: elem.id,
+        anchorKind: "element",
         pointerId: ev.pointerId,
         startClientX: ev.clientX,
         startClientY: ev.clientY,
-        origX: elem.x,
-        origY: elem.y,
+        items: buildDragItems(),
         moved: false,
         captured: false,
+        modClick: isModClick(ev),
       };
     });
     layerG.appendChild(g);
@@ -1013,25 +1201,13 @@
     updateDepthLabel();
   }
 
-  function setSelectedVisual(id) {
-    for (const [nid, g] of Object.entries(nodesById)) {
-      const box = g.querySelector(".node-box");
-      if (!box) continue;
-      if (id != null && nid === id) box.classList.add("selected");
-      else box.classList.remove("selected");
-    }
-    for (const [eid, g] of Object.entries(elementsById)) {
-      const box = g.querySelector(".element-box");
-      if (!box) continue;
-      if (id != null && eid === id) box.classList.add("selected");
-      else box.classList.remove("selected");
-    }
+  function selectElement(elem) {
+    replaceSelection(elem.id);
+    highlightOutline(canvasToSiteId(elem.id));
+    fillElementInspector(elem);
   }
 
-  function selectElement(elem) {
-    selectedId = elem.id;
-    setSelectedVisual(elem.id);
-    highlightOutline(canvasToSiteId(elem.id));
+  function fillElementInspector(elem) {
     const empty = document.getElementById("panel-empty");
     const show = document.getElementById("panel-show");
     empty.classList.add("hidden");
@@ -1066,15 +1242,7 @@
     return `${locationId}/${relId}`;
   }
 
-  async function selectNode(id) {
-    const elem = (graph?.elements || []).find((e) => e.id === id);
-    if (elem) {
-      selectElement(elem);
-      return;
-    }
-    selectedId = id;
-    setSelectedVisual(id);
-    highlightOutline(id ? canvasToSiteId(id) : locationId);
+  async function fillPlaceInspector(id) {
     const empty = document.getElementById("panel-empty");
     const show = document.getElementById("panel-show");
     if (!id || !locationId) {
@@ -1126,6 +1294,33 @@
     }
   }
 
+  async function selectNode(id) {
+    const elem = (graph?.elements || []).find((e) => e.id === id);
+    if (elem) {
+      selectElement(elem);
+      return;
+    }
+    replaceSelection(id);
+    highlightOutline(id ? canvasToSiteId(id) : locationId);
+    await fillPlaceInspector(id);
+  }
+
+  async function syncInspectorFromSelection() {
+    setSelectedVisual();
+    if (selectedIds.size === 0) {
+      highlightOutline(locationId);
+      await fillPlaceInspector(null);
+      return;
+    }
+    if (selectedIds.size > 1) {
+      setStatus(`${selectedIds.size} selected`);
+    }
+    highlightOutline(selectedId ? canvasToSiteId(selectedId) : locationId);
+    const elem = (graph?.elements || []).find((e) => e.id === selectedId);
+    if (elem) fillElementInspector(elem);
+    else await fillPlaceInspector(selectedId);
+  }
+
   function prefillRecipesFromSelection(detail) {
     const openings = detail.openings || [];
     const prefer =
@@ -1172,15 +1367,6 @@
   async function endDrag(ev) {
     if (!drag) return;
     if (ev && drag.pointerId != null && ev.pointerId !== drag.pointerId) return;
-    const kind = drag.kind || "place";
-    const placeNode =
-      kind === "place"
-        ? graph?.nodes.find((n) => n.id === drag.id)
-        : null;
-    const elemNode =
-      kind === "element"
-        ? (graph?.elements || []).find((e) => e.id === drag.id)
-        : null;
     svg.classList.remove("dragging");
     try {
       if (
@@ -1198,47 +1384,72 @@
     if (!finished.moved) {
       const now = Date.now();
       const isDbl =
-        lastTap.id === finished.id && now - lastTap.t <= DBLCLICK_MS;
-      lastTap = isDbl ? { id: null, t: 0 } : { id: finished.id, t: now };
-      if (kind === "place" && isDbl && placeNode) {
-        await enterNode(placeNode);
-        return;
+        !finished.modClick &&
+        finished.anchorKind === "place" &&
+        selectedIds.size === 1 &&
+        lastTap.id === finished.anchorId &&
+        now - lastTap.t <= DBLCLICK_MS;
+      lastTap = isDbl
+        ? { id: null, t: 0 }
+        : { id: finished.anchorId, t: now };
+      if (isDbl) {
+        const placeNode = graph?.nodes.find((n) => n.id === finished.anchorId);
+        if (placeNode) {
+          await enterNode(placeNode);
+          return;
+        }
       }
-      await selectNode(finished.id);
+      await syncInspectorFromSelection();
       return;
     }
     lastTap = { id: null, t: 0 };
     if (!locationId) return;
-    await selectNode(finished.id);
+    await syncInspectorFromSelection();
     try {
-      if (kind === "element" && elemNode) {
-        await api(`/api/electrical/positions`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            location_id: locationId,
-            positions: {
-              [finished.id]: { x: elemNode.x, y: elemNode.y },
-            },
-          }),
-        });
-      } else if (placeNode) {
+      const placePositions = {};
+      const elemPositions = {};
+      for (const item of finished.items || []) {
+        if (item.kind === "place") {
+          const node = graph?.nodes.find((n) => n.id === item.id);
+          if (node) placePositions[item.id] = { x: node.x, y: node.y };
+        } else if (item.kind === "element") {
+          const elem = (graph?.elements || []).find((e) => e.id === item.id);
+          if (elem) elemPositions[item.id] = { x: elem.x, y: elem.y };
+        }
+      }
+      if (Object.keys(placePositions).length) {
         await api(`/api/physical/positions`, {
           method: "PATCH",
           body: JSON.stringify({
             location_id: locationId,
-            positions: { [finished.id]: { x: placeNode.x, y: placeNode.y } },
+            positions: placePositions,
           }),
         });
-      } else {
+      }
+      if (Object.keys(elemPositions).length) {
+        await api(`/api/electrical/positions`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            location_id: locationId,
+            positions: elemPositions,
+          }),
+        });
+      }
+      if (
+        !Object.keys(placePositions).length &&
+        !Object.keys(elemPositions).length
+      ) {
         return;
       }
       pushLayoutHistory();
       syncLayoutDirty();
       updateSaveButton(dirtyLocal);
+      const n =
+        Object.keys(placePositions).length + Object.keys(elemPositions).length;
       setStatus(
         dirtyLocal
-          ? `Moved ${finished.id} · unsaved`
-          : `Moved ${finished.id}`
+          ? `Moved ${n} · unsaved`
+          : `Moved ${n}`
       );
       scheduleStatusRefresh();
     } catch (err) {
@@ -1246,72 +1457,120 @@
     }
   }
 
+  function applyMultiDrag(ev) {
+    if (!drag || drag.kind !== "multi") return;
+    const dist = Math.hypot(
+      ev.clientX - drag.startClientX,
+      ev.clientY - drag.startClientY
+    );
+    if (!drag.moved && dist < DRAG_THRESHOLD) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      svg.classList.add("dragging");
+      if (!drag.captured && drag.pointerId != null) {
+        try {
+          svg.setPointerCapture(drag.pointerId);
+          drag.captured = true;
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    const dx = (ev.clientX - drag.startClientX) / scale;
+    const dy = (ev.clientY - drag.startClientY) / scale;
+    for (const item of drag.items || []) {
+      if (item.kind === "place") {
+        const node = graph?.nodes.find((n) => n.id === item.id);
+        if (!node) continue;
+        node.x = Math.max(0, Math.round(item.origX + dx));
+        node.y = Math.max(0, Math.round(item.origY + dy));
+      } else if (item.kind === "element") {
+        const elem = (graph?.elements || []).find((e) => e.id === item.id);
+        if (!elem) continue;
+        let nx = Math.max(0, Math.round(item.origX + dx));
+        let ny = Math.max(0, Math.round(item.origY + dy));
+        if (elem.parent) {
+          const parent = graph.nodes.find((n) => n.id === elem.parent);
+          if (parent) {
+            const innerW = Math.max(ELEM_W, nodeW(parent) - 2 * PAD);
+            const innerH = Math.max(ELEM_H, nodeH(parent) - HEADER - PAD);
+            nx = Math.min(nx, Math.max(0, innerW - (elem.w ?? ELEM_W)));
+            ny = Math.min(ny, Math.max(0, innerH - (elem.h ?? ELEM_H)));
+          }
+        }
+        elem.x = nx;
+        elem.y = ny;
+      }
+    }
+    updateNodeVisual(null);
+  }
+
+  async function endMarquee(ev) {
+    if (!marquee) return;
+    if (ev && marquee.pointerId != null && ev.pointerId !== marquee.pointerId) {
+      return;
+    }
+    const finished = marquee;
+    marquee = null;
+    hideMarquee();
+    try {
+      if (
+        finished.captured &&
+        finished.pointerId != null &&
+        svg.hasPointerCapture?.(finished.pointerId)
+      ) {
+        svg.releasePointerCapture(finished.pointerId);
+      }
+    } catch {
+      /* ignore */
+    }
+    if (!finished.moved) {
+      if (!finished.additive) {
+        clearSelectionState();
+        setSelectedVisual();
+        await fillPlaceInspector(null);
+        highlightOutline(locationId);
+      }
+      return;
+    }
+    const w0 = clientToWorld(finished.startClientX, finished.startClientY);
+    const w1 = clientToWorld(
+      ev?.clientX ?? finished.startClientX,
+      ev?.clientY ?? finished.startClientY
+    );
+    const worldRect = {
+      x1: Math.min(w0.x, w1.x),
+      y1: Math.min(w0.y, w1.y),
+      x2: Math.max(w0.x, w1.x),
+      y2: Math.max(w0.y, w1.y),
+    };
+    const hit = idsInMarqueeWorld(worldRect, finished.additive);
+    selectedIds = hit;
+    selectedId = [...hit].slice(-1)[0] ?? null;
+    await syncInspectorFromSelection();
+  }
+
   svg.addEventListener("pointermove", (ev) => {
     if (drag) {
-      const kind = drag.kind || "place";
-      const placeNode =
-        kind === "place"
-          ? graph?.nodes.find((n) => n.id === drag.id)
-          : null;
-      const elemNode =
-        kind === "element"
-          ? (graph?.elements || []).find((e) => e.id === drag.id)
-          : null;
-      const node = placeNode || elemNode;
-      if (!node) return;
+      applyMultiDrag(ev);
+      return;
+    }
+    if (marquee) {
       const dist = Math.hypot(
-        ev.clientX - drag.startClientX,
-        ev.clientY - drag.startClientY
+        ev.clientX - marquee.startClientX,
+        ev.clientY - marquee.startClientY
       );
-      if (!drag.moved && dist < DRAG_THRESHOLD) return;
-      if (!drag.moved) {
-        drag.moved = true;
-        svg.classList.add("dragging");
-        if (!drag.captured && drag.pointerId != null) {
-          try {
-            svg.setPointerCapture(drag.pointerId);
-            drag.captured = true;
-          } catch {
-            /* ignore */
-          }
-        }
+      if (!marquee.moved && dist < DRAG_THRESHOLD) return;
+      if (!marquee.moved) {
+        marquee.moved = true;
       }
-      const dx = (ev.clientX - drag.startClientX) / scale;
-      const dy = (ev.clientY - drag.startClientY) / scale;
-      let nx = Math.max(0, Math.round(drag.origX + dx));
-      let ny = Math.max(0, Math.round(drag.origY + dy));
-      if (kind === "element" && elemNode?.parent) {
-        const parent = graph.nodes.find((n) => n.id === elemNode.parent);
-        if (parent) {
-          const innerW = Math.max(ELEM_W, nodeW(parent) - 2 * PAD);
-          const innerH = Math.max(ELEM_H, nodeH(parent) - HEADER - PAD);
-          nx = Math.min(nx, Math.max(0, innerW - (elemNode.w ?? ELEM_W)));
-          ny = Math.min(ny, Math.max(0, innerH - (elemNode.h ?? ELEM_H)));
-        }
-      }
-      node.x = nx;
-      node.y = ny;
-      if (kind === "element") {
-        const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
-        measureVisibleSizes();
-        for (const n of graph.nodes) {
-          const g = nodesById[n.id];
-          if (!g) continue;
-          const a = absXY(n, byId);
-          g.setAttribute("transform", `translate(${a.x},${a.y})`);
-          const box = g.querySelector(".node-box");
-          if (box) {
-            box.setAttribute("width", String(nodeW(n)));
-            box.setAttribute("height", String(nodeH(n)));
-          }
-        }
-        for (const e of graph.elements || []) {
-          updateElementVisual(e, byId);
-        }
-        refreshEdges();
-      } else {
-        updateNodeVisual(node);
-      }
+      const rect = viewport.getBoundingClientRect();
+      updateMarqueeDom(
+        marquee.startClientX - rect.left,
+        marquee.startClientY - rect.top,
+        ev.clientX - rect.left,
+        ev.clientY - rect.top
+      );
       return;
     }
     if (panDrag) {
@@ -1326,6 +1585,10 @@
       endDrag(ev);
       return;
     }
+    if (marquee) {
+      endMarquee(ev);
+      return;
+    }
     if (panDrag) {
       panDrag = null;
       viewport.classList.remove("panning");
@@ -1334,8 +1597,10 @@
 
   svg.addEventListener("pointercancel", (ev) => {
     if (drag) endDrag(ev);
+    if (marquee) endMarquee(ev);
     panDrag = null;
     viewport.classList.remove("panning");
+    hideMarquee();
   });
 
   function scheduleStatusRefresh() {
@@ -1622,8 +1887,8 @@
         await setCanvasLocation(placeId);
       }
       highlightOutline(placeId);
-      selectedId = null;
-      setSelectedVisual(null);
+      clearSelectionState();
+      setSelectedVisual();
       return;
     }
     const canvasRoot = nearestSelectableAncestor(placeId);
@@ -1678,7 +1943,7 @@
   }
 
   async function loadLocation() {
-    selectedId = null;
+    clearSelectionState();
     document.getElementById("panel-empty").classList.remove("hidden");
     document.getElementById("panel-show").classList.add("hidden");
     graph = await api(
@@ -1850,12 +2115,46 @@
   });
 
   viewport.addEventListener("pointerdown", (ev) => {
-    if (drag) return;
+    if (drag || marquee) return;
     if (ev.target !== svg && ev.target !== viewport) return;
+    const panWithLeft = spacePan || ev.altKey;
+    if (ev.button === 1 || (ev.button === 0 && panWithLeft)) {
+      ev.preventDefault();
+      panDrag = { x: ev.clientX, y: ev.clientY, panX, panY };
+      viewport.classList.add("panning");
+      svg.setPointerCapture(ev.pointerId);
+      return;
+    }
     if (ev.button !== 0) return;
-    panDrag = { x: ev.clientX, y: ev.clientY, panX, panY };
-    viewport.classList.add("panning");
-    svg.setPointerCapture(ev.pointerId);
+    marquee = {
+      pointerId: ev.pointerId,
+      startClientX: ev.clientX,
+      startClientY: ev.clientY,
+      additive: isModClick(ev),
+      moved: false,
+      captured: true,
+    };
+    viewport.classList.add("marqueeing");
+    try {
+      svg.setPointerCapture(ev.pointerId);
+    } catch {
+      /* ignore */
+    }
+  });
+
+  window.addEventListener("keydown", (ev) => {
+    if (ev.code === "Space" && !ev.repeat) {
+      const tag = (ev.target && ev.target.tagName) || "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      spacePan = true;
+      ev.preventDefault();
+    }
+  });
+  window.addEventListener("keyup", (ev) => {
+    if (ev.code === "Space") spacePan = false;
+  });
+  window.addEventListener("blur", () => {
+    spacePan = false;
   });
 
   viewport.addEventListener(
@@ -1870,7 +2169,15 @@
         return;
       }
       const factor = ev.deltaY > 0 ? 1 / 1.08 : 1.08;
-      scale = Math.min(3, Math.max(0.05, scale * factor));
+      const next = Math.min(3, Math.max(0.05, scale * factor));
+      if (next === scale) return;
+      const rect = viewport.getBoundingClientRect();
+      const mx = ev.clientX - rect.left;
+      const my = ev.clientY - rect.top;
+      const ratio = next / scale;
+      panX = mx - (mx - panX) * ratio;
+      panY = my - (my - panY) * ratio;
+      scale = next;
       applyWorldTransform();
     },
     { passive: false }
