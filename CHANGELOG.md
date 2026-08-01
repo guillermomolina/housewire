@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.20] — 2026-08-01
+
+### Changed
+
+- Element terminals fan out along the attach face (global slots per face) so
+  strands no longer pile on one midpoint; conduit road width scales with
+  ``contains`` (3 vs 15 cables stay distinct).
+
 ## [0.28.19] — 2026-08-01
 
 ### Changed

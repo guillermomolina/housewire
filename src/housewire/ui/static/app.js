@@ -1458,8 +1458,8 @@
     ];
   }
 
-  /** Side midpoint of an element facing ``toward`` (same-box cable endpoints). */
-  function elementAttachPoint(elem, toward, placeById) {
+  /** Which side of ``elem`` faces ``toward`` (E/W/N/S). */
+  function elementAttachFace(elem, toward, placeById) {
     const p = elementAbsXY(elem, placeById);
     const w = elem.w ?? ELEM_W;
     const h = elem.h ?? ELEM_H;
@@ -1467,10 +1467,48 @@
     const cy = p.y + h / 2;
     const dx = toward.x - cx;
     const dy = toward.y - cy;
-    if (Math.abs(dx) >= Math.abs(dy)) {
-      return { x: dx >= 0 ? p.x + w : p.x, y: cy };
+    if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "E" : "W";
+    return dy >= 0 ? "S" : "N";
+  }
+
+  /**
+   * Attach point on an element face. ``slot``/``slotCount`` spread terminals
+   * along that face so strands do not all land on the midpoint.
+   */
+  function elementAttachPoint(elem, toward, placeById, slot = 0, slotCount = 1) {
+    const p = elementAbsXY(elem, placeById);
+    const w = elem.w ?? ELEM_W;
+    const h = elem.h ?? ELEM_H;
+    const face = elementAttachFace(elem, toward, placeById);
+    const n = Math.max(1, slotCount | 0);
+    const s = Math.max(0, Math.min(n - 1, slot | 0));
+    const t = n <= 1 ? 0.5 : (s + 0.5) / n;
+    const inset = 4;
+    if (face === "E" || face === "W") {
+      const usable = Math.max(2, h - 2 * inset);
+      return {
+        x: face === "E" ? p.x + w : p.x,
+        y: p.y + inset + t * usable,
+      };
     }
-    return { x: cx, y: dy >= 0 ? p.y + h : p.y };
+    const usable = Math.max(2, w - 2 * inset);
+    return {
+      x: p.x + inset + t * usable,
+      y: face === "S" ? p.y + h : p.y,
+    };
+  }
+
+  /** Stable key for one cable_edge row (id alone can repeat across pairs). */
+  function cableEdgeKey(edge) {
+    return `${edge.id || ""}|${edge.from || ""}|${edge.to || ""}`;
+  }
+
+  /** Road stroke width from how many cables ride the conduit. */
+  function conduitRoadWidth(containsCount) {
+    const n = Math.max(0, Number(containsCount) || 0);
+    if (n <= 0) return 8;
+    // Per-cable band ≈ jacket; high ceiling so 3 vs 15 stay visually distinct.
+    return Math.min(96, 6 + n * 4);
   }
 
   function pathDToPoints(d) {
@@ -1507,7 +1545,7 @@
     TQ: "#26a69a",
     SR: "#b0bec5",
   };
-  const LANE_SPACING = 3.25;
+  const LANE_SPACING = 3.5;
   const JACKET_WIDTH = 5.5;
   const STRAND_WIDTH = 1.85;
 
@@ -1535,10 +1573,138 @@
     return [...new Set(indices)].sort((a, b) => a - b);
   }
 
-  function laneOffset(colorIndex, colorCount) {
-    const n = Math.max(colorCount, 1);
+  function laneOffset(laneIndex, laneCount) {
+    const n = Math.max(laneCount, 1);
     const mid = (n - 1) / 2;
-    return (colorIndex - mid) * LANE_SPACING;
+    return (laneIndex - mid) * LANE_SPACING;
+  }
+
+  function cableRouteKey(edge, elemById) {
+    const hops = edge.conduit_hops;
+    if (hops && hops.length) {
+      return hops.map((h) => h.conduit || "").join(">");
+    }
+    if (edge.conduit) return String(edge.conduit);
+    const a = elemById[edge.from];
+    const b = elemById[edge.to];
+    if (a?.parent && b?.parent && a.parent === b.parent) {
+      return `box:${a.parent}`;
+    }
+    return `cable:${cableEdgeKey(edge)}`;
+  }
+
+  /**
+   * Global terminal slots (per element face) and lane indices (per route)
+   * so strands from different cables do not stack on one midpoint.
+   */
+  function buildCableLayout(cableEdges, elemById, placeById) {
+    /** @type {Map<string, {key:string, wi:number, end:string}[]>} */
+    const byFace = new Map();
+    /** @type {Map<string, {key:string, wi:number}[]>} */
+    const byRoute = new Map();
+    /** @type {Map<string, string[]>} */
+    const jacketsByRoute = new Map();
+
+    function towardForEnd(edge, end, a, b) {
+      const hops = edge.conduit_hops;
+      if (hops && hops.length) {
+        const hop = end === "from" ? hops[0] : hops[hops.length - 1];
+        const place = placeById[end === "from" ? hop.from : hop.to];
+        const oid = end === "from" ? hop.from_opening : hop.to_opening;
+        if (place && oid) {
+          return openingAnchorAbs(place, oid, oid?.[0], placeById);
+        }
+      }
+      if (edge.from_opening && edge.to_opening && edge.conduit_from && edge.conduit_to) {
+        const place = placeById[end === "from" ? edge.conduit_from : edge.conduit_to];
+        const oid = end === "from" ? edge.from_opening : edge.to_opening;
+        if (place && oid) {
+          return openingAnchorAbs(place, oid, oid?.[0], placeById);
+        }
+      }
+      return elementCenter(end === "from" ? b : a, placeById);
+    }
+
+    for (const edge of cableEdges || []) {
+      const a = elemById[edge.from];
+      const b = elemById[edge.to];
+      if (!a || !b) continue;
+      const key = cableEdgeKey(edge);
+      const wires = cableWireIndices(edge);
+      const towardFrom = towardForEnd(edge, "from", a, b);
+      const towardTo = towardForEnd(edge, "to", a, b);
+      for (const wi of wires) {
+        for (const end of /** @type {const} */ (["from", "to"])) {
+          const elem = end === "from" ? a : b;
+          const toward = end === "from" ? towardFrom : towardTo;
+          const face = elementAttachFace(elem, toward, placeById);
+          const fk = `${elem.id}|${face}`;
+          if (!byFace.has(fk)) byFace.set(fk, []);
+          byFace.get(fk).push({ key, wi, end });
+        }
+        const rk = cableRouteKey(edge, elemById);
+        if (!byRoute.has(rk)) byRoute.set(rk, []);
+        byRoute.get(rk).push({ key, wi });
+      }
+      const rk = cableRouteKey(edge, elemById);
+      if (!jacketsByRoute.has(rk)) jacketsByRoute.set(rk, []);
+      if (!jacketsByRoute.get(rk).includes(key)) {
+        jacketsByRoute.get(rk).push(key);
+      }
+    }
+
+    /** @type {Map<string, {slot:number, count:number}>} */
+    const terminalMap = new Map();
+    for (const [, list] of byFace) {
+      list.sort((u, v) =>
+        u.key === v.key ? u.wi - v.wi : u.key < v.key ? -1 : 1
+      );
+      const count = list.length;
+      list.forEach((item, slot) => {
+        terminalMap.set(`${item.key}|${item.wi}|${item.end}`, { slot, count });
+      });
+    }
+
+    /** @type {Map<string, {index:number, count:number}>} */
+    const laneMap = new Map();
+    for (const [, list] of byRoute) {
+      list.sort((u, v) =>
+        u.key === v.key ? u.wi - v.wi : u.key < v.key ? -1 : 1
+      );
+      const count = list.length;
+      list.forEach((item, index) => {
+        laneMap.set(`${item.key}|${item.wi}`, { index, count });
+      });
+    }
+
+    /** @type {Map<string, {index:number, count:number}>} */
+    const jacketMap = new Map();
+    for (const [, keys] of jacketsByRoute) {
+      keys.sort();
+      const count = keys.length;
+      keys.forEach((key, index) => {
+        jacketMap.set(key, { index, count });
+      });
+    }
+
+    return {
+      terminal(edge, wi, end) {
+        return (
+          terminalMap.get(`${cableEdgeKey(edge)}|${wi}|${end}`) || {
+            slot: 0,
+            count: 1,
+          }
+        );
+      },
+      lane(edge, wi) {
+        return (
+          laneMap.get(`${cableEdgeKey(edge)}|${wi}`) || { index: 0, count: 1 }
+        );
+      },
+      jacket(edge) {
+        return jacketMap.get(cableEdgeKey(edge)) || { index: 0, count: 1 };
+      },
+    };
   }
 
   /** Offset an orthogonal polyline by ``dist`` along the left normal. */
@@ -1602,11 +1768,18 @@
    * In-box hop tail points: element edge → contour opening.
    * @returns {number[][]|null}
    */
-  function hopEndpointTailPts(elem, place, openingId, placeById) {
+  function hopEndpointTailPts(
+    elem,
+    place,
+    openingId,
+    placeById,
+    slot = 0,
+    slotCount = 1
+  ) {
     if (!elem || !place || !openingId) return null;
     if (elem.parent && place.id && elem.parent !== place.id) return null;
     const op = openingAnchorAbs(place, openingId, openingId?.[0], placeById);
-    const attach = elementAttachPoint(elem, op, placeById);
+    const attach = elementAttachPoint(elem, op, placeById, slot, slotCount);
     return simpleOrthoPts(attach, op);
   }
 
@@ -1654,21 +1827,51 @@
   }
 
   /**
-   * Base polylines for a cable edge (jacket follows these; strands are offset).
+   * Base polylines for a cable edge.
+   * @param {{fromSlot?:{slot:number,count:number}, toSlot?:{slot:number,count:number}, laneDist?:number}|undefined} opts
    * @returns {number[][][]}
    */
-  function cableBaseSubpaths(edge, placeById, elemById, occupied) {
+  function cableBaseSubpaths(edge, placeById, elemById, occupied, opts) {
     const a = elemById[edge.from];
     const b = elemById[edge.to];
     if (!a || !b) return [];
     const c1 = elementCenter(a, placeById);
     const c2 = elementCenter(b, placeById);
+    const fromSlot = opts?.fromSlot || { slot: 0, count: 1 };
+    const toSlot = opts?.toSlot || { slot: 0, count: 1 };
+    const laneDist = opts?.laneDist || 0;
+    /** Offset only conduit runs — tails keep slotted terminals on the element. */
+    const offsetMids = (subs) => {
+      if (Math.abs(laneDist) < 1e-9 || subs.length <= 2) {
+        // Same-box / single segment: terminals already fanned via slots.
+        return subs;
+      }
+      return subs.map((sub, i) => {
+        if (i === 0 || i === subs.length - 1) return sub;
+        return offsetOrthoPts(sub, laneDist);
+      });
+    };
 
-    // Same box: per-connection L (no A↔B unification — strands separate by lane).
+    // Same box: per-connection L with slotted terminals.
     if (a.parent && b.parent && a.parent === b.parent) {
-      const p1 = elementAttachPoint(a, c2, placeById);
-      const p2 = elementAttachPoint(b, c1, placeById);
-      return [simpleOrthoPts(p1, p2)];
+      const p1 = elementAttachPoint(
+        a,
+        c2,
+        placeById,
+        fromSlot.slot,
+        fromSlot.count
+      );
+      const p2 = elementAttachPoint(b, c1, placeById, toSlot.slot, toSlot.count);
+      const pts = simpleOrthoPts(p1, p2);
+      // Jacket (unslotted) may use a slight lane; strands rely on slots only.
+      if (
+        fromSlot.count <= 1 &&
+        toSlot.count <= 1 &&
+        Math.abs(laneDist) >= 1e-9
+      ) {
+        return [offsetOrthoPts(pts, laneDist)];
+      }
+      return [pts];
     }
 
     const parentExclude = [a.parent, b.parent].filter(Boolean);
@@ -1708,7 +1911,9 @@
         a,
         startPlace,
         first.from_opening,
-        placeById
+        placeById,
+        fromSlot.slot,
+        fromSlot.count
       );
       if (startTail && startTail.length >= 2) subs.push(startTail);
 
@@ -1768,27 +1973,31 @@
         b,
         endPlace,
         last.to_opening,
-        placeById
+        placeById,
+        toSlot.slot,
+        toSlot.count
       );
       if (endTail && endTail.length >= 2) subs.push(endTail);
-      return subs;
+      return offsetMids(subs);
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
     return d ? pathDToSubpaths(d) : [];
   }
 
-  function appendCableVisuals(cablesG, edge, placeById, elemById, occupied) {
-    const subs = cableBaseSubpaths(edge, placeById, elemById, occupied);
-    if (!subs.length) return null;
+  function appendCableVisuals(cablesG, edge, placeById, elemById, occupied, layout) {
     const colors = edge.colors || [];
     const wireIdx = cableWireIndices(edge);
-    const colorCount = Math.max(colors.length, wireIdx.length, 1);
     const edgeName = edge.name || edge.id || edge.via || "";
+    const jInfo = layout ? layout.jacket(edge) : { index: 0, count: 1 };
+    const jacketSubs = cableBaseSubpaths(edge, placeById, elemById, occupied, {
+      laneDist: laneOffset(jInfo.index, jInfo.count) * 0.35,
+    });
+    if (!jacketSubs.length) return null;
     /** @type {SVGElement[]} */
     const paths = [];
 
-    // White jacket (sheath) along the base route.
-    for (const sub of subs) {
+    // White jacket (sheath) along the cable route (not fanned to terminals).
+    for (const sub of jacketSubs) {
       const jacket = el("path", {
         class: "cable-jacket",
         d: pointsToPathD(sub),
@@ -1801,16 +2010,26 @@
       paths.push(jacket);
     }
 
-    // Colored strands to terminals (offset lanes).
+    // Colored strands: slotted terminals + global route lanes.
     for (const wi of wireIdx) {
       const code = colors[wi] || colors[0] || "GY";
-      const dist = laneOffset(wi, colorCount);
+      const fromT = layout
+        ? layout.terminal(edge, wi, "from")
+        : { slot: 0, count: 1 };
+      const toT = layout
+        ? layout.terminal(edge, wi, "to")
+        : { slot: 0, count: 1 };
+      const lane = layout ? layout.lane(edge, wi) : { index: wi, count: wireIdx.length };
+      const strandSubs = cableBaseSubpaths(edge, placeById, elemById, occupied, {
+        fromSlot: fromT,
+        toSlot: toT,
+        laneDist: laneOffset(lane.index, lane.count),
+      });
       const stroke = wireColorCss(code);
-      for (const sub of subs) {
-        const pts = offsetOrthoPts(sub, dist);
+      for (const sub of strandSubs) {
         const strand = el("path", {
           class: "cable-strand",
-          d: pointsToPathD(pts),
+          d: pointsToPathD(sub),
         });
         strand.setAttribute("stroke", stroke);
         strand.setAttribute("stroke-width", String(STRAND_WIDTH));
@@ -1821,17 +2040,16 @@
             `${edgeName} · ${code}${edge.via ? ` (${edge.via})` : ""}`
           )
         );
-        // Wider invisible hit target for hover later.
         const hit = el("path", {
           class: "cable-strand-hit",
-          d: pointsToPathD(pts),
+          d: pointsToPathD(sub),
         });
         cablesG.appendChild(hit);
         cablesG.appendChild(strand);
         paths.push(hit, strand);
       }
     }
-    return { edge, paths, subs, wireIdx };
+    return { edge, paths, subs: jacketSubs, wireIdx };
   }
 
   function refreshEdges() {
@@ -1846,7 +2064,7 @@
         for (const path of item.paths) path.setAttribute("d", routed.d);
         for (const s of routed.segs) occupied.push(s);
         const n = (item.edge.contains || []).length;
-        const roadW = Math.min(28, 7 + n * 2.5);
+        const roadW = conduitRoadWidth(n);
         const tube = item.paths[0];
         if (tube) tube.setAttribute("stroke-width", String(roadW));
       }
@@ -1859,13 +2077,15 @@
       const elemById = Object.fromEntries(
         (graph.elements || []).map((e) => [e.id, e])
       );
+      const layout = buildCableLayout(graph.cable_edges || [], elemById, byId);
       for (const edge of graph.cable_edges || []) {
         const item = appendCableVisuals(
           cablesG,
           edge,
           byId,
           elemById,
-          occupied
+          occupied,
+          layout
         );
         if (item) cablePaths.push(item);
       }
@@ -2206,7 +2426,7 @@
         ? `${edgeName}: ${contains}`
         : String(edgeName || "");
       const n = (edge.contains || []).length;
-      const roadW = Math.min(28, 7 + n * 2.5);
+      const roadW = conduitRoadWidth(n);
       const tube = el("path", { class: "edge-tube", d });
       tube.setAttribute("stroke-width", String(roadW));
       const core = el("path", { class: "edge-tube-core", d });
@@ -2232,13 +2452,18 @@
 
     // Cables: white jacket + colored strands (above tubes + elements).
     if (showElectrical) {
+      const elemById = Object.fromEntries(
+        (graph.elements || []).map((e) => [e.id, e])
+      );
+      const layout = buildCableLayout(graph.cable_edges || [], elemById, byId);
       for (const edge of graph.cable_edges || []) {
         const item = appendCableVisuals(
           cablesG,
           edge,
           byId,
           elemById,
-          occupied
+          occupied,
+          layout
         );
         if (item) cablePaths.push(item);
       }
