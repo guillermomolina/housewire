@@ -195,6 +195,7 @@ def _build_element_nodes(
     *,
     places: list[tuple[tuple[str, ...], dict[str, Any]]],
     loc_doc: dict[str, Any],
+    catalog=None,
 ) -> list[dict[str, Any]]:
     """Electrical elements for places in the graph (+ canvas root doc)."""
     sources: list[tuple[tuple[str, ...], dict[str, Any]]] = [
@@ -232,6 +233,7 @@ def _build_element_nodes(
                 if label is not None and str(label).strip()
                 else None
             )
+            etype = str(defn.get("type") or "Element")
             nodes.append(
                 {
                     "id": eid,
@@ -239,8 +241,9 @@ def _build_element_nodes(
                     "name": working_name,
                     "parent": parent_id,
                     "place_parts": list(place_parts),
-                    "type": str(defn.get("type") or "Element"),
+                    "type": etype,
                     "subtype": defn.get("subtype"),
+                    "icon": catalog_icon(etype, catalog=catalog, instance=defn),
                     "label": label_s,
                     "display_name": working_name or name,
                     "display_label": label_s or working_name or name,
@@ -721,6 +724,7 @@ def build_physical_graph(
 
     loc_meta = place_meta_from_mapping(loc_doc) or {}
     page = get_physical_page(loc_doc)
+    catalog = load_catalog(site_root)
 
     all_docs: dict[tuple[str, ...], dict[str, Any]] = {
         parts: node for parts, node in iter_places(site_doc, under=canvas_parts)
@@ -834,6 +838,7 @@ def build_physical_graph(
                 ),
                 "display_name": place_name(meta, place_id),
                 "display_label": place_label(meta, place_id),
+                "icon": catalog_icon(type_id, catalog=catalog, instance=doc),
                 "openings": [
                     {"id": oid, "face": _opening_face(oid)} for oid in openings
                 ],
@@ -918,7 +923,9 @@ def build_physical_graph(
                 }
             )
 
-    elements = _build_element_nodes(places=places, loc_doc=loc_doc)
+    elements = _build_element_nodes(
+        places=places, loc_doc=loc_doc, catalog=catalog
+    )
     element_ids = {e["id"] for e in elements}
     cable_edges = _build_cable_edges(
         places=places,

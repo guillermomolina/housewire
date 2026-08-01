@@ -7,6 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.14] — 2026-08-01
+
+### Changed
+
+- Place and element boxes show the catalog type icon before the type label.
+
 ## [0.27.13] — 2026-08-01
 
 ### Changed

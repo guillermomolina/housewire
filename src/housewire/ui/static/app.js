@@ -107,6 +107,31 @@
     return `fa-solid ${raw}`;
   }
 
+  /** Font Awesome icon + type label on a canvas box (place or element). */
+  function appendTypeWithIcon(g, { icon, typeText, x, y, maxW, textClass }) {
+    const iconSize = 10;
+    const gap = 3;
+    const fo = document.createElementNS(ns, "foreignObject");
+    fo.setAttribute("class", "type-icon-fo");
+    fo.setAttribute("x", String(x));
+    fo.setAttribute("y", String(y - iconSize));
+    fo.setAttribute("width", String(iconSize + 2));
+    fo.setAttribute("height", String(iconSize + 2));
+    const i = document.createElement("i");
+    i.className = `${faClass(icon)} type-icon`;
+    i.setAttribute("aria-hidden", "true");
+    fo.appendChild(i);
+    g.appendChild(fo);
+    const textX = x + iconSize + gap;
+    g.appendChild(
+      el(
+        "text",
+        { class: textClass, x: textX, y },
+        fitLabel(typeText, Math.max(8, maxW - (iconSize + gap)))
+      )
+    );
+  }
+
   const ns = "http://www.w3.org/2000/svg";
 
   function setStatus(text) {
@@ -1620,7 +1645,7 @@
       if (typeEl) {
         typeEl.textContent = fitLabel(
           (n.type || "") + (n.expandable ? " · +" : ""),
-          w
+          Math.max(8, w - 21)
         );
       }
       syncOpeningMarks(n);
@@ -1654,8 +1679,6 @@
     g.appendChild(box);
     const fullLabel = node.display_label || node.label || node.display_name || node.name || node.id;
     const canvasName = node.display_name || node.name || node.id;
-    const typeText =
-      (node.type || "") + (node.expandable ? " · +" : "");
     g.appendChild(el("title", null, fullLabel));
     g.appendChild(
       el(
@@ -1664,13 +1687,14 @@
         fitLabel(canvasName, w)
       )
     );
-    g.appendChild(
-      el(
-        "text",
-        { class: "node-type", x: 8, y: 34 },
-        fitLabel(typeText, w)
-      )
-    );
+    appendTypeWithIcon(g, {
+      icon: node.icon,
+      typeText: (node.type || "") + (node.expandable ? " · +" : ""),
+      x: 8,
+      y: 34,
+      maxW: w - 16,
+      textClass: "node-type",
+    });
 
     if (!hasKids) {
       const planes = (node.openings || []).filter(
@@ -1791,13 +1815,14 @@
         fitLabel(elem.display_name || elem.name || elem.leaf_id || elem.id, w - 4)
       )
     );
-    g.appendChild(
-      el(
-        "text",
-        { class: "element-type", x: 4, y: 22 },
-        fitLabel(elem.type || "", w - 4)
-      )
-    );
+    appendTypeWithIcon(g, {
+      icon: elem.icon,
+      typeText: elem.type || "",
+      x: 4,
+      y: 22,
+      maxW: w - 8,
+      textClass: "element-type",
+    });
     box.addEventListener("pointerdown", (ev) => {
       if (ev.button !== 0) return;
       ev.stopPropagation();

@@ -831,6 +831,22 @@ button:hover {
   pointer-events: none;
 }
 
+.type-icon-fo {
+  overflow: visible;
+  pointer-events: none;
+}
+
+.type-icon {
+  font-size: 9px;
+  line-height: 1;
+  color: var(--muted);
+  display: block;
+}
+
+.element-node .type-icon {
+  color: var(--element);
+}
+
 .edge-line {
   fill: none;
   stroke: var(--edge);
