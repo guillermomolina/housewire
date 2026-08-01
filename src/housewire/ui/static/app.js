@@ -935,32 +935,15 @@
     if (x1 === x2 && y1 === y2) {
       return `M ${x1} ${y1}`;
     }
-    if (x1 === x2 || y1 === y2) {
-      // Still may need a C when faces force a U-turn through a node.
-      const STUB0 = 20;
-      let ax0 = x1;
-      let ay0 = y1;
-      let bx0 = x2;
-      let by0 = y2;
-      if (fromFace === "E") ax0 = x1 + STUB0;
-      else if (fromFace === "W") ax0 = x1 - STUB0;
-      else if (fromFace === "S") ay0 = y1 + STUB0;
-      else if (fromFace === "N") ay0 = y1 - STUB0;
-      if (toFace === "E") bx0 = x2 + STUB0;
-      else if (toFace === "W") bx0 = x2 - STUB0;
-      else if (toFace === "S") by0 = y2 + STUB0;
-      else if (toFace === "N") by0 = y2 - STUB0;
-      if (!needsCDetour(fromFace, toFace, ax0, ay0, bx0, by0)) {
-        return `M ${x1} ${y1} L ${x2} ${y2}`;
-      }
-    }
+
     const STUB = 20;
-    const DETOUR = 40;
     const parts = [`M ${x1} ${y1}`];
     let ax = x1;
     let ay = y1;
     let bx = x2;
     let by = y2;
+
+    // Leave the opening outward, then later enter from the far stub.
     if (fromFace === "E") {
       ax = x1 + STUB;
       parts.push(`L ${ax} ${ay}`);
@@ -979,19 +962,23 @@
     else if (toFace === "S") by = y2 + STUB;
     else if (toFace === "N") by = y2 - STUB;
 
-    if (needsCDetour(fromFace, toFace, ax, ay, bx, by)) {
-      // C-shaped detour: exit, offset sideways, then approach (avoid U-turn overlap).
-      if (fromFace === "N" || fromFace === "S") {
-        const side = ax + DETOUR;
+    if (needsCDetour(fromFace, ax, ay, bx, by)) {
+      // C: offset sideways so the return does not reuse the exit corridor.
+      const detour = Math.max(48, STUB * 2);
+      if (fromFace === "N" || fromFace === "S" || !fromFace) {
+        const mid = (ax + bx) / 2;
+        // Prefer the side away from the chord so the loop is visible.
+        const side = mid >= ax ? Math.max(ax, bx) + detour : Math.min(ax, bx) - detour;
         parts.push(`L ${side} ${ay}`, `L ${side} ${by}`, `L ${bx} ${by}`);
       } else {
-        const mid = ay + DETOUR;
-        parts.push(`L ${ax} ${mid}`, `L ${bx} ${mid}`, `L ${bx} ${by}`);
+        const mid = (ay + by) / 2;
+        const side = mid >= ay ? Math.max(ay, by) + detour : Math.min(ay, by) - detour;
+        parts.push(`L ${ax} ${side}`, `L ${bx} ${side}`, `L ${bx} ${by}`);
       }
     } else if (ax === bx || ay === by) {
       parts.push(`L ${bx} ${by}`);
     } else {
-      // S / Z: two elbows through a mid line (not a single L corner).
+      // S / Z: two elbows through a mid line (forward progress only).
       let horizontalBridge;
       if (fromFace === "E" || fromFace === "W") horizontalBridge = true;
       else if (fromFace === "N" || fromFace === "S") horizontalBridge = false;
@@ -1013,24 +1000,17 @@
     return parts.join(" ");
   }
 
-  /** True when opposite faces would reverse back through the same corridor. */
-  function needsCDetour(fromFace, toFace, ax, ay, bx, by) {
-    const ns =
-      (fromFace === "N" || fromFace === "S") &&
-      (toFace === "N" || toFace === "S") &&
-      fromFace !== toFace;
-    const ew =
-      (fromFace === "E" || fromFace === "W") &&
-      (toFace === "E" || toFace === "W") &&
-      fromFace !== toFace;
-    if (ns && Math.abs(ax - bx) < 0.5) {
-      if (fromFace === "N" && by > ay) return true;
-      if (fromFace === "S" && by < ay) return true;
-    }
-    if (ew && Math.abs(ay - by) < 0.5) {
-      if (fromFace === "E" && bx < ax) return true;
-      if (fromFace === "W" && bx > ax) return true;
-    }
+  /**
+   * After leaving ``fromFace``, true if the run to the entry stub goes
+   * backwards along that exit axis (would overlap the outbound stub).
+   */
+  function needsCDetour(fromFace, ax, ay, bx, by) {
+    const dx = bx - ax;
+    const dy = by - ay;
+    if (fromFace === "N" && dy > 1) return true;
+    if (fromFace === "S" && dy < -1) return true;
+    if (fromFace === "E" && dx < -1) return true;
+    if (fromFace === "W" && dx > 1) return true;
     return false;
   }
 

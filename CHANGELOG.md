@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.3] — 2026-08-01
+
+### Fixed
+
+- Orthogonal C-detour: any route that reverses relative to the exit face
+  (not only perfectly aligned opposite openings) offsets sideways instead of
+  overlapping the outbound stub.
+
 ## [0.27.2] — 2026-08-01
 
 ### Fixed
