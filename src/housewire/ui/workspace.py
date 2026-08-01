@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import shutil
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import yaml
+
+from housewire.project.io import require_house_document, save_yaml
 from housewire.project.paths import find_site_yaml, is_yaml, list_root_yaml_files
 from housewire.project.session import ProjectSession
 
@@ -19,7 +23,8 @@ class Document:
 
     root: Path
     session: ProjectSession
-    # View tabs are client-side; server only tracks the document.
+    # True when opened from browser file content (temp site on the server).
+    browser_origin: bool = False
 
 
 @dataclass
@@ -29,6 +34,7 @@ class Workspace:
     document: Document | None = None
     # Reserved for multi-doc later.
     documents: dict[str, Document] = field(default_factory=dict)
+    _browser_temps: list[Path] = field(default_factory=list)
 
     @property
     def active(self) -> Document | None:
@@ -45,16 +51,16 @@ class Workspace:
     def require_session(self) -> ProjectSession:
         if self.document is None:
             raise FileNotFoundError(
-                "No document open. Open a site YAML or directory "
-                "(POST /api/workspace/open)."
+                "No document open. Open a site YAML (File → Open) "
+                "or start serve with a site path."
             )
         return self.document.session
 
     def require_root(self) -> Path:
         if self.document is None:
             raise FileNotFoundError(
-                "No document open. Open a site YAML or directory "
-                "(POST /api/workspace/open)."
+                "No document open. Open a site YAML (File → Open) "
+                "or start serve with a site path."
             )
         return self.document.root
 
@@ -81,12 +87,34 @@ class Workspace:
                 "name": root.name,
                 "yaml": yaml_path.name,
                 "yaml_path": str(yaml_path),
+                "browser_origin": self.document.browser_origin,
             },
             "dirty": dirty,
             "site": str(root),
         }
 
-    def open_site(self, path: Path, *, force: bool = False) -> Document:
+    def yaml_export(self) -> dict[str, str]:
+        """Return current site YAML text (from buffer) and filename."""
+        session = self.require_session()
+        path, doc = session.ensure_doc()
+        text = yaml.safe_dump(doc, sort_keys=False, allow_unicode=True)
+        return {"filename": path.name, "content": text}
+
+    def _guard_dirty(self, *, force: bool) -> None:
+        if self.document is not None and self.document.session.dirty_paths():
+            if not force:
+                raise ValueError(
+                    "Active document has unsaved changes. "
+                    "Save, or open with force=true to discard."
+                )
+
+    def open_site(
+        self,
+        path: Path,
+        *,
+        force: bool = False,
+        browser_origin: bool = False,
+    ) -> Document:
         """Load ``path`` as the active document.
 
         ``path`` may be a site directory or a ``.yaml``/``.yml`` file at the
@@ -115,19 +143,41 @@ class Workspace:
         else:
             raise FileNotFoundError(f"Path not found: {target}")
 
-        if self.document is not None and self.document.session.dirty_paths():
-            if not force:
-                raise ValueError(
-                    "Active document has unsaved changes. "
-                    "Save, or open with force=true to discard."
-                )
+        self._guard_dirty(force=force)
         doc = Document(
             root=root,
             session=ProjectSession(root, site_yaml=yaml_path),
+            browser_origin=browser_origin,
         )
         self.document = doc
         self.documents = {str(root): doc}
         return doc
+
+    def open_yaml_content(
+        self,
+        filename: str,
+        content: str,
+        *,
+        force: bool = False,
+    ) -> Document:
+        """Open YAML text from a browser file picker as a temp site document."""
+        name = Path(filename).name
+        if not is_yaml(Path(name)):
+            raise ValueError(f"Not a YAML filename: {filename}")
+        try:
+            data = yaml.safe_load(content) or {}
+        except yaml.YAMLError as exc:
+            raise ValueError(f"Invalid YAML: {exc}") from exc
+        if not isinstance(data, dict):
+            raise ValueError("YAML does not contain a valid object")
+        require_house_document(data, Path(name))
+
+        self._guard_dirty(force=force)
+        root = Path(tempfile.mkdtemp(prefix="housewire-open-"))
+        self._browser_temps.append(root)
+        yaml_path = root / name
+        save_yaml(yaml_path, data, backup=False)
+        return self.open_site(yaml_path, force=True, browser_origin=True)
 
     def close(self, *, force: bool = False) -> None:
         """Unload the active document."""
@@ -166,7 +216,6 @@ class Workspace:
                 )
             else:
                 shutil.copy2(child, dest_child)
-        # Prefer writing current in-memory doc into the new tree.
         src_sess = self.document.session
         yaml_name = src_sess.site_yaml().name
         try:

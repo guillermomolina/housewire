@@ -89,7 +89,6 @@ class TestWorkspaceApi(unittest.TestCase):
             st = client.get("/api/workspace").json()
             self.assertEqual(st["document"]["name"], "site_a")
             self.assertEqual(st["dirty"], [])
-            self.assertIn("dialogs", st)
 
             dest = Path(tmp) / "site_b"
             saved = client.post(
@@ -136,6 +135,23 @@ class TestWorkspaceApi(unittest.TestCase):
             )
             self.assertEqual(opened.status_code, 200)
             self.assertEqual(opened.json()["document"]["yaml"], "plan.yaml")
+
+            content = named.read_text(encoding="utf-8")
+            via_content = client.post(
+                "/api/workspace/open-content",
+                json={
+                    "filename": "from_browser.yml",
+                    "content": content,
+                    "force": True,
+                },
+            )
+            self.assertEqual(via_content.status_code, 200)
+            body = via_content.json()
+            self.assertEqual(body["document"]["yaml"], "from_browser.yml")
+            self.assertTrue(body["document"]["browser_origin"])
+            exported = client.get("/api/workspace/yaml").json()
+            self.assertEqual(exported["filename"], "from_browser.yml")
+            self.assertIn("schema:", exported["content"])
 
 
 if __name__ == "__main__":

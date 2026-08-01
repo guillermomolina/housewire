@@ -7,6 +7,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.25.0] — 2026-08-01
+
+### Changed
+
+- File → Open / Save as use the **browser file picker** (OS dialog via
+  ``<input type="file">`` / File System Access API). Removed server-side
+  zenity/kdialog/tkinter dialogs and the path modal.
+- After Close, layout dirty state is cleared so Open no longer falsely warns
+  about unsaved changes.
+
+### Added
+
+- ``POST /api/workspace/open-content`` and ``GET /api/workspace/yaml`` for
+  browser-picked YAML documents.
+
 ## [0.24.0] — 2026-08-01
 
 ### Changed

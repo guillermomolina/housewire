@@ -3,32 +3,34 @@
 housewire’s interactive UI is heading toward a multi-document editor, but the
 **file** unit and the **view** unit stay separate.
 
-## Document = site
+## Document = site YAML
 
-A **document** is one complete site directory:
+A **document** is one site YAML (any ``.yaml`` / ``.yml`` name) plus the site
+directory around it when known:
 
-- `$SITE/<name>.yaml` or `$SITE/<name>.yml` (any filename; nested places under
-  `elements:`). New sites still default to `housewire.yaml`.
-- optional `$SITE/catalog/` overlay
+- editable YAML with nested places under `elements:`
+- optional `$SITE/catalog/` overlay (when opened from a real site path, e.g.
+  `housewire serve $SITE`)
 - optional `$SITE/out/` (generated; not part of the editable document identity)
 
-If several YAML files sit at the site root and none is `housewire.yaml` /
-`housewire.yml`, open the specific file (not only the directory).
+New sites still default to `housewire.yaml`.
 
-There is a **File** menu for whole documents (Open site / Save / Save as / Close).
-View tabs are separate (canvas locations inside the open site).
+There is a **File** menu for documents (Open / Save / Save as / Close).
+View tabs are separate (canvas locations inside the open document).
 
 | Action | Meaning |
 |--------|---------|
-| Open site… | Native OS file dialog for a `.yaml`/`.yml` (fallback: path modal; Ctrl+O) |
-| Save | Persist dirty buffers (Ctrl+S; also toolbar) |
-| Save as… | Native OS save dialog for the new site folder path; then duplicate and open |
+| Open… | Browser/OS file picker for a `.yaml`/`.yml` (Ctrl+O) |
+| Save | Persist dirty buffers; write back via File System Access when available |
+| Save as… | Browser/OS save picker (or download) for the YAML |
 | Close | Drop the document (prompt if dirty) |
 
-**Why not the browser file picker?** A normal browser cannot give the server a
-real filesystem path. Because `housewire serve` runs locally, Open / Save as use
-a **system** dialog (`zenity`, `kdialog`, or Python `tkinter`) on the server
-process. If none is available, the UI falls back to typing an absolute path.
+Open/Save as use the same system file dialog you get from a web “Browse /
+Examinar” control (`<input type="file">` or the File System Access API). No
+typed paths and no server-side dialog helpers.
+
+When the browser cannot write back to the original file (no File System Access
+handle), Save may download a copy so you keep your changes.
 
 **Not yet:** New site, Export. Changing canvas location / depth / Elements is **View**, not File.
 
@@ -38,7 +40,7 @@ process. If none is available, the UI falls back to typing an absolute path.
 Figma pages, not like separate Atom files.
 
 - Opening `Parking` and `Planta_baja` as tabs = two views of the same YAML.
-- Opening another site = another **document** (future multi-doc workspace).
+- Opening another YAML = another **document** (future multi-doc workspace).
 
 ```text
 Workspace
@@ -49,12 +51,14 @@ Workspace
 
 ## API surface
 
-- `GET /api/workspace` — active document path, dirty flag, `dialogs.native`
-- `POST /api/workspace/open` — `{ "path": "…" }` or `{ "dialog": true }` to pick
-  a site YAML / directory
+- `GET /api/workspace` — active document path, dirty flag
+- `POST /api/workspace/open` — `{ "path": "…" }` (server filesystem; used by serve)
+- `POST /api/workspace/open-content` — `{ "filename", "content" }` from the browser picker
+- `GET /api/workspace/yaml` — current YAML text for Save as
 - `POST /api/workspace/close` — unload active document (optional `{ "force": true }`)
-- `POST /api/workspace/save-as` — `{ "path": "…" }` or `{ "dialog": true }`
-- `POST /api/save` — save active document (unchanged)
+- `POST /api/workspace/save-as` — `{ "path": "…" }` duplicate site tree (API / tests)
+- `POST /api/save` — save active document; returns YAML text for client write-back
 
-Server process may start with one site (`housewire serve $SITE`); Open/Close/Save As
-mutate the in-process workspace.
+`housewire serve $SITE` may start with one site on disk; File → Open replaces it
+with a picked YAML (loaded into a server temp site, written back through the
+browser handle when possible).

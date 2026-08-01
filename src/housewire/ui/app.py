@@ -6,12 +6,6 @@ from typing import Any
 from housewire import __version__
 from housewire.project.view_layout import get_physical_page, set_physical_page
 from housewire.ui import physical_graph as pg
-from housewire.ui.dialogs import (
-    DialogUnavailableError,
-    dialogs_available,
-    pick_open_yaml,
-    pick_save_site_path,
-)
 from housewire.ui.workspace import Workspace, create_workspace
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -99,32 +93,15 @@ def create_app(site_root: Path | None = None) -> Any:
 
     @app.get("/api/workspace")
     def api_workspace() -> dict[str, Any]:
-        status = workspace.status()
-        status["dialogs"] = {"native": dialogs_available()}
-        return status
+        return workspace.status()
 
     @app.post("/api/workspace/open")
     async def api_workspace_open(request: Request) -> dict[str, Any]:
         payload = await _json_body(request)
         force = bool(payload.get("force", False))
-        use_dialog = bool(payload.get("dialog", False))
         path = str(payload.get("path") or "").strip()
-        if use_dialog:
-            start = None
-            if workspace.root is not None:
-                start = workspace.root
-            try:
-                picked = pick_open_yaml(start_dir=start)
-            except DialogUnavailableError as exc:
-                raise HTTPException(501, str(exc)) from exc
-            if picked is None:
-                out = workspace.status()
-                out["cancelled"] = True
-                out["dialogs"] = {"native": True}
-                return out
-            path = str(picked)
         if not path:
-            raise HTTPException(400, "path is required (or dialog=true)")
+            raise HTTPException(400, "path is required")
         try:
             workspace.open_site(Path(path), force=force)
         except FileNotFoundError as exc:
@@ -133,10 +110,35 @@ def create_app(site_root: Path | None = None) -> Any:
             raise HTTPException(400, str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
-        out = workspace.status()
-        out["cancelled"] = False
-        out["dialogs"] = {"native": dialogs_available()}
-        return out
+        return workspace.status()
+
+    @app.post("/api/workspace/open-content")
+    async def api_workspace_open_content(request: Request) -> dict[str, Any]:
+        """Open a YAML document chosen via the browser file picker."""
+        payload = await _json_body(request)
+        force = bool(payload.get("force", False))
+        filename = str(payload.get("filename") or "").strip()
+        content = payload.get("content")
+        if not filename:
+            raise HTTPException(400, "filename is required")
+        if not isinstance(content, str):
+            raise HTTPException(400, "content must be a string")
+        try:
+            workspace.open_yaml_content(filename, content, force=force)
+        except ValueError as exc:
+            msg = str(exc)
+            code = 409 if "unsaved" in msg.lower() else 400
+            raise HTTPException(code, msg) from exc
+        return workspace.status()
+
+    @app.get("/api/workspace/yaml")
+    def api_workspace_yaml() -> dict[str, str]:
+        try:
+            return workspace.yaml_export()
+        except FileNotFoundError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     @app.post("/api/workspace/close")
     async def api_workspace_close(request: Request) -> dict[str, Any]:
@@ -151,29 +153,10 @@ def create_app(site_root: Path | None = None) -> Any:
     @app.post("/api/workspace/save-as")
     async def api_workspace_save_as(request: Request) -> dict[str, Any]:
         payload = await _json_body(request)
-        force = bool(payload.get("force", False))
-        use_dialog = bool(payload.get("dialog", False))
         path = str(payload.get("path") or "").strip()
-        if use_dialog:
-            start = workspace.root
-            default_name = "site_copy"
-            if start is not None:
-                default_name = f"{start.name}_copy"
-            try:
-                picked = pick_save_site_path(
-                    start_dir=start,
-                    default_name=default_name,
-                )
-            except DialogUnavailableError as exc:
-                raise HTTPException(501, str(exc)) from exc
-            if picked is None:
-                out = workspace.status()
-                out["cancelled"] = True
-                out["dialogs"] = {"native": True}
-                return out
-            path = str(picked)
         if not path:
-            raise HTTPException(400, "path is required (or dialog=true)")
+            raise HTTPException(400, "path is required")
+        force = bool(payload.get("force", False))
         try:
             workspace.save_as(Path(path), force=force)
         except FileNotFoundError as exc:
@@ -184,10 +167,7 @@ def create_app(site_root: Path | None = None) -> Any:
             raise HTTPException(400, str(exc)) from exc
         except OSError as exc:
             raise HTTPException(400, str(exc)) from exc
-        out = workspace.status()
-        out["cancelled"] = False
-        out["dialogs"] = {"native": dialogs_available()}
-        return out
+        return workspace.status()
 
     @app.get("/api/locations")
     def api_locations() -> dict[str, Any]:
@@ -486,7 +466,18 @@ def create_app(site_root: Path | None = None) -> Any:
             saved = [str(p.relative_to(root)) for p in session.save_all()]
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
-        return {"saved": saved}
+        yaml_path = session.site_yaml()
+        try:
+            text = yaml_path.read_text(encoding="utf-8")
+        except OSError:
+            text = workspace.yaml_export()["content"]
+        doc = workspace.document
+        return {
+            "saved": saved,
+            "filename": yaml_path.name,
+            "yaml": text,
+            "browser_origin": bool(doc and doc.browser_origin),
+        }
 
     @app.get("/api/status")
     def api_status() -> dict[str, Any]:

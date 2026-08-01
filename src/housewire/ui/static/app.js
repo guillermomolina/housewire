@@ -22,6 +22,8 @@
   let panX = 40;
   let panY = 40;
   let dirtyLocal = false;
+  /** @type {FileSystemFileHandle | null} */
+  let siteFileHandle = null;
   let drag = null;
   let panDrag = null;
   let marquee = null;
@@ -1848,6 +1850,11 @@
 
   async function saveDocument() {
     const data = await api("/api/save", { method: "POST", body: "{}" });
+    if (siteFileHandle && data.yaml != null) {
+      await writeTextToFileHandle(siteFileHandle, data.yaml);
+    } else if (data.browser_origin && data.yaml != null && !siteFileHandle) {
+      downloadYamlBlob(data.filename || "housewire.yaml", data.yaml);
+    }
     setStatus(`saved ${(data.saved || []).length} file(s)`);
     dirtyLocal = false;
     updateSaveButton(false);
@@ -1871,6 +1878,23 @@
     await loadLocations();
   }
 
+  function clearDocumentUi() {
+    viewTabs = [];
+    locationId = null;
+    graph = null;
+    clearSelectionState();
+    dirtyLocal = false;
+    layoutHistory = [];
+    layoutIndex = -1;
+    layoutBaseline = null;
+    siteFileHandle = null;
+    updateSaveButton(false);
+    svg.innerHTML = "";
+    const outline = document.getElementById("outline-tree");
+    if (outline) outline.innerHTML = "";
+    renderViewTabs();
+  }
+
   function closeFileMenu() {
     const menu = document.getElementById("menu-file");
     const btn = document.getElementById("menu-file-btn");
@@ -1887,84 +1911,112 @@
     btn.setAttribute("aria-expanded", willOpen ? "true" : "false");
   }
 
-  function promptPath({ title, hint, defaultPath, showForce }) {
+  const YAML_PICKER_TYPES = [
+    {
+      description: "YAML",
+      accept: {
+        "application/yaml": [".yaml", ".yml"],
+        "text/yaml": [".yaml", ".yml"],
+        "text/plain": [".yaml", ".yml"],
+      },
+    },
+  ];
+
+  async function writeTextToFileHandle(handle, text) {
+    const writable = await handle.createWritable();
+    await writable.write(text);
+    await writable.close();
+  }
+
+  function downloadYamlBlob(filename, content) {
+    const blob = new Blob([content], { type: "application/yaml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename || "housewire.yaml";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function pickOpenYamlViaInput() {
     return new Promise((resolve) => {
-      const modal = document.getElementById("path-modal");
-      const titleEl = document.getElementById("path-modal-title");
-      const hintEl = document.getElementById("path-modal-hint");
-      const input = document.getElementById("path-modal-input");
-      const forceWrap = document.getElementById("path-modal-force-wrap");
-      const forceEl = document.getElementById("path-modal-force");
-      const errEl = document.getElementById("path-modal-error");
-      const okBtn = document.getElementById("path-modal-ok");
-      if (!modal || !input) {
+      const input = document.getElementById("file-open-input");
+      if (!input) {
         resolve(null);
         return;
       }
-      titleEl.textContent = title;
-      hintEl.textContent = hint || "";
-      input.value = defaultPath || "";
-      forceEl.checked = false;
-      forceWrap.classList.toggle("hidden", !showForce);
-      errEl.classList.add("hidden");
-      errEl.textContent = "";
-      modal.classList.remove("hidden");
-      modal.setAttribute("aria-hidden", "false");
-      setTimeout(() => {
-        input.focus();
-        input.select();
-      }, 0);
-
-      function cleanup(result) {
-        modal.classList.add("hidden");
-        modal.setAttribute("aria-hidden", "true");
-        okBtn.removeEventListener("click", onOk);
-        document.removeEventListener("keydown", onKey);
-        modal
-          .querySelectorAll("[data-modal-dismiss]")
-          .forEach((el) => el.removeEventListener("click", onCancel));
-        resolve(result);
-      }
-
-      function onCancel() {
-        cleanup(null);
-      }
-
-      function onOk() {
-        const path = input.value.trim();
-        if (!path) {
-          errEl.textContent = "Path is required";
-          errEl.classList.remove("hidden");
+      input.value = "";
+      const onChange = () => {
+        input.removeEventListener("change", onChange);
+        const file = input.files && input.files[0];
+        if (!file) {
+          resolve(null);
           return;
         }
-        cleanup({ path, force: Boolean(forceEl.checked) });
-      }
-
-      function onKey(ev) {
-        if (ev.key === "Escape") {
-          ev.preventDefault();
-          onCancel();
-        } else if (ev.key === "Enter") {
-          ev.preventDefault();
-          onOk();
-        }
-      }
-
-      okBtn.addEventListener("click", onOk);
-      document.addEventListener("keydown", onKey);
-      modal
-        .querySelectorAll("[data-modal-dismiss]")
-        .forEach((el) => el.addEventListener("click", onCancel));
+        file.text().then((content) => {
+          resolve({ handle: null, name: file.name, content });
+        }, () => resolve(null));
+      };
+      input.addEventListener("change", onChange);
+      input.click();
     });
   }
 
+  async function pickOpenYamlFile() {
+    if (typeof window.showOpenFilePicker === "function") {
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          multiple: false,
+          types: YAML_PICKER_TYPES,
+          excludeAcceptAllOption: false,
+        });
+        const file = await handle.getFile();
+        return {
+          handle,
+          name: file.name,
+          content: await file.text(),
+        };
+      } catch (err) {
+        if (err && err.name === "AbortError") return null;
+      }
+    }
+    return pickOpenYamlViaInput();
+  }
+
+  async function pickSaveYamlFile(suggestedName, content) {
+    if (typeof window.showSaveFilePicker === "function") {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: suggestedName || "housewire.yaml",
+          types: YAML_PICKER_TYPES,
+          excludeAcceptAllOption: false,
+        });
+        await writeTextToFileHandle(handle, content);
+        return { handle, name: handle.name || suggestedName };
+      } catch (err) {
+        if (err && err.name === "AbortError") return null;
+      }
+    }
+    downloadYamlBlob(suggestedName || "housewire.yaml", content);
+    return {
+      handle: null,
+      name: suggestedName || "housewire.yaml",
+      downloaded: true,
+    };
+  }
+
   async function isDocumentDirty() {
-    syncLayoutDirty();
-    if (dirtyLocal) return true;
     try {
       const st = await api("/api/workspace");
+      if (!st.document) {
+        dirtyLocal = false;
+        return false;
+      }
+      syncLayoutDirty();
+      if (dirtyLocal) return true;
       return (st.dirty || []).length > 0;
     } catch {
+      syncLayoutDirty();
       return dirtyLocal;
     }
   }
@@ -1974,110 +2026,61 @@
     let force = false;
     if (dirty) {
       const discard = window.confirm(
-        "There are unsaved changes. Discard them and open another site?"
+        "There are unsaved changes. Discard them and open another file?"
       );
       if (!discard) return;
       force = true;
     }
-    const viaDialog = await tryWorkspaceDialog("open", { force });
-    if (viaDialog === "done" || viaDialog === "cancelled") return;
-    let defaultPath = "";
+    const picked = await pickOpenYamlFile();
+    if (!picked) return;
     try {
-      const st = await api("/api/workspace");
-      defaultPath =
-        (st.document && (st.document.yaml_path || st.document.path)) || "";
-    } catch {
-      /* ignore */
-    }
-    const choice = await promptPath({
-      title: "Open site",
-      hint: "Path to a site directory, or to any .yaml/.yml file at the site root.",
-      defaultPath,
-      showForce: false,
-    });
-    if (!choice) return;
-    try {
-      await api("/api/workspace/open", {
+      await api("/api/workspace/open-content", {
         method: "POST",
-        body: JSON.stringify({ path: choice.path, force }),
+        body: JSON.stringify({
+          filename: picked.name,
+          content: picked.content,
+          force,
+        }),
       });
+      siteFileHandle = picked.handle;
       await reloadAfterDocumentChange();
-      setStatus(`opened ${choice.path}`);
+      setStatus(`opened ${picked.name}`);
     } catch (err) {
       setStatus(String(err.message || err));
     }
   }
 
   async function fileSaveAs() {
-    const viaDialog = await tryWorkspaceDialog("save-as", { force: false });
-    if (viaDialog === "done" || viaDialog === "cancelled") return;
-    let defaultPath = "";
+    let exported;
     try {
-      const st = await api("/api/workspace");
-      const cur = (st.document && st.document.path) || "";
-      defaultPath = cur ? `${cur}_copy` : "";
-    } catch {
-      /* ignore */
+      exported = await api("/api/workspace/yaml");
+    } catch (err) {
+      setStatus(String(err.message || err));
+      return;
     }
-    const choice = await promptPath({
-      title: "Save site as",
-      hint: "New directory path. Copies the site (without out/) and opens it.",
-      defaultPath,
-      showForce: false,
-    });
-    if (!choice) return;
+    const suggested = exported.filename || "housewire.yaml";
+    const result = await pickSaveYamlFile(suggested, exported.content);
+    if (!result) return;
     try {
-      await api("/api/workspace/save-as", {
+      await api("/api/workspace/open-content", {
         method: "POST",
-        body: JSON.stringify({ path: choice.path, force: false }),
+        body: JSON.stringify({
+          filename: result.name,
+          content: exported.content,
+          force: true,
+        }),
       });
+      siteFileHandle = result.handle;
       dirtyLocal = false;
       updateSaveButton(false);
       await reloadAfterDocumentChange();
-      setStatus(`saved as ${choice.path}`);
+      setStatus(
+        result.downloaded
+          ? `downloaded ${result.name}`
+          : `saved as ${result.name}`
+      );
     } catch (err) {
       setStatus(String(err.message || err));
-    }
-  }
-
-  /** @returns {"done"|"cancelled"|"fallback"} */
-  async function tryWorkspaceDialog(kind, { force }) {
-    let native = false;
-    try {
-      const st = await api("/api/workspace");
-      native = Boolean(st.dialogs && st.dialogs.native);
-    } catch {
-      native = false;
-    }
-    if (!native) return "fallback";
-    const endpoint =
-      kind === "save-as" ? "/api/workspace/save-as" : "/api/workspace/open";
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dialog: true, force: Boolean(force) }),
-      });
-      if (res.status === 501) return "fallback";
-      const body = await res.text();
-      if (!res.ok) {
-        setStatus(body || res.statusText);
-        return "cancelled";
-      }
-      const st = body ? JSON.parse(body) : {};
-      if (st.cancelled) return "cancelled";
-      if (kind === "save-as") {
-        dirtyLocal = false;
-        updateSaveButton(false);
-      }
-      await reloadAfterDocumentChange();
-      const label =
-        (st.document && (st.document.yaml_path || st.document.path)) || "";
-      setStatus(kind === "save-as" ? `saved as ${label}` : `opened ${label}`);
-      return "done";
-    } catch (err) {
-      setStatus(String(err.message || err));
-      return "cancelled";
     }
   }
 
@@ -2094,17 +2097,9 @@
         method: "POST",
         body: JSON.stringify({ force: true }),
       });
-      viewTabs = [];
-      locationId = null;
-      graph = null;
-      clearSelectionState();
-      dirtyLocal = false;
-      updateSaveButton(false);
-      svg.innerHTML = "";
-      document.getElementById("outline-tree").innerHTML = "";
-      renderViewTabs();
+      clearDocumentUi();
       await refreshDocumentLabel();
-      setStatus("document closed — File → Open site…");
+      setStatus("document closed — File → Open…");
     } catch (err) {
       setStatus(String(err.message || err));
     }
