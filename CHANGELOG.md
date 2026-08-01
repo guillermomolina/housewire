@@ -7,6 +7,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Physical UI drag: moving a box no longer freezes when crossing another node
+  (live transform update instead of full SVG redraw each pointermove).
+
 ### Removed
 
 - ``requirements.txt`` and ``dev-requirements.txt`` (use ``pip install -e '.[dev,ui]'``

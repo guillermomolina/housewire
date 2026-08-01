@@ -110,11 +110,24 @@ button:hover {
   user-select: none;
 }
 
+#canvas.dragging {
+  cursor: move;
+}
+
+#canvas.dragging .node-box {
+  pointer-events: none;
+}
+
+#canvas.dragging .node-box.selected {
+  pointer-events: auto;
+}
+
 .node-box {
   fill: var(--node);
   stroke: var(--node-stroke);
   stroke-width: 1.5;
   cursor: move;
+  touch-action: none;
 }
 
 .node-box.selected {

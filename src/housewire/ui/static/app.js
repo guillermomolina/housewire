@@ -17,6 +17,9 @@
   let drag = null;
   let panDrag = null;
   let saveTimer = null;
+  let worldEl = null;
+  let nodesById = {};
+  let edgePaths = [];
 
   const ns = "http://www.w3.org/2000/svg";
 
@@ -72,6 +75,9 @@
 
   function clearSvg() {
     while (svg.firstChild) svg.removeChild(svg.firstChild);
+    worldEl = null;
+    nodesById = {};
+    edgePaths = [];
   }
 
   function el(name, attrs, text) {
@@ -85,39 +91,76 @@
     return node;
   }
 
+  function applyWorldTransform() {
+    if (worldEl) {
+      worldEl.setAttribute(
+        "transform",
+        `translate(${panX},${panY}) scale(${scale})`
+      );
+    }
+  }
+
+  function edgePathD(edge, byId) {
+    const a = byId[edge.from];
+    const b = byId[edge.to];
+    if (!a || !b) return null;
+    const p1 = openingAnchor(a, edge.from_opening, edge.from_opening?.[0]);
+    const p2 = openingAnchor(b, edge.to_opening, edge.to_opening?.[0]);
+    return `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
+  }
+
+  function refreshEdges() {
+    if (!graph) return;
+    const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+    for (const item of edgePaths) {
+      const d = edgePathD(item.edge, byId);
+      if (d) {
+        for (const path of item.paths) path.setAttribute("d", d);
+      }
+    }
+  }
+
+  function updateNodeVisual(node) {
+    const g = nodesById[node.id];
+    if (g) g.setAttribute("transform", `translate(${node.x},${node.y})`);
+    refreshEdges();
+  }
+
   function render() {
     if (!graph) return;
     ensurePositions();
     clearSvg();
 
-    const world = el("g", {
-      id: "world",
-      transform: `translate(${panX},${panY}) scale(${scale})`,
-    });
-    svg.appendChild(world);
+    worldEl = el("g", { id: "world" });
+    applyWorldTransform();
+    svg.appendChild(worldEl);
 
     const page = graph.page || {};
-    const representation = representationSelect.value || page.representation || "line";
+    const representation =
+      representationSelect.value || page.representation || "line";
     const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
 
     const edgesG = el("g", { class: "edges" });
     const nodesG = el("g", { class: "nodes" });
-    world.appendChild(edgesG);
-    world.appendChild(nodesG);
+    worldEl.appendChild(edgesG);
+    worldEl.appendChild(nodesG);
 
     for (const edge of graph.edges) {
-      const a = byId[edge.from];
-      const b = byId[edge.to];
-      if (!a || !b) continue;
-      const p1 = openingAnchor(a, edge.from_opening, edge.from_opening?.[0]);
-      const p2 = openingAnchor(b, edge.to_opening, edge.to_opening?.[0]);
-      const d = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
+      const d = edgePathD(edge, byId);
+      if (!d) continue;
+      const paths = [];
       if (representation === "tube") {
-        edgesG.appendChild(el("path", { class: "edge-tube", d }));
-        edgesG.appendChild(el("path", { class: "edge-tube-core", d }));
+        const tube = el("path", { class: "edge-tube", d });
+        const core = el("path", { class: "edge-tube-core", d });
+        edgesG.appendChild(tube);
+        edgesG.appendChild(core);
+        paths.push(tube, core);
       } else {
-        edgesG.appendChild(el("path", { class: "edge-line", d }));
+        const line = el("path", { class: "edge-line", d });
+        edgesG.appendChild(line);
+        paths.push(line);
       }
+      edgePaths.push({ edge, paths });
     }
 
     for (const node of graph.nodes) {
@@ -141,13 +184,11 @@
       );
 
       const backs = (node.openings || []).filter((o) => o.face === "B");
-      const sides = (node.openings || []).filter((o) => o.face !== "B" && o.face !== "F");
+      const sides = (node.openings || []).filter(
+        (o) => o.face !== "B" && o.face !== "F"
+      );
       for (const op of sides) {
-        const anchor = openingAnchor(
-          { x: 0, y: 0 },
-          op.id,
-          op.face
-        );
+        const anchor = openingAnchor({ x: 0, y: 0 }, op.id, op.face);
         g.appendChild(
           el(
             "text",
@@ -185,49 +226,99 @@
       }
 
       box.addEventListener("pointerdown", (ev) => {
+        if (ev.button !== 0) return;
+        ev.preventDefault();
         ev.stopPropagation();
-        box.setPointerCapture(ev.pointerId);
+        const gEl = nodesById[node.id];
+        if (gEl && gEl.parentNode) {
+          gEl.parentNode.appendChild(gEl);
+        }
+        box.classList.add("selected");
+        svg.classList.add("dragging");
+        svg.setPointerCapture(ev.pointerId);
         drag = {
           id: node.id,
+          pointerId: ev.pointerId,
           startClientX: ev.clientX,
           startClientY: ev.clientY,
           origX: node.x,
           origY: node.y,
         };
-        box.classList.add("selected");
-      });
-      box.addEventListener("pointermove", (ev) => {
-        if (!drag || drag.id !== node.id) return;
-        const dx = (ev.clientX - drag.startClientX) / scale;
-        const dy = (ev.clientY - drag.startClientY) / scale;
-        node.x = Math.round(drag.origX + dx);
-        node.y = Math.round(drag.origY + dy);
-        dirtyLocal = true;
-        render();
-      });
-      box.addEventListener("pointerup", async () => {
-        if (!drag || drag.id !== node.id) return;
-        box.classList.remove("selected");
-        const moved = { x: node.x, y: node.y };
-        drag = null;
-        try {
-          await api(`/api/physical/positions`, {
-            method: "PATCH",
-            body: JSON.stringify({
-              location_id: locationId,
-              positions: { [node.id]: moved },
-            }),
-          });
-          setStatus(`Moved ${node.id} · unsaved`);
-          scheduleStatusRefresh();
-        } catch (err) {
-          setStatus(String(err.message || err));
-        }
       });
 
       nodesG.appendChild(g);
+      nodesById[node.id] = g;
     }
   }
+
+  async function endDrag(ev) {
+    if (!drag) return;
+    if (ev && drag.pointerId != null && ev.pointerId !== drag.pointerId) return;
+    const node = graph?.nodes.find((n) => n.id === drag.id);
+    const g = nodesById[drag.id];
+    const box = g?.querySelector(".node-box");
+    if (box) box.classList.remove("selected");
+    svg.classList.remove("dragging");
+    try {
+      if (drag.pointerId != null && svg.hasPointerCapture?.(drag.pointerId)) {
+        svg.releasePointerCapture(drag.pointerId);
+      }
+    } catch {
+      /* ignore */
+    }
+    const finished = drag;
+    drag = null;
+    if (!node || !locationId) return;
+    try {
+      await api(`/api/physical/positions`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          location_id: locationId,
+          positions: { [finished.id]: { x: node.x, y: node.y } },
+        }),
+      });
+      setStatus(`Moved ${finished.id} · unsaved`);
+      scheduleStatusRefresh();
+    } catch (err) {
+      setStatus(String(err.message || err));
+    }
+  }
+
+  svg.addEventListener("pointermove", (ev) => {
+    if (drag) {
+      const node = graph?.nodes.find((n) => n.id === drag.id);
+      if (!node) return;
+      const dx = (ev.clientX - drag.startClientX) / scale;
+      const dy = (ev.clientY - drag.startClientY) / scale;
+      node.x = Math.round(drag.origX + dx);
+      node.y = Math.round(drag.origY + dy);
+      dirtyLocal = true;
+      updateNodeVisual(node);
+      return;
+    }
+    if (panDrag) {
+      panX = panDrag.panX + (ev.clientX - panDrag.x);
+      panY = panDrag.panY + (ev.clientY - panDrag.y);
+      applyWorldTransform();
+    }
+  });
+
+  svg.addEventListener("pointerup", (ev) => {
+    if (drag) {
+      endDrag(ev);
+      return;
+    }
+    if (panDrag) {
+      panDrag = null;
+      viewport.classList.remove("panning");
+    }
+  });
+
+  svg.addEventListener("pointercancel", (ev) => {
+    if (drag) endDrag(ev);
+    panDrag = null;
+    viewport.classList.remove("panning");
+  });
 
   function scheduleStatusRefresh() {
     clearTimeout(saveTimer);
@@ -238,7 +329,9 @@
     try {
       const st = await api("/api/status");
       const n = (st.dirty || []).length;
-      setStatus(n ? `${n} dirty file(s)` : dirtyLocal ? "layout pending" : "saved");
+      setStatus(
+        n ? `${n} dirty file(s)` : dirtyLocal ? "layout pending" : "saved"
+      );
       if (!n) dirtyLocal = false;
     } catch {
       /* ignore */
@@ -251,7 +344,8 @@
     for (const loc of data.locations || []) {
       const opt = document.createElement("option");
       opt.value = loc.id;
-      opt.textContent = (loc.label || loc.id) + (loc.type ? ` (${loc.type})` : '');
+      opt.textContent =
+        (loc.label || loc.id) + (loc.type ? ` (${loc.type})` : "");
       locationSelect.appendChild(opt);
     }
     if ((data.locations || []).length) {
@@ -265,7 +359,9 @@
 
   async function loadLocation() {
     locationId = locationSelect.value;
-    graph = await api(`/api/physical?location=${encodeURIComponent(locationId)}`);
+    graph = await api(
+      `/api/physical?location=${encodeURIComponent(locationId)}`
+    );
     representationSelect.value = graph.page?.representation || "line";
     render();
     await refreshStatus();
@@ -333,41 +429,35 @@
 
   document.getElementById("btn-zoom-in").addEventListener("click", () => {
     scale = Math.min(3, scale * 1.15);
-    render();
+    applyWorldTransform();
   });
   document.getElementById("btn-zoom-out").addEventListener("click", () => {
     scale = Math.max(0.35, scale / 1.15);
-    render();
+    applyWorldTransform();
   });
   document.getElementById("btn-zoom-reset").addEventListener("click", () => {
     scale = 1;
     panX = 40;
     panY = 40;
-    render();
+    applyWorldTransform();
   });
 
   viewport.addEventListener("pointerdown", (ev) => {
+    if (drag) return;
     if (ev.target !== svg && ev.target !== viewport) return;
+    if (ev.button !== 0) return;
     panDrag = { x: ev.clientX, y: ev.clientY, panX, panY };
     viewport.classList.add("panning");
+    svg.setPointerCapture(ev.pointerId);
   });
-  viewport.addEventListener("pointermove", (ev) => {
-    if (!panDrag) return;
-    panX = panDrag.panX + (ev.clientX - panDrag.x);
-    panY = panDrag.panY + (ev.clientY - panDrag.y);
-    render();
-  });
-  viewport.addEventListener("pointerup", () => {
-    panDrag = null;
-    viewport.classList.remove("panning");
-  });
+
   viewport.addEventListener(
     "wheel",
     (ev) => {
       ev.preventDefault();
       const factor = ev.deltaY > 0 ? 1 / 1.08 : 1.08;
       scale = Math.min(3, Math.max(0.35, scale * factor));
-      render();
+      applyWorldTransform();
     },
     { passive: false }
   );
