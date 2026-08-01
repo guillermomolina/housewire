@@ -6,7 +6,7 @@
   <title>HouseWire — physical</title>
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <link rel="stylesheet" href="/static/app.css?v=0.26.0" />
+  <link rel="stylesheet" href="/static/app.css?v=0.26.1" />
 </head>
 <body>
   <nav class="menubar" aria-label="Application">
@@ -19,8 +19,8 @@
       <div class="menu-dropdown hidden" id="menu-file" role="menu">
         <button type="button" role="menuitem" data-file-action="open">Open…</button>
         <button type="button" role="menuitem" data-file-action="save" id="menu-save" disabled>Save</button>
-        <button type="button" role="menuitem" data-file-action="save-as">Save as…</button>
-        <button type="button" role="menuitem" data-file-action="close">Close</button>
+        <button type="button" role="menuitem" data-file-action="save-as" id="menu-save-as" disabled>Save as…</button>
+        <button type="button" role="menuitem" data-file-action="close" id="menu-close" disabled>Close</button>
       </div>
     </div>
     <div id="doc-label" class="doc-label" title="Active site document"></div>
@@ -135,6 +135,6 @@
   </div>
   <footer id="status" class="statusbar" aria-live="polite"></footer>
   <input type="file" id="file-open-input" accept=".yaml,.yml,text/yaml,application/x-yaml" hidden />
-  <script src="/static/app.js?v=0.26.0"></script>
+  <script src="/static/app.js?v=0.26.1"></script>
 </body>
 </html>

@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.26.1] — 2026-08-01
+
+### Fixed
+
+- After Close, Open no longer falsely warns about unsaved changes (layout
+  dirty only counts while a document and canvas are active).
+- File → Save as… / Close stay disabled when no document is open.
+
 ## [0.26.0] — 2026-08-01
 
 ### Changed

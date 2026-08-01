@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-  <!-- A: house + wire node -->
-  <path d="M5 14.5 16 5l11 9.5V27H5V14.5Z" stroke="#8b949e" stroke-width="2" stroke-linejoin="round"/>
-  <path d="M16 5v8M9 21h14" stroke="#3fb950" stroke-width="2" stroke-linecap="round"/>
-  <circle cx="16" cy="21" r="2.6" fill="#58a6ff"/>
-</svg>

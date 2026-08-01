@@ -22,6 +22,8 @@
   let panX = 40;
   let panY = 40;
   let dirtyLocal = false;
+  /** Client mirror of whether the workspace has an open document. */
+  let hasDocument = false;
   /** @type {FileSystemFileHandle | null} */
   let siteFileHandle = null;
   let drag = null;
@@ -181,9 +183,36 @@
   }
 
   function syncLayoutDirty() {
-    dirtyLocal = Boolean(
-      layoutBaseline && !snapsEqual(snapshotPositions(), layoutBaseline)
-    );
+    if (!hasDocument || !locationId || !graph || !layoutBaseline) {
+      dirtyLocal = false;
+      return;
+    }
+    dirtyLocal = !snapsEqual(snapshotPositions(), layoutBaseline);
+  }
+
+  function updateFileMenuState({ dirty } = {}) {
+    const menuSave = document.getElementById("menu-save");
+    const menuSaveAs = document.getElementById("menu-save-as");
+    const menuClose = document.getElementById("menu-close");
+    const isDirty = dirty == null ? dirtyLocal : Boolean(dirty);
+    if (menuSave) menuSave.disabled = !hasDocument || !isDirty;
+    if (menuSaveAs) menuSaveAs.disabled = !hasDocument;
+    if (menuClose) menuClose.disabled = !hasDocument;
+  }
+
+  function applyWorkspaceStatus(st) {
+    hasDocument = Boolean(st && st.document);
+    if (!hasDocument) {
+      dirtyLocal = false;
+      layoutBaseline = null;
+      layoutHistory = [];
+      layoutIndex = -1;
+    }
+    const serverDirty = ((st && st.dirty) || []).length > 0;
+    if (hasDocument) syncLayoutDirty();
+    else dirtyLocal = false;
+    updateFileMenuState({ dirty: serverDirty || dirtyLocal });
+    return st;
   }
 
   function pushLayoutHistory() {
@@ -1828,22 +1857,23 @@
 
   async function refreshStatus() {
     try {
-      const st = await api("/api/status");
+      const st = applyWorkspaceStatus(await api("/api/workspace"));
+      if (!hasDocument) {
+        return;
+      }
       const n = (st.dirty || []).length;
-      syncLayoutDirty();
       const dirty = n > 0 || dirtyLocal;
       setStatus(
         n ? `${n} dirty file(s)` : dirtyLocal ? "layout pending" : "saved"
       );
-      updateSaveButton(dirty);
+      updateFileMenuState({ dirty });
     } catch {
       /* ignore */
     }
   }
 
   function updateSaveButton(dirty) {
-    const menuSave = document.getElementById("menu-save");
-    if (menuSave) menuSave.disabled = !dirty;
+    updateFileMenuState({ dirty });
   }
 
   async function saveDocument() {
@@ -1873,10 +1903,18 @@
     outlineCollapseReady = false;
     collapsedOutline = new Set();
     svg.innerHTML = "";
+    try {
+      applyWorkspaceStatus(await api("/api/workspace"));
+    } catch {
+      hasDocument = true;
+      updateFileMenuState({ dirty: false });
+    }
     await loadLocations();
   }
 
   function clearDocumentUi() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
     viewTabs = [];
     locationId = null;
     graph = null;
@@ -1886,7 +1924,8 @@
     layoutIndex = -1;
     layoutBaseline = null;
     siteFileHandle = null;
-    updateSaveButton(false);
+    hasDocument = false;
+    updateFileMenuState({ dirty: false });
     svg.innerHTML = "";
     const outline = document.getElementById("outline-tree");
     if (outline) outline.innerHTML = "";
@@ -2005,17 +2044,13 @@
 
   async function isDocumentDirty() {
     try {
-      const st = await api("/api/workspace");
-      if (!st.document) {
-        dirtyLocal = false;
-        return false;
-      }
-      syncLayoutDirty();
-      if (dirtyLocal) return true;
-      return (st.dirty || []).length > 0;
+      const st = applyWorkspaceStatus(await api("/api/workspace"));
+      if (!hasDocument) return false;
+      const serverDirty = (st.dirty || []).length > 0;
+      return serverDirty || dirtyLocal;
     } catch {
-      syncLayoutDirty();
-      return dirtyLocal;
+      // Do not block Open/Close on a transient API error.
+      return false;
     }
   }
 
@@ -2172,7 +2207,7 @@
     const el = document.getElementById("doc-label");
     if (!el) return;
     try {
-      const st = await api("/api/workspace");
+      const st = applyWorkspaceStatus(await api("/api/workspace"));
       const doc = st.document;
       if (!doc) {
         el.textContent = "(no document)";
@@ -2186,6 +2221,8 @@
         : String(doc.path || "Active site document");
     } catch {
       el.textContent = "";
+      hasDocument = false;
+      updateFileMenuState({ dirty: false });
     }
   }
 
