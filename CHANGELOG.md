@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.26.0] — 2026-08-01
+
+### Changed
+
+- UI chrome: **HouseWire** brand + logo on the menubar; Save only in File menu;
+  full-width status bar at the bottom; Outline and Inspector collapse to the
+  sides (state remembered in sessionStorage).
+
 ## [0.25.0] — 2026-08-01
 
 ### Changed

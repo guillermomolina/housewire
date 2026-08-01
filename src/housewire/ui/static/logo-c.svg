@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+  <!-- C: HW monogram with wire crossbar -->
+  <path d="M7 7v18M15 7v18M7 16h8" stroke="#e6edf3" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M18 7v18M18 25l7-18" stroke="#e6edf3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M7 16h14" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="23" cy="16" r="2.2" fill="#3fb950"/>
+</svg>

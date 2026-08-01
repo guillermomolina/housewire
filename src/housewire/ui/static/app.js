@@ -1842,8 +1842,6 @@
   }
 
   function updateSaveButton(dirty) {
-    const btn = document.getElementById("btn-save");
-    if (btn) btn.disabled = !dirty;
     const menuSave = document.getElementById("menu-save");
     if (menuSave) menuSave.disabled = !dirty;
   }
@@ -2706,13 +2704,68 @@
     }
   });
 
-  document.getElementById("btn-save").addEventListener("click", async () => {
+  document.getElementById("btn-save")?.addEventListener("click", async () => {
     try {
       await saveDocument();
     } catch (err) {
       setStatus(String(err.message || err));
     }
   });
+
+  function setSidePanelCollapsed(which, collapsed) {
+    const tree = document.getElementById("nav-tree");
+    const side = document.getElementById("side-panel");
+    const expandOutline = document.getElementById("btn-expand-outline");
+    const expandInspector = document.getElementById("btn-expand-inspector");
+    const collapseOutline = document.getElementById("btn-collapse-outline");
+    const collapseInspector = document.getElementById("btn-collapse-inspector");
+    if (which === "outline" && tree) {
+      tree.classList.toggle("collapsed", collapsed);
+      if (expandOutline) expandOutline.classList.toggle("hidden", !collapsed);
+      if (collapseOutline) collapseOutline.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      try {
+        sessionStorage.setItem("housewire-outline-panel", collapsed ? "0" : "1");
+      } catch {
+        /* ignore */
+      }
+    }
+    if (which === "inspector" && side) {
+      side.classList.toggle("collapsed", collapsed);
+      if (expandInspector) expandInspector.classList.toggle("hidden", !collapsed);
+      if (collapseInspector) {
+        collapseInspector.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      }
+      try {
+        sessionStorage.setItem("housewire-inspector-panel", collapsed ? "0" : "1");
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  document.getElementById("btn-collapse-outline")?.addEventListener("click", () => {
+    setSidePanelCollapsed("outline", true);
+  });
+  document.getElementById("btn-expand-outline")?.addEventListener("click", () => {
+    setSidePanelCollapsed("outline", false);
+  });
+  document.getElementById("btn-collapse-inspector")?.addEventListener("click", () => {
+    setSidePanelCollapsed("inspector", true);
+  });
+  document.getElementById("btn-expand-inspector")?.addEventListener("click", () => {
+    setSidePanelCollapsed("inspector", false);
+  });
+
+  try {
+    if (sessionStorage.getItem("housewire-outline-panel") === "0") {
+      setSidePanelCollapsed("outline", true);
+    }
+    if (sessionStorage.getItem("housewire-inspector-panel") === "0") {
+      setSidePanelCollapsed("inspector", true);
+    }
+  } catch {
+    /* ignore */
+  }
 
   const menuFileBtn = document.getElementById("menu-file-btn");
   if (menuFileBtn) {

@@ -3,12 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>housewire — physical</title>
+  <title>HouseWire — physical</title>
+  <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <link rel="stylesheet" href="/static/app.css?v=0.25.0" />
+  <link rel="stylesheet" href="/static/app.css?v=0.26.0" />
 </head>
 <body>
   <nav class="menubar" aria-label="Application">
+    <a class="brand" href="/" title="HouseWire">
+      <img class="brand-logo" src="/static/logo.svg" width="22" height="22" alt="" />
+      <span class="brand-text">HouseWire</span>
+    </a>
     <div class="menu">
       <button type="button" class="menu-btn" id="menu-file-btn" aria-haspopup="true" aria-expanded="false">File</button>
       <div class="menu-dropdown hidden" id="menu-file" role="menu">
@@ -18,10 +23,9 @@
         <button type="button" role="menuitem" data-file-action="close">Close</button>
       </div>
     </div>
+    <div id="doc-label" class="doc-label" title="Active site document"></div>
   </nav>
   <header class="toolbar">
-    <div class="brand">housewire</div>
-    <div id="doc-label" class="doc-label" title="Active site document"></div>
     <label class="field">
       Representation
       <select id="representation">
@@ -44,7 +48,6 @@
         <button type="button" id="btn-redo" disabled>Redo</button>
         <button type="button" id="btn-layout-reset" disabled title="Restore positions from the last Save (or location load)">Reset</button>
       </span>
-      <button type="button" id="btn-save" disabled>Save</button>
       <span class="zoom-group" title="Canvas zoom (mouse wheel)">
         <button type="button" id="btn-zoom-out">−</button>
         <button type="button" id="btn-zoom-reset" title="Fit all places in the viewport">Fit</button>
@@ -56,72 +59,82 @@
         <button type="button" id="btn-depth-in">depth +</button>
       </span>
     </div>
-    <div id="status" class="status" aria-live="polite"></div>
   </header>
   <div id="view-tabs" class="view-tabs" role="tablist" aria-label="Canvas views"></div>
   <div class="workspace">
     <aside id="nav-tree" class="nav-tree" aria-label="Site outline">
-      <h2>Outline</h2>
-      <div id="outline-tree" class="outline-tree"></div>
+      <div class="panel-head">
+        <h2>Outline</h2>
+        <button type="button" class="panel-collapse" id="btn-collapse-outline" title="Collapse outline" aria-expanded="true" aria-controls="nav-tree">«</button>
+      </div>
+      <div id="outline-tree" class="outline-tree panel-body"></div>
     </aside>
+    <button type="button" class="panel-expand left hidden" id="btn-expand-outline" title="Show outline" aria-controls="nav-tree">Outline</button>
     <main id="viewport">
       <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
       <div id="marquee" class="marquee hidden" aria-hidden="true"></div>
     </main>
+    <button type="button" class="panel-expand right hidden" id="btn-expand-inspector" title="Show inspector" aria-controls="side-panel">Inspector</button>
     <aside id="side-panel" class="side-panel">
-      <h2>Inspector</h2>
-      <div id="panel-empty" class="panel-empty">Selecciona una caja</div>
-      <div id="panel-show" class="panel-block hidden">
-        <h3>Show</h3>
-        <dl id="show-meta" class="show-meta"></dl>
-        <div id="show-elements-block">
-          <h4>Elements</h4>
-          <ul id="show-elements" class="show-list"></ul>
-        </div>
-        <div id="show-conduits-block">
-          <h4>Conduits</h4>
-          <ul id="show-conduits" class="show-list"></ul>
-        </div>
-        <div id="show-cables-block" class="hidden">
-          <h4>Cables</h4>
-          <ul id="show-cables" class="show-list"></ul>
-        </div>
+      <div class="panel-head">
+        <h2>Inspector</h2>
+        <button type="button" class="panel-collapse" id="btn-collapse-inspector" title="Collapse inspector" aria-expanded="true" aria-controls="side-panel">»</button>
       </div>
-      <div id="panel-recipes" class="panel-block">
-        <h3>Recipes</h3>
-        <div class="recipe-tabs">
-          <button type="button" class="recipe-tab active" data-recipe="socket">Socket</button>
-          <button type="button" class="recipe-tab" data-recipe="lamp">Lamp</button>
-          <button type="button" class="recipe-tab" data-recipe="feed">Feed</button>
+      <div class="panel-body">
+        <div id="panel-empty" class="panel-empty">Selecciona una caja</div>
+        <div id="panel-show" class="panel-block hidden">
+          <h3>Show</h3>
+          <dl id="show-meta" class="show-meta"></dl>
+          <div id="show-elements-block">
+            <h4>Elements</h4>
+            <ul id="show-elements" class="show-list"></ul>
+          </div>
+          <div id="show-conduits-block">
+            <h4>Conduits</h4>
+            <ul id="show-conduits" class="show-list"></ul>
+          </div>
+          <div id="show-cables-block" class="hidden">
+            <h4>Cables</h4>
+            <ul id="show-cables" class="show-list"></ul>
+          </div>
         </div>
-        <form id="form-socket" class="recipe-form">
-          <label>Name <input name="name" required placeholder="Enchufe_5" /></label>
-          <label>From <input name="from" required placeholder="Caja.N1" /></label>
-          <label>Strip <input name="strip" value="Regleta" required /></label>
-          <label>Pins <input name="pins" placeholder="3,2,1" /></label>
-          <button type="submit">Add socket</button>
-        </form>
-        <form id="form-lamp" class="recipe-form hidden">
-          <label>Name <input name="name" required placeholder="Lampara_3" /></label>
-          <label>From <input name="from" required placeholder="Caja.S1" /></label>
-          <label>Strip <input name="strip" value="Regleta" required /></label>
-          <label>Pins <input name="pins" required placeholder="6,5,2" /></label>
-          <label>To pins <input name="to_pins" placeholder="1,2,3" /></label>
-          <button type="submit">Add lamp</button>
-        </form>
-        <form id="form-feed" class="recipe-form hidden">
-          <label>Name <input name="name" required placeholder="Linea_A_a_B" /></label>
-          <label>From <input name="from" required placeholder="Caja_A.E1" /></label>
-          <label>To <input name="to" required placeholder="Caja_B.N1" /></label>
-          <label>From pin <input name="from_pin" required placeholder="Regleta.1" /></label>
-          <label>To pin <input name="to_pin" required placeholder="Regleta.1" /></label>
-          <button type="submit">Add feed</button>
-        </form>
-        <p id="recipe-msg" class="recipe-msg"></p>
+        <div id="panel-recipes" class="panel-block">
+          <h3>Recipes</h3>
+          <div class="recipe-tabs">
+            <button type="button" class="recipe-tab active" data-recipe="socket">Socket</button>
+            <button type="button" class="recipe-tab" data-recipe="lamp">Lamp</button>
+            <button type="button" class="recipe-tab" data-recipe="feed">Feed</button>
+          </div>
+          <form id="form-socket" class="recipe-form">
+            <label>Name <input name="name" required placeholder="Enchufe_5" /></label>
+            <label>From <input name="from" required placeholder="Caja.N1" /></label>
+            <label>Strip <input name="strip" value="Regleta" required /></label>
+            <label>Pins <input name="pins" placeholder="3,2,1" /></label>
+            <button type="submit">Add socket</button>
+          </form>
+          <form id="form-lamp" class="recipe-form hidden">
+            <label>Name <input name="name" required placeholder="Lampara_3" /></label>
+            <label>From <input name="from" required placeholder="Caja.S1" /></label>
+            <label>Strip <input name="strip" value="Regleta" required /></label>
+            <label>Pins <input name="pins" required placeholder="6,5,2" /></label>
+            <label>To pins <input name="to_pins" placeholder="1,2,3" /></label>
+            <button type="submit">Add lamp</button>
+          </form>
+          <form id="form-feed" class="recipe-form hidden">
+            <label>Name <input name="name" required placeholder="Linea_A_a_B" /></label>
+            <label>From <input name="from" required placeholder="Caja_A.E1" /></label>
+            <label>To <input name="to" required placeholder="Caja_B.N1" /></label>
+            <label>From pin <input name="from_pin" required placeholder="Regleta.1" /></label>
+            <label>To pin <input name="to_pin" required placeholder="Regleta.1" /></label>
+            <button type="submit">Add feed</button>
+          </form>
+          <p id="recipe-msg" class="recipe-msg"></p>
+        </div>
       </div>
     </aside>
   </div>
+  <footer id="status" class="statusbar" aria-live="polite"></footer>
   <input type="file" id="file-open-input" accept=".yaml,.yml,text/yaml,application/x-yaml" hidden />
-  <script src="/static/app.js?v=0.25.0"></script>
+  <script src="/static/app.js?v=0.26.0"></script>
 </body>
 </html>
