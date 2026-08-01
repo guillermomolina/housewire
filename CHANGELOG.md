@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.9] — 2026-08-01
+
+### Changed
+
+- Menubar: after opening a menu with a click, hovering another top-level menu
+  (File / Edit / View) switches to that dropdown.
+
 ## [0.28.8] — 2026-08-01
 
 ### Fixed

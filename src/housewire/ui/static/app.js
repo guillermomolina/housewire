@@ -2738,6 +2738,17 @@
     renderDocTabs({ documents: [], active: null, document: null });
   }
 
+  let menuBarArmed = false;
+
+  function isMenuOpen(name) {
+    const menu = document.getElementById(`menu-${name}`);
+    return Boolean(menu && !menu.classList.contains("hidden"));
+  }
+
+  function anyMenuOpen() {
+    return Boolean(document.querySelector(".menu-dropdown:not(.hidden)"));
+  }
+
   function closeAllMenus() {
     document.querySelectorAll(".menu-dropdown, .menu-flyout").forEach((menu) => {
       menu.classList.add("hidden");
@@ -2751,18 +2762,25 @@
     document.querySelectorAll(".menu-item-submenu").forEach((el) => {
       el.classList.remove("is-open");
     });
+    menuBarArmed = false;
   }
 
-  function toggleMenu(name) {
+  function openMenu(name) {
     const menu = document.getElementById(`menu-${name}`);
     const btn = document.getElementById(`menu-${name}-btn`);
     if (!menu || !btn) return;
-    const willOpen = menu.classList.contains("hidden");
     closeAllMenus();
-    if (willOpen) {
-      menu.classList.remove("hidden");
-      btn.setAttribute("aria-expanded", "true");
+    menu.classList.remove("hidden");
+    btn.setAttribute("aria-expanded", "true");
+    menuBarArmed = true;
+  }
+
+  function toggleMenu(name) {
+    if (isMenuOpen(name)) {
+      closeAllMenus();
+      return;
     }
+    openMenu(name);
   }
 
   function closeFileMenu() {
@@ -3656,6 +3674,15 @@
       const host = btn.closest(".menu");
       const name = host && host.getAttribute("data-menu");
       if (name) toggleMenu(name);
+    });
+  });
+
+  // After a click-open, hovering another top-level menu switches to it.
+  document.querySelectorAll(".menubar .menu").forEach((host) => {
+    host.addEventListener("mouseenter", () => {
+      if (!menuBarArmed && !anyMenuOpen()) return;
+      const name = host.getAttribute("data-menu");
+      if (name && !isMenuOpen(name)) openMenu(name);
     });
   });
 
