@@ -86,13 +86,21 @@
     layoutBaseline = snapshotPositions();
     layoutHistory = [cloneSnap(layoutBaseline)];
     layoutIndex = 0;
+    syncLayoutDirty();
     updateHistoryButtons();
   }
 
   /** Update Reset target only; leave undo/redo stack intact. */
   function markLayoutBaseline() {
     layoutBaseline = cloneSnap(snapshotPositions());
+    syncLayoutDirty();
     updateHistoryButtons();
+  }
+
+  function syncLayoutDirty() {
+    dirtyLocal = Boolean(
+      layoutBaseline && !snapsEqual(snapshotPositions(), layoutBaseline)
+    );
   }
 
   function pushLayoutHistory() {
@@ -116,7 +124,8 @@
       method: "PATCH",
       body: JSON.stringify({ location_id: locationId, positions: snap }),
     });
-    dirtyLocal = true;
+    syncLayoutDirty();
+    updateSaveButton(dirtyLocal);
     scheduleStatusRefresh();
   }
 
@@ -131,7 +140,9 @@
     updateNodeVisual(graph.nodes[0] || null);
     try {
       await persistSnapshot(snap);
-      setStatus(status || "layout");
+      setStatus(
+        dirtyLocal ? status || "layout" : status ? `${status} · saved` : "saved"
+      );
     } catch (err) {
       setStatus(String(err.message || err));
     }
@@ -806,7 +817,11 @@
         }),
       });
       pushLayoutHistory();
-      setStatus(`Moved ${finished.id} · unsaved`);
+      syncLayoutDirty();
+      updateSaveButton(dirtyLocal);
+      setStatus(
+        dirtyLocal ? `Moved ${finished.id} · unsaved` : `Moved ${finished.id}`
+      );
       scheduleStatusRefresh();
     } catch (err) {
       setStatus(String(err.message || err));
@@ -875,7 +890,7 @@
     try {
       const st = await api("/api/status");
       const n = (st.dirty || []).length;
-      if (n) dirtyLocal = false;
+      syncLayoutDirty();
       const dirty = n > 0 || dirtyLocal;
       setStatus(
         n ? `${n} dirty file(s)` : dirtyLocal ? "layout pending" : "saved"

@@ -130,7 +130,7 @@ def create_app(site_root: Path) -> Any:
             if yaml_path in docs and yaml_path not in session._buffers:
                 session.ensure_doc(yaml_path)
                 session._buffers[yaml_path].doc = docs[yaml_path]
-            session.mark_dirty(yaml_path)
+            session.reconcile_dirty(yaml_path)
         return {
             "updated": updated,
             "graph": _graph(location_id, depth),
@@ -156,7 +156,8 @@ def create_app(site_root: Path) -> Any:
         for node_id in updated:
             parts = tuple(p for p in node_id.split("/") if p)
             yaml_path = (loc_dir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
-            session.mark_dirty(yaml_path)
+            # Undo/redo back to disk positions should clear dirty.
+            session.reconcile_dirty(yaml_path)
         return {"updated": updated}
 
     @app.patch("/api/physical/page")

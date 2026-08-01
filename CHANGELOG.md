@@ -22,7 +22,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   there are unsaved changes). Manual **Auto-layout** repositions all visible
   places. Canvas **Fit** frames all places in the viewport (also runs after
   load). After **Save**, only the Reset baseline moves to the saved positions
-  (Reset greys out; undo/redo history is kept).
+  (Reset greys out; undo/redo history is kept). Undo/redo back to the saved
+  layout clears dirty and disables **Save**.
 
 ### Changed
 

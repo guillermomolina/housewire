@@ -251,6 +251,24 @@ class TestServeApi(unittest.TestCase):
             saved = client.post("/api/save").json()
             self.assertTrue(saved["saved"])
 
+            # Move then restore saved coords → dirty clears (undo-to-saved).
+            client.patch(
+                "/api/physical/positions",
+                json={
+                    "location_id": "Parking",
+                    "positions": {"Caja_4": {"x": 99, "y": 88}},
+                },
+            )
+            self.assertTrue(client.get("/api/status").json()["dirty"])
+            client.patch(
+                "/api/physical/positions",
+                json={
+                    "location_id": "Parking",
+                    "positions": {"Caja_4": {"x": 11, "y": 22}},
+                },
+            )
+            self.assertEqual(client.get("/api/status").json()["dirty"], [])
+
             caja = abm.load_editable(
                 parking / "Caja_4" / "housewire.yaml", root
             )

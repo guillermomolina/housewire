@@ -27,6 +27,21 @@ class DocBuffer:
     mtime: float | None = None
 
 
+def _docs_equivalent(a: Any, b: Any) -> bool:
+    """Deep equality treating int/float numbers as equal when values match."""
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return float(a) == float(b)
+    if isinstance(a, dict) and isinstance(b, dict):
+        if set(a) != set(b):
+            return False
+        return all(_docs_equivalent(a[k], b[k]) for k in a)
+    if isinstance(a, list) and isinstance(b, list):
+        if len(a) != len(b):
+            return False
+        return all(_docs_equivalent(x, y) for x, y in zip(a, b, strict=True))
+    return a == b
+
+
 @dataclass(frozen=True)
 class LocationChild:
     """A navigable child location under the current place."""
@@ -241,6 +256,19 @@ class ProjectSession:
     def mark_dirty(self, path: Path | None = None) -> None:
         resolved, _ = self.ensure_doc(path)
         self._buffers[resolved].dirty = True
+
+    def reconcile_dirty(self, path: Path | None = None) -> bool:
+        """Set dirty from buffer vs disk; clear when they match. Return dirty."""
+        from housewire.project import abm
+
+        resolved, doc = self.ensure_doc(path)
+        buf = self._buffers[resolved]
+        if not resolved.is_file():
+            buf.dirty = True
+            return True
+        disk = abm.load_editable(resolved, self.root)
+        buf.dirty = not _docs_equivalent(doc, disk)
+        return buf.dirty
 
     def is_dirty(self, path: Path | None = None) -> bool:
         if path is None:
