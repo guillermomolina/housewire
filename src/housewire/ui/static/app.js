@@ -1503,12 +1503,17 @@
     return `${edge.id || ""}|${edge.from || ""}|${edge.to || ""}|${edge.from_pin || ""}|${edge.to_pin || ""}`;
   }
 
-  /** Road stroke width from how many cables ride the conduit. */
-  function conduitRoadWidth(containsCount) {
-    const n = Math.max(0, Number(containsCount) || 0);
-    if (n <= 0) return 8;
-    // Per-cable band ≈ jacket; high ceiling so 3 vs 15 stay visually distinct.
-    return Math.min(96, 6 + n * 4);
+  /** Clear gap between parallel strand centers (px). */
+  const LANE_SPACING = 7;
+  const JACKET_WIDTH = 3.5;
+  const STRAND_WIDTH = 2.2;
+
+  /** Road stroke width: transparent highway that fits spaced cable lanes. */
+  function conduitRoadWidth(containsCount, laneCount) {
+    const cables = Math.max(0, Number(containsCount) || 0);
+    const lanes = Math.max(cables, Number(laneCount) || 0, 1);
+    // Padding + one lane pitch per strand/cable so parallel runs stay readable.
+    return Math.min(140, Math.max(16, 12 + lanes * LANE_SPACING));
   }
 
   /** Local (element-space) anchor for a terminal cell id. */
@@ -1587,7 +1592,7 @@
     return { x: pt.x, y: pt.y, face };
   }
 
-  const INBOX_STUB = 10;
+  const INBOX_STUB = 14;
 
   function faceOutwardDelta(face) {
     const f = String(face || "").toUpperCase();
@@ -1701,9 +1706,6 @@
     TQ: "#26a69a",
     SR: "#b0bec5",
   };
-  const LANE_SPACING = 3.5;
-  const JACKET_WIDTH = 5.5;
-  const STRAND_WIDTH = 1.85;
 
   function wireColorCss(code) {
     const key = String(code || "").trim().toUpperCase();
@@ -1733,6 +1735,31 @@
     const n = Math.max(laneCount, 1);
     const mid = (n - 1) / 2;
     return (laneIndex - mid) * LANE_SPACING;
+  }
+
+  /**
+   * Offset a polyline but pin the endpoints (terminal / opening stay put).
+   * Short segments get synthetic midpoints so a visible parallel gap remains.
+   */
+  function offsetKeepEnds(pts, dist) {
+    if (!pts || pts.length < 2) return pts ? pts.map((p) => [p[0], p[1]]) : [];
+    if (Math.abs(dist) < 1e-9) return pts.map((p) => [p[0], p[1]]);
+    /** @type {number[][]} */
+    let work = pts.map((p) => [p[0], p[1]]);
+    if (work.length === 2) {
+      const a = work[0];
+      const b = work[1];
+      work = [
+        a,
+        [a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25],
+        [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75],
+        b,
+      ];
+    }
+    const out = offsetOrthoPts(work, dist);
+    out[0] = [pts[0][0], pts[0][1]];
+    out[out.length - 1] = [pts[pts.length - 1][0], pts[pts.length - 1][1]];
+    return out;
   }
 
   function cableRouteKey(edge, elemById) {
@@ -2023,16 +2050,10 @@
     const laneDist = opts?.laneDist || 0;
     const fromPin = opts?.fromPin != null ? opts.fromPin : edge.from_pin;
     const toPin = opts?.toPin != null ? opts.toPin : edge.to_pin;
-    /** Offset only conduit runs — tails keep slotted terminals on the element. */
-    const offsetMids = (subs) => {
-      if (Math.abs(laneDist) < 1e-9 || subs.length <= 2) {
-        // Same-box / single segment: terminals already fanned via slots.
-        return subs;
-      }
-      return subs.map((sub, i) => {
-        if (i === 0 || i === subs.length - 1) return sub;
-        return offsetOrthoPts(sub, laneDist);
-      });
+    /** Parallel lanes with endpoints pinned to terminals / openings. */
+    const applyLane = (subs) => {
+      if (Math.abs(laneDist) < 1e-9) return subs;
+      return subs.map((sub) => offsetKeepEnds(sub, laneDist));
     };
 
     // Same box: stub out of each terminal, then ortho through the box.
@@ -2070,16 +2091,7 @@
         prefer,
         "element"
       );
-      if (
-        fromSlot.count <= 1 &&
-        toSlot.count <= 1 &&
-        !fromPin &&
-        !toPin &&
-        Math.abs(laneDist) >= 1e-9
-      ) {
-        return [offsetOrthoPts(pts, laneDist)];
-      }
-      return [pts];
+      return applyLane([pts]);
     }
 
     const parentExclude = [a.parent, b.parent].filter(Boolean);
@@ -2110,7 +2122,7 @@
         !last.to_opening
       ) {
         const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
-        return d ? pathDToSubpaths(d) : [];
+        return applyLane(d ? pathDToSubpaths(d) : []);
       }
 
       /** @type {number[][][]} */
@@ -2132,7 +2144,7 @@
         const pt = placeById[hop.to];
         if (!pf || !pt || !hop.from_opening || !hop.to_opening) {
           const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
-          return d ? pathDToSubpaths(d) : [];
+          return applyLane(d ? pathDToSubpaths(d) : []);
         }
         const tubeD = hopTubePathD(hop);
         let ext = null;
@@ -2188,10 +2200,27 @@
         toPin
       );
       if (endTail && endTail.length >= 2) subs.push(endTail);
-      return offsetMids(subs);
+      return applyLane(subs);
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
-    return d ? pathDToSubpaths(d) : [];
+    return applyLane(d ? pathDToSubpaths(d) : []);
+  }
+
+  /** How many strand lanes ride a conduit edge (for road width). */
+  function conduitLaneHint(edge, cableEdges) {
+    const cid = edge.id;
+    const contains = edge.contains || [];
+    let strands = 0;
+    for (const ce of cableEdges || []) {
+      const hops = ce.conduit_hops || [];
+      const on =
+        (ce.conduit && ce.conduit === cid) ||
+        hops.some((h) => h.conduit === cid) ||
+        (ce.id && contains.includes(ce.id));
+      if (!on) continue;
+      strands += cableWireIndices(ce).length;
+    }
+    return Math.max(strands, contains.length, 1);
   }
 
   function appendCableVisuals(cablesG, edge, placeById, elemById, occupied, layout) {
@@ -2200,7 +2229,8 @@
     const edgeName = edge.name || edge.id || edge.via || "";
     const jInfo = layout ? layout.jacket(edge) : { index: 0, count: 1 };
     const jacketSubs = cableBaseSubpaths(edge, placeById, elemById, occupied, {
-      laneDist: laneOffset(jInfo.index, jInfo.count) * 0.35,
+      // Jackets share the highway but stay thinner / slightly separated.
+      laneDist: laneOffset(jInfo.index, jInfo.count) * 0.55,
     });
     if (!jacketSubs.length) return null;
     /** @type {SVGElement[]} */
@@ -2274,7 +2304,8 @@
         for (const path of item.paths) path.setAttribute("d", routed.d);
         for (const s of routed.segs) occupied.push(s);
         const n = (item.edge.contains || []).length;
-        const roadW = conduitRoadWidth(n);
+        const lanes = conduitLaneHint(item.edge, graph.cable_edges || []);
+        const roadW = conduitRoadWidth(n, lanes);
         const tube = item.paths[0];
         if (tube) tube.setAttribute("stroke-width", String(roadW));
       }
@@ -2663,7 +2694,8 @@
         ? `${edgeName}: ${contains}`
         : String(edgeName || "");
       const n = (edge.contains || []).length;
-      const roadW = conduitRoadWidth(n);
+      const lanes = conduitLaneHint(edge, graph.cable_edges || []);
+      const roadW = conduitRoadWidth(n, lanes);
       const tube = el("path", { class: "edge-tube", d });
       tube.setAttribute("stroke-width", String(roadW));
       const core = el("path", { class: "edge-tube-core", d });

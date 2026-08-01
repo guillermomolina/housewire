@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.24] — 2026-08-01
+
+### Changed
+
+- Wider lane spacing and transparent conduit “highway” so parallel strands stay
+  visually separable; lane offset applies along the whole run (ends stay on
+  terminals/openings).
+
 ## [0.28.23] — 2026-08-01
 
 ### Changed
