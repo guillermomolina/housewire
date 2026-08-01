@@ -23,7 +23,7 @@ from housewire.house.conduit_ref import (
     split_conduit_endpoint,
 )
 from housewire.project.io import HOUSEWIRE_YAML, load_yaml
-from housewire.project.openings import declared_opening_ids
+from housewire.project.openings import declared_opening_ids, expand_opening_grid
 from housewire.project.paths import is_excluded_path
 from housewire.project.view_layout import (
     get_electrical_position,
@@ -749,6 +749,15 @@ def build_physical_graph(
             openings = sorted(declared_opening_ids(meta.get("openings")) or [])
         except ValueError:
             openings = []
+        opening_grid: dict[str, list[int]] = {}
+        if meta.get("opening_grid") is not None:
+            try:
+                for face, (cols, rows) in expand_opening_grid(
+                    meta.get("opening_grid")
+                ).items():
+                    opening_grid[face] = [int(cols), int(rows)]
+            except ValueError:
+                opening_grid = {}
         phys = get_physical_view(doc) or {}
         rotation = phys.get("rotation", 0)
         if not isinstance(rotation, int):
@@ -794,6 +803,7 @@ def build_physical_graph(
                 "openings": [
                     {"id": oid, "face": _opening_face(oid)} for oid in openings
                 ],
+                "opening_grid": opening_grid or None,
                 "x": px,
                 "y": py,
                 "w": width,

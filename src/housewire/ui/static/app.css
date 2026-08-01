@@ -508,13 +508,26 @@ button:hover {
 
 .opening-back {
   fill: var(--back);
-  font-size: 8px;
+  font-size: 7px;
   pointer-events: none;
 }
 
 .opening-back-mark {
-  fill: none;
+  fill: color-mix(in srgb, var(--back) 18%, transparent);
   stroke: var(--back);
+  stroke-width: 1.2;
+  pointer-events: none;
+}
+
+.opening-front {
+  fill: var(--opening);
+  font-size: 7px;
+  pointer-events: none;
+}
+
+.opening-front-mark {
+  fill: color-mix(in srgb, var(--opening) 18%, transparent);
+  stroke: var(--opening);
   stroke-width: 1.2;
   pointer-events: none;
 }

@@ -56,6 +56,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   ``conduits`` and ``cables`` for reuse.
 - Cables and conduits support optional YAML ``name:`` (short display) beside
   ``label:``; UI lists and tooltips prefer ``name`` → id.
+- Physical UI draws each back/front opening (``B2-1``, …) on its face grid
+  near the box border; conduit paths terminate at that circle.
 
 ### Changed
 

@@ -567,6 +567,52 @@
     return Math.max(maxDeclared, preferIndex || 1, declared.length, 1);
   }
 
+  const PLANE_MARGIN = 12;
+  const PLANE_R = 6;
+
+  function planeGridDims(node, face, plane) {
+    let cols = 1;
+    let rows = 1;
+    const raw = node.opening_grid && node.opening_grid[face];
+    if (Array.isArray(raw) && raw.length >= 2) {
+      cols = Math.max(1, Number(raw[0]) || 1);
+      rows = Math.max(1, Number(raw[1]) || 1);
+    } else if (raw && typeof raw === "object") {
+      cols = Math.max(1, Number(raw.cols) || 1);
+      rows = Math.max(1, Number(raw.rows) || 1);
+    }
+    for (const o of node.openings || []) {
+      const p = parsePlaneOpening(o.id);
+      if (!p || p.face !== face) continue;
+      cols = Math.max(cols, p.col);
+      rows = Math.max(rows, p.row);
+    }
+    if (plane) {
+      cols = Math.max(cols, plane.col);
+      rows = Math.max(rows, plane.row);
+    }
+    return { cols, rows };
+  }
+
+  /** Local coords for B/F openings on a face grid, inset near the box border. */
+  function planeAnchorLocal(node, openingId, face) {
+    const w = nodeW(node);
+    const h = nodeH(node);
+    const plane = parsePlaneOpening(openingId);
+    const f = (plane?.face || face || "?").toUpperCase();
+    if (!plane || (f !== "B" && f !== "F")) {
+      return { x: w / 2, y: h / 2 };
+    }
+    const { cols, rows } = planeGridDims(node, f, plane);
+    const margin = Math.min(PLANE_MARGIN, Math.max(4, Math.min(w, h) / 5));
+    const innerW = Math.max(PLANE_R * 2, w - 2 * margin);
+    const innerH = Math.max(PLANE_R * 2, h - 2 * margin);
+    return {
+      x: margin + ((plane.col - 0.5) / cols) * innerW,
+      y: margin + ((plane.row - 0.5) / rows) * innerH,
+    };
+  }
+
   function openingAnchorAbs(node, openingId, face, byId) {
     const a = absXY(node, byId);
     const w = nodeW(node);
@@ -582,13 +628,8 @@
     ).toUpperCase();
 
     if (f === "B" || f === "F") {
-      const c = nodeCenterAbs(node, byId);
-      if (!plane) return c;
-      const cols = Math.max(plane.col, 2);
-      const rows = Math.max(plane.row, 2);
-      const ox = ((plane.col - 0.5) / cols - 0.5) * (w * 0.35);
-      const oy = ((plane.row - 0.5) / rows - 0.5) * (h * 0.35);
-      return { x: c.x + ox, y: c.y + oy };
+      const local = planeAnchorLocal(node, openingId, f);
+      return { x: a.x + local.x, y: a.y + local.y };
     }
 
     const index = side?.index || 1;
@@ -617,12 +658,7 @@
     ).toUpperCase();
 
     if (f === "B" || f === "F") {
-      if (!plane) return { x: w / 2, y: h / 2 };
-      const cols = Math.max(plane.col, 2);
-      const rows = Math.max(plane.row, 2);
-      const ox = ((plane.col - 0.5) / cols - 0.5) * (w * 0.35);
-      const oy = ((plane.row - 0.5) / rows - 0.5) * (h * 0.35);
-      return { x: w / 2 + ox, y: h / 2 + oy };
+      return planeAnchorLocal(node, openingId, f);
     }
 
     const index = side?.index || 1;
@@ -633,6 +669,32 @@
     if (f === "W") return { x: 0, y: t * h };
     if (f === "E") return { x: w, y: t * h };
     return { x: w / 2, y: h / 2 };
+  }
+
+  /** Nearest contour face for routing stubs into a B/F opening. */
+  function planeApproachFace(node, openingId, face, byId) {
+    const p = openingAnchorAbs(node, openingId, face, byId);
+    const a = absXY(node, byId);
+    const w = nodeW(node);
+    const h = nodeH(node);
+    const dists = [
+      ["N", p.y - a.y],
+      ["S", a.y + h - p.y],
+      ["W", p.x - a.x],
+      ["E", a.x + w - p.x],
+    ];
+    dists.sort((x, y) => x[1] - y[1]);
+    return dists[0][0];
+  }
+
+  function routeFace(node, openingId, face, byId) {
+    const f = String(
+      face || (openingId || "?")[0] || "?"
+    ).toUpperCase();
+    if (f === "B" || f === "F") {
+      return planeApproachFace(node, openingId, f, byId);
+    }
+    return f;
   }
 
   function ensurePositions() {
@@ -792,10 +854,10 @@
     const a = byId[edge.from];
     const b = byId[edge.to];
     if (!a || !b) return null;
-    const fromFace = edge.from_opening?.[0];
-    const toFace = edge.to_opening?.[0];
-    const p1 = openingAnchorAbs(a, edge.from_opening, fromFace, byId);
-    const p2 = openingAnchorAbs(b, edge.to_opening, toFace, byId);
+    const fromFace = routeFace(a, edge.from_opening, edge.from_opening?.[0], byId);
+    const toFace = routeFace(b, edge.to_opening, edge.to_opening?.[0], byId);
+    const p1 = openingAnchorAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
+    const p2 = openingAnchorAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
     return orthoPathD(p1, p2, fromFace, toFace);
   }
 
@@ -843,18 +905,28 @@
       edge.from_opening &&
       edge.to_opening
     ) {
-      const fromFace = edge.from_opening?.[0];
-      const toFace = edge.to_opening?.[0];
+      const fromFace = routeFace(
+        conduitFrom,
+        edge.from_opening,
+        edge.from_opening?.[0],
+        placeById
+      );
+      const toFace = routeFace(
+        conduitTo,
+        edge.to_opening,
+        edge.to_opening?.[0],
+        placeById
+      );
       const op1 = openingAnchorAbs(
         conduitFrom,
         edge.from_opening,
-        fromFace,
+        edge.from_opening?.[0],
         placeById
       );
       const op2 = openingAnchorAbs(
         conduitTo,
         edge.to_opening,
-        toFace,
+        edge.to_opening?.[0],
         placeById
       );
       // Element → opening → along conduit (S) → opening → element.
@@ -955,7 +1027,9 @@
     );
 
     if (!hasKids) {
-      const backs = (node.openings || []).filter((o) => o.face === "B");
+      const planes = (node.openings || []).filter(
+        (o) => o.face === "B" || o.face === "F"
+      );
       const sides = (node.openings || []).filter(
         (o) => o.face !== "B" && o.face !== "F"
       );
@@ -979,25 +1053,30 @@
           )
         );
       }
-      if (backs.length) {
+      for (const op of planes) {
+        const anchor = openingAnchorLocal(node, op.id, op.face);
+        const markClass =
+          op.face === "F" ? "opening-front-mark" : "opening-back-mark";
+        const textClass =
+          op.face === "F" ? "opening-front" : "opening-back";
         g.appendChild(
           el("circle", {
-            class: "opening-back-mark",
-            cx: w / 2,
-            cy: h / 2 + 6,
-            r: 7,
+            class: markClass,
+            cx: anchor.x,
+            cy: anchor.y,
+            r: PLANE_R,
           })
         );
         g.appendChild(
           el(
             "text",
             {
-              class: "opening-back",
-              x: w / 2,
-              y: h / 2 + 9,
+              class: textClass,
+              x: anchor.x,
+              y: anchor.y + 3,
               "text-anchor": "middle",
             },
-            backs.map((b) => b.id).join(",")
+            op.id
           )
         );
       }
