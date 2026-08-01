@@ -371,7 +371,9 @@ views:
   levels are drawn inside parent boxes; it does not change representation.
 - **Elements / Cables** toolbar toggles show or hide the electrical LOD on the
   same canvas (session UI state; not persisted). Conduit `line`/`tube` is
-  independent of cable edges.
+  independent of cable edges. Element boxes enlarge their host place (like
+  nested locations); Elements draw only when the place is a leaf in the current
+  depth view. Cables listed in a conduit ``contains`` follow the conduit path.
 - Back openings (`B…`) are drawn at the symbol center, not as a fourth side.
 - Omitted when unused; Graphviz/WireViz generate does not require these fields.
 

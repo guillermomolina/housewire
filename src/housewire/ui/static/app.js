@@ -260,23 +260,36 @@
     return `${raw.slice(0, Math.max(1, maxChars - 1))}…`;
   }
 
-  /** Recompute window sizes bottom-up from visible children (keeps drag live). */
+  /** Recompute window sizes bottom-up from visible children and elements. */
   function measureVisibleSizes() {
     if (!graph) return;
+    const elemsByParent = {};
+    for (const e of graph.elements || []) {
+      const key = e.parent || "";
+      (elemsByParent[key] ||= []).push(e);
+    }
     function measure(node) {
       const kids = childrenOf(node.id);
-      if (!kids.length) {
-        // Keep server size when children are hidden (depth zoom).
-        if (node.w == null) node.w = leafWidthForLabel(node.display_name || node.name || node.id);
+      const elems = elemsByParent[node.id] || [];
+      for (const kid of kids) measure(kid);
+      if (!kids.length && !elems.length) {
+        // Keep server size when no visible interior (depth / empty leaf).
+        if (node.w == null) {
+          node.w = leafWidthForLabel(node.display_name || node.name || node.id);
+        }
         if (node.h == null) node.h = LEAF_H;
         return;
       }
-      for (const kid of kids) measure(kid);
       let maxR = 0;
       let maxB = 0;
       for (const kid of kids) {
         maxR = Math.max(maxR, (kid.x ?? 0) + nodeW(kid));
         maxB = Math.max(maxB, (kid.y ?? 0) + nodeH(kid));
+      }
+      // Elements always contribute (same idea as nested places beyond depth).
+      for (const e of elems) {
+        maxR = Math.max(maxR, (e.x ?? 0) + (e.w ?? ELEM_W));
+        maxB = Math.max(maxB, (e.y ?? 0) + (e.h ?? ELEM_H));
       }
       node.w = Math.max(LEAF_W, maxR + 2 * PAD);
       node.h = Math.max(LEAF_H, HEADER + maxB + PAD);
@@ -530,23 +543,65 @@
     const parent = placeById[elem.parent];
     if (!parent) return { x: elem.x ?? 0, y: elem.y ?? 0 };
     const a = absXY(parent, placeById);
-    return { x: a.x + (elem.x ?? 0), y: a.y + (elem.y ?? 0) };
+    // Same content origin as nested locations (PAD / HEADER).
+    return {
+      x: a.x + PAD + (elem.x ?? 0),
+      y: a.y + HEADER + (elem.y ?? 0),
+    };
+  }
+
+  function elementCenter(elem, placeById) {
+    const p = elementAbsXY(elem, placeById);
+    return {
+      x: p.x + (elem.w ?? ELEM_W) / 2,
+      y: p.y + (elem.h ?? ELEM_H) / 2,
+    };
+  }
+
+  function appendOrtho(d, p1, p2, fromFace) {
+    const seg = orthoPathD(p1, p2, fromFace);
+    if (!d) return seg;
+    // Drop leading M; continue with L segments.
+    return d + seg.replace(/^M\s+[-\d.]+(?:\s+|,)[-\d.]+\s*/, " ");
   }
 
   function cablePathD(edge, placeById, elemById) {
     const a = elemById[edge.from];
     const b = elemById[edge.to];
     if (!a || !b) return null;
-    const p1 = elementAbsXY(a, placeById);
-    const p2 = elementAbsXY(b, placeById);
-    const c1 = {
-      x: p1.x + (a.w ?? ELEM_W) / 2,
-      y: p1.y + (a.h ?? ELEM_H) / 2,
-    };
-    const c2 = {
-      x: p2.x + (b.w ?? ELEM_W) / 2,
-      y: p2.y + (b.h ?? ELEM_H) / 2,
-    };
+    const c1 = elementCenter(a, placeById);
+    const c2 = elementCenter(b, placeById);
+    const conduitFrom = edge.conduit_from
+      ? placeById[edge.conduit_from]
+      : null;
+    const conduitTo = edge.conduit_to ? placeById[edge.conduit_to] : null;
+    if (
+      edge.conduit &&
+      conduitFrom &&
+      conduitTo &&
+      edge.from_opening &&
+      edge.to_opening
+    ) {
+      const fromFace = edge.from_opening?.[0];
+      const toFace = edge.to_opening?.[0];
+      const op1 = openingAnchorAbs(
+        conduitFrom,
+        edge.from_opening,
+        fromFace,
+        placeById
+      );
+      const op2 = openingAnchorAbs(
+        conduitTo,
+        edge.to_opening,
+        toFace,
+        placeById
+      );
+      // Element → opening → along conduit → opening → element.
+      let d = appendOrtho("", c1, op1, null);
+      d = appendOrtho(d, op1, op2, fromFace);
+      d = appendOrtho(d, op2, c2, null);
+      return d;
+    }
     return orthoPathD(c1, c2, null);
   }
 
@@ -854,6 +909,8 @@
     if (showElements) {
       for (const elem of graph.elements || []) {
         if (elem.parent && !byId[elem.parent]) continue;
+        // Like depth: interior elements only when the place is a leaf in view.
+        if (elem.parent && childrenOf(elem.parent).length) continue;
         paintElement(elem, elementsG, byId);
       }
     }
@@ -1116,11 +1173,36 @@
       }
       const dx = (ev.clientX - drag.startClientX) / scale;
       const dy = (ev.clientY - drag.startClientY) / scale;
-      node.x = Math.max(0, Math.round(drag.origX + dx));
-      node.y = Math.max(0, Math.round(drag.origY + dy));
+      let nx = Math.max(0, Math.round(drag.origX + dx));
+      let ny = Math.max(0, Math.round(drag.origY + dy));
+      if (kind === "element" && elemNode?.parent) {
+        const parent = graph.nodes.find((n) => n.id === elemNode.parent);
+        if (parent) {
+          const innerW = Math.max(ELEM_W, nodeW(parent) - 2 * PAD);
+          const innerH = Math.max(ELEM_H, nodeH(parent) - HEADER - PAD);
+          nx = Math.min(nx, Math.max(0, innerW - (elemNode.w ?? ELEM_W)));
+          ny = Math.min(ny, Math.max(0, innerH - (elemNode.h ?? ELEM_H)));
+        }
+      }
+      node.x = nx;
+      node.y = ny;
       if (kind === "element") {
         const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
-        updateElementVisual(node, byId);
+        measureVisibleSizes();
+        for (const n of graph.nodes) {
+          const g = nodesById[n.id];
+          if (!g) continue;
+          const a = absXY(n, byId);
+          g.setAttribute("transform", `translate(${a.x},${a.y})`);
+          const box = g.querySelector(".node-box");
+          if (box) {
+            box.setAttribute("width", String(nodeW(n)));
+            box.setAttribute("height", String(nodeH(n)));
+          }
+        }
+        for (const e of graph.elements || []) {
+          updateElementVisual(e, byId);
+        }
         refreshEdges();
       } else {
         updateNodeVisual(node);

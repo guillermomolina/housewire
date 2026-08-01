@@ -171,7 +171,11 @@ class TestPhysicalGraph(unittest.TestCase):
             self.assertEqual(len(graph["cable_edges"]), 1)
             self.assertEqual(graph["cable_edges"][0]["from"], "Caja_4/Regleta")
             self.assertEqual(graph["cable_edges"][0]["to"], "Enchufe_1/Socket")
+            self.assertEqual(graph["cable_edges"][0].get("conduit"), "Conducto_1")
+            self.assertEqual(graph["cable_edges"][0].get("from_opening"), "W2")
             caja_node = next(n for n in graph["nodes"] if n["id"] == "Caja_4")
+            # Elements enlarge the leaf window past the default leaf size.
+            self.assertGreater(caja_node["h"], 56)
             faces = {o["id"]: o["face"] for o in caja_node["openings"]}
             self.assertEqual(faces.get("B1-1"), "B")
             self.assertIsNotNone(caja_node["x"])

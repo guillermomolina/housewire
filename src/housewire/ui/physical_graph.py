@@ -46,8 +46,8 @@ ELEM_W = 72.0
 ELEM_H = 28.0
 ELEM_GAP_X = 80.0
 ELEM_GAP_Y = 36.0
-ELEM_ORIGIN_X = 8.0
-ELEM_ORIGIN_Y = 40.0
+ELEM_ORIGIN_X = 28.0
+ELEM_ORIGIN_Y = 8.0
 
 
 def _leaf_size(display_name: str) -> tuple[float, float]:
@@ -69,34 +69,12 @@ def _default_local_pos(index: int, *, nested: bool) -> tuple[float, float]:
     )
 
 
-def _content_size(
-    parts: tuple[str, ...],
-    children_map: dict[tuple[str, ...], list[tuple[str, ...]]],
-    pos_map: dict[tuple[str, ...], tuple[float, float]],
-    name_map: dict[tuple[str, ...], str],
-    cache: dict[tuple[str, ...], tuple[float, float]],
-) -> tuple[float, float]:
-    """Bounding window size for a place from its full descendant layout."""
-    if parts in cache:
-        return cache[parts]
-    kids = children_map.get(parts, [])
-    if not kids:
-        place_id = parts[-1] if parts else "?"
-        cache[parts] = _leaf_size(name_map.get(parts, place_id))
-        return cache[parts]
-    max_r = 0.0
-    max_b = 0.0
-    for kid in kids:
-        kw, kh = _content_size(kid, children_map, pos_map, name_map, cache)
-        kx, ky = pos_map[kid]
-        max_r = max(max_r, kx + kw)
-        max_b = max(max_b, ky + kh)
-    # Left gutter is CONTENT_PAD (applied when drawing); right/bottom match it.
-    cache[parts] = (
-        max(LEAF_W, max_r + 2 * CONTENT_PAD),
-        max(LEAF_H, CONTENT_HEADER + max_b + CONTENT_PAD),
+def _default_element_pos(index: int) -> tuple[float, float]:
+    cols = 2
+    return (
+        ELEM_ORIGIN_X + (index % cols) * ELEM_GAP_X,
+        ELEM_ORIGIN_Y + (index // cols) * ELEM_GAP_Y,
     )
-    return cache[parts]
 
 
 def _opening_face(opening_id: str) -> str:
@@ -106,12 +84,44 @@ def _opening_face(opening_id: str) -> str:
     return text[0].upper()
 
 
-def _default_element_pos(index: int) -> tuple[float, float]:
-    cols = 2
-    return (
-        ELEM_ORIGIN_X + (index % cols) * ELEM_GAP_X,
-        ELEM_ORIGIN_Y + (index // cols) * ELEM_GAP_Y,
+def _content_size(
+    parts: tuple[str, ...],
+    children_map: dict[tuple[str, ...], list[tuple[str, ...]]],
+    pos_map: dict[tuple[str, ...], tuple[float, float]],
+    name_map: dict[tuple[str, ...], str],
+    cache: dict[tuple[str, ...], tuple[float, float]],
+    element_boxes: dict[tuple[str, ...], list[tuple[float, float, float, float]]]
+    | None = None,
+) -> tuple[float, float]:
+    """Bounding window size from nested places and electrical elements."""
+    if parts in cache:
+        return cache[parts]
+    kids = children_map.get(parts, [])
+    boxes = (element_boxes or {}).get(parts, [])
+    max_r = 0.0
+    max_b = 0.0
+    has_content = False
+    for kid in kids:
+        kw, kh = _content_size(
+            kid, children_map, pos_map, name_map, cache, element_boxes
+        )
+        kx, ky = pos_map[kid]
+        max_r = max(max_r, kx + kw)
+        max_b = max(max_b, ky + kh)
+        has_content = True
+    for ex, ey, ew, eh in boxes:
+        max_r = max(max_r, ex + ew)
+        max_b = max(max_b, ey + eh)
+        has_content = True
+    if not has_content:
+        place_id = parts[-1] if parts else "?"
+        cache[parts] = _leaf_size(name_map.get(parts, place_id))
+        return cache[parts]
+    cache[parts] = (
+        max(LEAF_W, max_r + 2 * CONTENT_PAD),
+        max(LEAF_H, CONTENT_HEADER + max_b + CONTENT_PAD),
     )
+    return cache[parts]
 
 
 def _iter_electrical_elements(
@@ -238,8 +248,20 @@ def _build_cable_edges(
     places: list[tuple[tuple[str, ...], dict[str, Any]]],
     loc_doc: dict[str, Any],
     element_ids: set[str],
+    elements: list[dict[str, Any]],
+    conduit_edges: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Connection edges whose endpoints are both in ``element_ids``."""
+    """Connection edges whose endpoints are both in ``element_ids``.
+
+    When the via cable appears in a conduit ``contains``, attach that conduit
+    so the UI can route the cable along the tube.
+    """
+    elem_parent = {e["id"]: e.get("parent") for e in elements}
+    conduit_by_cable: dict[str, dict[str, Any]] = {}
+    for cedge in conduit_edges:
+        for cable in cedge.get("contains") or []:
+            conduit_by_cable[str(cable)] = cedge
+
     sources: list[tuple[tuple[str, ...], dict[str, Any]]] = [
         (tuple(), loc_doc),
         *places,
@@ -280,15 +302,33 @@ def _build_cable_edges(
                 raw_colors = cable.get("colors") or []
                 if isinstance(raw_colors, list):
                     colors = [str(c) for c in raw_colors]
-            edges.append(
-                {
-                    "id": cable_name or f"connection_{index}",
-                    "from": from_id,
-                    "to": to_id,
-                    "via": via,
-                    "colors": colors,
-                }
-            )
+            row: dict[str, Any] = {
+                "id": cable_name or f"connection_{index}",
+                "from": from_id,
+                "to": to_id,
+                "via": via,
+                "colors": colors,
+            }
+            cedge = conduit_by_cable.get(cable_name)
+            if cedge is not None:
+                from_place = elem_parent.get(from_id)
+                to_place = elem_parent.get(to_id)
+                c_from = cedge.get("from")
+                c_to = cedge.get("to")
+                # Align openings with which place hosts each element.
+                if from_place == c_from and to_place == c_to:
+                    row["conduit"] = cedge.get("id")
+                    row["conduit_from"] = c_from
+                    row["conduit_to"] = c_to
+                    row["from_opening"] = cedge.get("from_opening")
+                    row["to_opening"] = cedge.get("to_opening")
+                elif from_place == c_to and to_place == c_from:
+                    row["conduit"] = cedge.get("id")
+                    row["conduit_from"] = c_to
+                    row["conduit_to"] = c_from
+                    row["from_opening"] = cedge.get("to_opening")
+                    row["to_opening"] = cedge.get("from_opening")
+            edges.append(row)
     return edges
 
 
@@ -522,10 +562,20 @@ def build_physical_graph(
 
     pos_map: dict[tuple[str, ...], tuple[float, float]] = {}
     name_map: dict[tuple[str, ...], str] = {}
+    element_boxes: dict[
+        tuple[str, ...], list[tuple[float, float, float, float]]
+    ] = {}
     for parts, doc in all_docs.items():
         meta = place_meta_from_mapping(doc) or {}
         place_id = parts[-1] if parts else ""
         name_map[parts] = place_name(meta, place_id)
+        for index, (_ename, defn) in enumerate(_iter_electrical_elements(doc)):
+            stored = get_electrical_position(defn)
+            if stored is None:
+                ex, ey = _default_element_pos(index)
+            else:
+                ex, ey = stored
+            element_boxes.setdefault(parts, []).append((ex, ey, ELEM_W, ELEM_H))
     for parent, kids in children_map.items():
         nested = len(parent) > 0
         for index, kid in enumerate(kids):
@@ -570,7 +620,12 @@ def build_physical_graph(
             for other in all_under
         )
         width, height = _content_size(
-            parts, children_map, pos_map, name_map, size_cache
+            parts,
+            children_map,
+            pos_map,
+            name_map,
+            size_cache,
+            element_boxes,
         )
         px, py = pos_map[parts]
         place_id = parts[-1]
@@ -669,7 +724,11 @@ def build_physical_graph(
     elements = _build_element_nodes(places=places, loc_doc=loc_doc)
     element_ids = {e["id"] for e in elements}
     cable_edges = _build_cable_edges(
-        places=places, loc_doc=loc_doc, element_ids=element_ids
+        places=places,
+        loc_doc=loc_doc,
+        element_ids=element_ids,
+        elements=elements,
+        conduit_edges=edges,
     )
 
     return {

@@ -29,7 +29,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   electrical elements inside places and connection edges on the same canvas.
   Element positions persist as ``view.electrical``; missing coords auto-fill on
   load. ``PATCH /api/electrical/positions``, ``POST /api/electrical/auto-layout``.
-  Graph JSON includes ``elements`` and ``cable_edges``.
+  Graph JSON includes ``elements`` and ``cable_edges``. Cables that ride in a
+  conduit ``contains`` follow the conduit path (element→opening→tube→opening→
+  element). Element boxes enlarge their host place like nested locations;
+  Elements draw only inside leaf places in the current depth view.
 
 ### Changed
 
