@@ -553,6 +553,13 @@ class TestServeApi(unittest.TestCase):
             dirty = client.get("/api/workspace").json()
             self.assertTrue(dirty.get("dirty"))
 
+    def test_cable_edge_via_indices(self) -> None:
+        from housewire.ui.physical_graph import _via_wire_indices
+
+        self.assertEqual(_via_wire_indices("Linea_x.1"), [1])
+        self.assertEqual(_via_wire_indices("Linea_x.[1, 2, 3]"), [1, 2, 3])
+        self.assertEqual(_via_wire_indices("Linea_x"), [])
+
     def test_unified_edit_undo_redo_reset(self) -> None:
         try:
             from fastapi.testclient import TestClient

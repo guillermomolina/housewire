@@ -172,6 +172,28 @@ def _via_cable_name(via_token: str) -> str:
     return text.strip().rstrip("/")
 
 
+def _via_wire_indices(via_token: str) -> list[int]:
+    """Parse 1-based wire indices from ``Cable.1`` or ``Cable.[1, 2, 3]``."""
+    text = str(via_token).strip()
+    if "." not in text:
+        return []
+    _name, _, rest = text.partition(".")
+    rest = rest.strip()
+    if not rest:
+        return []
+    if rest.startswith("[") and rest.endswith("]"):
+        inner = rest[1:-1]
+        out: list[int] = []
+        for part in inner.split(","):
+            token = part.strip()
+            if token.isdigit():
+                out.append(int(token))
+        return out
+    if rest.isdigit():
+        return [int(rest)]
+    return []
+
+
 def _connection_end_element_id(
     endpoint: str,
     *,
@@ -415,6 +437,7 @@ def _build_cable_edges(
                 "to": to_id,
                 "via": via,
                 "colors": colors,
+                "via_indices": _via_wire_indices(via),
             }
             hops = _conduit_hops_for_cable(
                 cable_name,

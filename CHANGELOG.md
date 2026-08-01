@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.18] — 2026-08-01
+
+### Changed
+
+- Canvas cables draw as highway layers: neutral conduit road (width ∝
+  ``contains``), white jacket per cable, and colored WireViz strands per
+  ``via`` index that reach element attach points. No longer merges every
+  conductor onto one green path.
+
 ## [0.28.17] — 2026-08-01
 
 ### Changed

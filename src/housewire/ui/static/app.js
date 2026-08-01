@@ -1490,16 +1490,124 @@
     return pointsToPathD(pts);
   }
 
+  /** WireViz-ish conductor codes → CSS stroke colors. */
+  const WIREVIZ_COLORS = {
+    BN: "#a0522d",
+    BK: "#1a1a1a",
+    BU: "#1e90ff",
+    GNYE: "#adff2f",
+    GY: "#9e9e9e",
+    RD: "#e53935",
+    OG: "#fb8c00",
+    YE: "#fdd835",
+    GN: "#43a047",
+    VT: "#8e24aa",
+    WH: "#f0f0f0",
+    PK: "#ec407a",
+    TQ: "#26a69a",
+    SR: "#b0bec5",
+  };
+  const LANE_SPACING = 3.25;
+  const JACKET_WIDTH = 5.5;
+  const STRAND_WIDTH = 1.85;
+
+  function wireColorCss(code) {
+    const key = String(code || "").trim().toUpperCase();
+    return WIREVIZ_COLORS[key] || "#8b949e";
+  }
+
+  function cableWireIndices(edge) {
+    const colors = edge.colors || [];
+    const raw = edge.via_indices || [];
+    /** @type {number[]} */
+    let indices = [];
+    if (raw.length) {
+      for (const v of raw) {
+        const i = Number(v) - 1;
+        if (Number.isFinite(i) && i >= 0) indices.push(i);
+      }
+    } else if (colors.length) {
+      indices = colors.map((_, i) => i);
+    } else {
+      indices = [0];
+    }
+    // Unique, stable order.
+    return [...new Set(indices)].sort((a, b) => a - b);
+  }
+
+  function laneOffset(colorIndex, colorCount) {
+    const n = Math.max(colorCount, 1);
+    const mid = (n - 1) / 2;
+    return (colorIndex - mid) * LANE_SPACING;
+  }
+
+  /** Offset an orthogonal polyline by ``dist`` along the left normal. */
+  function offsetOrthoPts(pts, dist) {
+    if (!pts || pts.length < 2) return pts ? pts.map((p) => [p[0], p[1]]) : [];
+    if (Math.abs(dist) < 1e-9) return pts.map((p) => [p[0], p[1]]);
+    /** @type {number[][]} */
+    const out = [];
+    for (let i = 0; i < pts.length; i++) {
+      let nx = 0;
+      let ny = 0;
+      let w = 0;
+      if (i > 0) {
+        const dx = pts[i][0] - pts[i - 1][0];
+        const dy = pts[i][1] - pts[i - 1][1];
+        const len = Math.hypot(dx, dy) || 1;
+        nx += -dy / len;
+        ny += dx / len;
+        w += 1;
+      }
+      if (i < pts.length - 1) {
+        const dx = pts[i + 1][0] - pts[i][0];
+        const dy = pts[i + 1][1] - pts[i][1];
+        const len = Math.hypot(dx, dy) || 1;
+        nx += -dy / len;
+        ny += dx / len;
+        w += 1;
+      }
+      if (w > 1) {
+        nx /= w;
+        ny /= w;
+        const nlen = Math.hypot(nx, ny) || 1;
+        nx /= nlen;
+        ny /= nlen;
+      }
+      out.push([pts[i][0] + nx * dist, pts[i][1] + ny * dist]);
+    }
+    return out;
+  }
+
+  function pathDToSubpaths(d) {
+    /** @type {number[][][]} */
+    const subs = [];
+    const re = /M\s*([-\d.]+)(?:\s+|,)([-\d.]+)([^M]*)/gi;
+    let m;
+    while ((m = re.exec(String(d || "")))) {
+      /** @type {number[][]} */
+      const pts = [[Number(m[1]), Number(m[2])]];
+      const rest = m[3] || "";
+      const lr = /L\s*([-\d.]+)(?:\s+|,)([-\d.]+)/gi;
+      let lm;
+      while ((lm = lr.exec(rest))) {
+        pts.push([Number(lm[1]), Number(lm[2])]);
+      }
+      if (pts.length >= 2) subs.push(pts);
+    }
+    return subs;
+  }
+
   /**
-   * In-box hop tail: element edge → contour opening (full L to the face, not a
-   * short mid-box stub).
+   * In-box hop tail points: element edge → contour opening.
+   * @returns {number[][]|null}
    */
-  function hopEndpointTailD(elem, place, openingId, placeById) {
+  function hopEndpointTailPts(elem, place, openingId, placeById) {
     if (!elem || !place || !openingId) return null;
     if (elem.parent && place.id && elem.parent !== place.id) return null;
     const op = openingAnchorAbs(place, openingId, openingId?.[0], placeById);
     const attach = elementAttachPoint(elem, op, placeById);
-    return pointsToPathD(simpleOrthoPts(attach, op));
+    return simpleOrthoPts(attach, op);
   }
 
   /**
@@ -1545,33 +1653,26 @@
     return null;
   }
 
-  function cablePathD(edge, placeById, elemById, occupied) {
+  /**
+   * Base polylines for a cable edge (jacket follows these; strands are offset).
+   * @returns {number[][][]}
+   */
+  function cableBaseSubpaths(edge, placeById, elemById, occupied) {
     const a = elemById[edge.from];
     const b = elemById[edge.to];
-    if (!a || !b) return null;
+    if (!a || !b) return [];
     const c1 = elementCenter(a, placeById);
     const c2 = elementCenter(b, placeById);
 
-    // Same box: local bridges only (edge-to-edge L). Canonical endpoint order
-    // so A→B and B→A share one L (otherwise HV + VH close into a rectangle).
+    // Same box: per-connection L (no A↔B unification — strands separate by lane).
     if (a.parent && b.parent && a.parent === b.parent) {
-      let e1 = a;
-      let e2 = b;
-      if (String(a.id) > String(b.id)) {
-        e1 = b;
-        e2 = a;
-      }
-      const ca = elementCenter(e1, placeById);
-      const cb = elementCenter(e2, placeById);
-      const p1 = elementAttachPoint(e1, cb, placeById);
-      const p2 = elementAttachPoint(e2, ca, placeById);
-      return pointsToPathD(simpleOrthoPts(p1, p2));
+      const p1 = elementAttachPoint(a, c2, placeById);
+      const p2 = elementAttachPoint(b, c1, placeById);
+      return [simpleOrthoPts(p1, p2)];
     }
 
     const parentExclude = [a.parent, b.parent].filter(Boolean);
     const outsideObstacles = placeObstacles(placeById, parentExclude);
-    // Slight inset so face stubs at openings are not treated as inside the leaf
-    // (inset 0 clipped E-face exits and left floating exterior overlays).
     const leafObstacles = placeObstacles(placeById, [], 2);
 
     let hops = edge.conduit_hops;
@@ -1587,8 +1688,6 @@
       ];
     }
     if (hops && hops.length) {
-      // Endpoint tails to the box contour + exterior tube overlay (no in-box
-      // transit between entry/exit openings — that drew the green lattice).
       const first = hops[0];
       const last = hops[hops.length - 1];
       const startPlace = placeById[first.from];
@@ -1599,74 +1698,140 @@
         !first.from_opening ||
         !last.to_opening
       ) {
-        return orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
+        const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
+        return d ? pathDToSubpaths(d) : [];
       }
 
-      /** @type {string[]} */
-      const parts = [];
-      const startTail = hopEndpointTailD(
+      /** @type {number[][][]} */
+      const subs = [];
+      const startTail = hopEndpointTailPts(
         a,
         startPlace,
         first.from_opening,
         placeById
       );
-      if (startTail) parts.push(startTail);
+      if (startTail && startTail.length >= 2) subs.push(startTail);
 
       for (let i = 0; i < hops.length; i++) {
         const hop = hops[i];
         const pf = placeById[hop.from];
         const pt = placeById[hop.to];
         if (!pf || !pt || !hop.from_opening || !hop.to_opening) {
-          return orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
+          const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
+          return d ? pathDToSubpaths(d) : [];
         }
         const tubeD = hopTubePathD(hop);
+        let ext = null;
         if (tubeD) {
-          const ext = exteriorPathD(tubeD, leafObstacles);
-          if (ext) parts.push(ext);
-          continue;
+          ext = exteriorPathD(tubeD, leafObstacles);
+        } else {
+          const opA = openingAnchorAbs(
+            pf,
+            hop.from_opening,
+            hop.from_opening?.[0],
+            placeById
+          );
+          const opB = openingAnchorAbs(
+            pt,
+            hop.to_opening,
+            hop.to_opening?.[0],
+            placeById
+          );
+          const fromFace = routeFace(
+            pf,
+            hop.from_opening,
+            hop.from_opening?.[0],
+            placeById
+          );
+          const toFace = routeFace(
+            pt,
+            hop.to_opening,
+            hop.to_opening?.[0],
+            placeById
+          );
+          const routed = orthoRoute(
+            opA,
+            opB,
+            fromFace,
+            toFace,
+            null,
+            placeObstacles(placeById, [])
+          );
+          ext = exteriorPathD(pointsToPathD(routed), leafObstacles);
         }
-        const opA = openingAnchorAbs(
-          pf,
-          hop.from_opening,
-          hop.from_opening?.[0],
-          placeById
-        );
-        const opB = openingAnchorAbs(
-          pt,
-          hop.to_opening,
-          hop.to_opening?.[0],
-          placeById
-        );
-        const fromFace = routeFace(
-          pf,
-          hop.from_opening,
-          hop.from_opening?.[0],
-          placeById
-        );
-        const toFace = routeFace(
-          pt,
-          hop.to_opening,
-          hop.to_opening?.[0],
-          placeById
-        );
-        const routed = orthoRoute(
-          opA,
-          opB,
-          fromFace,
-          toFace,
-          null,
-          placeObstacles(placeById, [])
-        );
-        const ext = exteriorPathD(pointsToPathD(routed), leafObstacles);
-        if (ext) parts.push(ext);
+        if (ext) {
+          for (const sub of pathDToSubpaths(ext)) subs.push(sub);
+        }
       }
 
-      const endTail = hopEndpointTailD(b, endPlace, last.to_opening, placeById);
-      if (endTail) parts.push(endTail);
-
-      return parts.length ? parts.join(" ") : null;
+      const endTail = hopEndpointTailPts(
+        b,
+        endPlace,
+        last.to_opening,
+        placeById
+      );
+      if (endTail && endTail.length >= 2) subs.push(endTail);
+      return subs;
     }
-    return orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
+    const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
+    return d ? pathDToSubpaths(d) : [];
+  }
+
+  function appendCableVisuals(cablesG, edge, placeById, elemById, occupied) {
+    const subs = cableBaseSubpaths(edge, placeById, elemById, occupied);
+    if (!subs.length) return null;
+    const colors = edge.colors || [];
+    const wireIdx = cableWireIndices(edge);
+    const colorCount = Math.max(colors.length, wireIdx.length, 1);
+    const edgeName = edge.name || edge.id || edge.via || "";
+    /** @type {SVGElement[]} */
+    const paths = [];
+
+    // White jacket (sheath) along the base route.
+    for (const sub of subs) {
+      const jacket = el("path", {
+        class: "cable-jacket",
+        d: pointsToPathD(sub),
+      });
+      jacket.setAttribute("stroke-width", String(JACKET_WIDTH));
+      jacket.appendChild(
+        el("title", null, `${edgeName}${colors.length ? ` [${colors.join(",")}]` : ""}`)
+      );
+      cablesG.appendChild(jacket);
+      paths.push(jacket);
+    }
+
+    // Colored strands to terminals (offset lanes).
+    for (const wi of wireIdx) {
+      const code = colors[wi] || colors[0] || "GY";
+      const dist = laneOffset(wi, colorCount);
+      const stroke = wireColorCss(code);
+      for (const sub of subs) {
+        const pts = offsetOrthoPts(sub, dist);
+        const strand = el("path", {
+          class: "cable-strand",
+          d: pointsToPathD(pts),
+        });
+        strand.setAttribute("stroke", stroke);
+        strand.setAttribute("stroke-width", String(STRAND_WIDTH));
+        strand.appendChild(
+          el(
+            "title",
+            null,
+            `${edgeName} · ${code}${edge.via ? ` (${edge.via})` : ""}`
+          )
+        );
+        // Wider invisible hit target for hover later.
+        const hit = el("path", {
+          class: "cable-strand-hit",
+          d: pointsToPathD(pts),
+        });
+        cablesG.appendChild(hit);
+        cablesG.appendChild(strand);
+        paths.push(hit, strand);
+      }
+    }
+    return { edge, paths, subs, wireIdx };
   }
 
   function refreshEdges() {
@@ -1680,15 +1845,29 @@
         item.d = routed.d;
         for (const path of item.paths) path.setAttribute("d", routed.d);
         for (const s of routed.segs) occupied.push(s);
+        const n = (item.edge.contains || []).length;
+        const roadW = Math.min(28, 7 + n * 2.5);
+        const tube = item.paths[0];
+        if (tube) tube.setAttribute("stroke-width", String(roadW));
       }
     }
-    const elemById = Object.fromEntries(
-      (graph.elements || []).map((e) => [e.id, e])
-    );
-    for (const item of cablePaths) {
-      const d = cablePathD(item.edge, byId, elemById, occupied);
-      if (d) {
-        for (const path of item.paths) path.setAttribute("d", d);
+    // Rebuild cable layers (jacket + strands) from scratch.
+    const cablesG = worldEl && worldEl.querySelector("g.cables");
+    if (cablesG && showElectrical) {
+      cablesG.innerHTML = "";
+      cablePaths = [];
+      const elemById = Object.fromEntries(
+        (graph.elements || []).map((e) => [e.id, e])
+      );
+      for (const edge of graph.cable_edges || []) {
+        const item = appendCableVisuals(
+          cablesG,
+          edge,
+          byId,
+          elemById,
+          occupied
+        );
+        if (item) cablePaths.push(item);
       }
     }
   }
@@ -2026,7 +2205,10 @@
       const title = contains
         ? `${edgeName}: ${contains}`
         : String(edgeName || "");
+      const n = (edge.contains || []).length;
+      const roadW = Math.min(28, 7 + n * 2.5);
       const tube = el("path", { class: "edge-tube", d });
+      tube.setAttribute("stroke-width", String(roadW));
       const core = el("path", { class: "edge-tube-core", d });
       tube.appendChild(el("title", null, title));
       core.appendChild(el("title", null, title));
@@ -2048,20 +2230,17 @@
       }
     }
 
-    // Cables last (above tubes + elements) using the cached tube paths.
+    // Cables: white jacket + colored strands (above tubes + elements).
     if (showElectrical) {
       for (const edge of graph.cable_edges || []) {
-        const d = cablePathD(edge, byId, elemById, occupied);
-        if (!d) continue;
-        const colors = (edge.colors || []).join(",");
-        const edgeName = edge.name || edge.id || edge.via || "";
-        const title = colors
-          ? `${edgeName} (${colors})`
-          : String(edgeName);
-        const line = el("path", { class: "cable-edge", d });
-        line.appendChild(el("title", null, title));
-        cablesG.appendChild(line);
-        cablePaths.push({ edge, paths: [line] });
+        const item = appendCableVisuals(
+          cablesG,
+          edge,
+          byId,
+          elemById,
+          occupied
+        );
+        if (item) cablePaths.push(item);
       }
     }
     updateDepthLabel();
