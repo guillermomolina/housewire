@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.11] — 2026-08-01
+
+### Fixed
+
+- Draw cable edges above conduits and elements so in-box tails are not covered
+  by tube caps.
+
 ## [0.27.10] — 2026-08-01
 
 ### Changed

@@ -861,8 +861,9 @@ button:hover {
 .cable-edge {
   fill: none;
   stroke: var(--cable);
-  stroke-width: 1.75;
+  stroke-width: 2.25;
   stroke-linejoin: round;
+  stroke-linecap: round;
   pointer-events: none;
 }
 

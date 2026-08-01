@@ -1806,8 +1806,8 @@
       (graph.elements || []).map((e) => [e.id, e])
     );
 
-    // Containers → leaves → conduits (above fill so paths reach B/F marks) →
-    // cables → elements.
+    // Containers → leaves → conduits → elements → cables (cables on top so
+    // in-box tails stay visible over tube caps).
     const containersG = el("g", { class: "containers" });
     const leavesG = el("g", { class: "leaves" });
     const edgesG = el("g", { class: "edges" });
@@ -1816,8 +1816,8 @@
     worldEl.appendChild(containersG);
     worldEl.appendChild(leavesG);
     worldEl.appendChild(edgesG);
-    worldEl.appendChild(cablesG);
     worldEl.appendChild(elementsG);
+    worldEl.appendChild(cablesG);
 
     const byDepth = [...graph.nodes].sort(
       (a, b) => (a.parts?.length || 0) - (b.parts?.length || 0)
