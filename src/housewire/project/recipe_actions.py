@@ -402,6 +402,9 @@ def place_detail(
     openings = meta.get("openings") or []
     if not isinstance(openings, list):
         openings = []
+    connects = doc.get("connects")
+    if not isinstance(connects, list):
+        connects = meta.get("connects") if isinstance(meta.get("connects"), list) else []
     return {
         "id": "/".join(parts),
         "path": str(path.relative_to(session.root)),
@@ -412,5 +415,6 @@ def place_detail(
         "install": meta.get("install"),
         "mount": meta.get("mount"),
         "openings": [str(o) for o in openings],
+        "connects": [str(c) for c in connects],
         "elements": elements,
     }

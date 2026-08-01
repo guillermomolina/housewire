@@ -38,7 +38,7 @@ HELP_TEXT = """housewire shell commands:
   unset KEY | unset --element NAME KEY
   add location NAME --type T [--subtype ...] [--label ...] [--notes ...]
                                [--inline | --dir] [--set KEY=VALUE | --set KEY VALUE …]
-                               T=Room|JunctionBox|DeviceBox|LightPoint|Panel|Floor|House
+                               T=Room|Stair|JunctionBox|DeviceBox|LightPoint|Panel|Floor|House
                                default: outline if you are in outline; inline if you are inline
                                (memory → save; outline creates folder on save)
                                NAME with spaces → technical id + automatic label

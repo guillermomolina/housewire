@@ -114,6 +114,7 @@ Place types (catalog, `wireviz_skip`):
 | type | Meaning |
 |------|---------|
 | `Room` | Room / space |
+| `Stair` | Stair / vertical circulation linking two places (`connects`) |
 | `JunctionBox` | Junction / derivation box |
 | `DeviceBox` | Device box (socket / switch; 1-/2-/3-gang) |
 | `LightPoint` | Light point (ceiling/wall hole to a luminaire) |
@@ -121,6 +122,21 @@ Place types (catalog, `wireviz_skip`):
 | `Floor` | Floor / level |
 | `House` | Dwelling (need not be the tree root) |
 | `Location` | Generic place (rare; prefer a specific type) |
+
+### Stair (`connects`)
+
+A stair is a place in the tree (sibling of the floors it links — the filesystem
+has a single parent). Use ``connects`` to name the two ends:
+
+```yaml
+type: Stair
+label: Escalera Parking — Planta baja
+connects: [Parking, Planta_baja]
+```
+
+- ``connects``: list of two location refs (usually sibling ``Floor`` ids).
+- Optional for generate today; used by docs/UI to show what the stair joins.
+- Children (junction boxes, switches, light points) live under the stair folder.
 
 The **tree root** is the directory you pass to `housewire` (`project_path`), not a
 particular `type`. You can point at a subtree or insert folders above

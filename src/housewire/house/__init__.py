@@ -15,6 +15,7 @@ HOUSE_SCHEMA = "house/v1"
 PLACE_TYPES = frozenset(
     {
         "Room",
+        "Stair",
         "JunctionBox",
         "DeviceBox",
         "LightPoint",

@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.22.0] — 2026-08-01
+
+### Added
+
+- Place type ``Stair`` for vertical circulation linking two locations via
+  ``connects: [A, B]`` (not a plain ``Room``).
+
 ## [0.21.0] — 2026-08-01
 
 ### Added

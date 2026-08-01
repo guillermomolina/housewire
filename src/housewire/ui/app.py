@@ -31,7 +31,7 @@ def create_app(site_root: Path) -> Any:
 
     root = site_root.resolve()
     session = ProjectSession(root)
-    app = FastAPI(title="housewire UI", version="0.21.0")
+    app = FastAPI(title="housewire UI", version="0.22.0")
 
     def _session_docs() -> dict[Path, dict[str, Any]]:
         return {p: buf.doc for p, buf in session._buffers.items()}

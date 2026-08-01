@@ -599,7 +599,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--type",
         dest="type_id",
         required=True,
-        help="Room, JunctionBox, DeviceBox, LightPoint, Panel, Floor, House (or Location)",
+        help="Room, Stair, JunctionBox, DeviceBox, LightPoint, Panel, Floor, House (or Location)",
     )
     add_loc.add_argument("--subtype")
     add_loc.add_argument("--notes")

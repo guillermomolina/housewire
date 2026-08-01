@@ -325,6 +325,14 @@ def _style_for_type(type_id: str) -> dict[str, str]:
             "cluster_style": "rounded,filled",
             "cluster_bg": "#F7F1E8",
         },
+        "Stair": {
+            "shape": "box",
+            "fill": "#E8E4F5",
+            "border": "#5A4A8A",
+            "penwidth": "1.5",
+            "cluster_style": "rounded,filled,dashed",
+            "cluster_bg": "#F0EDF8",
+        },
         "Panel": {
             "shape": "box",
             "fill": "#EEDDDD",

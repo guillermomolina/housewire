@@ -124,7 +124,7 @@ def _validate_type_field(value: Any, *, target: SetTarget) -> None:
         if not is_place_type(type_id):
             raise ValueError(
                 f"Unknown place type: {type_id!r}. "
-                "Use Room|JunctionBox|DeviceBox|LightPoint|Panel|Floor|House (or Location)."
+                "Use Room|Stair|JunctionBox|DeviceBox|LightPoint|Panel|Floor|House (or Location)."
             )
         return
     catalog = load_catalog()

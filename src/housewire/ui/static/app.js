@@ -351,6 +351,7 @@
         ["install", detail.install],
         ["mount", detail.mount],
         ["openings", (detail.openings || []).join(", ")],
+        ["connects", (detail.connects || []).join(" ↔ ")],
         ["notes", detail.notes],
       ];
       for (const [k, v] of rows) {
