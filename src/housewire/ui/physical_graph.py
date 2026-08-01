@@ -23,16 +23,26 @@ from housewire.project.view_layout import (
 # Window-style nested layout (must match UI constants in static/app.js).
 LEAF_W = 120.0
 LEAF_H = 56.0
-CONTENT_PAD = 16.0
-CONTENT_HEADER = 28.0
+LEAF_W_MAX = 260.0
+CONTENT_PAD = 28.0  # margin on each side inside a parent window
+CONTENT_HEADER = 36.0
+LABEL_CHAR_W = 6.6  # approx. 11px sans glyph width
+LABEL_INSET = 16.0
+
+
+def _leaf_size(label: str) -> tuple[float, float]:
+    """Leaf window size wide enough for the label (capped)."""
+    text = str(label or "").strip() or "?"
+    width = LABEL_INSET + len(text) * LABEL_CHAR_W
+    return (max(LEAF_W, min(LEAF_W_MAX, width)), LEAF_H)
 
 
 def _default_local_pos(index: int, *, nested: bool) -> tuple[float, float]:
     cols = 4
     if nested:
-        origin_x, origin_y, gap_x, gap_y = 16.0, 36.0, 140.0, 100.0
+        origin_x, origin_y, gap_x, gap_y = 28.0, 40.0, 160.0, 110.0
     else:
-        origin_x, origin_y, gap_x, gap_y = 80.0, 80.0, 180.0, 140.0
+        origin_x, origin_y, gap_x, gap_y = 80.0, 80.0, 200.0, 160.0
     return (
         origin_x + (index % cols) * gap_x,
         origin_y + (index // cols) * gap_y,
@@ -43,6 +53,7 @@ def _content_size(
     parts: tuple[str, ...],
     children_map: dict[tuple[str, ...], list[tuple[str, ...]]],
     pos_map: dict[tuple[str, ...], tuple[float, float]],
+    label_map: dict[tuple[str, ...], str],
     cache: dict[tuple[str, ...], tuple[float, float]],
 ) -> tuple[float, float]:
     """Bounding window size for a place from its full descendant layout."""
@@ -50,17 +61,18 @@ def _content_size(
         return cache[parts]
     kids = children_map.get(parts, [])
     if not kids:
-        cache[parts] = (LEAF_W, LEAF_H)
+        cache[parts] = _leaf_size(label_map.get(parts, parts[-1] if parts else "?"))
         return cache[parts]
     max_r = 0.0
     max_b = 0.0
     for kid in kids:
-        kw, kh = _content_size(kid, children_map, pos_map, cache)
+        kw, kh = _content_size(kid, children_map, pos_map, label_map, cache)
         kx, ky = pos_map[kid]
         max_r = max(max_r, kx + kw)
         max_b = max(max_b, ky + kh)
+    # Left gutter is CONTENT_PAD (applied when drawing); right/bottom match it.
     cache[parts] = (
-        max(LEAF_W, max_r + CONTENT_PAD),
+        max(LEAF_W, max_r + 2 * CONTENT_PAD),
         max(LEAF_H, CONTENT_HEADER + max_b + CONTENT_PAD),
     )
     return cache[parts]
@@ -293,6 +305,10 @@ def build_physical_graph(
         kids.sort()
 
     pos_map: dict[tuple[str, ...], tuple[float, float]] = {}
+    label_map: dict[tuple[str, ...], str] = {}
+    for parts, doc in all_docs.items():
+        meta = place_meta_from_mapping(doc) or {}
+        label_map[parts] = str(meta.get("label") or parts[-1])
     for parent, kids in children_map.items():
         nested = len(parent) > 0
         for index, kid in enumerate(kids):
@@ -336,7 +352,9 @@ def build_physical_graph(
             len(other) > depth and other[: len(parts)] == parts
             for other in all_under
         )
-        width, height = _content_size(parts, children_map, pos_map, size_cache)
+        width, height = _content_size(
+            parts, children_map, pos_map, label_map, size_cache
+        )
         px, py = pos_map[parts]
         nodes.append(
             {
@@ -344,7 +362,7 @@ def build_physical_graph(
                 "parts": list(parts),
                 "parent": parent_id,
                 "type": type_id,
-                "label": str(meta.get("label") or parts[-1]),
+                "label": label_map[parts],
                 "openings": [
                     {"id": oid, "face": _opening_face(oid)} for oid in openings
                 ],
@@ -477,10 +495,10 @@ def apply_auto_layout(
             row = index // cols
             # Nested siblings sit closer; top-level keeps the roomier grid.
             nested = node.get("parent") is not None
-            ox = 16.0 if nested else origin_x
-            oy = 36.0 if nested else origin_y
-            gx = 140.0 if nested else gap_x
-            gy = 100.0 if nested else gap_y
+            ox = 28.0 if nested else origin_x
+            oy = 40.0 if nested else origin_y
+            gx = 160.0 if nested else gap_x
+            gy = 110.0 if nested else gap_y
             x = ox + col * gx
             y = oy + row * gy
             set_physical_position(doc, x, y)

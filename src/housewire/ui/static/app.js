@@ -8,8 +8,10 @@
 
   const LEAF_W = 120;
   const LEAF_H = 56;
-  const PAD = 16;
-  const HEADER = 28;
+  const LEAF_W_MAX = 260;
+  const PAD = 28;
+  const HEADER = 36;
+  const LABEL_CHAR_W = 6.6;
 
   let graph = null;
   let locationId = null;
@@ -77,6 +79,18 @@
     return node.h || LEAF_H;
   }
 
+  function leafWidthForLabel(label) {
+    const text = String(label || "?").trim() || "?";
+    return Math.max(LEAF_W, Math.min(LEAF_W_MAX, 16 + text.length * LABEL_CHAR_W));
+  }
+
+  function fitLabel(text, boxW) {
+    const raw = String(text || "");
+    const maxChars = Math.max(4, Math.floor((boxW - 16) / LABEL_CHAR_W));
+    if (raw.length <= maxChars) return raw;
+    return `${raw.slice(0, Math.max(1, maxChars - 1))}…`;
+  }
+
   /** Recompute window sizes bottom-up from visible children (keeps drag live). */
   function measureVisibleSizes() {
     if (!graph) return;
@@ -84,7 +98,7 @@
       const kids = childrenOf(node.id);
       if (!kids.length) {
         // Keep server size when children are hidden (depth zoom).
-        if (node.w == null) node.w = LEAF_W;
+        if (node.w == null) node.w = leafWidthForLabel(node.label || node.id);
         if (node.h == null) node.h = LEAF_H;
         return;
       }
@@ -95,7 +109,7 @@
         maxR = Math.max(maxR, (kid.x ?? 0) + nodeW(kid));
         maxB = Math.max(maxB, (kid.y ?? 0) + nodeH(kid));
       }
-      node.w = Math.max(LEAF_W, maxR + PAD);
+      node.w = Math.max(LEAF_W, maxR + 2 * PAD);
       node.h = Math.max(LEAF_H, HEADER + maxB + PAD);
     }
     for (const node of childrenOf(null)) measure(node);
@@ -230,10 +244,10 @@
       const nested = Boolean(parentKey);
       for (const node of siblings) {
         if (node.x == null || node.y == null) {
-          const ox = nested ? 16 : 80;
-          const oy = nested ? 36 : 80;
-          const gx = nested ? 140 : 180;
-          const gy = nested ? 100 : 140;
+          const ox = nested ? 28 : 80;
+          const oy = nested ? 40 : 80;
+          const gx = nested ? 160 : 200;
+          const gy = nested ? 110 : 160;
           node.x = ox + (i % 4) * gx;
           node.y = oy + Math.floor(i / 4) * gy;
           dirtyLocal = true;
@@ -328,14 +342,22 @@
       rx: 6,
     });
     g.appendChild(box);
+    const fullLabel = node.label || node.id;
+    const typeText =
+      (node.type || "") + (node.expandable ? " · +" : "");
+    g.appendChild(el("title", null, fullLabel));
     g.appendChild(
-      el("text", { class: "node-label", x: 8, y: 18 }, node.label || node.id)
+      el(
+        "text",
+        { class: "node-label", x: 8, y: 18 },
+        fitLabel(fullLabel, w)
+      )
     );
     g.appendChild(
       el(
         "text",
         { class: "node-type", x: 8, y: 34 },
-        (node.type || "") + (node.expandable ? " · +" : "")
+        fitLabel(typeText, w)
       )
     );
 

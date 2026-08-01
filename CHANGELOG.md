@@ -28,7 +28,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   parent fills; draw containers → edges → leaves.
 - Depth zoom uses window-style nesting: parent ``w``/``h`` is the bounding
   box of its full descendant layout (same whether interior is drawn), and
-  children sit at natural size in parent-local coordinates.
+  children sit at natural size in parent-local coordinates. Inner padding
+  leaves a margin so children do not touch the parent border; leaf width
+  grows with the label (ellipsis + tooltip if still too long).
 
 ## [0.22.0] — 2026-08-01
 
