@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.10] — 2026-08-01
+
+### Fixed
+
+- Cable drawing inside junction boxes: drop hop stubs and clipped tube
+  fragments (they left floating green segments). In-box green is only
+  same-place bridges (edge-to-edge L); hop cables overlay exterior tube
+  geometry only.
+
 ## [0.28.9] — 2026-08-01
 
 ### Changed

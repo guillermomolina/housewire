@@ -1595,19 +1595,19 @@
     return `${d} ${seg}`;
   }
 
-  /** Short orth stub from ``from`` toward ``to`` (in-box hop hint, not a full run). */
-  function stubToward(from, to, len) {
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 1e-6) return { x: from.x, y: from.y };
-    const t = Math.min(len ?? 32, dist) / dist;
-    const tip = { x: from.x + dx * t, y: from.y + dy * t };
-    // Keep stub axis-aligned: prefer the dominant delta.
+  /** Side midpoint of an element facing ``toward`` (same-box cable endpoints). */
+  function elementAttachPoint(elem, toward, placeById) {
+    const p = elementAbsXY(elem, placeById);
+    const w = elem.w ?? ELEM_W;
+    const h = elem.h ?? ELEM_H;
+    const cx = p.x + w / 2;
+    const cy = p.y + h / 2;
+    const dx = toward.x - cx;
+    const dy = toward.y - cy;
     if (Math.abs(dx) >= Math.abs(dy)) {
-      return { x: tip.x, y: from.y };
+      return { x: dx >= 0 ? p.x + w : p.x, y: cy };
     }
-    return { x: from.x, y: tip.y };
+    return { x: cx, y: dy >= 0 ? p.y + h : p.y };
   }
 
   function pathDToPoints(d) {
@@ -1677,14 +1677,16 @@
     const c1 = elementCenter(a, placeById);
     const c2 = elementCenter(b, placeById);
 
-    // Same box: local wiring only — never side-C (that filled boxes with grids).
+    // Same box: local bridges only (edge-to-edge L). Hop cables do not paint
+    // inside — stubs/tails stacked into a lattice and floating fragments.
     if (a.parent && b.parent && a.parent === b.parent) {
-      return pointsToPathD(simpleOrthoPts(c1, c2));
+      const p1 = elementAttachPoint(a, c2, placeById);
+      const p2 = elementAttachPoint(b, c1, placeById);
+      return pointsToPathD(simpleOrthoPts(p1, p2));
     }
 
     const parentExclude = [a.parent, b.parent].filter(Boolean);
     const outsideObstacles = placeObstacles(placeById, parentExclude);
-    // Full leaf rects (no inset): strip tube overlays that skim inside borders.
     const leafObstacles = placeObstacles(placeById, [], 0);
 
     let hops = edge.conduit_hops;
@@ -1700,41 +1702,22 @@
       ];
     }
     if (hops && hops.length) {
-      const first = hops[0];
-      const last = hops[hops.length - 1];
-      const startPlace = placeById[first.from];
-      const endPlace = placeById[last.to];
-      if (
-        !startPlace ||
-        !endPlace ||
-        !first.from_opening ||
-        !last.to_opening
-      ) {
-        return orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
-      }
-      const innerStart = openingInteriorPoint(
-        startPlace,
-        first.from_opening,
-        first.from_opening?.[0],
-        placeById
-      );
-      const innerEnd = openingInteriorPoint(
-        endPlace,
-        last.to_opening,
-        last.to_opening?.[0],
-        placeById
-      );
-      // Hop cables: only a short stub toward the exit (full element→opening
-      // L's for every cable turned junction boxes into an unreadable grid).
-      // Local same-box bridges are drawn in full above.
-      const startStub = stubToward(c1, innerStart, 36);
-      let d = pointsToPathD(simpleOrthoPts(c1, startStub));
+      // Exterior tube overlay only (teal tubes already show the run; green
+      // rides the conduit outside leaf boxes).
+      /** @type {string[]} */
+      const parts = [];
       for (let i = 0; i < hops.length; i++) {
         const hop = hops[i];
         const pf = placeById[hop.from];
         const pt = placeById[hop.to];
         if (!pf || !pt || !hop.from_opening || !hop.to_opening) {
           return orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
+        }
+        const tubeD = hopTubePathD(hop);
+        if (tubeD) {
+          const ext = exteriorPathD(tubeD, leafObstacles);
+          if (ext) parts.push(ext);
+          continue;
         }
         const opA = openingAnchorAbs(
           pf,
@@ -1748,32 +1731,30 @@
           hop.to_opening?.[0],
           placeById
         );
-        const tubeD = hopTubePathD(hop);
-        if (tubeD) {
-          const ext = exteriorPathD(tubeD, leafObstacles);
-          if (ext) d = `${d} ${ext}`;
-        } else {
-          const fromFace = routeFace(
-            pf,
-            hop.from_opening,
-            hop.from_opening?.[0],
-            placeById
-          );
-          const toFace = routeFace(
-            pt,
-            hop.to_opening,
-            hop.to_opening?.[0],
-            placeById
-          );
-          const hopObs = placeObstacles(placeById, []);
-          const routed = orthoRoute(opA, opB, fromFace, toFace, null, hopObs);
-          const ext = exteriorPathD(pointsToPathD(routed), leafObstacles);
-          if (ext) d = `${d} ${ext}`;
-        }
+        const fromFace = routeFace(
+          pf,
+          hop.from_opening,
+          hop.from_opening?.[0],
+          placeById
+        );
+        const toFace = routeFace(
+          pt,
+          hop.to_opening,
+          hop.to_opening?.[0],
+          placeById
+        );
+        const routed = orthoRoute(
+          opA,
+          opB,
+          fromFace,
+          toFace,
+          null,
+          placeObstacles(placeById, [])
+        );
+        const ext = exteriorPathD(pointsToPathD(routed), leafObstacles);
+        if (ext) parts.push(ext);
       }
-      const endStub = stubToward(c2, innerEnd, 36);
-      d = appendSimpleSubpath(d, endStub, c2);
-      return d;
+      return parts.length ? parts.join(" ") : null;
     }
     return orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
   }
