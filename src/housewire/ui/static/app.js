@@ -231,7 +231,10 @@
         transform: `translate(${node.x},${node.y})`,
       });
       const box = el("rect", {
-        class: "node-box" + (selectedId === node.id ? " selected" : ""),
+        class:
+          "node-box" +
+          (selectedId === node.id ? " selected" : "") +
+          (node.drillable ? " drillable" : ""),
         width: NODE_W,
         height: NODE_H,
         rx: 6,
@@ -309,6 +312,17 @@
           origY: node.y,
           moved: false,
         };
+      });
+      box.addEventListener("dblclick", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (!node.drillable || !locationId) return;
+        const nextId =
+          locationId === "." ? node.id : `${locationId}/${node.id}`;
+        const opt = [...locationSelect.options].find((o) => o.value === nextId);
+        if (!opt || opt.disabled) return;
+        locationSelect.value = nextId;
+        loadLocation().catch((err) => setStatus(String(err.message || err)));
       });
 
       nodesG.appendChild(g);

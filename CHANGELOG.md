@@ -11,6 +11,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 - Physical UI location selector shows the outline **tree** (indented), not a
   flat list; prefers the first ``Floor`` as default canvas.
+- Physical canvas shows only **direct** child places (House → floors/stairs;
+  Floor → boxes). Nested contents appear after drilling in (double-click or
+  selector). Drillable nodes use a dashed border.
 
 ## [0.22.0] — 2026-08-01
 

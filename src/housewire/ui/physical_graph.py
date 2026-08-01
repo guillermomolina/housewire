@@ -193,7 +193,7 @@ def build_physical_graph(
     *,
     session_docs: dict[Path, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Build UI graph for one location: nodes = child places, edges = conduits."""
+    """Build UI graph for one location: nodes = *direct* child places only."""
     ldir = location_dir(site_root, location_id)
     loc_yaml = (ldir / HOUSEWIRE_YAML).resolve()
 
@@ -214,7 +214,11 @@ def build_physical_graph(
     loc_meta = place_meta_from_mapping(loc_doc) or {}
     page = get_physical_page(loc_doc)
 
-    place_paths = iter_place_yaml_under(ldir, session_docs=session_docs)
+    place_paths = [
+        (parts, path)
+        for parts, path in iter_place_yaml_under(ldir, session_docs=session_docs)
+        if len(parts) == 1
+    ]
     places: list[tuple[tuple[str, ...], Path, dict[str, Any]]] = []
     for parts, path in place_paths:
         try:
@@ -227,6 +231,11 @@ def build_physical_graph(
         places.append((parts, path, doc))
 
     known_full = {parts for parts, _, _ in places}
+    # Descendants of this canvas (for drillable flag), still outline-only.
+    all_under = {
+        parts
+        for parts, _path in iter_place_yaml_under(ldir, session_docs=session_docs)
+    }
     nodes: list[dict[str, Any]] = []
 
     for parts, _path, doc in places:
@@ -246,6 +255,10 @@ def build_physical_graph(
                 rotation = int(rotation)
             except (TypeError, ValueError):
                 rotation = 0
+        has_child = any(
+            len(other) > len(parts) and other[: len(parts)] == parts
+            for other in all_under
+        )
         nodes.append(
             {
                 "id": "/".join(parts),
@@ -258,6 +271,7 @@ def build_physical_graph(
                 "x": pos[0] if pos else None,
                 "y": pos[1] if pos else None,
                 "rotation": rotation,
+                "drillable": has_child,
             }
         )
 

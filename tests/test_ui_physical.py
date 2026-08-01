@@ -90,6 +90,17 @@ class TestPhysicalGraph(unittest.TestCase):
                 [r["id"] for r in locations].index("Parking"),
             )
 
+            # House canvas: only direct children (Parking), not nested boxes
+            house_graph = build_physical_graph(root, ".")
+            self.assertEqual(
+                {n["id"] for n in house_graph["nodes"]}, {"Parking"}
+            )
+            self.assertTrue(
+                next(n for n in house_graph["nodes"] if n["id"] == "Parking")[
+                    "drillable"
+                ]
+            )
+
             graph = build_physical_graph(root, "Parking")
             self.assertEqual(graph["location"]["id"], "Parking")
             self.assertEqual(len(graph["nodes"]), 2)

@@ -251,6 +251,14 @@ button:hover {
   stroke-width: 2;
 }
 
+.node-box.drillable {
+  stroke-dasharray: 4 2;
+}
+
+.node-box.drillable.selected {
+  stroke-dasharray: none;
+}
+
 .node-label {
   fill: var(--text);
   font-size: 11px;
