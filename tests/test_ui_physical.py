@@ -80,6 +80,15 @@ class TestPhysicalGraph(unittest.TestCase):
             ids = {row["id"] for row in locations}
             self.assertIn("Parking", ids)
             self.assertIn(".", ids)  # House root also has children
+            by_id = {row["id"]: row for row in locations}
+            self.assertEqual(by_id["."]["depth"], 0)
+            self.assertEqual(by_id["Parking"]["depth"], 1)
+            self.assertTrue(by_id["Parking"]["selectable"])
+            # Tree order: root before child
+            self.assertLess(
+                [r["id"] for r in locations].index("."),
+                [r["id"] for r in locations].index("Parking"),
+            )
 
             graph = build_physical_graph(root, "Parking")
             self.assertEqual(graph["location"]["id"], "Parking")

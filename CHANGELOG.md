@@ -7,7 +7,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-_Changes not yet released in a tagged version._
+### Changed
+
+- Physical UI location selector shows the outline **tree** (indented), not a
+  flat list; prefers the first ``Floor`` as default canvas.
 
 ## [0.22.0] — 2026-08-01
 

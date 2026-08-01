@@ -496,15 +496,27 @@
   async function loadLocations() {
     const data = await api("/api/locations");
     locationSelect.innerHTML = "";
-    for (const loc of data.locations || []) {
+    const rows = data.locations || [];
+    for (const loc of rows) {
       const opt = document.createElement("option");
       opt.value = loc.id;
+      const pad = "\u00A0\u00A0".repeat(loc.depth || 0);
+      const branch = (loc.depth || 0) > 0 ? "└ " : "";
       opt.textContent =
-        (loc.label || loc.id) + (loc.type ? ` (${loc.type})` : "");
+        pad +
+        branch +
+        (loc.label || loc.id) +
+        (loc.type ? ` (${loc.type})` : "");
+      if (loc.selectable === false) {
+        opt.disabled = true;
+      }
       locationSelect.appendChild(opt);
     }
-    if ((data.locations || []).length) {
-      locationId = data.locations[0].id;
+    const first =
+      rows.find((r) => r.selectable !== false && r.type === "Floor") ||
+      rows.find((r) => r.selectable !== false);
+    if (first) {
+      locationId = first.id;
       locationSelect.value = locationId;
       await loadLocation();
     } else {

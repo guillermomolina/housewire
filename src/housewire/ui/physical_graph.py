@@ -83,10 +83,14 @@ def iter_place_yaml_under(
 
 
 def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
-    """Outline places that have at least one child outline place (any type)."""
-    rows: list[dict[str, Any]] = []
+    """Outline location tree (preorder), only nodes useful as canvas roots.
+
+    Each row includes ``depth`` for UI indentation. A node is included if it
+    has child outline places (selectable) or is an ancestor of such a node.
+    """
     root = site_root.resolve()
-    seen: set[str] = set()
+    places: dict[str, dict[str, Any]] = {}
+
     for yaml_path in sorted(root.rglob(HOUSEWIRE_YAML)):
         if is_excluded_path(yaml_path):
             continue
@@ -98,19 +102,86 @@ def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
         if meta is None:
             continue
         parent = yaml_path.parent
-        if not iter_place_yaml_under(parent):
+        try:
+            rel = parent.relative_to(root)
+        except ValueError:
             continue
-        rel = parent.relative_to(root)
         location_id = "." if str(rel) == "." else str(rel).replace("\\", "/")
-        if location_id in seen:
+        parts = () if location_id == "." else tuple(rel.parts)
+        places[location_id] = {
+            "id": location_id,
+            "label": str(meta.get("label") or (root.name if location_id == "." else parent.name)),
+            "type": str(meta.get("type") or "Location"),
+            "path": location_id,
+            "parts": parts,
+        }
+
+    def _is_descendant(ancestor: tuple[str, ...], other: tuple[str, ...]) -> bool:
+        return len(other) > len(ancestor) and other[: len(ancestor)] == ancestor
+
+    selectable: set[str] = set()
+    for loc_id, info in places.items():
+        parts = info["parts"]
+        if any(
+            _is_descendant(parts, other["parts"]) for other in places.values()
+        ):
+            selectable.add(loc_id)
+
+    keep: set[str] = set(selectable)
+    for loc_id in selectable:
+        parts = places[loc_id]["parts"]
+        for depth in range(len(parts)):
+            anc_parts = parts[:depth]
+            anc_id = "." if not anc_parts else "/".join(anc_parts)
+            if anc_id in places:
+                keep.add(anc_id)
+
+    children: dict[str | None, list[str]] = {}
+    for loc_id, info in places.items():
+        if loc_id not in keep:
             continue
-        seen.add(location_id)
+        parts = info["parts"]
+        if not parts:
+            parent_key: str | None = None
+        else:
+            parent_key = "." if len(parts) == 1 else "/".join(parts[:-1])
+            if parent_key not in keep:
+                parent_key = None
+        children.setdefault(parent_key, []).append(loc_id)
+
+    for kids in children.values():
+        kids.sort(key=lambda i: places[i]["label"].lower())
+
+    rows: list[dict[str, Any]] = []
+
+    def _walk(parent_key: str | None, depth: int) -> None:
+        for loc_id in children.get(parent_key, []):
+            info = places[loc_id]
+            rows.append(
+                {
+                    "id": info["id"],
+                    "label": info["label"],
+                    "type": info["type"],
+                    "path": info["path"],
+                    "depth": depth,
+                    "selectable": loc_id in selectable,
+                }
+            )
+            _walk(loc_id, depth + 1)
+
+    _walk(None, 0)
+    # Orphans that lost parent link but are still kept
+    emitted = {r["id"] for r in rows}
+    for loc_id in sorted(keep - emitted, key=lambda i: places[i]["parts"]):
+        info = places[loc_id]
         rows.append(
             {
-                "id": location_id,
-                "label": str(meta.get("label") or parent.name),
-                "type": str(meta.get("type") or "Location"),
-                "path": location_id,
+                "id": info["id"],
+                "label": info["label"],
+                "type": info["type"],
+                "path": info["path"],
+                "depth": len(info["parts"]),
+                "selectable": loc_id in selectable,
             }
         )
     return rows
