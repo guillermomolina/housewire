@@ -6,7 +6,7 @@
   <title>HouseWire — physical</title>
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <link rel="stylesheet" href="/static/app.css?v=0.28.3" />
+  <link rel="stylesheet" href="/static/app.css?v=0.28.6" />
 </head>
 <body>
   <nav class="menubar" aria-label="Application">
@@ -51,6 +51,41 @@
         <button type="button" role="menuitem" data-edit-action="auto-layout" id="menu-auto-layout">
           <span class="menu-item-main"><i class="fa-solid fa-table-cells-large" aria-hidden="true"></i><span>Auto-layout</span></span>
         </button>
+        <hr class="menu-sep" />
+        <div class="menu-item-submenu">
+          <button
+            type="button"
+            class="menu-submenu-trigger"
+            id="menu-insert-btn"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-controls="menu-insert"
+          >
+            <span class="menu-item-main"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Insert</span></span>
+            <span class="menu-caret" aria-hidden="true"><i class="fa-solid fa-chevron-right"></i></span>
+          </button>
+          <div class="menu-flyout hidden" id="menu-insert" role="menu">
+            <button type="button" role="menuitem" data-insert-action="socket">
+              <span class="menu-item-main"><i class="fa-solid fa-plug" aria-hidden="true"></i><span>Socket…</span></span>
+            </button>
+            <button type="button" role="menuitem" data-insert-action="lamp">
+              <span class="menu-item-main"><i class="fa-solid fa-lightbulb" aria-hidden="true"></i><span>Lamp…</span></span>
+            </button>
+            <button type="button" role="menuitem" data-insert-action="feed">
+              <span class="menu-item-main"><i class="fa-solid fa-arrow-right-arrow-left" aria-hidden="true"></i><span>Feed…</span></span>
+            </button>
+            <hr class="menu-sep" />
+            <button type="button" role="menuitem" data-insert-action="element" disabled title="Coming soon">
+              <span class="menu-item-main"><i class="fa-solid fa-cube" aria-hidden="true"></i><span>Element…</span></span>
+            </button>
+            <button type="button" role="menuitem" data-insert-action="cable" disabled title="Coming soon">
+              <span class="menu-item-main"><i class="fa-solid fa-link" aria-hidden="true"></i><span>Cable…</span></span>
+            </button>
+            <button type="button" role="menuitem" data-insert-action="conduit" disabled title="Coming soon">
+              <span class="menu-item-main"><i class="fa-solid fa-grip-lines" aria-hidden="true"></i><span>Conduit…</span></span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="menu" data-menu="view">
@@ -166,38 +201,6 @@
             <ul id="show-cables" class="show-list"></ul>
           </div>
         </div>
-        <div id="panel-recipes" class="panel-block">
-          <h3>Recipes</h3>
-          <div class="recipe-tabs">
-            <button type="button" class="recipe-tab active" data-recipe="socket">Socket</button>
-            <button type="button" class="recipe-tab" data-recipe="lamp">Lamp</button>
-            <button type="button" class="recipe-tab" data-recipe="feed">Feed</button>
-          </div>
-          <form id="form-socket" class="recipe-form">
-            <label>Name <input name="name" required placeholder="Enchufe_5" /></label>
-            <label>From <input name="from" required placeholder="Caja.N1" /></label>
-            <label>Strip <input name="strip" value="Regleta" required /></label>
-            <label>Pins <input name="pins" placeholder="3,2,1" /></label>
-            <button type="submit">Add socket</button>
-          </form>
-          <form id="form-lamp" class="recipe-form hidden">
-            <label>Name <input name="name" required placeholder="Lampara_3" /></label>
-            <label>From <input name="from" required placeholder="Caja.S1" /></label>
-            <label>Strip <input name="strip" value="Regleta" required /></label>
-            <label>Pins <input name="pins" required placeholder="6,5,2" /></label>
-            <label>To pins <input name="to_pins" placeholder="1,2,3" /></label>
-            <button type="submit">Add lamp</button>
-          </form>
-          <form id="form-feed" class="recipe-form hidden">
-            <label>Name <input name="name" required placeholder="Linea_A_a_B" /></label>
-            <label>From <input name="from" required placeholder="Caja_A.E1" /></label>
-            <label>To <input name="to" required placeholder="Caja_B.N1" /></label>
-            <label>From pin <input name="from_pin" required placeholder="Regleta.1" /></label>
-            <label>To pin <input name="to_pin" required placeholder="Regleta.1" /></label>
-            <button type="submit">Add feed</button>
-          </form>
-          <p id="recipe-msg" class="recipe-msg"></p>
-        </div>
       </div>
     </aside>
   </div>
@@ -230,7 +233,58 @@
       <div class="modal-actions" id="app-modal-actions"></div>
     </div>
   </div>
+  <div id="insert-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-insert-dismiss></div>
+    <div
+      class="modal-card modal-card-form"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="insert-modal-title"
+    >
+      <div class="modal-card-head">
+        <h2 id="insert-modal-title">Insert</h2>
+        <button type="button" class="modal-close" data-insert-dismiss aria-label="Close">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="modal-card-body">
+        <form id="form-socket" class="insert-form">
+          <label>Name <input name="name" required placeholder="Enchufe_5" /></label>
+          <label>From <input name="from" required placeholder="Caja.N1" /></label>
+          <label>Strip <input name="strip" value="Regleta" required /></label>
+          <label>Pins <input name="pins" placeholder="3,2,1" /></label>
+          <div class="insert-form-actions">
+            <button type="button" data-insert-dismiss>Cancel</button>
+            <button type="submit" class="primary">Add socket</button>
+          </div>
+        </form>
+        <form id="form-lamp" class="insert-form hidden">
+          <label>Name <input name="name" required placeholder="Lampara_3" /></label>
+          <label>From <input name="from" required placeholder="Caja.S1" /></label>
+          <label>Strip <input name="strip" value="Regleta" required /></label>
+          <label>Pins <input name="pins" required placeholder="6,5,2" /></label>
+          <label>To pins <input name="to_pins" placeholder="1,2,3" /></label>
+          <div class="insert-form-actions">
+            <button type="button" data-insert-dismiss>Cancel</button>
+            <button type="submit" class="primary">Add lamp</button>
+          </div>
+        </form>
+        <form id="form-feed" class="insert-form hidden">
+          <label>Name <input name="name" required placeholder="Linea_A_a_B" /></label>
+          <label>From <input name="from" required placeholder="Caja_A.E1" /></label>
+          <label>To <input name="to" required placeholder="Caja_B.N1" /></label>
+          <label>From pin <input name="from_pin" required placeholder="Regleta.1" /></label>
+          <label>To pin <input name="to_pin" required placeholder="Regleta.1" /></label>
+          <div class="insert-form-actions">
+            <button type="button" data-insert-dismiss>Cancel</button>
+            <button type="submit" class="primary">Add feed</button>
+          </div>
+        </form>
+        <p id="insert-msg" class="insert-msg"></p>
+      </div>
+    </div>
+  </div>
   <input type="file" id="file-open-input" accept=".yaml,.yml,text/yaml,application/x-yaml" hidden />
-  <script src="/static/app.js?v=0.28.3"></script>
+  <script src="/static/app.js?v=0.28.6"></script>
 </body>
 </html>

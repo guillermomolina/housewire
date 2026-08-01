@@ -183,6 +183,92 @@ body {
   cursor: default;
 }
 
+.menu-item-submenu {
+  position: relative;
+}
+
+.menu-submenu-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 0.4rem 0.65rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.menu-submenu-trigger:hover,
+.menu-item-submenu:focus-within > .menu-submenu-trigger,
+.menu-item-submenu.is-open > .menu-submenu-trigger {
+  background: var(--bg);
+}
+
+.menu-submenu-trigger:hover .menu-item-main i,
+.menu-item-submenu:focus-within > .menu-submenu-trigger .menu-item-main i,
+.menu-item-submenu.is-open > .menu-submenu-trigger .menu-item-main i {
+  color: var(--text);
+}
+
+.menu-caret {
+  color: var(--muted);
+  font-size: 0.65rem;
+  flex-shrink: 0;
+}
+
+.menu-flyout {
+  position: absolute;
+  top: -0.25rem;
+  left: calc(100% - 0.15rem);
+  z-index: 60;
+  min-width: 12.5rem;
+  padding: 0.25rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.menu-flyout.hidden {
+  display: none;
+}
+
+.menu-flyout button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 0.4rem 0.65rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.menu-flyout button:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.menu-flyout button:hover:not(:disabled) .menu-item-main i {
+  color: var(--text);
+}
+
+.menu-flyout button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -249,7 +335,7 @@ body {
 .modal {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -274,6 +360,44 @@ body {
 .modal-card h2 {
   margin: 0 0 0.35rem;
   font-size: 1rem;
+}
+
+.modal-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.modal-card-head h2 {
+  margin: 0;
+}
+
+.modal-close {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.modal-card-form {
+  width: min(24rem, calc(100vw - 2rem));
+}
+
+.modal-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .modal-hint {
@@ -823,7 +947,7 @@ button:hover {
 }
 
 .panel-block.hidden,
-.recipe-form.hidden,
+.insert-form.hidden,
 .hidden {
   display: none !important;
 }
@@ -866,24 +990,13 @@ button:hover {
   margin-left: -1.1rem;
 }
 
-.recipe-tabs {
-  display: flex;
-  gap: 0.35rem;
-  margin-bottom: 0.6rem;
-}
-
-.recipe-tab.active {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.recipe-form {
+.insert-form {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
 }
 
-.recipe-form label {
+.insert-form label {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
@@ -892,7 +1005,7 @@ button:hover {
   text-transform: uppercase;
 }
 
-.recipe-form input {
+.insert-form input {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
@@ -902,16 +1015,43 @@ button:hover {
   text-transform: none;
 }
 
-.recipe-form button[type="submit"] {
-  margin-top: 0.35rem;
-  border-color: var(--accent);
+.insert-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
-.recipe-msg {
-  margin: 0.6rem 0 0;
+.insert-form-actions button {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.insert-form-actions button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #111;
+}
+
+.insert-form-actions button.primary:hover {
+  filter: brightness(1.08);
+}
+
+.insert-msg {
+  margin: 0.25rem 0 0;
   font-size: 0.8rem;
   color: var(--muted);
   min-height: 1.2em;
+}
+
+.insert-msg.is-error {
+  color: #f07178;
 }
 
 .node-box {

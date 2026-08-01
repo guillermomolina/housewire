@@ -2262,7 +2262,7 @@
         }
       }
       fillConduitsList(detail.conduits || []);
-      prefillRecipesFromSelection(detail);
+      prefillInsertForms(detail);
     } catch (err) {
       setStatus(String(err.message || err));
     }
@@ -2295,7 +2295,7 @@
     else await fillPlaceInspector(selectedId);
   }
 
-  function prefillRecipesFromSelection(detail) {
+  function prefillInsertForms(detail) {
     const openings = detail.openings || [];
     const prefer =
       openings.find((o) => String(o).startsWith("N")) ||
@@ -2304,9 +2304,9 @@
     const fromVal = `${detail.id}.${prefer}`;
     for (const formId of ["form-socket", "form-lamp"]) {
       const form = document.getElementById(formId);
+      if (!form) continue;
       const from = form.querySelector('[name="from"]');
-      if (from && !from.value) from.value = fromVal;
-      else if (from) from.value = fromVal;
+      if (from) from.value = fromVal;
     }
     const feedFrom = document.querySelector('#form-feed [name="from"]');
     if (feedFrom) feedFrom.value = fromVal;
@@ -2656,11 +2656,17 @@
   }
 
   function closeAllMenus() {
-    document.querySelectorAll(".menu-dropdown").forEach((menu) => {
+    document.querySelectorAll(".menu-dropdown, .menu-flyout").forEach((menu) => {
       menu.classList.add("hidden");
     });
     document.querySelectorAll(".menu-btn").forEach((btn) => {
       btn.setAttribute("aria-expanded", "false");
+    });
+    document.querySelectorAll(".menu-submenu-trigger").forEach((btn) => {
+      btn.setAttribute("aria-expanded", "false");
+    });
+    document.querySelectorAll(".menu-item-submenu").forEach((el) => {
+      el.classList.remove("is-open");
     });
   }
 
@@ -3587,6 +3593,36 @@
   if (menuEdit) {
     menuEdit.addEventListener("click", (ev) => {
       ev.stopPropagation();
+      const insertItem = ev.target.closest("[data-insert-action]");
+      if (insertItem) {
+        if (insertItem.disabled) return;
+        closeAllMenus();
+        openInsertModal(insertItem.getAttribute("data-insert-action"));
+        return;
+      }
+      const subTrigger = ev.target.closest(".menu-submenu-trigger");
+      if (subTrigger) {
+        ev.preventDefault();
+        const host = subTrigger.closest(".menu-item-submenu");
+        const flyout = host && host.querySelector(".menu-flyout");
+        if (!flyout) return;
+        const open = flyout.classList.contains("hidden");
+        document.querySelectorAll(".menu-flyout").forEach((el) => {
+          el.classList.add("hidden");
+        });
+        document.querySelectorAll(".menu-item-submenu").forEach((el) => {
+          el.classList.remove("is-open");
+        });
+        document.querySelectorAll(".menu-submenu-trigger").forEach((btn) => {
+          btn.setAttribute("aria-expanded", "false");
+        });
+        if (open) {
+          flyout.classList.remove("hidden");
+          host.classList.add("is-open");
+          subTrigger.setAttribute("aria-expanded", "true");
+        }
+        return;
+      }
       const item = ev.target.closest("[data-edit-action]");
       if (!item || item.disabled) return;
       const action = item.getAttribute("data-edit-action");
@@ -3601,6 +3637,19 @@
         runAutoLayout().catch((err) => setStatus(String(err.message || err)));
       }
     });
+
+    // Hover opens Insert flyout while Edit menu is open.
+    const insertHost = menuEdit.querySelector(".menu-item-submenu");
+    if (insertHost) {
+      insertHost.addEventListener("mouseenter", () => {
+        const flyout = insertHost.querySelector(".menu-flyout");
+        const trigger = insertHost.querySelector(".menu-submenu-trigger");
+        if (!flyout || !trigger) return;
+        flyout.classList.remove("hidden");
+        insertHost.classList.add("is-open");
+        trigger.setAttribute("aria-expanded", "true");
+      });
+    }
   }
 
   const menuView = document.getElementById("menu-view");
@@ -3720,32 +3769,64 @@
     { passive: false }
   );
 
-  document.querySelectorAll(".recipe-tab").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".recipe-tab").forEach((b) => {
-        b.classList.toggle("active", b === btn);
-      });
-      const kind = btn.dataset.recipe;
-      for (const id of ["socket", "lamp", "feed"]) {
-        document
-          .getElementById(`form-${id}`)
-          .classList.toggle("hidden", id !== kind);
-      }
-    });
-  });
+  const INSERT_TITLES = {
+    socket: "Insert socket",
+    lamp: "Insert lamp",
+    feed: "Insert feed",
+  };
 
-  function recipeMsg(text) {
-    document.getElementById("recipe-msg").textContent = text || "";
+  function insertMsg(text, isError) {
+    const el = document.getElementById("insert-msg");
+    if (!el) return;
+    el.textContent = text || "";
+    el.classList.toggle("is-error", Boolean(isError && text));
   }
 
-  async function submitRecipe(kind, form) {
+  function closeInsertModal() {
+    const modal = document.getElementById("insert-modal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+    document.removeEventListener("keydown", onInsertModalKey);
+  }
+
+  function onInsertModalKey(ev) {
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      closeInsertModal();
+    }
+  }
+
+  function openInsertModal(kind) {
+    const modal = document.getElementById("insert-modal");
+    const titleEl = document.getElementById("insert-modal-title");
+    if (!modal || !INSERT_TITLES[kind]) return;
+    if (titleEl) titleEl.textContent = INSERT_TITLES[kind];
+    for (const id of ["socket", "lamp", "feed"]) {
+      const form = document.getElementById(`form-${id}`);
+      if (form) form.classList.toggle("hidden", id !== kind);
+    }
+    insertMsg("");
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+    document.addEventListener("keydown", onInsertModalKey);
+    const form = document.getElementById(`form-${kind}`);
+    const first = form && form.querySelector("input:not([type=hidden])");
+    setTimeout(() => first && first.focus(), 0);
+  }
+
+  document.querySelectorAll("[data-insert-dismiss]").forEach((el) => {
+    el.addEventListener("click", () => closeInsertModal());
+  });
+
+  async function submitInsert(kind, form) {
     if (!locationId) return;
     const data = Object.fromEntries(new FormData(form).entries());
     const body = { location_id: locationId, depth: depthLevel, ...data };
     for (const key of Object.keys(body)) {
       if (body[key] === "") delete body[key];
     }
-    recipeMsg("…");
+    insertMsg("…");
     try {
       const res = await api(`/api/recipes/${kind}`, {
         method: "POST",
@@ -3758,9 +3839,6 @@
       await loadOutline();
       const newId = res.result?.place_id;
       if (newId) await selectNode(newId);
-      recipeMsg(
-        `${kind}: ${res.result?.cable_name || ""} + ${res.result?.conduit_name || ""}`
-      );
       setStatus(`${kind} added · unsaved`);
       scheduleStatusRefresh();
       form.reset();
@@ -3768,24 +3846,25 @@
         const detail = await api(
           `/api/place?location=${encodeURIComponent(locationId)}&id=${encodeURIComponent(selectedId)}`
         );
-        prefillRecipesFromSelection(detail);
+        prefillInsertForms(detail);
       }
+      closeInsertModal();
     } catch (err) {
-      recipeMsg(String(err.message || err));
+      insertMsg(String(err.message || err), true);
     }
   }
 
-  document.getElementById("form-socket").addEventListener("submit", (ev) => {
+  document.getElementById("form-socket")?.addEventListener("submit", (ev) => {
     ev.preventDefault();
-    submitRecipe("socket", ev.target);
+    submitInsert("socket", ev.target);
   });
-  document.getElementById("form-lamp").addEventListener("submit", (ev) => {
+  document.getElementById("form-lamp")?.addEventListener("submit", (ev) => {
     ev.preventDefault();
-    submitRecipe("lamp", ev.target);
+    submitInsert("lamp", ev.target);
   });
-  document.getElementById("form-feed").addEventListener("submit", (ev) => {
+  document.getElementById("form-feed")?.addEventListener("submit", (ev) => {
     ev.preventDefault();
-    submitRecipe("feed", ev.target);
+    submitInsert("feed", ev.target);
   });
 
   loadLocations().catch((err) => setStatus(String(err.message || err)));

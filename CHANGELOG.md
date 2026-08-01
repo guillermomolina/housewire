@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.6] — 2026-08-01
+
+### Changed
+
+- Move socket/lamp/feed forms out of the inspector into **Edit → Insert**
+  (flyout submenu + modal). Placeholder Insert entries for Element / Cable /
+  Conduit (disabled) prepare the future atomic insert menu. UI no longer
+  labels these as “Recipes”.
+
 ## [0.28.5] — 2026-08-01
 
 ### Fixed
