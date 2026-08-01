@@ -351,6 +351,7 @@ views:
 ```
 
 - **`view.physical`**: canvas coordinates for that place under its parent canvas.
+  ``x`` and ``y`` must be ``>= 0`` (parent-local origin at the content top-left).
 - **`views.physical`**: page size and preferred conduit drawing mode for the
   canvas root location (often a `Floor` or `Room`, but any place type works).
 - Canvas zoom (pan/wheel) is independent of `representation` (line vs tube).

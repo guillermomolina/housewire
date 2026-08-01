@@ -675,8 +675,8 @@
       }
       const dx = (ev.clientX - drag.startClientX) / scale;
       const dy = (ev.clientY - drag.startClientY) / scale;
-      node.x = Math.round(drag.origX + dx);
-      node.y = Math.round(drag.origY + dy);
+      node.x = Math.max(0, Math.round(drag.origX + dx));
+      node.y = Math.max(0, Math.round(drag.origY + dy));
       dirtyLocal = true;
       updateNodeVisual(node);
       return;

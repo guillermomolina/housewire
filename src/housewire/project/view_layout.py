@@ -18,13 +18,16 @@ def get_physical_view(place: dict[str, Any]) -> dict[str, Any] | None:
 def get_physical_position(
     place: dict[str, Any],
 ) -> tuple[float, float] | None:
-    """Return ``(x, y)`` if both are numeric, else ``None``."""
+    """Return ``(x, y)`` if both are non-negative numbers, else ``None``."""
     phys = get_physical_view(place)
     if phys is None:
         return None
     x, y = phys.get("x"), phys.get("y")
     if isinstance(x, (int, float)) and isinstance(y, (int, float)):
-        return float(x), float(y)
+        fx, fy = float(x), float(y)
+        if fx < 0 or fy < 0:
+            return None
+        return fx, fy
     return None
 
 
@@ -35,9 +38,15 @@ def set_physical_position(
     *,
     rotation: int | None = None,
 ) -> None:
-    """Write ``view.physical.x/y`` (and optional rotation) on a place map."""
+    """Write ``view.physical.x/y`` (and optional rotation) on a place map.
+
+    Coordinates must be ``>= 0`` (window layout uses parent-local origin).
+    """
     if not isinstance(place, dict):
         raise ValueError("place must be a map")
+    fx, fy = float(x), float(y)
+    if fx < 0 or fy < 0:
+        raise ValueError("view.physical x and y must be >= 0")
     view = place.get("view")
     if view is None:
         view = {}
@@ -50,8 +59,8 @@ def set_physical_position(
         view["physical"] = phys
     elif not isinstance(phys, dict):
         raise ValueError("view.physical must be a map")
-    phys["x"] = float(x)
-    phys["y"] = float(y)
+    phys["x"] = fx
+    phys["y"] = fy
     if rotation is not None:
         rot = int(rotation)
         if rot not in (0, 90, 180, 270):

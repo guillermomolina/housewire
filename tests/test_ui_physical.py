@@ -29,6 +29,15 @@ class TestViewLayout(unittest.TestCase):
         self.assertEqual(get_physical_position(place), (10.0, 20.0))
         self.assertEqual(place["view"]["physical"]["rotation"], 90)
 
+    def test_physical_position_rejects_negatives(self) -> None:
+        place: dict = {"schema": "house/v1", "type": "JunctionBox"}
+        with self.assertRaises(ValueError):
+            set_physical_position(place, -1, 10)
+        with self.assertRaises(ValueError):
+            set_physical_position(place, 10, -0.5)
+        place["view"] = {"physical": {"x": -5, "y": 20}}
+        self.assertIsNone(get_physical_position(place))
+
     def test_page_defaults_and_set(self) -> None:
         place: dict = {"schema": "house/v1", "type": "Room"}
         page = get_physical_page(place)
