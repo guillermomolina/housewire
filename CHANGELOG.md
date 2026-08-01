@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.7] — 2026-08-01
+
+### Fixed
+
+- In-box cable runs approach contour openings from an interior inset so the
+  wire stays inside the place instead of traveling along the box border.
+
 ## [0.27.6] — 2026-08-01
 
 ### Fixed

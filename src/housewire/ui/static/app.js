@@ -1341,6 +1341,21 @@
     };
   }
 
+  /**
+   * Point just inside a contour opening so in-box cable runs stay off the border.
+   * B/F openings are already interior — return the anchor unchanged.
+   */
+  function openingInteriorPoint(node, openingId, face, byId, inset) {
+    const op = openingAnchorAbs(node, openingId, face, byId);
+    const f = routeFace(node, openingId, face, byId);
+    const m = inset ?? 16;
+    if (f === "N") return { x: op.x, y: op.y + m };
+    if (f === "S") return { x: op.x, y: op.y - m };
+    if (f === "W") return { x: op.x + m, y: op.y };
+    if (f === "E") return { x: op.x - m, y: op.y };
+    return op;
+  }
+
   function appendOrtho(d, p1, p2, fromFace, toFace, occupied) {
     const pts = orthoRoute(p1, p2, fromFace, toFace, occupied);
     const seg = pointsToPathD(pts);
@@ -1390,9 +1405,17 @@
         first.from_opening?.[0],
         placeById
       );
-      // Along a tube: do not dodge occupancy (cable should ride on the conduit).
-      let d = appendOrtho("", c1, opStart, null, null, null).d;
+      const innerStart = openingInteriorPoint(
+        startPlace,
+        first.from_opening,
+        first.from_opening?.[0],
+        placeById
+      );
+      // Element → interior approach → opening (stay inside the box).
+      let d = appendOrtho("", c1, innerStart, null, null, null).d;
+      d = appendOrtho(d, innerStart, opStart, null, null, null).d;
       let prevArrive = null;
+      let prevToOpening = null;
       for (let i = 0; i < hops.length; i++) {
         const hop = hops[i];
         const pf = placeById[hop.from];
@@ -1412,9 +1435,23 @@
           hop.to_opening?.[0],
           placeById
         );
-        if (prevArrive) {
-          // Through intermediate box: arrive opening → leave opening.
-          d = appendOrtho(d, prevArrive, opA, null, null, null).d;
+        if (prevArrive && prevToOpening) {
+          // Through intermediate box: contour → interior → next opening.
+          const innerIn = openingInteriorPoint(
+            pf,
+            prevToOpening,
+            prevToOpening?.[0],
+            placeById
+          );
+          const innerOut = openingInteriorPoint(
+            pf,
+            hop.from_opening,
+            hop.from_opening?.[0],
+            placeById
+          );
+          d = appendOrtho(d, prevArrive, innerIn, null, null, null).d;
+          d = appendOrtho(d, innerIn, innerOut, null, null, null).d;
+          d = appendOrtho(d, innerOut, opA, null, null, null).d;
         }
         const fromFace = routeFace(
           pf,
@@ -1430,6 +1467,7 @@
         );
         d = appendOrtho(d, opA, opB, fromFace, toFace, null).d;
         prevArrive = opB;
+        prevToOpening = hop.to_opening;
       }
       const opEnd = openingAnchorAbs(
         endPlace,
@@ -1437,7 +1475,14 @@
         last.to_opening?.[0],
         placeById
       );
-      d = appendOrtho(d, opEnd, c2, null, null, null).d;
+      const innerEnd = openingInteriorPoint(
+        endPlace,
+        last.to_opening,
+        last.to_opening?.[0],
+        placeById
+      );
+      d = appendOrtho(d, opEnd, innerEnd, null, null, null).d;
+      d = appendOrtho(d, innerEnd, c2, null, null, null).d;
       return d;
     }
     return orthoPathD(c1, c2, null, null, occupied);
