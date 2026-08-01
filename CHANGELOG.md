@@ -7,6 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.10] — 2026-08-01
+
+### Changed
+
+- Outline active row uses the same amber ``--selection`` as canvas selection.
+
 ## [0.27.9] — 2026-08-01
 
 ### Changed

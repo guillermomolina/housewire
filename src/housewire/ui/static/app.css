@@ -586,8 +586,8 @@ button:hover {
 }
 
 .outline-item.active {
-  background: #21262d;
-  outline: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--selection) 14%, #21262d);
+  outline: 1px solid var(--selection);
 }
 
 .outline-item.element {
