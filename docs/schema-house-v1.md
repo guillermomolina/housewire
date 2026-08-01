@@ -250,7 +250,7 @@ becomes one visual pin (cables left and right). That is layout only, not WireViz
 | `Socket` | Schuko / 2P+E outlet |
 | `Switch` | Switch mechanism; subtypes `unipolar`, `crossover`, `intermediate` |
 | `Luminaire` | Lamp / pendant (default terminals 1–3) |
-| `Relay` | Smart relay / Zigbee switch (`N`, `LIn`, `LOut`, `S1`, `S2`; subtype `zbmini_r2`) |
+| `Relay` | Smart relay / Zigbee switch (`N`, `LIn`, `LOut`, `S1`, `S2`; subtypes `zbmini_r2`, `mini_zbd`) |
 
 **Switch subtypes**
 

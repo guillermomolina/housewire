@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.19.3] — 2026-08-01
+
+### Added
+
+- Catalog ``Relay`` subtype ``mini_zbd`` (Sonoff MINI Zigbee Dry: ``L``, ``N``,
+  ``NO``, ``COM``, ``NC``).
+
 ## [0.19.2] — 2026-08-01
 
 ### Changed

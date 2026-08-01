@@ -36,3 +36,27 @@ subtypes:
     # Physical pins: N (pair tied internally), LOut, LIn, S1, S2.
   zbmini_extreme:
     title: Sonoff ZBMini Extreme (legacy alias)
+  mini_zbd:
+    title: Sonoff MINI Zigbee Dry (MINI-ZBD)
+    # Power L+N; dry contact NO/COM/(NC). No switched mains LOut.
+    terminals:
+      L:
+        label: L
+        direction: in
+        role: phase
+      N:
+        label: N
+        direction: in
+        role: neutral
+      NO:
+        label: NO
+        direction: out
+        role: signal
+      COM:
+        label: COM
+        direction: inout
+        role: signal
+      NC:
+        label: NC
+        direction: out
+        role: signal
