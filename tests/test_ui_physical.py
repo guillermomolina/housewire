@@ -405,6 +405,8 @@ class TestServeApi(unittest.TestCase):
             self.assertTrue(
                 any(e["id"] == "Regleta" for e in detail["elements"])
             )
+            self.assertEqual(detail["conduits"], [])
+            self.assertEqual(detail["cables"], [])
 
             cooked = client.post(
                 "/api/recipes/socket",
@@ -423,6 +425,26 @@ class TestServeApi(unittest.TestCase):
             self.assertTrue(
                 any(e["to"] == "Enchufe_9" for e in body["graph"]["edges"])
             )
+
+            caja_after = client.get(
+                "/api/place",
+                params={"location": "Parking", "id": "Caja_4"},
+            ).json()
+            self.assertTrue(caja_after["conduits"])
+            self.assertTrue(
+                any(
+                    "Enchufe_9" in str(c.get("to") or "")
+                    or "Enchufe_9" in str(c.get("from") or "")
+                    for c in caja_after["conduits"]
+                )
+            )
+            self.assertTrue(caja_after["cables"])
+            enchufe = client.get(
+                "/api/place",
+                params={"location": "Parking", "id": "Enchufe_9"},
+            ).json()
+            self.assertTrue(enchufe["conduits"])
+            self.assertTrue(enchufe["cables"])
 
 
 if __name__ == "__main__":

@@ -1231,8 +1231,85 @@
       meta.appendChild(dt);
       meta.appendChild(dd);
     }
-    const ul = document.getElementById("show-elements");
+    document.getElementById("show-elements").innerHTML = "";
+    document.getElementById("show-conduits").innerHTML = "";
+    document.getElementById("show-cables").innerHTML = "";
+    fillCablesForElement(elem);
+  }
+
+  function fillListEmpty(ul, label) {
     ul.innerHTML = "";
+    const li = document.createElement("li");
+    li.className = "show-empty";
+    li.textContent = label;
+    ul.appendChild(li);
+  }
+
+  function appendSub(li, text) {
+    if (!text) return;
+    const span = document.createElement("span");
+    span.className = "show-sub";
+    span.textContent = text;
+    li.appendChild(span);
+  }
+
+  function fillConduitsList(conduits) {
+    const ul = document.getElementById("show-conduits");
+    ul.innerHTML = "";
+    if (!conduits || !conduits.length) {
+      fillListEmpty(ul, "—");
+      return;
+    }
+    for (const c of conduits) {
+      const li = document.createElement("li");
+      const ends = [c.from, c.to].filter(Boolean).join(" → ");
+      const head = [c.id, c.subtype].filter(Boolean).join(" · ");
+      li.textContent = ends ? `${head}: ${ends}` : head;
+      const contains = (c.contains || []).join(", ");
+      appendSub(li, contains ? `contains: ${contains}` : "");
+      appendSub(li, c.notes ? String(c.notes).trim() : "");
+      ul.appendChild(li);
+    }
+  }
+
+  function fillCablesList(cables) {
+    const ul = document.getElementById("show-cables");
+    ul.innerHTML = "";
+    if (!cables || !cables.length) {
+      fillListEmpty(ul, "—");
+      return;
+    }
+    for (const c of cables) {
+      const li = document.createElement("li");
+      const bits = [c.id];
+      if (c.subtype || c.type) bits.push(c.subtype || c.type);
+      if (c.section) bits.push(String(c.section));
+      if ((c.colors || []).length) bits.push((c.colors || []).join(", "));
+      li.textContent = bits.join(" · ");
+      appendSub(li, c.notes ? String(c.notes).trim() : "");
+      ul.appendChild(li);
+    }
+  }
+
+  function fillCablesForElement(elem) {
+    const ul = document.getElementById("show-cables");
+    const edges = (graph?.cable_edges || []).filter(
+      (e) => e.from === elem.id || e.to === elem.id
+    );
+    if (!edges.length) {
+      fillListEmpty(ul, "—");
+      return;
+    }
+    ul.innerHTML = "";
+    for (const e of edges) {
+      const li = document.createElement("li");
+      const other = e.from === elem.id ? e.to : e.from;
+      const bits = [e.id || "cable", `↔ ${other}`];
+      if ((e.colors || []).length) bits.push((e.colors || []).join(", "));
+      if (e.conduit) bits.push(`via ${e.conduit}`);
+      li.textContent = bits.join(" · ");
+      ul.appendChild(li);
+    }
   }
 
   function canvasToSiteId(relId) {
@@ -1280,13 +1357,19 @@
       }
       const ul = document.getElementById("show-elements");
       ul.innerHTML = "";
-      for (const elItem of detail.elements || []) {
-        const li = document.createElement("li");
-        li.textContent = `${elItem.id} (${elItem.type || "?"}${
-          elItem.subtype ? " / " + elItem.subtype : ""
-        })`;
-        ul.appendChild(li);
+      if (!(detail.elements || []).length) {
+        fillListEmpty(ul, "—");
+      } else {
+        for (const elItem of detail.elements || []) {
+          const li = document.createElement("li");
+          li.textContent = `${elItem.id} (${elItem.type || "?"}${
+            elItem.subtype ? " / " + elItem.subtype : ""
+          })`;
+          ul.appendChild(li);
+        }
       }
+      fillConduitsList(detail.conduits || []);
+      fillCablesList(detail.cables || []);
       prefillRecipesFromSelection(detail);
     } catch (err) {
       setStatus(String(err.message || err));
