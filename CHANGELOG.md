@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.0] — 2026-08-01
+
+### Changed
+
+- Menubar: File / Edit / View with icons and keyboard shortcuts; Edit has
+  Undo/Redo/Reset/Auto-layout; View has Electrical, zoom, Fit, depth.
+- Toolbar is an icon-only button strip grouped by File / Edit / View.
+
 ## [0.27.15] — 2026-08-01
 
 ### Changed

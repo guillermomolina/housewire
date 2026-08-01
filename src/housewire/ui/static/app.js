@@ -272,15 +272,22 @@
   }
 
   function updateHistoryButtons() {
-    const undo = document.getElementById("btn-undo");
-    const redo = document.getElementById("btn-redo");
-    const reset = document.getElementById("btn-layout-reset");
-    if (undo) undo.disabled = layoutIndex <= 0;
-    if (redo) redo.disabled = layoutIndex < 0 || layoutIndex >= layoutHistory.length - 1;
-    if (reset) {
-      reset.disabled =
-        !layoutBaseline ||
-        snapsEqual(snapshotPositions(), layoutBaseline);
+    const undoDisabled = layoutIndex <= 0;
+    const redoDisabled =
+      layoutIndex < 0 || layoutIndex >= layoutHistory.length - 1;
+    const resetDisabled =
+      !layoutBaseline || snapsEqual(snapshotPositions(), layoutBaseline);
+    for (const id of ["btn-undo", "menu-undo"]) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = undoDisabled;
+    }
+    for (const id of ["btn-redo", "menu-redo"]) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = redoDisabled;
+    }
+    for (const id of ["btn-layout-reset", "menu-layout-reset"]) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = resetDisabled;
     }
   }
 
@@ -311,8 +318,11 @@
     const menuSave = document.getElementById("menu-save");
     const menuSaveAs = document.getElementById("menu-save-as");
     const menuClose = document.getElementById("menu-close");
+    const btnSave = document.getElementById("btn-save");
     const isDirty = dirty == null ? dirtyLocal : Boolean(dirty);
-    if (menuSave) menuSave.disabled = !hasDocument || !isDirty;
+    const saveDisabled = !hasDocument || !isDirty;
+    if (menuSave) menuSave.disabled = saveDisabled;
+    if (btnSave) btnSave.disabled = saveDisabled;
     if (menuSaveAs) menuSaveAs.disabled = !hasDocument;
     if (menuClose) menuClose.disabled = !hasDocument;
   }
@@ -421,12 +431,20 @@
 
   function updateDepthLabel() {
     if (depthLabel) {
-      depthLabel.textContent = `depth ${depthLevel}/${Math.max(maxDepth, 1)}`;
+      depthLabel.textContent = `${depthLevel}/${Math.max(maxDepth, 1)}`;
     }
-    const deeper = document.getElementById("btn-depth-in");
-    const shallower = document.getElementById("btn-depth-out");
-    if (deeper) deeper.disabled = depthLevel >= Math.max(maxDepth, 1);
-    if (shallower) shallower.disabled = depthLevel <= 1;
+    const deeperIds = ["btn-depth-in", "menu-depth-in"];
+    const shallowerIds = ["btn-depth-out", "menu-depth-out"];
+    const deeperDisabled = depthLevel >= Math.max(maxDepth, 1);
+    const shallowerDisabled = depthLevel <= 1;
+    for (const id of deeperIds) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = deeperDisabled;
+    }
+    for (const id of shallowerIds) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = shallowerDisabled;
+    }
   }
 
   async function api(path, options) {
@@ -2510,20 +2528,91 @@
     renderDocTabs({ documents: [], active: null, document: null });
   }
 
+  function closeAllMenus() {
+    document.querySelectorAll(".menu-dropdown").forEach((menu) => {
+      menu.classList.add("hidden");
+    });
+    document.querySelectorAll(".menu-btn").forEach((btn) => {
+      btn.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function toggleMenu(name) {
+    const menu = document.getElementById(`menu-${name}`);
+    const btn = document.getElementById(`menu-${name}-btn`);
+    if (!menu || !btn) return;
+    const willOpen = menu.classList.contains("hidden");
+    closeAllMenus();
+    if (willOpen) {
+      menu.classList.remove("hidden");
+      btn.setAttribute("aria-expanded", "true");
+    }
+  }
+
   function closeFileMenu() {
-    const menu = document.getElementById("menu-file");
-    const btn = document.getElementById("menu-file-btn");
-    if (menu) menu.classList.add("hidden");
-    if (btn) btn.setAttribute("aria-expanded", "false");
+    closeAllMenus();
   }
 
   function toggleFileMenu() {
-    const menu = document.getElementById("menu-file");
-    const btn = document.getElementById("menu-file-btn");
-    if (!menu || !btn) return;
-    const willOpen = menu.classList.contains("hidden");
-    menu.classList.toggle("hidden", !willOpen);
-    btn.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    toggleMenu("file");
+  }
+
+  function syncElectricalUi() {
+    const btn = document.getElementById("btn-electrical");
+    if (btn) btn.setAttribute("aria-pressed", showElectrical ? "true" : "false");
+    const mi = document.getElementById("menu-electrical");
+    if (mi) mi.setAttribute("aria-checked", showElectrical ? "true" : "false");
+  }
+
+  function setElectrical(on) {
+    showElectrical = Boolean(on);
+    syncElectricalUi();
+    render();
+    renderOutline();
+  }
+
+  function zoomIn() {
+    scale = Math.min(3, scale * 1.15);
+    applyWorldTransform();
+  }
+
+  function zoomOut() {
+    scale = Math.max(0.05, scale / 1.15);
+    applyWorldTransform();
+  }
+
+  async function runAutoLayout() {
+    const data = await api(`/api/physical/auto-layout`, {
+      method: "POST",
+      body: JSON.stringify({
+        location_id: locationId,
+        force: true,
+        depth: depthLevel,
+      }),
+    });
+    graph = data.graph;
+    depthLevel = graph.depth || depthLevel;
+    maxDepth = graph.max_depth || maxDepth;
+    let elemUpdated = [];
+    if (showElectrical) {
+      const elData = await api(`/api/electrical/auto-layout`, {
+        method: "POST",
+        body: JSON.stringify({
+          location_id: locationId,
+          force: true,
+          depth: depthLevel,
+        }),
+      });
+      if (elData.graph) graph = elData.graph;
+      elemUpdated = elData.updated || [];
+    }
+    render();
+    if (data.updated.length || elemUpdated.length) pushLayoutHistory();
+    setStatus(
+      `auto-layout: ${data.updated.length} place(s)` +
+        (elemUpdated.length ? `, ${elemUpdated.length} element(s)` : "")
+    );
+    scheduleStatusRefresh();
   }
 
   const YAML_PICKER_TYPES = [
@@ -3175,11 +3264,7 @@
       await setDepth(needDepth);
     }
     if (!showElectrical) {
-      showElectrical = true;
-      const toggle = document.getElementById("toggle-electrical");
-      if (toggle) toggle.checked = true;
-      render();
-      renderOutline();
+      setElectrical(true);
     }
     const rel = siteToCanvasRelative(node.id);
     if (rel) {
@@ -3238,61 +3323,23 @@
     await loadLocation({ fit: false });
   }
 
-  const toggleElectrical = document.getElementById("toggle-electrical");
-  if (toggleElectrical) {
-    toggleElectrical.checked = showElectrical;
-    toggleElectrical.addEventListener("change", () => {
-      showElectrical = Boolean(toggleElectrical.checked);
-      render();
-      renderOutline();
-    });
-  }
+  syncElectricalUi();
 
-  document.getElementById("btn-auto-force").addEventListener("click", async () => {
-    try {
-      const data = await api(`/api/physical/auto-layout`, {
-        method: "POST",
-        body: JSON.stringify({
-          location_id: locationId,
-          force: true,
-          depth: depthLevel,
-        }),
-      });
-      graph = data.graph;
-      depthLevel = graph.depth || depthLevel;
-      maxDepth = graph.max_depth || maxDepth;
-      let elemUpdated = [];
-      if (showElectrical) {
-        const elData = await api(`/api/electrical/auto-layout`, {
-          method: "POST",
-          body: JSON.stringify({
-            location_id: locationId,
-            force: true,
-            depth: depthLevel,
-          }),
-        });
-        if (elData.graph) graph = elData.graph;
-        elemUpdated = elData.updated || [];
-      }
-      render();
-      if (data.updated.length || elemUpdated.length) pushLayoutHistory();
-      setStatus(
-        `auto-layout: ${data.updated.length} place(s)` +
-          (elemUpdated.length ? `, ${elemUpdated.length} element(s)` : "")
-      );
-      scheduleStatusRefresh();
-    } catch (err) {
-      setStatus(String(err.message || err));
-    }
+  document.getElementById("btn-electrical")?.addEventListener("click", () => {
+    setElectrical(!showElectrical);
   });
 
-  document.getElementById("btn-undo").addEventListener("click", () => {
+  document.getElementById("btn-auto-force")?.addEventListener("click", () => {
+    runAutoLayout().catch((err) => setStatus(String(err.message || err)));
+  });
+
+  document.getElementById("btn-undo")?.addEventListener("click", () => {
     undoLayout().catch((err) => setStatus(String(err.message || err)));
   });
-  document.getElementById("btn-redo").addEventListener("click", () => {
+  document.getElementById("btn-redo")?.addEventListener("click", () => {
     redoLayout().catch((err) => setStatus(String(err.message || err)));
   });
-  document.getElementById("btn-layout-reset").addEventListener("click", () => {
+  document.getElementById("btn-layout-reset")?.addEventListener("click", () => {
     resetLayout().catch((err) => setStatus(String(err.message || err)));
   });
 
@@ -3319,6 +3366,10 @@
       ev.preventDefault();
       redoLayout().catch((err) => setStatus(String(err.message || err)));
     }
+  });
+
+  document.getElementById("btn-open")?.addEventListener("click", () => {
+    fileOpen().catch((err) => setStatus(String(err.message || err)));
   });
 
   document.getElementById("btn-save")?.addEventListener("click", async () => {
@@ -3384,46 +3435,95 @@
     /* ignore */
   }
 
-  const menuFileBtn = document.getElementById("menu-file-btn");
-  if (menuFileBtn) {
-    menuFileBtn.addEventListener("click", (ev) => {
+  document.querySelectorAll(".menu-btn").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      toggleFileMenu();
+      const host = btn.closest(".menu");
+      const name = host && host.getAttribute("data-menu");
+      if (name) toggleMenu(name);
     });
-  }
+  });
+
   const menuFile = document.getElementById("menu-file");
   if (menuFile) {
     menuFile.addEventListener("click", (ev) => {
       ev.stopPropagation();
       const item = ev.target.closest("[data-file-action]");
       if (!item || item.disabled) return;
+      closeAllMenus();
       handleFileAction(item.getAttribute("data-file-action")).catch((err) =>
         setStatus(String(err.message || err))
       );
     });
   }
+
+  const menuEdit = document.getElementById("menu-edit");
+  if (menuEdit) {
+    menuEdit.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const item = ev.target.closest("[data-edit-action]");
+      if (!item || item.disabled) return;
+      const action = item.getAttribute("data-edit-action");
+      closeAllMenus();
+      if (action === "undo") {
+        undoLayout().catch((err) => setStatus(String(err.message || err)));
+      } else if (action === "redo") {
+        redoLayout().catch((err) => setStatus(String(err.message || err)));
+      } else if (action === "reset") {
+        resetLayout().catch((err) => setStatus(String(err.message || err)));
+      } else if (action === "auto-layout") {
+        runAutoLayout().catch((err) => setStatus(String(err.message || err)));
+      }
+    });
+  }
+
+  const menuView = document.getElementById("menu-view");
+  if (menuView) {
+    menuView.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const item = ev.target.closest("[data-view-action]");
+      if (!item || item.disabled) return;
+      const action = item.getAttribute("data-view-action");
+      if (action === "electrical") {
+        setElectrical(!showElectrical);
+        return;
+      }
+      closeAllMenus();
+      if (action === "zoom-in") zoomIn();
+      else if (action === "zoom-out") zoomOut();
+      else if (action === "fit") fitView();
+      else if (action === "depth-in") {
+        setDepth(depthLevel + 1).catch((err) =>
+          setStatus(String(err.message || err))
+        );
+      } else if (action === "depth-out") {
+        setDepth(depthLevel - 1).catch((err) =>
+          setStatus(String(err.message || err))
+        );
+      }
+    });
+  }
+
   document.addEventListener("click", (ev) => {
     if (ev.target && ev.target.closest && ev.target.closest(".menu")) return;
-    closeFileMenu();
+    closeAllMenus();
   });
 
-  document.getElementById("btn-zoom-in").addEventListener("click", () => {
-    scale = Math.min(3, scale * 1.15);
-    applyWorldTransform();
+  document.getElementById("btn-zoom-in")?.addEventListener("click", () => {
+    zoomIn();
   });
-  document.getElementById("btn-zoom-out").addEventListener("click", () => {
-    scale = Math.max(0.05, scale / 1.15);
-    applyWorldTransform();
+  document.getElementById("btn-zoom-out")?.addEventListener("click", () => {
+    zoomOut();
   });
-  document.getElementById("btn-zoom-reset").addEventListener("click", () => {
+  document.getElementById("btn-zoom-reset")?.addEventListener("click", () => {
     fitView();
   });
 
-  document.getElementById("btn-depth-in").addEventListener("click", () => {
+  document.getElementById("btn-depth-in")?.addEventListener("click", () => {
     setDepth(depthLevel + 1).catch((err) => setStatus(String(err.message || err)));
   });
-  document.getElementById("btn-depth-out").addEventListener("click", () => {
+  document.getElementById("btn-depth-out")?.addEventListener("click", () => {
     setDepth(depthLevel - 1).catch((err) => setStatus(String(err.message || err)));
   });
 
