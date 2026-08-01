@@ -342,7 +342,9 @@ views:
 - **`view.physical`**: canvas coordinates for that place under its parent canvas.
 - **`views.physical`**: page size and preferred conduit drawing mode for the
   canvas root location (often a `Floor` or `Room`, but any place type works).
-- Zoom in the UI is independent of `representation` (line vs tube).
+- Canvas zoom (pan/wheel) is independent of `representation` (line vs tube).
+- **Depth zoom** (`depth` query / toolbar) controls how many nested outline
+  levels are drawn inside parent boxes; it does not change representation.
 - Back openings (`B…`) are drawn at the symbol center, not as a fourth side.
 - Omitted when unused; Graphviz/WireViz generate does not require these fields.
 

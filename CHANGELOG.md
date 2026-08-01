@@ -7,13 +7,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Physical UI **depth zoom** (``depth −`` / ``depth +``, or Alt+wheel): nested
+  children appear inside their parent boxes. Independent of canvas zoom
+  (``+`` / ``−`` / wheel). ``GET /api/physical?depth=N``.
+
 ### Changed
 
 - Physical UI location selector shows the outline **tree** (indented), not a
-  flat list; prefers the first ``Floor`` as default canvas.
-- Physical canvas shows only **direct** child places (House → floors/stairs;
-  Floor → boxes). Nested contents appear after drilling in (double-click or
-  selector). Drillable nodes use a dashed border.
+  flat list; defaults to the site **root** (``.``) when present.
+- Physical canvas defaults to **direct** children (depth 1). Higher depth nests
+  descendants inside parents instead of flattening them as siblings.
+
+### Fixed
+
+- Physical UI double-click enters a place (or deepens the view): drag no longer
+  captures the pointer on ``pointerdown``, which had blocked dblclick.
+- Physical UI depth zoom: nested conduit lines were hidden under opaque
+  parent fills; draw containers → edges → leaves.
 
 ## [0.22.0] — 2026-08-01
 

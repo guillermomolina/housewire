@@ -46,11 +46,21 @@ def create_app(site_root: Path) -> Any:
             session.ensure_doc(path)
         return loc_dir
 
-    def _graph(location_id: str) -> dict[str, Any]:
+    def _graph(location_id: str, depth: int = 1) -> dict[str, Any]:
         _preload_location(location_id)
         return pg.build_physical_graph(
-            root, location_id, session_docs=_session_docs()
+            root, location_id, depth=depth, session_docs=_session_docs()
         )
+
+    def _depth_from(payload: dict[str, Any] | None = None, raw: int | None = None) -> int:
+        value = raw if raw is not None else (payload or {}).get("depth", 1)
+        try:
+            depth = int(value)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, "depth must be an integer") from exc
+        if depth < 1:
+            raise HTTPException(400, "depth must be >= 1")
+        return depth
 
     async def _json_body(request: Request) -> dict[str, Any]:
         data = await request.json()
@@ -72,9 +82,9 @@ def create_app(site_root: Path) -> Any:
         return {"locations": pg.list_canvas_locations(root)}
 
     @app.get("/api/physical")
-    def api_physical(location: str) -> dict[str, Any]:
+    def api_physical(location: str, depth: int = 1) -> dict[str, Any]:
         try:
-            return _graph(location)
+            return _graph(location, _depth_from(raw=depth))
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
         except ValueError as exc:
@@ -101,11 +111,16 @@ def create_app(site_root: Path) -> Any:
         if not location_id:
             raise HTTPException(400, "location_id is required")
         force = bool(payload.get("force", False))
+        depth = _depth_from(payload)
         try:
             loc_dir = _preload_location(location_id)
             docs = _session_docs()
             updated = pg.apply_auto_layout(
-                root, location_id, session_docs=docs, force=force
+                root,
+                location_id,
+                session_docs=docs,
+                depth=depth,
+                force=force,
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
@@ -118,7 +133,7 @@ def create_app(site_root: Path) -> Any:
             session.mark_dirty(yaml_path)
         return {
             "updated": updated,
-            "graph": _graph(location_id),
+            "graph": _graph(location_id, depth),
         }
 
     @app.patch("/api/physical/positions")
@@ -193,7 +208,10 @@ def create_app(site_root: Path) -> Any:
                 notes=payload.get("notes"),
                 canvas_location_id=location_id,
             )
-            return {"result": result, "graph": _graph(location_id)}
+            return {
+                "result": result,
+                "graph": _graph(location_id, _depth_from(payload)),
+            }
         except (ValueError, FileExistsError, FileNotFoundError) as exc:
             raise HTTPException(400, str(exc)) from exc
 
@@ -227,7 +245,10 @@ def create_app(site_root: Path) -> Any:
                 notes=payload.get("notes"),
                 canvas_location_id=location_id,
             )
-            return {"result": result, "graph": _graph(location_id)}
+            return {
+                "result": result,
+                "graph": _graph(location_id, _depth_from(payload)),
+            }
         except (ValueError, FileExistsError, FileNotFoundError) as exc:
             raise HTTPException(400, str(exc)) from exc
 
@@ -261,7 +282,10 @@ def create_app(site_root: Path) -> Any:
                 notes=payload.get("notes"),
                 canvas_location_id=location_id,
             )
-            return {"result": result, "graph": _graph(location_id)}
+            return {
+                "result": result,
+                "graph": _graph(location_id, _depth_from(payload)),
+            }
         except (ValueError, FileExistsError, FileNotFoundError) as exc:
             raise HTTPException(400, str(exc)) from exc
 

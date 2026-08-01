@@ -64,7 +64,29 @@ body {
 .actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.4rem;
+}
+
+.zoom-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.35rem;
+  padding-left: 0.5rem;
+  border-left: 1px solid var(--border);
+}
+
+.depth-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  min-width: 5.5rem;
+  text-align: center;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 button {
@@ -251,12 +273,18 @@ button:hover {
   stroke-width: 2;
 }
 
-.node-box.drillable {
-  stroke-dasharray: 4 2;
+.node-box.container {
+  fill: #1e242c;
+  fill-opacity: 0.55;
+  stroke-dasharray: 5 3;
 }
 
-.node-box.drillable.selected {
+.node-box.container.selected {
   stroke-dasharray: none;
+}
+
+.node-box.expandable:not(.container) {
+  stroke-dasharray: 4 2;
 }
 
 .node-label {

@@ -24,9 +24,16 @@
       <button type="button" id="btn-auto">Auto-layout</button>
       <button type="button" id="btn-auto-force" title="Reposition all nodes">Auto-layout (force)</button>
       <button type="button" id="btn-save">Save</button>
-      <button type="button" id="btn-zoom-in">+</button>
-      <button type="button" id="btn-zoom-out">−</button>
-      <button type="button" id="btn-zoom-reset">1:1</button>
+      <span class="zoom-group" title="Canvas zoom (mouse wheel)">
+        <button type="button" id="btn-zoom-out">−</button>
+        <button type="button" id="btn-zoom-reset">1:1</button>
+        <button type="button" id="btn-zoom-in">+</button>
+      </span>
+      <span class="zoom-group" title="Depth zoom: show more/fewer nested children (Alt+wheel)">
+        <button type="button" id="btn-depth-out">depth −</button>
+        <span id="depth-label" class="depth-label">depth 1/1</span>
+        <button type="button" id="btn-depth-in">depth +</button>
+      </span>
     </div>
     <div id="status" class="status" aria-live="polite"></div>
   </header>

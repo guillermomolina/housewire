@@ -90,16 +90,32 @@ class TestPhysicalGraph(unittest.TestCase):
                 [r["id"] for r in locations].index("Parking"),
             )
 
-            # House canvas: only direct children (Parking), not nested boxes
-            house_graph = build_physical_graph(root, ".")
+            # House canvas depth 1: only direct children (Parking)
+            house_graph = build_physical_graph(root, ".", depth=1)
             self.assertEqual(
                 {n["id"] for n in house_graph["nodes"]}, {"Parking"}
             )
-            self.assertTrue(
-                next(n for n in house_graph["nodes"] if n["id"] == "Parking")[
-                    "drillable"
-                ]
+            self.assertEqual(house_graph["depth"], 1)
+            self.assertEqual(house_graph["max_depth"], 2)
+            parking_node = next(
+                n for n in house_graph["nodes"] if n["id"] == "Parking"
             )
+            self.assertTrue(parking_node["expandable"])
+            self.assertIsNone(parking_node["parent"])
+
+            # House depth 2: boxes nested under Parking
+            deep = build_physical_graph(root, ".", depth=2)
+            self.assertEqual(
+                {n["id"] for n in deep["nodes"]},
+                {"Parking", "Parking/Caja_4", "Parking/Enchufe_1"},
+            )
+            caja_nested = next(
+                n for n in deep["nodes"] if n["id"] == "Parking/Caja_4"
+            )
+            self.assertEqual(caja_nested["parent"], "Parking")
+            self.assertEqual(len(deep["edges"]), 1)
+            self.assertEqual(deep["edges"][0]["from"], "Parking/Caja_4")
+            self.assertEqual(deep["edges"][0]["to"], "Parking/Enchufe_1")
 
             graph = build_physical_graph(root, "Parking")
             self.assertEqual(graph["location"]["id"], "Parking")
@@ -180,6 +196,14 @@ class TestServeApi(unittest.TestCase):
             ).json()
             self.assertEqual(len(graph["nodes"]), 2)
             self.assertEqual(graph["location"]["id"], "Parking")
+
+            house = client.get(
+                "/api/physical", params={"location": ".", "depth": 2}
+            ).json()
+            self.assertEqual(house["depth"], 2)
+            ids = {n["id"] for n in house["nodes"]}
+            self.assertIn("Parking", ids)
+            self.assertIn("Parking/Caja_4", ids)
 
             laid = client.post(
                 "/api/physical/auto-layout",

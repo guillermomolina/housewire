@@ -2,15 +2,20 @@
   const svg = document.getElementById("canvas");
   const locationSelect = document.getElementById("location-select");
   const representationSelect = document.getElementById("representation");
+  const depthLabel = document.getElementById("depth-label");
   const statusEl = document.getElementById("status");
   const viewport = document.getElementById("viewport");
 
-  const NODE_W = 120;
-  const NODE_H = 56;
+  const LEAF_W = 120;
+  const LEAF_H = 56;
+  const PAD = 16;
+  const HEADER = 28;
 
   let graph = null;
   let locationId = null;
   let selectedId = null;
+  let depthLevel = 1;
+  let maxDepth = 1;
   let scale = 1;
   let panX = 40;
   let panY = 40;
@@ -21,12 +26,24 @@
   let worldEl = null;
   let nodesById = {};
   let edgePaths = [];
+  let lastTap = { id: null, t: 0 };
   const DRAG_THRESHOLD = 4;
+  const DBLCLICK_MS = 400;
 
   const ns = "http://www.w3.org/2000/svg";
 
   function setStatus(text) {
     statusEl.textContent = text || "";
+  }
+
+  function updateDepthLabel() {
+    if (depthLabel) {
+      depthLabel.textContent = `depth ${depthLevel}/${Math.max(maxDepth, 1)}`;
+    }
+    const deeper = document.getElementById("btn-depth-in");
+    const shallower = document.getElementById("btn-depth-out");
+    if (deeper) deeper.disabled = depthLevel >= Math.max(maxDepth, 1);
+    if (shallower) shallower.disabled = depthLevel <= 1;
   }
 
   async function api(path, options) {
@@ -41,10 +58,68 @@
     return res.json();
   }
 
-  function nodeCenter(node) {
+  function nodeW(node) {
+    return node.w || LEAF_W;
+  }
+
+  function nodeH(node) {
+    return node.h || LEAF_H;
+  }
+
+  function childrenOf(parentId) {
+    const key = parentId || null;
+    return (graph?.nodes || []).filter((n) => (n.parent || null) === key);
+  }
+
+  function measureSizes() {
+    if (!graph) return;
+    const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+
+    function measure(node) {
+      const kids = childrenOf(node.id);
+      if (!kids.length) {
+        node.w = LEAF_W;
+        node.h = LEAF_H;
+        return;
+      }
+      for (const kid of kids) measure(kid);
+      let maxR = 0;
+      let maxB = 0;
+      for (const kid of kids) {
+        maxR = Math.max(maxR, (kid.x ?? 0) + nodeW(kid));
+        maxB = Math.max(maxB, (kid.y ?? 0) + nodeH(kid));
+      }
+      node.w = Math.max(LEAF_W, maxR + PAD);
+      node.h = Math.max(LEAF_H, HEADER + maxB + PAD);
+    }
+
+    for (const node of childrenOf(null)) measure(node);
+    // Keep map warm for abs lookups during measure of orphans
+    void byId;
+  }
+
+  function absXY(node, byId) {
+    const map =
+      byId || Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
+    if (!node.parent) {
+      return { x: node.x ?? 0, y: node.y ?? 0 };
+    }
+    const parent = map[node.parent];
+    if (!parent) {
+      return { x: node.x ?? 0, y: node.y ?? 0 };
+    }
+    const pa = absXY(parent, map);
     return {
-      x: (node.x ?? 0) + NODE_W / 2,
-      y: (node.y ?? 0) + NODE_H / 2,
+      x: pa.x + PAD + (node.x ?? 0),
+      y: pa.y + HEADER + (node.y ?? 0),
+    };
+  }
+
+  function nodeCenterAbs(node, byId) {
+    const a = absXY(node, byId);
+    return {
+      x: a.x + nodeW(node) / 2,
+      y: a.y + nodeH(node) / 2,
     };
   }
 
@@ -73,9 +148,10 @@
     return Math.max(maxDeclared, preferIndex || 1, declared.length, 1);
   }
 
-  function openingAnchor(node, openingId, face) {
-    const x = node.x ?? 0;
-    const y = node.y ?? 0;
+  function openingAnchorAbs(node, openingId, face, byId) {
+    const a = absXY(node, byId);
+    const w = nodeW(node);
+    const h = nodeH(node);
     const side = parseSideOpening(openingId);
     const plane = parsePlaneOpening(openingId);
     const f = (
@@ -87,43 +163,81 @@
     ).toUpperCase();
 
     if (f === "B" || f === "F") {
-      const c = nodeCenter(node);
+      const c = nodeCenterAbs(node, byId);
       if (!plane) return c;
-      // Slight offset inside the box so several B/F ids are distinguishable.
       const cols = Math.max(plane.col, 2);
       const rows = Math.max(plane.row, 2);
-      const ox = ((plane.col - 0.5) / cols - 0.5) * (NODE_W * 0.35);
-      const oy = ((plane.row - 0.5) / rows - 0.5) * (NODE_H * 0.35);
+      const ox = ((plane.col - 0.5) / cols - 0.5) * (w * 0.35);
+      const oy = ((plane.row - 0.5) / rows - 0.5) * (h * 0.35);
       return { x: c.x + ox, y: c.y + oy };
     }
 
     const index = side?.index || 1;
     const n = sideSlotCount(node, f, index);
-    const t = index / (n + 1); // 1-based index → fraction along face
+    const t = index / (n + 1);
 
-    if (f === "N") return { x: x + t * NODE_W, y };
-    if (f === "S") return { x: x + t * NODE_W, y: y + NODE_H };
-    if (f === "W") return { x, y: y + t * NODE_H };
-    if (f === "E") return { x: x + NODE_W, y: y + t * NODE_H };
-    return nodeCenter(node);
+    if (f === "N") return { x: a.x + t * w, y: a.y };
+    if (f === "S") return { x: a.x + t * w, y: a.y + h };
+    if (f === "W") return { x: a.x, y: a.y + t * h };
+    if (f === "E") return { x: a.x + w, y: a.y + t * h };
+    return nodeCenterAbs(node, byId);
   }
 
   /** Local (0,0) anchor for labels drawn inside the node group. */
   function openingAnchorLocal(node, openingId, face) {
-    const abs = openingAnchor({ ...node, x: 0, y: 0 }, openingId, face);
-    return abs;
+    const w = nodeW(node);
+    const h = nodeH(node);
+    const side = parseSideOpening(openingId);
+    const plane = parsePlaneOpening(openingId);
+    const f = (
+      side?.face ||
+      plane?.face ||
+      face ||
+      (openingId || "?")[0] ||
+      "?"
+    ).toUpperCase();
+
+    if (f === "B" || f === "F") {
+      if (!plane) return { x: w / 2, y: h / 2 };
+      const cols = Math.max(plane.col, 2);
+      const rows = Math.max(plane.row, 2);
+      const ox = ((plane.col - 0.5) / cols - 0.5) * (w * 0.35);
+      const oy = ((plane.row - 0.5) / rows - 0.5) * (h * 0.35);
+      return { x: w / 2 + ox, y: h / 2 + oy };
+    }
+
+    const index = side?.index || 1;
+    const n = sideSlotCount(node, f, index);
+    const t = index / (n + 1);
+    if (f === "N") return { x: t * w, y: 0 };
+    if (f === "S") return { x: t * w, y: h };
+    if (f === "W") return { x: 0, y: t * h };
+    if (f === "E") return { x: w, y: t * h };
+    return { x: w / 2, y: h / 2 };
   }
 
   function ensurePositions() {
     if (!graph) return;
-    let i = 0;
+    const byParent = {};
     for (const node of graph.nodes) {
-      if (node.x == null || node.y == null) {
-        node.x = 80 + (i % 4) * 180;
-        node.y = 80 + Math.floor(i / 4) * 140;
-        dirtyLocal = true;
+      const key = node.parent || "";
+      (byParent[key] ||= []).push(node);
+    }
+    for (const [parentKey, siblings] of Object.entries(byParent)) {
+      let i = 0;
+      const nested = Boolean(parentKey);
+      for (const node of siblings) {
+        if (node.x == null || node.y == null) {
+          const ox = nested ? 16 : 80;
+          const oy = nested ? 36 : 80;
+          const gx = nested ? 140 : 180;
+          const gy = nested ? 100 : 140;
+          node.x = ox + (i % 4) * gx;
+          node.y = oy + Math.floor(i / 4) * gy;
+          dirtyLocal = true;
+        }
+        i += 1;
       }
-      i += 1;
     }
   }
 
@@ -158,14 +272,15 @@
     const a = byId[edge.from];
     const b = byId[edge.to];
     if (!a || !b) return null;
-    const p1 = openingAnchor(a, edge.from_opening, edge.from_opening?.[0]);
-    const p2 = openingAnchor(b, edge.to_opening, edge.to_opening?.[0]);
+    const p1 = openingAnchorAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
+    const p2 = openingAnchorAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
     return `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
   }
 
   function refreshEdges() {
     if (!graph) return;
     const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+    measureSizes();
     for (const item of edgePaths) {
       const d = edgePathD(item.edge, byId);
       if (d) {
@@ -174,15 +289,135 @@
     }
   }
 
-  function updateNodeVisual(node) {
-    const g = nodesById[node.id];
-    if (g) g.setAttribute("transform", `translate(${node.x},${node.y})`);
+  function updateNodeVisual(_node) {
+    const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+    measureSizes();
+    for (const n of graph.nodes) {
+      const g = nodesById[n.id];
+      if (!g) continue;
+      const a = absXY(n, byId);
+      g.setAttribute("transform", `translate(${a.x},${a.y})`);
+      const box = g.querySelector(".node-box");
+      if (box) {
+        box.setAttribute("width", String(nodeW(n)));
+        box.setAttribute("height", String(nodeH(n)));
+      }
+    }
     refreshEdges();
+  }
+
+  function paintNode(node, layerG, byId) {
+    const a = absXY(node, byId);
+    const w = nodeW(node);
+    const h = nodeH(node);
+    const hasKids = childrenOf(node.id).length > 0;
+    const g = el("g", {
+      class: "node" + (hasKids ? " container" : ""),
+      "data-id": node.id,
+      transform: `translate(${a.x},${a.y})`,
+    });
+    const box = el("rect", {
+      class:
+        "node-box" +
+        (selectedId === node.id ? " selected" : "") +
+        (hasKids ? " container" : "") +
+        (node.expandable ? " expandable" : ""),
+      width: w,
+      height: h,
+      rx: 6,
+    });
+    g.appendChild(box);
+    g.appendChild(
+      el("text", { class: "node-label", x: 8, y: 18 }, node.label || node.id)
+    );
+    g.appendChild(
+      el(
+        "text",
+        { class: "node-type", x: 8, y: 34 },
+        (node.type || "") + (node.expandable ? " · +" : "")
+      )
+    );
+
+    if (!hasKids) {
+      const backs = (node.openings || []).filter((o) => o.face === "B");
+      const sides = (node.openings || []).filter(
+        (o) => o.face !== "B" && o.face !== "F"
+      );
+      for (const op of sides) {
+        const anchor = openingAnchorLocal(node, op.id, op.face);
+        const labelX =
+          op.face === "W" ? 4 : op.face === "E" ? w - 4 : anchor.x;
+        const labelY =
+          op.face === "N" ? 10 : op.face === "S" ? h - 3 : anchor.y + 3;
+        g.appendChild(
+          el(
+            "text",
+            {
+              class: "opening-side",
+              x: labelX,
+              y: labelY,
+              "text-anchor":
+                op.face === "W" ? "start" : op.face === "E" ? "end" : "middle",
+            },
+            op.id
+          )
+        );
+      }
+      if (backs.length) {
+        g.appendChild(
+          el("circle", {
+            class: "opening-back-mark",
+            cx: w / 2,
+            cy: h / 2 + 6,
+            r: 7,
+          })
+        );
+        g.appendChild(
+          el(
+            "text",
+            {
+              class: "opening-back",
+              x: w / 2,
+              y: h / 2 + 9,
+              "text-anchor": "middle",
+            },
+            backs.map((b) => b.id).join(",")
+          )
+        );
+      }
+    }
+
+    box.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0) return;
+      ev.stopPropagation();
+      raiseNode(node.id);
+      // Defer capture until real drag — early capture kills dblclick.
+      drag = {
+        id: node.id,
+        pointerId: ev.pointerId,
+        startClientX: ev.clientX,
+        startClientY: ev.clientY,
+        origX: node.x,
+        origY: node.y,
+        moved: false,
+        captured: false,
+      };
+    });
+
+    layerG.appendChild(g);
+    nodesById[node.id] = g;
+  }
+
+  function raiseNode(id) {
+    const gEl = nodesById[id];
+    if (gEl && gEl.parentNode) gEl.parentNode.appendChild(gEl);
+    for (const kid of childrenOf(id)) raiseNode(kid.id);
   }
 
   function render() {
     if (!graph) return;
     ensurePositions();
+    measureSizes();
     clearSvg();
 
     worldEl = el("g", { id: "world" });
@@ -194,10 +429,20 @@
       representationSelect.value || page.representation || "line";
     const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
 
+    // Containers under edges under leaves so nested conduits stay visible.
+    const containersG = el("g", { class: "containers" });
     const edgesG = el("g", { class: "edges" });
-    const nodesG = el("g", { class: "nodes" });
+    const leavesG = el("g", { class: "leaves" });
+    worldEl.appendChild(containersG);
     worldEl.appendChild(edgesG);
-    worldEl.appendChild(nodesG);
+    worldEl.appendChild(leavesG);
+
+    const byDepth = [...graph.nodes].sort(
+      (a, b) => (a.parts?.length || 0) - (b.parts?.length || 0)
+    );
+    for (const node of byDepth) {
+      if (childrenOf(node.id).length) paintNode(node, containersG, byId);
+    }
 
     for (const edge of graph.edges) {
       const d = edgePathD(edge, byId);
@@ -225,109 +470,9 @@
     }
 
     for (const node of graph.nodes) {
-      const g = el("g", {
-        class: "node",
-        "data-id": node.id,
-        transform: `translate(${node.x},${node.y})`,
-      });
-      const box = el("rect", {
-        class:
-          "node-box" +
-          (selectedId === node.id ? " selected" : "") +
-          (node.drillable ? " drillable" : ""),
-        width: NODE_W,
-        height: NODE_H,
-        rx: 6,
-      });
-      g.appendChild(box);
-      g.appendChild(
-        el("text", { class: "node-label", x: 8, y: 18 }, node.label || node.id)
-      );
-      g.appendChild(
-        el("text", { class: "node-type", x: 8, y: 34 }, node.type || "")
-      );
-
-      const backs = (node.openings || []).filter((o) => o.face === "B");
-      const sides = (node.openings || []).filter(
-        (o) => o.face !== "B" && o.face !== "F"
-      );
-      for (const op of sides) {
-        const anchor = openingAnchorLocal(node, op.id, op.face);
-        const labelX =
-          op.face === "W" ? 4 : op.face === "E" ? NODE_W - 4 : anchor.x;
-        const labelY =
-          op.face === "N" ? 10 : op.face === "S" ? NODE_H - 3 : anchor.y + 3;
-        g.appendChild(
-          el(
-            "text",
-            {
-              class: "opening-side",
-              x: labelX,
-              y: labelY,
-              "text-anchor":
-                op.face === "W" ? "start" : op.face === "E" ? "end" : "middle",
-            },
-            op.id
-          )
-        );
-      }
-      if (backs.length) {
-        g.appendChild(
-          el("circle", {
-            class: "opening-back-mark",
-            cx: NODE_W / 2,
-            cy: NODE_H / 2 + 6,
-            r: 7,
-          })
-        );
-        g.appendChild(
-          el(
-            "text",
-            {
-              class: "opening-back",
-              x: NODE_W / 2,
-              y: NODE_H / 2 + 9,
-              "text-anchor": "middle",
-            },
-            backs.map((b) => b.id).join(",")
-          )
-        );
-      }
-
-      box.addEventListener("pointerdown", (ev) => {
-        if (ev.button !== 0) return;
-        ev.preventDefault();
-        ev.stopPropagation();
-        const gEl = nodesById[node.id];
-        if (gEl && gEl.parentNode) {
-          gEl.parentNode.appendChild(gEl);
-        }
-        svg.setPointerCapture(ev.pointerId);
-        drag = {
-          id: node.id,
-          pointerId: ev.pointerId,
-          startClientX: ev.clientX,
-          startClientY: ev.clientY,
-          origX: node.x,
-          origY: node.y,
-          moved: false,
-        };
-      });
-      box.addEventListener("dblclick", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        if (!node.drillable || !locationId) return;
-        const nextId =
-          locationId === "." ? node.id : `${locationId}/${node.id}`;
-        const opt = [...locationSelect.options].find((o) => o.value === nextId);
-        if (!opt || opt.disabled) return;
-        locationSelect.value = nextId;
-        loadLocation().catch((err) => setStatus(String(err.message || err)));
-      });
-
-      nodesG.appendChild(g);
-      nodesById[node.id] = g;
+      if (!childrenOf(node.id).length) paintNode(node, leavesG, byId);
     }
+    updateDepthLabel();
   }
 
   function setSelectedVisual(id) {
@@ -409,13 +554,42 @@
     if (feedFrom) feedFrom.value = fromVal;
   }
 
+  function canvasLocationIdForNode(node) {
+    if (!node || !locationId) return null;
+    return locationId === "." ? node.id : `${locationId}/${node.id}`;
+  }
+
+  async function enterNode(node) {
+    if (!node || !locationId) return;
+    const nextId = canvasLocationIdForNode(node);
+    const opt = [...locationSelect.options].find((o) => o.value === nextId);
+    if (opt && !opt.disabled) {
+      locationSelect.value = nextId;
+      depthLevel = 1;
+      await loadLocation();
+      setStatus(`Entered ${nextId}`);
+      return;
+    }
+    // Not a canvas root in the selector: deepen the view instead.
+    if (node.expandable || childrenOf(node.id).length) {
+      await setDepth(depthLevel + 1);
+      setStatus(`Depth ${depthLevel}`);
+      return;
+    }
+    setStatus(`No deeper view for ${node.id}`);
+  }
+
   async function endDrag(ev) {
     if (!drag) return;
     if (ev && drag.pointerId != null && ev.pointerId !== drag.pointerId) return;
     const node = graph?.nodes.find((n) => n.id === drag.id);
     svg.classList.remove("dragging");
     try {
-      if (drag.pointerId != null && svg.hasPointerCapture?.(drag.pointerId)) {
+      if (
+        drag.captured &&
+        drag.pointerId != null &&
+        svg.hasPointerCapture?.(drag.pointerId)
+      ) {
         svg.releasePointerCapture(drag.pointerId);
       }
     } catch {
@@ -424,9 +598,18 @@
     const finished = drag;
     drag = null;
     if (!finished.moved) {
+      const now = Date.now();
+      const isDbl =
+        lastTap.id === finished.id && now - lastTap.t <= DBLCLICK_MS;
+      lastTap = isDbl ? { id: null, t: 0 } : { id: finished.id, t: now };
+      if (isDbl && node) {
+        await enterNode(node);
+        return;
+      }
       await selectNode(finished.id);
       return;
     }
+    lastTap = { id: null, t: 0 };
     if (!node || !locationId) return;
     await selectNode(finished.id);
     try {
@@ -456,6 +639,14 @@
       if (!drag.moved) {
         drag.moved = true;
         svg.classList.add("dragging");
+        if (!drag.captured && drag.pointerId != null) {
+          try {
+            svg.setPointerCapture(drag.pointerId);
+            drag.captured = true;
+          } catch {
+            /* ignore */
+          }
+        }
       }
       const dx = (ev.clientX - drag.startClientX) / scale;
       const dy = (ev.clientY - drag.startClientY) / scale;
@@ -527,7 +718,7 @@
       locationSelect.appendChild(opt);
     }
     const first =
-      rows.find((r) => r.selectable !== false && r.type === "Floor") ||
+      rows.find((r) => r.selectable !== false && r.id === ".") ||
       rows.find((r) => r.selectable !== false);
     if (first) {
       locationId = first.id;
@@ -544,14 +735,28 @@
     document.getElementById("panel-empty").classList.remove("hidden");
     document.getElementById("panel-show").classList.add("hidden");
     graph = await api(
-      `/api/physical?location=${encodeURIComponent(locationId)}`
+      `/api/physical?location=${encodeURIComponent(locationId)}&depth=${depthLevel}`
     );
+    depthLevel = graph.depth || depthLevel;
+    maxDepth = graph.max_depth || 1;
+    if (depthLevel > maxDepth) depthLevel = Math.max(maxDepth, 1);
     representationSelect.value = graph.page?.representation || "line";
     render();
     await refreshStatus();
   }
 
+  async function setDepth(next) {
+    const capped = Math.min(Math.max(1, next), Math.max(maxDepth, 1));
+    if (capped === depthLevel && graph) {
+      updateDepthLabel();
+      return;
+    }
+    depthLevel = capped;
+    await loadLocation();
+  }
+
   locationSelect.addEventListener("change", () => {
+    depthLevel = 1;
     loadLocation().catch((err) => setStatus(String(err.message || err)));
   });
 
@@ -575,9 +780,15 @@
     try {
       const data = await api(`/api/physical/auto-layout`, {
         method: "POST",
-        body: JSON.stringify({ location_id: locationId, force: false }),
+        body: JSON.stringify({
+          location_id: locationId,
+          force: false,
+          depth: depthLevel,
+        }),
       });
       graph = data.graph;
+      depthLevel = graph.depth || depthLevel;
+      maxDepth = graph.max_depth || maxDepth;
       render();
       setStatus(`auto-layout: ${data.updated.length} node(s)`);
       scheduleStatusRefresh();
@@ -590,9 +801,15 @@
     try {
       const data = await api(`/api/physical/auto-layout`, {
         method: "POST",
-        body: JSON.stringify({ location_id: locationId, force: true }),
+        body: JSON.stringify({
+          location_id: locationId,
+          force: true,
+          depth: depthLevel,
+        }),
       });
       graph = data.graph;
+      depthLevel = graph.depth || depthLevel;
+      maxDepth = graph.max_depth || maxDepth;
       render();
       setStatus(`auto-layout force: ${data.updated.length} node(s)`);
       scheduleStatusRefresh();
@@ -626,6 +843,13 @@
     applyWorldTransform();
   });
 
+  document.getElementById("btn-depth-in").addEventListener("click", () => {
+    setDepth(depthLevel + 1).catch((err) => setStatus(String(err.message || err)));
+  });
+  document.getElementById("btn-depth-out").addEventListener("click", () => {
+    setDepth(depthLevel - 1).catch((err) => setStatus(String(err.message || err)));
+  });
+
   viewport.addEventListener("pointerdown", (ev) => {
     if (drag) return;
     if (ev.target !== svg && ev.target !== viewport) return;
@@ -639,6 +863,13 @@
     "wheel",
     (ev) => {
       ev.preventDefault();
+      if (ev.altKey) {
+        const delta = ev.deltaY > 0 ? -1 : 1;
+        setDepth(depthLevel + delta).catch((err) =>
+          setStatus(String(err.message || err))
+        );
+        return;
+      }
       const factor = ev.deltaY > 0 ? 1 / 1.08 : 1.08;
       scale = Math.min(3, Math.max(0.35, scale * factor));
       applyWorldTransform();
@@ -667,7 +898,7 @@
   async function submitRecipe(kind, form) {
     if (!locationId) return;
     const data = Object.fromEntries(new FormData(form).entries());
-    const body = { location_id: locationId, ...data };
+    const body = { location_id: locationId, depth: depthLevel, ...data };
     for (const key of Object.keys(body)) {
       if (body[key] === "") delete body[key];
     }
@@ -678,6 +909,8 @@
         body: JSON.stringify(body),
       });
       graph = res.graph;
+      depthLevel = graph.depth || depthLevel;
+      maxDepth = graph.max_depth || maxDepth;
       render();
       const newId = res.result?.place_id;
       if (newId) await selectNode(newId);

@@ -191,9 +191,16 @@ def build_physical_graph(
     site_root: Path,
     location_id: str,
     *,
+    depth: int = 1,
     session_docs: dict[Path, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Build UI graph for one location: nodes = *direct* child places only."""
+    """Build UI graph for one location.
+
+    ``depth`` is how many outline levels under the canvas root are visible
+    (1 = direct children only; 2 = children nested inside parents; …).
+    """
+    if depth < 1:
+        raise ValueError("depth must be >= 1")
     ldir = location_dir(site_root, location_id)
     loc_yaml = (ldir / HOUSEWIRE_YAML).resolve()
 
@@ -214,10 +221,17 @@ def build_physical_graph(
     loc_meta = place_meta_from_mapping(loc_doc) or {}
     page = get_physical_page(loc_doc)
 
+    all_under = {
+        parts
+        for parts, _path in iter_place_yaml_under(ldir, session_docs=session_docs)
+    }
+    max_depth = max((len(parts) for parts in all_under), default=0)
+    depth = min(depth, max(max_depth, 1))
+
     place_paths = [
         (parts, path)
         for parts, path in iter_place_yaml_under(ldir, session_docs=session_docs)
-        if len(parts) == 1
+        if 1 <= len(parts) <= depth
     ]
     places: list[tuple[tuple[str, ...], Path, dict[str, Any]]] = []
     for parts, path in place_paths:
@@ -231,11 +245,9 @@ def build_physical_graph(
         places.append((parts, path, doc))
 
     known_full = {parts for parts, _, _ in places}
-    # Descendants of this canvas (for drillable flag), still outline-only.
-    all_under = {
-        parts
-        for parts, _path in iter_place_yaml_under(ldir, session_docs=session_docs)
-    }
+    # Resolve conduits against the full outline under this canvas so refs to
+    # deeper places still parse; then map endpoints to a visible ancestor.
+    known_resolve = all_under | known_full
     nodes: list[dict[str, Any]] = []
 
     for parts, _path, doc in places:
@@ -255,14 +267,16 @@ def build_physical_graph(
                 rotation = int(rotation)
             except (TypeError, ValueError):
                 rotation = 0
-        has_child = any(
-            len(other) > len(parts) and other[: len(parts)] == parts
+        parent_id = "/".join(parts[:-1]) if len(parts) > 1 else None
+        has_deeper = any(
+            len(other) > depth and other[: len(parts)] == parts
             for other in all_under
         )
         nodes.append(
             {
                 "id": "/".join(parts),
                 "parts": list(parts),
+                "parent": parent_id,
                 "type": type_id,
                 "label": str(meta.get("label") or parts[-1]),
                 "openings": [
@@ -271,15 +285,28 @@ def build_physical_graph(
                 "x": pos[0] if pos else None,
                 "y": pos[1] if pos else None,
                 "rotation": rotation,
-                "drillable": has_child,
+                "expandable": has_deeper,
             }
         )
+
+    def _visible_endpoint(parts: tuple[str, ...] | None) -> tuple[str, ...] | None:
+        if parts is None or parts not in known_resolve:
+            return None
+        if parts in known_full:
+            return parts
+        # Collapse to nearest visible ancestor within depth window.
+        for cut in range(min(len(parts), depth), 0, -1):
+            anc = parts[:cut]
+            if anc in known_full:
+                return anc
+        return None
 
     edges: list[dict[str, Any]] = []
     edge_sources: list[tuple[tuple[str, ...], dict[str, Any]]] = [
         (tuple(), loc_doc),
         *[(parts, doc) for parts, _, doc in places],
     ]
+    seen_edges: set[tuple[str, str, str, str, str]] = set()
     for current_parts, doc in edge_sources:
         conduits = doc.get("conduits") or {}
         if not isinstance(conduits, dict):
@@ -294,19 +321,27 @@ def build_physical_graph(
             except ValueError:
                 continue
             from_parts = resolve_location_ref(
-                from_loc, current_parts=list(current_parts), known=known_full
+                from_loc, current_parts=list(current_parts), known=known_resolve
             )
             to_parts = resolve_location_ref(
-                to_loc, current_parts=list(current_parts), known=known_full
+                to_loc, current_parts=list(current_parts), known=known_resolve
             )
-            if from_parts not in known_full or to_parts not in known_full:
+            from_vis = _visible_endpoint(from_parts)
+            to_vis = _visible_endpoint(to_parts)
+            if from_vis is None or to_vis is None or from_vis == to_vis:
                 continue
+            from_id = "/".join(from_vis)
+            to_id = "/".join(to_vis)
+            key = (str(conduit_name), from_id, to_id, from_op or "", to_op or "")
+            if key in seen_edges:
+                continue
+            seen_edges.add(key)
             contains = [str(c) for c in (conduit.get("contains") or [])]
             edges.append(
                 {
                     "id": str(conduit_name),
-                    "from": "/".join(from_parts),
-                    "to": "/".join(to_parts),
+                    "from": from_id,
+                    "to": to_id,
                     "from_opening": from_op,
                     "to_opening": to_op,
                     "contains": contains,
@@ -321,6 +356,8 @@ def build_physical_graph(
             "type": str(loc_meta.get("type") or "Location"),
         },
         "page": page,
+        "depth": depth,
+        "max_depth": max_depth,
         "nodes": nodes,
         "edges": edges,
     }
@@ -331,6 +368,7 @@ def apply_auto_layout(
     location_id: str,
     *,
     session_docs: dict[Path, dict[str, Any]],
+    depth: int = 1,
     force: bool = False,
     gap_x: float = 180.0,
     gap_y: float = 140.0,
@@ -338,29 +376,47 @@ def apply_auto_layout(
     origin_y: float = 80.0,
     cols: int = 4,
 ) -> list[str]:
-    """Assign grid positions to nodes missing x/y (or all if force)."""
+    """Assign grid positions to nodes missing x/y (or all if force).
+
+    Sibling groups (same parent) are laid out independently so nested depth
+    zoom keeps child coords relative to their container.
+    """
     graph = build_physical_graph(
-        site_root, location_id, session_docs=session_docs
+        site_root, location_id, depth=depth, session_docs=session_docs
     )
     ldir = location_dir(site_root, location_id)
+    by_parent: dict[str | None, list[dict[str, Any]]] = {}
+    for node in graph["nodes"]:
+        parent = node.get("parent")
+        by_parent.setdefault(parent, []).append(node)
+
     updated: list[str] = []
-    for index, node in enumerate(graph["nodes"]):
-        if not force and node.get("x") is not None and node.get("y") is not None:
-            continue
-        col = index % cols
-        row = index // cols
-        x = origin_x + col * gap_x
-        y = origin_y + row * gap_y
-        parts = tuple(node["parts"])
-        yaml_path = (ldir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
-        doc = session_docs.get(yaml_path)
-        if doc is None:
-            if not yaml_path.is_file():
+    for siblings in by_parent.values():
+        index = 0
+        for node in siblings:
+            if not force and node.get("x") is not None and node.get("y") is not None:
                 continue
-            doc = load_yaml(yaml_path)
-            session_docs[yaml_path] = doc
-        set_physical_position(doc, x, y)
-        updated.append(node["id"])
+            col = index % cols
+            row = index // cols
+            # Nested siblings sit closer; top-level keeps the roomier grid.
+            nested = node.get("parent") is not None
+            ox = 16.0 if nested else origin_x
+            oy = 36.0 if nested else origin_y
+            gx = 140.0 if nested else gap_x
+            gy = 100.0 if nested else gap_y
+            x = ox + col * gx
+            y = oy + row * gy
+            parts = tuple(node["parts"])
+            yaml_path = (ldir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
+            doc = session_docs.get(yaml_path)
+            if doc is None:
+                if not yaml_path.is_file():
+                    continue
+                doc = load_yaml(yaml_path)
+                session_docs[yaml_path] = doc
+            set_physical_position(doc, x, y)
+            updated.append(node["id"])
+            index += 1
     return updated
 
 
