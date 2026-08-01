@@ -1366,12 +1366,39 @@
     };
   }
 
-  /** Start a new subpath (keep M) so cable skips the tube middle. */
+  /** Start a new subpath (keep M). */
   function appendOrthoSubpath(d, p1, p2, fromFace, toFace, occupied) {
     const pts = orthoRoute(p1, p2, fromFace, toFace, occupied);
     const seg = pointsToPathD(pts);
     if (!d) return { d: seg, segs: segsFromPoints(pts) };
     return { d: `${d} ${seg}`, segs: segsFromPoints(pts) };
+  }
+
+  function pathDToPoints(d) {
+    /** @type {number[][]} */
+    const pts = [];
+    const re = /[ML]\s*([-\d.]+)(?:\s+|,)([-\d.]+)/gi;
+    let m;
+    while ((m = re.exec(String(d || "")))) {
+      pts.push([Number(m[1]), Number(m[2])]);
+    }
+    return pts;
+  }
+
+  function reversePathD(d) {
+    const pts = pathDToPoints(d);
+    pts.reverse();
+    return pointsToPathD(pts);
+  }
+
+  /** Exact tube geometry for a hop (same path as the conduit edge). */
+  function hopTubePathD(hop) {
+    const item = edgePaths.find((e) => e.edge && e.edge.id === hop.conduit);
+    if (!item || !item.d) return null;
+    const e = item.edge;
+    if (e.from === hop.from && e.to === hop.to) return item.d;
+    if (e.from === hop.to && e.to === hop.from) return reversePathD(item.d);
+    return null;
   }
 
   function cablePathD(edge, placeById, elemById, occupied) {
@@ -1406,7 +1433,6 @@
       ) {
         return orthoPathD(c1, c2, null, null, occupied);
       }
-      // Only draw in-box tails; the conduit tube already shows the run between places.
       const opStart = openingAnchorAbs(
         startPlace,
         first.from_opening,
@@ -1419,6 +1445,7 @@
         first.from_opening?.[0],
         placeById
       );
+      // Element → opening, then ride the tube geometry on top of the conduit.
       let d = appendOrthoSubpath("", c1, innerStart, null, null, null).d;
       d = appendOrtho(d, innerStart, opStart, null, null, null).d;
       let prevArrive = null;
@@ -1459,7 +1486,24 @@
           d = appendOrtho(d, innerIn, innerOut, null, null, null).d;
           d = appendOrtho(d, innerOut, opA, null, null, null).d;
         }
-        // Skip hop.from → hop.to (tube owns that corridor).
+        const tubeD = hopTubePathD(hop);
+        if (tubeD) {
+          d = `${d} ${tubeD}`;
+        } else {
+          const fromFace = routeFace(
+            pf,
+            hop.from_opening,
+            hop.from_opening?.[0],
+            placeById
+          );
+          const toFace = routeFace(
+            pt,
+            hop.to_opening,
+            hop.to_opening?.[0],
+            placeById
+          );
+          d = appendOrthoSubpath(d, opA, opB, fromFace, toFace, null).d;
+        }
         prevArrive = opB;
         prevToOpening = hop.to_opening;
       }
@@ -1490,6 +1534,7 @@
     for (const item of edgePaths) {
       const routed = edgePathD(item.edge, byId, occupied);
       if (routed) {
+        item.d = routed.d;
         for (const path of item.paths) path.setAttribute("d", routed.d);
         for (const s of routed.segs) occupied.push(s);
       }
@@ -1844,13 +1889,23 @@
       core.appendChild(el("title", null, title));
       edgesG.appendChild(tube);
       edgesG.appendChild(core);
-      edgePaths.push({ edge, paths: [tube, core] });
+      edgePaths.push({ edge, paths: [tube, core], d });
     }
 
     for (const node of graph.nodes) {
       if (!childrenOf(node.id).length) paintNode(node, leavesG, byId);
     }
 
+    if (showElements) {
+      for (const elem of graph.elements || []) {
+        if (elem.parent && !byId[elem.parent]) continue;
+        // Like depth: interior elements only when the place is a leaf in view.
+        if (elem.parent && childrenOf(elem.parent).length) continue;
+        paintElement(elem, elementsG, byId);
+      }
+    }
+
+    // Cables last (above tubes + elements) using the cached tube paths.
     if (showCables) {
       for (const edge of graph.cable_edges || []) {
         const d = cablePathD(edge, byId, elemById, occupied);
@@ -1864,15 +1919,6 @@
         line.appendChild(el("title", null, title));
         cablesG.appendChild(line);
         cablePaths.push({ edge, paths: [line] });
-      }
-    }
-
-    if (showElements) {
-      for (const elem of graph.elements || []) {
-        if (elem.parent && !byId[elem.parent]) continue;
-        // Like depth: interior elements only when the place is a leaf in view.
-        if (elem.parent && childrenOf(elem.parent).length) continue;
-        paintElement(elem, elementsG, byId);
       }
     }
     updateDepthLabel();

@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.12] — 2026-08-01
+
+### Fixed
+
+- Cable overlay rides the exact conduit path (on top of the tube) plus in-box
+  tails, so cables stay visible and do not fork outside the tube.
+
 ## [0.27.11] — 2026-08-01
 
 ### Fixed

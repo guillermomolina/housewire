@@ -63,8 +63,7 @@ Drag places on a location canvas (any place with child locations), auto-layout,
 then **Save**. Conduits always draw as tubes. Canvas zoom (`+`/`−`/wheel) is
 separate from **depth zoom** (`depth −`/`+` or Alt+wheel), which nests more
 children inside parent boxes. **Elements** / **Cables** toggles show the
-electrical LOD on the same canvas (element symbols inside places; cable tails
-inside boxes — runs between places are the tubes). Click a box or element for
+electrical LOD on the same canvas (element symbols inside places; cables ride on top of tubes between places, with in-box tails to elements). Click a box or element for
 the side panel (inspector + socket/lamp/feed recipes). Place positions go to
 `view.physical`; element positions to `view.electrical`; page settings to
 `views.physical` on the canvas root.
