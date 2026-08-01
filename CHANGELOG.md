@@ -11,6 +11,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 - Physical UI drag: moving a box no longer freezes when crossing another node
   (live transform update instead of full SVG redraw each pointermove).
+- Physical UI: conduit endpoints fan out along each face (``S1``/``S2``/…)
+  instead of sharing one midpoint per side.
 
 ### Removed
 

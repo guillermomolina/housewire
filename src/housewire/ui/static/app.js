@@ -46,18 +46,70 @@
     };
   }
 
+  function parseSideOpening(openingId) {
+    const m = String(openingId || "").match(/^([NSEW])(\d+)$/i);
+    if (!m) return null;
+    return { face: m[1].toUpperCase(), index: parseInt(m[2], 10) };
+  }
+
+  function parsePlaneOpening(openingId) {
+    const m = String(openingId || "").match(/^([FB])(\d+)-(\d+)$/i);
+    if (!m) return null;
+    return {
+      face: m[1].toUpperCase(),
+      row: parseInt(m[2], 10),
+      col: parseInt(m[3], 10),
+    };
+  }
+
+  function sideSlotCount(node, face, preferIndex) {
+    const declared = (node.openings || [])
+      .map((o) => parseSideOpening(o.id))
+      .filter((p) => p && p.face === face)
+      .map((p) => p.index);
+    const maxDeclared = declared.length ? Math.max(...declared) : 0;
+    return Math.max(maxDeclared, preferIndex || 1, declared.length, 1);
+  }
+
   function openingAnchor(node, openingId, face) {
     const x = node.x ?? 0;
     const y = node.y ?? 0;
-    const f = (face || (openingId || "?")[0] || "?").toUpperCase();
+    const side = parseSideOpening(openingId);
+    const plane = parsePlaneOpening(openingId);
+    const f = (
+      side?.face ||
+      plane?.face ||
+      face ||
+      (openingId || "?")[0] ||
+      "?"
+    ).toUpperCase();
+
     if (f === "B" || f === "F") {
-      return nodeCenter(node);
+      const c = nodeCenter(node);
+      if (!plane) return c;
+      // Slight offset inside the box so several B/F ids are distinguishable.
+      const cols = Math.max(plane.col, 2);
+      const rows = Math.max(plane.row, 2);
+      const ox = ((plane.col - 0.5) / cols - 0.5) * (NODE_W * 0.35);
+      const oy = ((plane.row - 0.5) / rows - 0.5) * (NODE_H * 0.35);
+      return { x: c.x + ox, y: c.y + oy };
     }
-    if (f === "N") return { x: x + NODE_W / 2, y };
-    if (f === "S") return { x: x + NODE_W / 2, y: y + NODE_H };
-    if (f === "W") return { x, y: y + NODE_H / 2 };
-    if (f === "E") return { x: x + NODE_W, y: y + NODE_H / 2 };
+
+    const index = side?.index || 1;
+    const n = sideSlotCount(node, f, index);
+    const t = index / (n + 1); // 1-based index → fraction along face
+
+    if (f === "N") return { x: x + t * NODE_W, y };
+    if (f === "S") return { x: x + t * NODE_W, y: y + NODE_H };
+    if (f === "W") return { x, y: y + t * NODE_H };
+    if (f === "E") return { x: x + NODE_W, y: y + t * NODE_H };
     return nodeCenter(node);
+  }
+
+  /** Local (0,0) anchor for labels drawn inside the node group. */
+  function openingAnchorLocal(node, openingId, face) {
+    const abs = openingAnchor({ ...node, x: 0, y: 0 }, openingId, face);
+    return abs;
   }
 
   function ensurePositions() {
@@ -188,15 +240,20 @@
         (o) => o.face !== "B" && o.face !== "F"
       );
       for (const op of sides) {
-        const anchor = openingAnchor({ x: 0, y: 0 }, op.id, op.face);
+        const anchor = openingAnchorLocal(node, op.id, op.face);
+        const labelX =
+          op.face === "W" ? 4 : op.face === "E" ? NODE_W - 4 : anchor.x;
+        const labelY =
+          op.face === "N" ? 10 : op.face === "S" ? NODE_H - 3 : anchor.y + 3;
         g.appendChild(
           el(
             "text",
             {
               class: "opening-side",
-              x: Math.min(NODE_W - 4, Math.max(4, anchor.x)),
-              y: Math.min(NODE_H - 4, Math.max(10, anchor.y + 3)),
-              "text-anchor": "middle",
+              x: labelX,
+              y: labelY,
+              "text-anchor":
+                op.face === "W" ? "start" : op.face === "E" ? "end" : "middle",
             },
             op.id
           )
