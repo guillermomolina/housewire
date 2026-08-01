@@ -828,12 +828,12 @@
     try {
       const st = await api("/api/status");
       const n = (st.dirty || []).length;
+      if (n) dirtyLocal = false;
       const dirty = n > 0 || dirtyLocal;
       setStatus(
         n ? `${n} dirty file(s)` : dirtyLocal ? "layout pending" : "saved"
       );
-      if (!n) dirtyLocal = false;
-      updateSaveButton(dirty || dirtyLocal);
+      updateSaveButton(dirty);
     } catch {
       /* ignore */
     }
