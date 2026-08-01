@@ -29,6 +29,10 @@
   let nodesById = {};
   let edgePaths = [];
   let lastTap = { id: null, t: 0 };
+  let layoutHistory = [];
+  let layoutIndex = -1;
+  let layoutBaseline = null;
+  const HISTORY_MAX = 50;
   const DRAG_THRESHOLD = 4;
   const DBLCLICK_MS = 400;
 
@@ -36,6 +40,115 @@
 
   function setStatus(text) {
     statusEl.textContent = text || "";
+  }
+
+  function snapshotPositions() {
+    const snap = {};
+    for (const n of graph?.nodes || []) {
+      snap[n.id] = { x: n.x ?? 0, y: n.y ?? 0 };
+    }
+    return snap;
+  }
+
+  function cloneSnap(snap) {
+    return JSON.parse(JSON.stringify(snap || {}));
+  }
+
+  function snapsEqual(a, b) {
+    const ka = Object.keys(a || {}).sort();
+    const kb = Object.keys(b || {}).sort();
+    if (ka.length !== kb.length) return false;
+    for (let i = 0; i < ka.length; i++) {
+      if (ka[i] !== kb[i]) return false;
+      const pa = a[ka[i]];
+      const pb = b[kb[i]];
+      if ((pa?.x ?? 0) !== (pb?.x ?? 0) || (pa?.y ?? 0) !== (pb?.y ?? 0)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function updateHistoryButtons() {
+    const undo = document.getElementById("btn-undo");
+    const redo = document.getElementById("btn-redo");
+    const reset = document.getElementById("btn-layout-reset");
+    if (undo) undo.disabled = layoutIndex <= 0;
+    if (redo) redo.disabled = layoutIndex < 0 || layoutIndex >= layoutHistory.length - 1;
+    if (reset) {
+      reset.disabled =
+        !layoutBaseline ||
+        snapsEqual(snapshotPositions(), layoutBaseline);
+    }
+  }
+
+  function resetLayoutHistory() {
+    layoutBaseline = snapshotPositions();
+    layoutHistory = [cloneSnap(layoutBaseline)];
+    layoutIndex = 0;
+    updateHistoryButtons();
+  }
+
+  function pushLayoutHistory() {
+    const snap = snapshotPositions();
+    if (layoutIndex >= 0 && snapsEqual(snap, layoutHistory[layoutIndex])) {
+      updateHistoryButtons();
+      return;
+    }
+    layoutHistory = layoutHistory.slice(0, layoutIndex + 1);
+    layoutHistory.push(cloneSnap(snap));
+    if (layoutHistory.length > HISTORY_MAX) {
+      layoutHistory.shift();
+    }
+    layoutIndex = layoutHistory.length - 1;
+    updateHistoryButtons();
+  }
+
+  async function persistSnapshot(snap) {
+    if (!locationId || !snap) return;
+    await api(`/api/physical/positions`, {
+      method: "PATCH",
+      body: JSON.stringify({ location_id: locationId, positions: snap }),
+    });
+    dirtyLocal = true;
+    scheduleStatusRefresh();
+  }
+
+  async function applyLayoutSnapshot(snap, status) {
+    if (!graph || !snap) return;
+    for (const n of graph.nodes) {
+      const p = snap[n.id];
+      if (!p) continue;
+      n.x = p.x;
+      n.y = p.y;
+    }
+    updateNodeVisual(graph.nodes[0] || null);
+    try {
+      await persistSnapshot(snap);
+      setStatus(status || "layout");
+    } catch (err) {
+      setStatus(String(err.message || err));
+    }
+    updateHistoryButtons();
+  }
+
+  async function undoLayout() {
+    if (layoutIndex <= 0) return;
+    layoutIndex -= 1;
+    await applyLayoutSnapshot(layoutHistory[layoutIndex], "undo layout");
+  }
+
+  async function redoLayout() {
+    if (layoutIndex >= layoutHistory.length - 1) return;
+    layoutIndex += 1;
+    await applyLayoutSnapshot(layoutHistory[layoutIndex], "redo layout");
+  }
+
+  async function resetLayout() {
+    if (!layoutBaseline) return;
+    layoutHistory = [cloneSnap(layoutBaseline)];
+    layoutIndex = 0;
+    await applyLayoutSnapshot(layoutBaseline, "reset layout");
   }
 
   function updateDepthLabel() {
@@ -645,6 +758,7 @@
           positions: { [finished.id]: { x: node.x, y: node.y } },
         }),
       });
+      pushLayoutHistory();
       setStatus(`Moved ${finished.id} · unsaved`);
       scheduleStatusRefresh();
     } catch (err) {
@@ -767,6 +881,7 @@
     if (depthLevel > maxDepth) depthLevel = Math.max(maxDepth, 1);
     representationSelect.value = graph.page?.representation || "line";
     render();
+    resetLayoutHistory();
     await refreshStatus();
   }
 
@@ -815,6 +930,7 @@
       depthLevel = graph.depth || depthLevel;
       maxDepth = graph.max_depth || maxDepth;
       render();
+      pushLayoutHistory();
       setStatus(`auto-layout: ${data.updated.length} node(s)`);
       scheduleStatusRefresh();
     } catch (err) {
@@ -836,10 +952,36 @@
       depthLevel = graph.depth || depthLevel;
       maxDepth = graph.max_depth || maxDepth;
       render();
+      pushLayoutHistory();
       setStatus(`auto-layout force: ${data.updated.length} node(s)`);
       scheduleStatusRefresh();
     } catch (err) {
       setStatus(String(err.message || err));
+    }
+  });
+
+  document.getElementById("btn-undo").addEventListener("click", () => {
+    undoLayout().catch((err) => setStatus(String(err.message || err)));
+  });
+  document.getElementById("btn-redo").addEventListener("click", () => {
+    redoLayout().catch((err) => setStatus(String(err.message || err)));
+  });
+  document.getElementById("btn-layout-reset").addEventListener("click", () => {
+    resetLayout().catch((err) => setStatus(String(err.message || err)));
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    const tag = (ev.target && ev.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    const mod = ev.ctrlKey || ev.metaKey;
+    if (!mod) return;
+    const key = ev.key.toLowerCase();
+    if (key === "z" && !ev.shiftKey) {
+      ev.preventDefault();
+      undoLayout().catch((err) => setStatus(String(err.message || err)));
+    } else if (key === "y" || (key === "z" && ev.shiftKey)) {
+      ev.preventDefault();
+      redoLayout().catch((err) => setStatus(String(err.message || err)));
     }
   });
 

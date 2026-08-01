@@ -15,6 +15,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - Physical UI **depth zoom** (``depth −`` / ``depth +``, or Alt+wheel): nested
   children appear inside their parent boxes. Independent of canvas zoom
   (``+`` / ``−`` / wheel). ``GET /api/physical?depth=N``.
+- Physical UI layout **Undo** / **Redo** / **Reset** (positions only;
+  Ctrl+Z / Ctrl+Y). Reset restores the snapshot from the last location load.
 
 ### Changed
 
