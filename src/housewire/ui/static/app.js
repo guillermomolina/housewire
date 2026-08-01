@@ -1385,6 +1385,35 @@
         push([[xHi, ay], [xHi, by]]);
         push([[xLo, ay], [xLo, by]]);
       }
+      // Rails that clear each obstacle rect (endpoint boxes included).
+      // Stub-relative detours alone cannot clear a large from/to box.
+      const obsOffs = needLanes ? [0, lane, -lane, 2 * lane, -2 * lane] : [0];
+      const pad = Math.max(stub, 12);
+      for (const r of obstacles) {
+        const xR = r.x + r.w + pad;
+        const xL = r.x - pad;
+        const yB = r.y + r.h + pad;
+        const yT = r.y - pad;
+        for (const off of obsOffs) {
+          const o = Math.abs(off);
+          const xRo = xR + (off >= 0 ? o : 0);
+          const xLo = xL - (off <= 0 ? o : 0);
+          const yBo = yB + (off >= 0 ? o : 0);
+          const yTo = yT - (off <= 0 ? o : 0);
+          push([[xRo, ay], [xRo, by]]);
+          push([[xLo, ay], [xLo, by]]);
+          push([[ax, yBo], [bx, yBo]]);
+          push([[ax, yTo], [bx, yTo]]);
+          push([[xRo, ay], [xRo, yBo], [bx, yBo]]);
+          push([[xRo, ay], [xRo, yTo], [bx, yTo]]);
+          push([[xLo, ay], [xLo, yBo], [bx, yBo]]);
+          push([[xLo, ay], [xLo, yTo], [bx, yTo]]);
+          push([[ax, yBo], [xRo, yBo], [xRo, by]]);
+          push([[ax, yBo], [xLo, yBo], [xLo, by]]);
+          push([[ax, yTo], [xRo, yTo], [xRo, by]]);
+          push([[ax, yTo], [xLo, yTo], [xLo, by]]);
+        }
+      }
     }
 
     // 3 bends: side C loops
@@ -1470,8 +1499,9 @@
     const toFace = routeFace(b, edge.to_opening, edge.to_opening?.[0], byId);
     const p1 = openingAnchorAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
     const p2 = openingAnchorAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
-    // Exclude endpoints: stubs already leave their faces; go around other leaves.
-    const obstacles = placeObstacles(byId, [edge.from, edge.to]);
+    // Include endpoints: stubs leave the faces, so mid-routes must go around
+    // the boxes themselves (otherwise L/Z cuts back through the interior).
+    const obstacles = placeObstacles(byId, []);
     const pts = orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles);
     return { d: pointsToPathD(pts), segs: segsFromPoints(pts) };
   }
@@ -1642,7 +1672,7 @@
             hop.to_opening?.[0],
             placeById
           );
-          const hopObs = placeObstacles(placeById, [hop.from, hop.to]);
+          const hopObs = placeObstacles(placeById, []);
           d = appendOrthoSubpath(d, opA, opB, fromFace, toFace, null, hopObs).d;
         }
       }

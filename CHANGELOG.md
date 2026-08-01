@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.5] — 2026-08-01
+
+### Fixed
+
+- Tube/cable orthogonal routes no longer cut back through their own endpoint
+  boxes (that drew the green lattice inside junction boxes). Endpoints count
+  as obstacles and side-C rails clear each box rect, not only stub midpoints.
+
 ## [0.28.4] — 2026-08-01
 
 ### Fixed
