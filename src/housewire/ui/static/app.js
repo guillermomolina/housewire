@@ -31,7 +31,6 @@
   let elementsById = {};
   let edgePaths = [];
   let cablePaths = [];
-  let openingsOverlayEl = null;
   let lastTap = { id: null, t: 0 };
   let layoutHistory = [];
   let layoutIndex = -1;
@@ -594,9 +593,9 @@
     return { cols, rows };
   }
 
-  /** Center of cell index (1-based) along size; outer cells hug the border. */
+  /** Center of cell index (1-based) along size; outer cells near the border. */
   function planeCellCenter(size, count, index, radius) {
-    const margin = radius + 1;
+    const margin = radius + 5;
     if (count <= 1) return size / 2;
     const span = Math.max(0, size - 2 * margin);
     return margin + ((index - 1) / (count - 1)) * span;
@@ -1064,11 +1063,7 @@
           op.face === "F" ? "opening-front-mark" : "opening-back-mark";
         const textClass =
           op.face === "F" ? "opening-front" : "opening-back";
-        const markG = el("g", {
-          class: "opening-plane",
-          transform: `translate(${a.x},${a.y})`,
-        });
-        markG.appendChild(
+        g.appendChild(
           el("circle", {
             class: markClass,
             cx: anchor.x,
@@ -1076,7 +1071,7 @@
             r: PLANE_R,
           })
         );
-        markG.appendChild(
+        g.appendChild(
           el(
             "text",
             {
@@ -1088,8 +1083,6 @@
             op.id
           )
         );
-        if (openingsOverlayEl) openingsOverlayEl.appendChild(markG);
-        else g.appendChild(markG);
       }
     }
 
@@ -1217,20 +1210,17 @@
     );
 
     // Containers → leaves → conduits (above fill so paths reach B/F marks) →
-    // opening overlay → cables → elements.
+    // cables → elements.
     const containersG = el("g", { class: "containers" });
     const leavesG = el("g", { class: "leaves" });
     const edgesG = el("g", { class: "edges" });
-    const openingsG = el("g", { class: "openings-overlay" });
     const cablesG = el("g", { class: "cables" });
     const elementsG = el("g", { class: "elements" });
     worldEl.appendChild(containersG);
     worldEl.appendChild(leavesG);
     worldEl.appendChild(edgesG);
-    worldEl.appendChild(openingsG);
     worldEl.appendChild(cablesG);
     worldEl.appendChild(elementsG);
-    openingsOverlayEl = openingsG;
 
     const byDepth = [...graph.nodes].sort(
       (a, b) => (a.parts?.length || 0) - (b.parts?.length || 0)
