@@ -39,6 +39,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   Collapsible branches (session-remembered); icons from catalog ``icon:``
   (site ``catalog/`` overlay + optional per-instance ``icon:``). Toolbar
   location dropdown removed (outline is the navigator). ``GET /api/catalog``.
+  Outline opens only the first level by default; elements appear in the tree
+  only when the Elements toggle is on. Orthogonal conduit/cable paths use
+  S/Z mid elbows (not a single L corner).
 
 ### Changed
 

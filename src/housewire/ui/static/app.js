@@ -37,7 +37,8 @@
   let showCables = false;
   let outlineNodes = [];
   let canvasLocations = [];
-  let collapsedOutline = loadCollapsedOutline();
+  let collapsedOutline = new Set();
+  let outlineCollapseReady = false;
   const HISTORY_MAX = 50;
   const DRAG_THRESHOLD = 4;
   const DBLCLICK_MS = 400;
@@ -46,18 +47,19 @@
 
   function loadCollapsedOutline() {
     try {
-      const raw = sessionStorage.getItem("housewire-outline-collapsed");
-      const arr = raw ? JSON.parse(raw) : [];
+      const raw = sessionStorage.getItem("housewire-outline-collapsed-v2");
+      if (raw == null) return null; // signal: apply first-level default
+      const arr = JSON.parse(raw);
       return new Set(Array.isArray(arr) ? arr : []);
     } catch {
-      return new Set();
+      return null;
     }
   }
 
   function saveCollapsedOutline() {
     try {
       sessionStorage.setItem(
-        "housewire-outline-collapsed",
+        "housewire-outline-collapsed-v2",
         JSON.stringify([...collapsedOutline])
       );
     } catch {
@@ -65,8 +67,29 @@
     }
   }
 
-  function iconClassForType(typeId) {
-    return "fa-circle";
+  function defaultCollapsedOutline(nodes) {
+    // Open only the first level: collapse every place deeper than the root.
+    const set = new Set();
+    const list = nodes || [];
+    for (const n of list) {
+      if (n.kind !== "place" || (n.depth || 0) < 1) continue;
+      const hasKid = list.some((c) => {
+        if (outlineParentId(c) !== n.id) return false;
+        if (c.kind === "element" && !showElements) return false;
+        return true;
+      });
+      if (hasKid) set.add(n.id);
+    }
+    return set;
+  }
+
+  function ensureOutlineCollapse(nodes) {
+    if (outlineCollapseReady) return;
+    const stored = loadCollapsedOutline();
+    collapsedOutline =
+      stored == null ? defaultCollapsedOutline(nodes) : stored;
+    outlineCollapseReady = true;
+    saveCollapsedOutline();
   }
 
   function faClass(icon) {
@@ -542,23 +565,62 @@
     applyWorldTransform();
   }
 
-  function orthoPathD(p1, p2, fromFace) {
+  function orthoPathD(p1, p2, fromFace, toFace) {
     const x1 = p1.x;
     const y1 = p1.y;
     const x2 = p2.x;
     const y2 = p2.y;
+    if (x1 === x2 && y1 === y2) {
+      return `M ${x1} ${y1}`;
+    }
     if (x1 === x2 || y1 === y2) {
       return `M ${x1} ${y1} L ${x2} ${y2}`;
     }
-    // Leave along the opening axis when known (E/W → horizontal first).
-    let horizontalFirst;
-    if (fromFace === "E" || fromFace === "W") horizontalFirst = true;
-    else if (fromFace === "N" || fromFace === "S") horizontalFirst = false;
-    else horizontalFirst = Math.abs(x2 - x1) >= Math.abs(y2 - y1);
-    if (horizontalFirst) {
-      return `M ${x1} ${y1} L ${x2} ${y1} L ${x2} ${y2}`;
+    const STUB = 20;
+    const parts = [`M ${x1} ${y1}`];
+    let ax = x1;
+    let ay = y1;
+    let bx = x2;
+    let by = y2;
+    if (fromFace === "E") {
+      ax = x1 + STUB;
+      parts.push(`L ${ax} ${ay}`);
+    } else if (fromFace === "W") {
+      ax = x1 - STUB;
+      parts.push(`L ${ax} ${ay}`);
+    } else if (fromFace === "S") {
+      ay = y1 + STUB;
+      parts.push(`L ${ax} ${ay}`);
+    } else if (fromFace === "N") {
+      ay = y1 - STUB;
+      parts.push(`L ${ax} ${ay}`);
     }
-    return `M ${x1} ${y1} L ${x1} ${y2} L ${x2} ${y2}`;
+    if (toFace === "E") bx = x2 + STUB;
+    else if (toFace === "W") bx = x2 - STUB;
+    else if (toFace === "S") by = y2 + STUB;
+    else if (toFace === "N") by = y2 - STUB;
+
+    // S / Z: two elbows through a mid line (not a single L corner).
+    let horizontalBridge;
+    if (fromFace === "E" || fromFace === "W") horizontalBridge = true;
+    else if (fromFace === "N" || fromFace === "S") horizontalBridge = false;
+    else if (toFace === "E" || toFace === "W") horizontalBridge = true;
+    else if (toFace === "N" || toFace === "S") horizontalBridge = false;
+    else horizontalBridge = Math.abs(bx - ax) >= Math.abs(by - ay);
+
+    if (ax === bx || ay === by) {
+      parts.push(`L ${bx} ${by}`);
+    } else if (horizontalBridge) {
+      const mx = (ax + bx) / 2;
+      parts.push(`L ${mx} ${ay}`, `L ${mx} ${by}`, `L ${bx} ${by}`);
+    } else {
+      const my = (ay + by) / 2;
+      parts.push(`L ${ax} ${my}`, `L ${bx} ${my}`, `L ${bx} ${by}`);
+    }
+    if (bx !== x2 || by !== y2) {
+      parts.push(`L ${x2} ${y2}`);
+    }
+    return parts.join(" ");
   }
 
   function edgePathD(edge, byId) {
@@ -566,9 +628,10 @@
     const b = byId[edge.to];
     if (!a || !b) return null;
     const fromFace = edge.from_opening?.[0];
+    const toFace = edge.to_opening?.[0];
     const p1 = openingAnchorAbs(a, edge.from_opening, fromFace, byId);
-    const p2 = openingAnchorAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
-    return orthoPathD(p1, p2, fromFace);
+    const p2 = openingAnchorAbs(b, edge.to_opening, toFace, byId);
+    return orthoPathD(p1, p2, fromFace, toFace);
   }
 
   function elementAbsXY(elem, placeById) {
@@ -591,8 +654,8 @@
     };
   }
 
-  function appendOrtho(d, p1, p2, fromFace) {
-    const seg = orthoPathD(p1, p2, fromFace);
+  function appendOrtho(d, p1, p2, fromFace, toFace) {
+    const seg = orthoPathD(p1, p2, fromFace, toFace);
     if (!d) return seg;
     // Drop leading M; continue with L segments.
     return d + seg.replace(/^M\s+[-\d.]+(?:\s+|,)[-\d.]+\s*/, " ");
@@ -629,13 +692,13 @@
         toFace,
         placeById
       );
-      // Element → opening → along conduit → opening → element.
-      let d = appendOrtho("", c1, op1, null);
-      d = appendOrtho(d, op1, op2, fromFace);
-      d = appendOrtho(d, op2, c2, null);
+      // Element → opening → along conduit (S) → opening → element.
+      let d = appendOrtho("", c1, op1, null, fromFace);
+      d = appendOrtho(d, op1, op2, fromFace, toFace);
+      d = appendOrtho(d, op2, c2, toFace, null);
       return d;
     }
-    return orthoPathD(c1, c2, null);
+    return orthoPathD(c1, c2, null, null);
   }
 
   function refreshEdges() {
@@ -1361,6 +1424,7 @@
     try {
       const data = await api("/api/outline");
       outlineNodes = data.nodes || [];
+      ensureOutlineCollapse(outlineNodes);
       renderOutline();
     } catch (err) {
       setStatus(String(err.message || err));
@@ -1375,7 +1439,11 @@
   }
 
   function outlineHasKids(nodeId) {
-    return outlineNodes.some((n) => outlineParentId(n) === nodeId);
+    return outlineNodes.some((n) => {
+      if (outlineParentId(n) !== nodeId) return false;
+      if (n.kind === "element" && !showElements) return false;
+      return true;
+    });
   }
 
   function isOutlineHidden(node) {
@@ -1413,6 +1481,7 @@
     if (!host) return;
     host.innerHTML = "";
     for (const node of outlineNodes) {
+      if (node.kind === "element" && !showElements) continue;
       if (isOutlineHidden(node)) continue;
       const row = document.createElement("div");
       row.className =
@@ -1446,7 +1515,7 @@
       row.appendChild(twist);
 
       const icon = document.createElement("i");
-      icon.className = `${faClass(node.icon || iconClassForType(node.type))} outline-icon`;
+      icon.className = `${faClass(node.icon)} outline-icon`;
       icon.setAttribute("aria-hidden", "true");
       row.appendChild(icon);
 
@@ -1676,6 +1745,7 @@
     toggleElements.addEventListener("change", () => {
       showElements = Boolean(toggleElements.checked);
       render();
+      renderOutline();
     });
   }
   if (toggleCables) {
