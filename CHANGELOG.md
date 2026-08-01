@@ -54,8 +54,6 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - Physical UI inspector: **locations** list Elements + Conduits; **elements**
   list Cables (connection edges). Place detail API still returns both
   ``conduits`` and ``cables`` for reuse.
-- Physical UI: ``mount: ceiling`` places mirror E/W opening *positions* on the
-  top-down plan (label text stays upright and readable).
 
 ### Changed
 

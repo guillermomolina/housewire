@@ -85,7 +85,6 @@ class TestPhysicalGraph(unittest.TestCase):
             caja_yaml = parking / "Caja_4" / "housewire.yaml"
             caja_doc = abm.load_editable(caja_yaml, root)
             caja_doc["openings"] = ["W2", "B1-1"]
-            caja_doc["mount"] = "ceiling"
             abm.add_element(caja_doc, "Regleta", type_id="TerminalStrip")
             abm.persist(caja_doc, caja_yaml, root)
 
@@ -178,7 +177,6 @@ class TestPhysicalGraph(unittest.TestCase):
             caja_node = next(n for n in graph["nodes"] if n["id"] == "Caja_4")
             # Elements enlarge the leaf window past the default leaf size.
             self.assertGreater(caja_node["h"], 56)
-            self.assertEqual(caja_node["mount"], "ceiling")
             faces = {o["id"]: o["face"] for o in caja_node["openings"]}
             self.assertEqual(faces.get("B1-1"), "B")
             self.assertIsNotNone(caja_node["x"])
