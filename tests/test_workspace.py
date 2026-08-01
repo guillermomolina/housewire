@@ -1,4 +1,4 @@
-"""Workspace / document API (site = document; views are client-side)."""
+"""Workspace / multi-document API (one YAML file per tab)."""
 from __future__ import annotations
 
 import shutil
@@ -23,12 +23,17 @@ class TestWorkspaceUnit(unittest.TestCase):
             ws = create_workspace(root)
             self.assertEqual(ws.status()["document"]["name"], "site_a")
             self.assertEqual(ws.status()["document"]["yaml"], "housewire.yaml")
+            self.assertEqual(len(ws.status()["documents"]), 1)
 
             dest = Path(tmp) / "site_b"
             ws.save_as(dest)
             self.assertEqual(ws.require_root(), dest.resolve())
             self.assertTrue((dest / "housewire.yaml").is_file())
+            # Save as opens a new tab; original stays open.
+            self.assertEqual(len(ws.status()["documents"]), 2)
 
+            ws.close(force=True)
+            self.assertEqual(len(ws.status()["documents"]), 1)
             ws.close(force=True)
             self.assertIsNone(ws.document)
 
@@ -38,10 +43,10 @@ class TestWorkspaceUnit(unittest.TestCase):
             path, live = ws.require_session().ensure_doc()
             live["notes"] = "dirty"
             ws.require_session().mark_dirty(path)
-            with self.assertRaises(ValueError):
-                ws.open_site(dest)
-            ws.open_site(dest, force=True)
+            # Opening another site adds a tab; does not discard the dirty one.
+            ws.open_site(dest)
             self.assertEqual(ws.status()["document"]["name"], "site_b")
+            self.assertEqual(len(ws.status()["documents"]), 2)
 
     def test_open_custom_yaml_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -60,6 +65,26 @@ class TestWorkspaceUnit(unittest.TestCase):
 
             ws2 = create_workspace(root)
             self.assertEqual(ws2.status()["document"]["yaml"], "instalacion.yml")
+
+    def test_activate_and_close_by_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            a = Path(tmp) / "a"
+            b = Path(tmp) / "b"
+            a.mkdir()
+            b.mkdir()
+            save_site(a, init_site(a, type_id="House", label="A"))
+            save_site(b, init_site(b, type_id="House", label="B"))
+            ws = create_workspace(a)
+            ws.open_site(b)
+            self.assertEqual(ws.status()["document"]["name"], "b")
+            id_a = next(
+                d["id"] for d in ws.status()["documents"] if d["name"] == "a"
+            )
+            ws.activate(id_a)
+            self.assertEqual(ws.status()["document"]["name"], "a")
+            ws.close(force=True, doc_id=id_a)
+            self.assertEqual(ws.status()["document"]["name"], "b")
+            self.assertEqual(len(ws.status()["documents"]), 1)
 
 
 class TestWorkspaceApi(unittest.TestCase):
@@ -89,6 +114,7 @@ class TestWorkspaceApi(unittest.TestCase):
             st = client.get("/api/workspace").json()
             self.assertEqual(st["document"]["name"], "site_a")
             self.assertEqual(st["dirty"], [])
+            self.assertEqual(len(st["documents"]), 1)
 
             dest = Path(tmp) / "site_b"
             saved = client.post(
@@ -96,11 +122,13 @@ class TestWorkspaceApi(unittest.TestCase):
             ).json()
             self.assertEqual(saved["document"]["name"], "site_b")
             self.assertTrue((dest / "housewire.yaml").is_file())
+            self.assertEqual(len(saved["documents"]), 2)
 
             closed = client.post(
                 "/api/workspace/close", json={"force": True}
             ).json()
-            self.assertIsNone(closed["document"])
+            self.assertEqual(len(closed["documents"]), 1)
+            client.post("/api/workspace/close", json={"force": True})
 
             again = client.post(
                 "/api/workspace/open", json={"path": str(root)}
@@ -111,16 +139,23 @@ class TestWorkspaceApi(unittest.TestCase):
                 "/api/physical/page",
                 json={"location_id": ".", "representation": "tube"},
             )
-            blocked = client.post(
+            # Dirty active + open another = two tabs (no 409).
+            opened_b = client.post(
                 "/api/workspace/open", json={"path": str(dest)}
             )
-            self.assertEqual(blocked.status_code, 409)
-            forced = client.post(
-                "/api/workspace/open",
-                json={"path": str(dest), "force": True},
+            self.assertEqual(opened_b.status_code, 200)
+            self.assertEqual(opened_b.json()["document"]["name"], "site_b")
+            self.assertEqual(len(opened_b.json()["documents"]), 2)
+
+            id_a = next(
+                d["id"]
+                for d in opened_b.json()["documents"]
+                if d["name"] == "site_a"
             )
-            self.assertEqual(forced.status_code, 200)
-            self.assertEqual(forced.json()["document"]["name"], "site_b")
+            act = client.post(
+                "/api/workspace/activate", json={"id": id_a}
+            ).json()
+            self.assertEqual(act["document"]["name"], "site_a")
 
             # Open by YAML file path (custom name)
             custom_root = Path(tmp) / "named"
@@ -131,7 +166,7 @@ class TestWorkspaceApi(unittest.TestCase):
             shutil.move(str(custom_root / "housewire.yaml"), str(named))
             opened = client.post(
                 "/api/workspace/open",
-                json={"path": str(named), "force": True},
+                json={"path": str(named)},
             )
             self.assertEqual(opened.status_code, 200)
             self.assertEqual(opened.json()["document"]["yaml"], "plan.yaml")
@@ -142,7 +177,6 @@ class TestWorkspaceApi(unittest.TestCase):
                 json={
                     "filename": "from_browser.yml",
                     "content": content,
-                    "force": True,
                 },
             )
             self.assertEqual(via_content.status_code, 200)

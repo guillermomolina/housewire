@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.0] — 2026-08-01
+
+### Changed
+
+- **Breaking (UI):** tabs are **open files** (one YAML document per tab), not
+  canvas location views. File → Open adds a tab; tab × closes that file.
+  Canvas place is selected from the Outline. Multi-document workspace API:
+  ``documents`` / ``active`` / ``POST /api/workspace/activate``.
+
 ## [0.26.2] — 2026-08-01
 
 ### Fixed

@@ -1,3 +1,3 @@
 """housewire — document home electrical installations and export diagrams."""
 
-__version__ = "0.26.2"
+__version__ = "0.27.0"

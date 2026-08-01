@@ -24,8 +24,12 @@
   let dirtyLocal = false;
   /** Client mirror of whether the workspace has an open document. */
   let hasDocument = false;
-  /** @type {FileSystemFileHandle | null} */
-  let siteFileHandle = null;
+  /** @type {string | null} */
+  let activeDocId = null;
+  /** @type {Record<string, FileSystemFileHandle>} */
+  let fileHandles = {};
+  /** Per-document canvas location/depth when switching tabs. */
+  let docViews = {};
   let drag = null;
   let panDrag = null;
   let marquee = null;
@@ -45,8 +49,6 @@
   let canvasLocations = [];
   let collapsedOutline = new Set();
   let outlineCollapseReady = false;
-  /** @type {{ id: string, title: string, depth: number }[]} */
-  let viewTabs = [];
   const HISTORY_MAX = 50;
   const DRAG_THRESHOLD = 4;
   const DBLCLICK_MS = 400;
@@ -201,17 +203,21 @@
   }
 
   function applyWorkspaceStatus(st) {
-    hasDocument = Boolean(st && st.document);
+    const docs = (st && st.documents) || [];
+    hasDocument = docs.length > 0 && Boolean(st.document);
+    activeDocId = (st && st.active) || (st.document && st.document.id) || null;
     if (!hasDocument) {
       dirtyLocal = false;
       layoutBaseline = null;
       layoutHistory = [];
       layoutIndex = -1;
+      activeDocId = null;
     }
     const serverDirty = ((st && st.dirty) || []).length > 0;
     if (hasDocument) syncLayoutDirty();
     else dirtyLocal = false;
     updateFileMenuState({ dirty: serverDirty || dirtyLocal });
+    renderDocTabs(st);
     return st;
   }
 
@@ -1878,9 +1884,10 @@
 
   async function saveDocument() {
     const data = await api("/api/save", { method: "POST", body: "{}" });
-    if (siteFileHandle && data.yaml != null) {
-      await writeTextToFileHandle(siteFileHandle, data.yaml);
-    } else if (data.browser_origin && data.yaml != null && !siteFileHandle) {
+    const handle = activeDocId ? fileHandles[activeDocId] : null;
+    if (handle && data.yaml != null) {
+      await writeTextToFileHandle(handle, data.yaml);
+    } else if (data.browser_origin && data.yaml != null && !handle) {
       downloadYamlBlob(data.filename || "housewire.yaml", data.yaml);
     }
     setStatus(`saved ${(data.saved || []).length} file(s)`);
@@ -1891,8 +1898,15 @@
     return data;
   }
 
-  async function reloadAfterDocumentChange() {
-    viewTabs = [];
+  function rememberCurrentDocView() {
+    if (!activeDocId) return;
+    docViews[activeDocId] = {
+      locationId: locationId,
+      depthLevel: depthLevel,
+    };
+  }
+
+  function resetCanvasState() {
     locationId = null;
     graph = null;
     clearSelectionState();
@@ -1903,6 +1917,10 @@
     outlineCollapseReady = false;
     collapsedOutline = new Set();
     svg.innerHTML = "";
+  }
+
+  async function reloadAfterDocumentChange() {
+    resetCanvasState();
     try {
       applyWorkspaceStatus(await api("/api/workspace"));
     } catch {
@@ -1915,21 +1933,15 @@
   function clearDocumentUi() {
     clearTimeout(saveTimer);
     saveTimer = null;
-    viewTabs = [];
-    locationId = null;
-    graph = null;
-    clearSelectionState();
-    dirtyLocal = false;
-    layoutHistory = [];
-    layoutIndex = -1;
-    layoutBaseline = null;
-    siteFileHandle = null;
+    resetCanvasState();
+    fileHandles = {};
+    docViews = {};
+    activeDocId = null;
     hasDocument = false;
     updateFileMenuState({ dirty: false });
-    svg.innerHTML = "";
     const outline = document.getElementById("outline-tree");
     if (outline) outline.innerHTML = "";
-    renderViewTabs();
+    renderDocTabs({ documents: [], active: null, document: null });
   }
 
   function closeFileMenu() {
@@ -2055,27 +2067,22 @@
   }
 
   async function fileOpen() {
-    const dirty = await isDocumentDirty();
-    let force = false;
-    if (dirty) {
-      const discard = window.confirm(
-        "There are unsaved changes. Discard them and open another file?"
-      );
-      if (!discard) return;
-      force = true;
-    }
+    // Multi-doc: Open always adds/activates a tab; no discard of other files.
     const picked = await pickOpenYamlFile();
     if (!picked) return;
+    rememberCurrentDocView();
     try {
-      await api("/api/workspace/open-content", {
+      const st = await api("/api/workspace/open-content", {
         method: "POST",
         body: JSON.stringify({
           filename: picked.name,
           content: picked.content,
-          force,
         }),
       });
-      siteFileHandle = picked.handle;
+      applyWorkspaceStatus(st);
+      if (picked.handle && st.document && st.document.id) {
+        fileHandles[st.document.id] = picked.handle;
+      }
       await reloadAfterDocumentChange();
       setStatus(`opened ${picked.name}`);
     } catch (err) {
@@ -2094,16 +2101,19 @@
     const suggested = exported.filename || "housewire.yaml";
     const result = await pickSaveYamlFile(suggested, exported.content);
     if (!result) return;
+    rememberCurrentDocView();
     try {
-      await api("/api/workspace/open-content", {
+      const st = await api("/api/workspace/open-content", {
         method: "POST",
         body: JSON.stringify({
           filename: result.name,
           content: exported.content,
-          force: true,
         }),
       });
-      siteFileHandle = result.handle;
+      applyWorkspaceStatus(st);
+      if (result.handle && st.document && st.document.id) {
+        fileHandles[st.document.id] = result.handle;
+      }
       dirtyLocal = false;
       updateSaveButton(false);
       await reloadAfterDocumentChange();
@@ -2117,22 +2127,69 @@
     }
   }
 
-  async function fileClose() {
-    const dirty = await isDocumentDirty();
+  async function closeDocument(docId) {
+    if (!docId) return;
+    let dirty = false;
+    try {
+      const st = await api("/api/workspace");
+      const row = (st.documents || []).find((d) => d.id === docId);
+      dirty = Boolean(row && row.dirty);
+      if (docId === activeDocId) {
+        syncLayoutDirty();
+        dirty = dirty || dirtyLocal || (st.dirty || []).length > 0;
+      }
+    } catch {
+      dirty = docId === activeDocId && dirtyLocal;
+    }
     if (dirty) {
       const discard = window.confirm(
         "There are unsaved changes. Close and discard them?"
       );
       if (!discard) return;
     }
+    const wasActive = docId === activeDocId;
+    rememberCurrentDocView();
     try {
-      await api("/api/workspace/close", {
+      const st = await api("/api/workspace/close", {
         method: "POST",
-        body: JSON.stringify({ force: true }),
+        body: JSON.stringify({ force: true, id: docId }),
       });
-      clearDocumentUi();
-      await refreshDocumentLabel();
-      setStatus("document closed — File → Open…");
+      delete fileHandles[docId];
+      delete docViews[docId];
+      applyWorkspaceStatus(st);
+      if (!hasDocument) {
+        clearDocumentUi();
+        await refreshDocumentLabel();
+        setStatus("document closed — File → Open…");
+        return;
+      }
+      if (wasActive) {
+        resetCanvasState();
+        await loadLocations();
+      }
+      setStatus("document closed");
+    } catch (err) {
+      setStatus(String(err.message || err));
+    }
+  }
+
+  async function fileClose() {
+    if (!activeDocId) return;
+    await closeDocument(activeDocId);
+  }
+
+  async function activateDocument(docId) {
+    if (!docId || docId === activeDocId) return;
+    rememberCurrentDocView();
+    try {
+      const st = await api("/api/workspace/activate", {
+        method: "POST",
+        body: JSON.stringify({ id: docId }),
+      });
+      applyWorkspaceStatus(st);
+      resetCanvasState();
+      await loadLocations();
+      setStatus(`switched to ${(st.document && st.document.title) || docId}`);
     } catch (err) {
       setStatus(String(err.message || err));
     }
@@ -2189,17 +2246,29 @@
 
   async function loadLocations() {
     await refreshDocumentLabel();
+    if (!hasDocument) {
+      canvasLocations = [];
+      svg.innerHTML = "";
+      return;
+    }
     const data = await api("/api/locations");
     canvasLocations = data.locations || [];
     await loadOutline();
-    const first =
+    const saved = activeDocId ? docViews[activeDocId] : null;
+    let target =
+      (saved &&
+        saved.locationId &&
+        canvasLocations.find(
+          (r) => r.selectable !== false && r.id === saved.locationId
+        )) ||
       canvasLocations.find((r) => r.selectable !== false && r.id === ".") ||
       canvasLocations.find((r) => r.selectable !== false);
-    if (first) {
-      await openViewTab(first.id, { activate: true, resetDepth: true });
+    if (target) {
+      if (saved && saved.depthLevel) depthLevel = saved.depthLevel;
+      else depthLevel = 1;
+      await setCanvasLocation(target.id, { resetDepth: !saved });
     } else {
       setStatus("No locations with children found");
-      renderViewTabs();
     }
   }
 
@@ -2214,8 +2283,9 @@
         el.title = "Active site document";
         return;
       }
-      const yamlName = doc.yaml ? String(doc.yaml) : "";
-      el.textContent = yamlName ? `${doc.name}/${yamlName}` : String(doc.name);
+      const n = (st.documents || []).length;
+      el.textContent =
+        n > 1 ? `${doc.title} (${n} open)` : String(doc.title || doc.yaml);
       el.title = doc.yaml_path
         ? String(doc.yaml_path)
         : String(doc.path || "Active site document");
@@ -2226,111 +2296,52 @@
     }
   }
 
-  function viewTitleFor(id) {
-    const row = canvasLocations.find((r) => r.id === id);
-    if (row) {
-      return row.display_name || row.name || row.id || id;
-    }
-    if (id === "." || id === "") return "Site";
-    return String(id).split("/").pop() || id;
-  }
-
-  function renderViewTabs() {
+  function renderDocTabs(st) {
     const bar = document.getElementById("view-tabs");
     if (!bar) return;
     bar.innerHTML = "";
-    for (const tab of viewTabs) {
+    const docs = (st && st.documents) || [];
+    const active = (st && st.active) || activeDocId;
+    for (const doc of docs) {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "view-tab" + (tab.id === locationId ? " active" : "");
+      btn.className = "view-tab" + (doc.id === active ? " active" : "");
       btn.setAttribute("role", "tab");
-      btn.setAttribute("aria-selected", tab.id === locationId ? "true" : "false");
-      btn.dataset.viewId = tab.id;
+      btn.setAttribute("aria-selected", doc.id === active ? "true" : "false");
+      btn.dataset.docId = doc.id;
       const label = document.createElement("span");
-      label.textContent = tab.title;
+      label.textContent = (doc.dirty ? "• " : "") + (doc.title || doc.yaml);
       btn.appendChild(label);
       const close = document.createElement("button");
       close.type = "button";
       close.className = "view-tab-close";
-      const lastTab = viewTabs.length <= 1;
-      close.title = lastTab ? "Close document" : "Close view";
-      close.setAttribute(
-        "aria-label",
-        lastTab ? `Close document (${tab.title})` : `Close ${tab.title}`
-      );
+      close.title = "Close file";
+      close.setAttribute("aria-label", `Close ${doc.title || doc.yaml}`);
       close.textContent = "×";
       close.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        closeViewTab(tab.id).catch((err) =>
+        closeDocument(doc.id).catch((err) =>
           setStatus(String(err.message || err))
         );
       });
       btn.appendChild(close);
       btn.addEventListener("click", () => {
-        activateViewTab(tab.id);
+        activateDocument(doc.id).catch((err) =>
+          setStatus(String(err.message || err))
+        );
       });
       bar.appendChild(btn);
     }
   }
 
-  function rememberActiveViewDepth() {
-    if (!locationId) return;
-    const tab = viewTabs.find((t) => t.id === locationId);
-    if (tab) tab.depth = depthLevel;
-  }
-
-  async function openViewTab(id, { activate = true, resetDepth = true } = {}) {
-    if (!id) return;
-    let tab = viewTabs.find((t) => t.id === id);
-    if (!tab) {
-      tab = { id, title: viewTitleFor(id), depth: 1 };
-      viewTabs.push(tab);
-    } else {
-      tab.title = viewTitleFor(id);
-    }
-    if (activate) {
-      await activateViewTab(id, { resetDepth });
-    } else {
-      renderViewTabs();
-    }
-  }
-
-  async function activateViewTab(id, { resetDepth = false } = {}) {
-    if (!id) return;
-    rememberActiveViewDepth();
-    const tab = viewTabs.find((t) => t.id === id);
-    if (!tab) {
-      await openViewTab(id, { activate: true, resetDepth: true });
-      return;
-    }
-    if (!resetDepth && tab.depth) depthLevel = tab.depth;
-    else if (resetDepth) depthLevel = 1;
-    locationId = id;
-    renderViewTabs();
-    await loadLocation();
-  }
-
-  async function closeViewTab(id) {
-    const idx = viewTabs.findIndex((t) => t.id === id);
-    if (idx < 0) return;
-    // Last view tab closes the whole document (same as File → Close).
-    if (viewTabs.length <= 1) {
-      await fileClose();
-      return;
-    }
-    const wasActive = locationId === id;
-    viewTabs.splice(idx, 1);
-    if (wasActive) {
-      const next = viewTabs[Math.max(0, idx - 1)];
-      await activateViewTab(next.id);
-    } else {
-      renderViewTabs();
-    }
-  }
-
   async function setCanvasLocation(id, { resetDepth = true } = {}) {
     if (!id) return;
-    await openViewTab(id, { activate: true, resetDepth });
+    if (resetDepth) depthLevel = 1;
+    locationId = id;
+    if (activeDocId) {
+      docViews[activeDocId] = { locationId: id, depthLevel };
+    }
+    await loadLocation();
   }
 
   async function loadOutline() {
@@ -2615,8 +2626,9 @@
     else applyWorldTransform();
     highlightOutline(locationId);
     await refreshStatus();
-    rememberActiveViewDepth();
-    renderViewTabs();
+    if (activeDocId) {
+      docViews[activeDocId] = { locationId, depthLevel };
+    }
     const bits = [];
     if (filled.length) {
       bits.push(`${filled.length} place(s)`);

@@ -114,7 +114,7 @@ def create_app(site_root: Path | None = None) -> Any:
 
     @app.post("/api/workspace/open-content")
     async def api_workspace_open_content(request: Request) -> dict[str, Any]:
-        """Open a YAML document chosen via the browser file picker."""
+        """Open a YAML document chosen via the browser file picker (new tab)."""
         payload = await _json_body(request)
         force = bool(payload.get("force", False))
         filename = str(payload.get("filename") or "").strip()
@@ -131,6 +131,18 @@ def create_app(site_root: Path | None = None) -> Any:
             raise HTTPException(code, msg) from exc
         return workspace.status()
 
+    @app.post("/api/workspace/activate")
+    async def api_workspace_activate(request: Request) -> dict[str, Any]:
+        payload = await _json_body(request)
+        doc_id = str(payload.get("id") or "").strip()
+        if not doc_id:
+            raise HTTPException(400, "id is required")
+        try:
+            workspace.activate(doc_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return workspace.status()
+
     @app.get("/api/workspace/yaml")
     def api_workspace_yaml() -> dict[str, str]:
         try:
@@ -144,8 +156,10 @@ def create_app(site_root: Path | None = None) -> Any:
     async def api_workspace_close(request: Request) -> dict[str, Any]:
         payload = await _json_body(request)
         force = bool(payload.get("force", False))
+        raw_id = payload.get("id")
+        doc_id = str(raw_id).strip() if raw_id else None
         try:
-            workspace.close(force=force)
+            workspace.close(force=force, doc_id=doc_id or None)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         return workspace.status()
