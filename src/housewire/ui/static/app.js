@@ -1084,19 +1084,19 @@
   }
 
   /** Shrunk leaf-place rects as routing obstacles (skip rooms/containers). */
-  function placeObstacles(byId, excludeIds) {
+  function placeObstacles(byId, excludeIds, inset) {
     const ex = new Set(excludeIds || []);
-    const inset = 8;
+    const pad = inset == null ? 8 : inset;
     /** @type {{x:number,y:number,w:number,h:number}[]} */
     const rects = [];
     for (const n of Object.values(byId)) {
       if (!n || ex.has(n.id)) continue;
       if (childrenOf(n.id).length) continue;
       const a = absXY(n, byId);
-      const w = nodeW(n) - 2 * inset;
-      const h = nodeH(n) - 2 * inset;
-      if (w < 10 || h < 10) continue;
-      rects.push({ x: a.x + inset, y: a.y + inset, w, h });
+      const w = nodeW(n) - 2 * pad;
+      const h = nodeH(n) - 2 * pad;
+      if (w < 4 || h < 4) continue;
+      rects.push({ x: a.x + pad, y: a.y + pad, w, h });
     }
     return rects;
   }
@@ -1560,6 +1560,41 @@
     return { d: `${d} ${seg}`, segs: segsFromPoints(pts) };
   }
 
+  /** In-box wiring: straight or single L — never C / lane detours. */
+  function simpleOrthoPts(p1, p2) {
+    const x1 = p1.x;
+    const y1 = p1.y;
+    const x2 = p2.x;
+    const y2 = p2.y;
+    if (Math.abs(x1 - x2) < 1e-6 && Math.abs(y1 - y2) < 1e-6) {
+      return [[x1, y1]];
+    }
+    if (Math.abs(x1 - x2) < 1e-6 || Math.abs(y1 - y2) < 1e-6) {
+      return [
+        [x1, y1],
+        [x2, y2],
+      ];
+    }
+    return [
+      [x1, y1],
+      [x2, y1],
+      [x2, y2],
+    ];
+  }
+
+  function appendSimple(d, p1, p2) {
+    const pts = simpleOrthoPts(p1, p2);
+    const seg = pointsToPathD(pts);
+    if (!d) return seg;
+    return d + seg.replace(/^M\s+[-\d.]+(?:\s+|,)[-\d.]+\s*/, " ");
+  }
+
+  function appendSimpleSubpath(d, p1, p2) {
+    const seg = pointsToPathD(simpleOrthoPts(p1, p2));
+    if (!d) return seg;
+    return `${d} ${seg}`;
+  }
+
   function pathDToPoints(d) {
     /** @type {number[][]} */
     const pts = [];
@@ -1575,6 +1610,39 @@
     const pts = pathDToPoints(d);
     pts.reverse();
     return pointsToPathD(pts);
+  }
+
+  /**
+   * Drop polyline runs that cut through leaf places so cable overlays do not
+   * paint a green lattice inside junction boxes when a tube route misbehaves.
+   */
+  function exteriorPathD(d, obstacles) {
+    if (!d) return null;
+    if (!obstacles || !obstacles.length) return d;
+    const pts = pathDToPoints(d);
+    if (pts.length < 2) return d;
+    let out = "";
+    /** @type {number[][]} */
+    let run = [];
+    const flush = () => {
+      if (run.length >= 2) {
+        const piece = pointsToPathD(run);
+        out = out ? `${out} ${piece}` : piece;
+      }
+      run = [];
+    };
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      if (pathObstacleCost([a, b], obstacles) > 0) {
+        flush();
+        continue;
+      }
+      if (!run.length) run.push(a);
+      run.push(b);
+    }
+    flush();
+    return out || null;
   }
 
   /** Exact tube geometry for a hop (same path as the conduit edge). */
@@ -1593,9 +1661,16 @@
     if (!a || !b) return null;
     const c1 = elementCenter(a, placeById);
     const c2 = elementCenter(b, placeById);
-    // Direct element↔element: go around other leaf boxes (not parents — tails stay inside).
+
+    // Same box: local wiring only — never side-C (that filled boxes with grids).
+    if (a.parent && b.parent && a.parent === b.parent) {
+      return pointsToPathD(simpleOrthoPts(c1, c2));
+    }
+
     const parentExclude = [a.parent, b.parent].filter(Boolean);
     const outsideObstacles = placeObstacles(placeById, parentExclude);
+    // Full leaf rects (no inset): strip tube overlays that skim inside borders.
+    const leafObstacles = placeObstacles(placeById, [], 0);
 
     let hops = edge.conduit_hops;
     if ((!hops || !hops.length) && edge.conduit && edge.conduit_from && edge.conduit_to) {
@@ -1634,9 +1709,9 @@
         first.from_opening?.[0],
         placeById
       );
-      // Element → opening stays inside the parent box (no place obstacles).
-      let d = appendOrthoSubpath("", c1, innerStart, null, null, null, null).d;
-      d = appendOrtho(d, innerStart, opStart, null, null, null, null).d;
+      // Element → opening: simple L inside the box.
+      let d = appendSimple("", c1, innerStart);
+      d = appendSimple(d, innerStart, opStart);
       for (let i = 0; i < hops.length; i++) {
         const hop = hops[i];
         const pf = placeById[hop.from];
@@ -1658,7 +1733,8 @@
         );
         const tubeD = hopTubePathD(hop);
         if (tubeD) {
-          d = `${d} ${tubeD}`;
+          const ext = exteriorPathD(tubeD, leafObstacles);
+          if (ext) d = `${d} ${ext}`;
         } else {
           const fromFace = routeFace(
             pf,
@@ -1673,7 +1749,9 @@
             placeById
           );
           const hopObs = placeObstacles(placeById, []);
-          d = appendOrthoSubpath(d, opA, opB, fromFace, toFace, null, hopObs).d;
+          const routed = orthoRoute(opA, opB, fromFace, toFace, null, hopObs);
+          const ext = exteriorPathD(pointsToPathD(routed), leafObstacles);
+          if (ext) d = `${d} ${ext}`;
         }
       }
       const opEnd = openingAnchorAbs(
@@ -1688,8 +1766,8 @@
         last.to_opening?.[0],
         placeById
       );
-      d = appendOrthoSubpath(d, opEnd, innerEnd, null, null, null, null).d;
-      d = appendOrtho(d, innerEnd, c2, null, null, null, null).d;
+      d = appendSimpleSubpath(d, opEnd, innerEnd);
+      d = appendSimple(d, innerEnd, c2);
       return d;
     }
     return orthoPathD(c1, c2, null, null, occupied, outsideObstacles);

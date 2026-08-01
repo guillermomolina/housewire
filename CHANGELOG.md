@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.7] — 2026-08-01
+
+### Fixed
+
+- In-box cable drawing: same-place runs and element↔opening tails use a
+  simple L (no side-C / lane detours). Tube overlays on cables skip segments
+  that cut through leaf boxes, so junction boxes no longer fill with a green
+  lattice.
+
 ## [0.28.6] — 2026-08-01
 
 ### Changed
