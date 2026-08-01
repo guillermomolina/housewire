@@ -1,6 +1,7 @@
 """JSON physical graph for the interactive UI (locations + conduits, no Graphviz)."""
 from __future__ import annotations
 
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -255,6 +256,83 @@ def _build_element_nodes(
     return nodes
 
 
+def _conduit_hops_for_cable(
+    cable_name: str,
+    from_place: str | None,
+    to_place: str | None,
+    conduit_edges: list[dict[str, Any]],
+) -> list[dict[str, Any]] | None:
+    """Shortest chain of conduit edges that carry ``cable_name`` between places.
+
+    Returns oriented hops ``{conduit, from, to, from_opening, to_opening}``,
+    or ``None`` when there is no path (including same-place / intra-box).
+    """
+    if not cable_name or not from_place or not to_place:
+        return None
+    if from_place == to_place:
+        return None
+
+    adj: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    for cedge in conduit_edges:
+        contains = [str(c) for c in (cedge.get("contains") or [])]
+        if cable_name not in contains:
+            continue
+        a = str(cedge.get("from") or "")
+        b = str(cedge.get("to") or "")
+        if not a or not b or a == b:
+            continue
+        cid = str(cedge.get("id") or "")
+        a_op = cedge.get("from_opening")
+        b_op = cedge.get("to_opening")
+        if not a_op or not b_op:
+            continue
+        fwd = {
+            "conduit": cid,
+            "from": a,
+            "to": b,
+            "from_opening": a_op,
+            "to_opening": b_op,
+        }
+        rev = {
+            "conduit": cid,
+            "from": b,
+            "to": a,
+            "from_opening": b_op,
+            "to_opening": a_op,
+        }
+        adj.setdefault(a, []).append((b, fwd))
+        adj.setdefault(b, []).append((a, rev))
+
+    # BFS for fewest hops (then stable by conduit id).
+    queue: deque[str] = deque([from_place])
+    prev: dict[str, tuple[str, dict[str, Any]] | None] = {from_place: None}
+    while queue:
+        cur = queue.popleft()
+        if cur == to_place:
+            break
+        neighbors = sorted(adj.get(cur, []), key=lambda t: (t[1]["conduit"], t[0]))
+        for nxt, hop in neighbors:
+            if nxt in prev:
+                continue
+            prev[nxt] = (cur, hop)
+            queue.append(nxt)
+
+    if to_place not in prev or to_place == from_place:
+        return None
+
+    hops: list[dict[str, Any]] = []
+    cur = to_place
+    while cur != from_place:
+        step = prev.get(cur)
+        if step is None:
+            return None
+        parent, hop = step
+        hops.append(hop)
+        cur = parent
+    hops.reverse()
+    return hops or None
+
+
 def _build_cable_edges(
     *,
     places: list[tuple[tuple[str, ...], dict[str, Any]]],
@@ -265,14 +343,11 @@ def _build_cable_edges(
 ) -> list[dict[str, Any]]:
     """Connection edges whose endpoints are both in ``element_ids``.
 
-    When the via cable appears in a conduit ``contains``, attach that conduit
-    so the UI can route the cable along the tube.
+    When the via cable appears in one or more conduit ``contains`` lists,
+    attach the shortest conduit hop chain between the element host places
+    so the UI can route the cable along those tubes.
     """
     elem_parent = {e["id"]: e.get("parent") for e in elements}
-    conduit_by_cable: dict[str, dict[str, Any]] = {}
-    for cedge in conduit_edges:
-        for cable in cedge.get("contains") or []:
-            conduit_by_cable[str(cable)] = cedge
 
     sources: list[tuple[tuple[str, ...], dict[str, Any]]] = [
         (tuple(), loc_doc),
@@ -331,25 +406,19 @@ def _build_cable_edges(
                 "via": via,
                 "colors": colors,
             }
-            cedge = conduit_by_cable.get(cable_name)
-            if cedge is not None:
-                from_place = elem_parent.get(from_id)
-                to_place = elem_parent.get(to_id)
-                c_from = cedge.get("from")
-                c_to = cedge.get("to")
-                # Align openings with which place hosts each element.
-                if from_place == c_from and to_place == c_to:
-                    row["conduit"] = cedge.get("id")
-                    row["conduit_from"] = c_from
-                    row["conduit_to"] = c_to
-                    row["from_opening"] = cedge.get("from_opening")
-                    row["to_opening"] = cedge.get("to_opening")
-                elif from_place == c_to and to_place == c_from:
-                    row["conduit"] = cedge.get("id")
-                    row["conduit_from"] = c_to
-                    row["conduit_to"] = c_from
-                    row["from_opening"] = cedge.get("to_opening")
-                    row["to_opening"] = cedge.get("from_opening")
+            hops = _conduit_hops_for_cable(
+                cable_name,
+                elem_parent.get(from_id),
+                elem_parent.get(to_id),
+                conduit_edges,
+            )
+            if hops:
+                row["conduit_hops"] = hops
+                row["conduit"] = hops[0]["conduit"] if len(hops) == 1 else None
+                row["conduit_from"] = hops[0]["from"]
+                row["conduit_to"] = hops[-1]["to"]
+                row["from_opening"] = hops[0]["from_opening"]
+                row["to_opening"] = hops[-1]["to_opening"]
             edges.append(row)
     return edges
 

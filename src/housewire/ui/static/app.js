@@ -1206,45 +1206,86 @@
     if (!a || !b) return null;
     const c1 = elementCenter(a, placeById);
     const c2 = elementCenter(b, placeById);
-    const conduitFrom = edge.conduit_from
-      ? placeById[edge.conduit_from]
-      : null;
-    const conduitTo = edge.conduit_to ? placeById[edge.conduit_to] : null;
-    if (
-      edge.conduit &&
-      conduitFrom &&
-      conduitTo &&
-      edge.from_opening &&
-      edge.to_opening
-    ) {
-      const fromFace = routeFace(
-        conduitFrom,
-        edge.from_opening,
-        edge.from_opening?.[0],
+
+    let hops = edge.conduit_hops;
+    if ((!hops || !hops.length) && edge.conduit && edge.conduit_from && edge.conduit_to) {
+      hops = [
+        {
+          conduit: edge.conduit,
+          from: edge.conduit_from,
+          to: edge.conduit_to,
+          from_opening: edge.from_opening,
+          to_opening: edge.to_opening,
+        },
+      ];
+    }
+    if (hops && hops.length) {
+      const first = hops[0];
+      const last = hops[hops.length - 1];
+      const startPlace = placeById[first.from];
+      const endPlace = placeById[last.to];
+      if (
+        !startPlace ||
+        !endPlace ||
+        !first.from_opening ||
+        !last.to_opening
+      ) {
+        return orthoPathD(c1, c2, null, null);
+      }
+      const opStart = openingAnchorAbs(
+        startPlace,
+        first.from_opening,
+        first.from_opening?.[0],
         placeById
       );
-      const toFace = routeFace(
-        conduitTo,
-        edge.to_opening,
-        edge.to_opening?.[0],
+      // Element → opening on the box contour (no outward stub).
+      let d = appendOrtho("", c1, opStart, null, null);
+      let prevArrive = null;
+      for (let i = 0; i < hops.length; i++) {
+        const hop = hops[i];
+        const pf = placeById[hop.from];
+        const pt = placeById[hop.to];
+        if (!pf || !pt || !hop.from_opening || !hop.to_opening) {
+          return orthoPathD(c1, c2, null, null);
+        }
+        const opA = openingAnchorAbs(
+          pf,
+          hop.from_opening,
+          hop.from_opening?.[0],
+          placeById
+        );
+        const opB = openingAnchorAbs(
+          pt,
+          hop.to_opening,
+          hop.to_opening?.[0],
+          placeById
+        );
+        if (prevArrive) {
+          // Through intermediate box: arrive opening → leave opening.
+          d = appendOrtho(d, prevArrive, opA, null, null);
+        }
+        const fromFace = routeFace(
+          pf,
+          hop.from_opening,
+          hop.from_opening?.[0],
+          placeById
+        );
+        const toFace = routeFace(
+          pt,
+          hop.to_opening,
+          hop.to_opening?.[0],
+          placeById
+        );
+        d = appendOrtho(d, opA, opB, fromFace, toFace);
+        prevArrive = opB;
+      }
+      const opEnd = openingAnchorAbs(
+        endPlace,
+        last.to_opening,
+        last.to_opening?.[0],
         placeById
       );
-      const op1 = openingAnchorAbs(
-        conduitFrom,
-        edge.from_opening,
-        edge.from_opening?.[0],
-        placeById
-      );
-      const op2 = openingAnchorAbs(
-        conduitTo,
-        edge.to_opening,
-        edge.to_opening?.[0],
-        placeById
-      );
-      // Element → opening → along conduit (S) → opening → element.
-      let d = appendOrtho("", c1, op1, null, fromFace);
-      d = appendOrtho(d, op1, op2, fromFace, toFace);
-      d = appendOrtho(d, op2, c2, toFace, null);
+      d = appendOrtho(d, opEnd, c2, null, null);
       return d;
     }
     return orthoPathD(c1, c2, null, null);

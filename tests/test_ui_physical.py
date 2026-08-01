@@ -168,6 +168,11 @@ class TestPhysicalGraph(unittest.TestCase):
             self.assertEqual(graph["cable_edges"][0]["to"], "Enchufe_1/Socket")
             self.assertEqual(graph["cable_edges"][0].get("conduit"), "Conducto_1")
             self.assertEqual(graph["cable_edges"][0].get("from_opening"), "W2")
+            hops = graph["cable_edges"][0].get("conduit_hops")
+            self.assertEqual(len(hops), 1)
+            self.assertEqual(hops[0]["conduit"], "Conducto_1")
+            self.assertEqual(hops[0]["from_opening"], "W2")
+            self.assertEqual(hops[0]["to_opening"], "N1")
             caja_node = next(n for n in graph["nodes"] if n["id"] == "Caja_4")
             # Elements enlarge the leaf window past the default leaf size.
             self.assertGreater(caja_node["h"], 56)
@@ -231,6 +236,67 @@ class TestPhysicalGraph(unittest.TestCase):
                 r for r in outline if r["id"] == "Parking/Enchufe_1/Socket"
             )
             self.assertEqual(socket.get("icon"), "fa-plug")
+
+    def test_multi_hop_cable_follows_conduit_chain(self) -> None:
+        """Cable listed in several conduits gets a hop path between hosts."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = init_site(root, type_id="House", label="Site")
+            add_place(doc, "Parking", type_id="Floor", label="Parking")
+            for name, label in (
+                ("A", "Caja A"),
+                ("B", "Caja B"),
+                ("C", "Caja C"),
+            ):
+                add_place(
+                    doc,
+                    name,
+                    under=("Parking",),
+                    type_id="JunctionBox",
+                    label=label,
+                )
+            for parts in (("Parking", "A"), ("Parking", "B"), ("Parking", "C")):
+                box = get_place_node(doc, parts)
+                box["openings"] = ["N1", "S1"]
+                abm.add_element(box, "Regleta", type_id="TerminalStrip")
+            parking = get_place_node(doc, ("Parking",))
+            abm.add_cable(parking, "Linea_AC", section="1.5", colors=["BN"])
+            abm.add_conduit(
+                parking,
+                "Conducto_AB",
+                contains=["Linea_AC"],
+                from_ref="A.S1",
+                to_ref="B.N1",
+            )
+            abm.add_conduit(
+                parking,
+                "Conducto_BC",
+                contains=["Linea_AC"],
+                from_ref="B.S1",
+                to_ref="C.N1",
+            )
+            abm.add_connection(
+                parking,
+                from_ref="A/Regleta.1",
+                via_ref="Linea_AC.1",
+                to_ref="C/Regleta.1",
+            )
+            save_site(root, doc)
+
+            graph = build_physical_graph(root, "Parking")
+            self.assertEqual(len(graph["cable_edges"]), 1)
+            edge = graph["cable_edges"][0]
+            hops = edge.get("conduit_hops") or []
+            self.assertEqual(
+                [h["conduit"] for h in hops],
+                ["Conducto_AB", "Conducto_BC"],
+            )
+            self.assertEqual(edge.get("conduit_from"), "A")
+            self.assertEqual(edge.get("conduit_to"), "C")
+            self.assertEqual(edge.get("from_opening"), "S1")
+            self.assertEqual(edge.get("to_opening"), "N1")
+            # Multi-hop: no single conduit id
+            self.assertIsNone(edge.get("conduit"))
 
 
 class TestServeApi(unittest.TestCase):

@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.5] — 2026-08-01
+
+### Fixed
+
+- Cables join conduit openings on the box contour (element→opening without
+  outward stubs) so they exit through the tube instead of latching onto it
+  outside the box.
+- Cables that ride through a chain of conduits (multi-hop ``contains``) follow
+  that path; ``cable_edges`` include ``conduit_hops``. Intra-box connections
+  still draw direct (no tube).
+
 ## [0.27.4] — 2026-08-01
 
 ### Fixed
