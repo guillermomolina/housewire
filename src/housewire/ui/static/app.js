@@ -567,33 +567,57 @@
     return Math.max(maxDeclared, preferIndex || 1, declared.length, 1);
   }
 
+  /** Ceiling boxes on a top-down plan: E/W swap (labels stay readable). */
+  function isCeilingMount(node) {
+    return String(node?.mount || "").toLowerCase() === "ceiling";
+  }
+
+  function planFace(node, face) {
+    const f = String(face || "?").toUpperCase();
+    if (!isCeilingMount(node)) return f;
+    if (f === "E") return "W";
+    if (f === "W") return "E";
+    return f;
+  }
+
+  function sideSlotT(node, logicalFace, index, n) {
+    let i = index;
+    if (isCeilingMount(node) && (logicalFace === "N" || logicalFace === "S")) {
+      i = n + 1 - index;
+    }
+    return i / (n + 1);
+  }
+
   function openingAnchorAbs(node, openingId, face, byId) {
     const a = absXY(node, byId);
     const w = nodeW(node);
     const h = nodeH(node);
     const side = parseSideOpening(openingId);
     const plane = parsePlaneOpening(openingId);
-    const f = (
+    const logical = (
       side?.face ||
       plane?.face ||
       face ||
       (openingId || "?")[0] ||
       "?"
     ).toUpperCase();
+    const f = planFace(node, logical);
 
-    if (f === "B" || f === "F") {
+    if (logical === "B" || logical === "F") {
       const c = nodeCenterAbs(node, byId);
       if (!plane) return c;
       const cols = Math.max(plane.col, 2);
       const rows = Math.max(plane.row, 2);
-      const ox = ((plane.col - 0.5) / cols - 0.5) * (w * 0.35);
+      let col = plane.col;
+      if (isCeilingMount(node)) col = cols + 1 - col;
+      const ox = ((col - 0.5) / cols - 0.5) * (w * 0.35);
       const oy = ((plane.row - 0.5) / rows - 0.5) * (h * 0.35);
       return { x: c.x + ox, y: c.y + oy };
     }
 
     const index = side?.index || 1;
-    const n = sideSlotCount(node, f, index);
-    const t = index / (n + 1);
+    const n = sideSlotCount(node, logical, index);
+    const t = sideSlotT(node, logical, index, n);
 
     if (f === "N") return { x: a.x + t * w, y: a.y };
     if (f === "S") return { x: a.x + t * w, y: a.y + h };
@@ -608,26 +632,29 @@
     const h = nodeH(node);
     const side = parseSideOpening(openingId);
     const plane = parsePlaneOpening(openingId);
-    const f = (
+    const logical = (
       side?.face ||
       plane?.face ||
       face ||
       (openingId || "?")[0] ||
       "?"
     ).toUpperCase();
+    const f = planFace(node, logical);
 
-    if (f === "B" || f === "F") {
+    if (logical === "B" || logical === "F") {
       if (!plane) return { x: w / 2, y: h / 2 };
       const cols = Math.max(plane.col, 2);
       const rows = Math.max(plane.row, 2);
-      const ox = ((plane.col - 0.5) / cols - 0.5) * (w * 0.35);
+      let col = plane.col;
+      if (isCeilingMount(node)) col = cols + 1 - col;
+      const ox = ((col - 0.5) / cols - 0.5) * (w * 0.35);
       const oy = ((plane.row - 0.5) / rows - 0.5) * (h * 0.35);
       return { x: w / 2 + ox, y: h / 2 + oy };
     }
 
     const index = side?.index || 1;
-    const n = sideSlotCount(node, f, index);
-    const t = index / (n + 1);
+    const n = sideSlotCount(node, logical, index);
+    const t = sideSlotT(node, logical, index, n);
     if (f === "N") return { x: t * w, y: 0 };
     if (f === "S") return { x: t * w, y: h };
     if (f === "W") return { x: 0, y: t * h };
@@ -792,10 +819,10 @@
     const a = byId[edge.from];
     const b = byId[edge.to];
     if (!a || !b) return null;
-    const fromFace = edge.from_opening?.[0];
-    const toFace = edge.to_opening?.[0];
-    const p1 = openingAnchorAbs(a, edge.from_opening, fromFace, byId);
-    const p2 = openingAnchorAbs(b, edge.to_opening, toFace, byId);
+    const fromFace = planFace(a, edge.from_opening?.[0]);
+    const toFace = planFace(b, edge.to_opening?.[0]);
+    const p1 = openingAnchorAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
+    const p2 = openingAnchorAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
     return orthoPathD(p1, p2, fromFace, toFace);
   }
 
@@ -843,18 +870,18 @@
       edge.from_opening &&
       edge.to_opening
     ) {
-      const fromFace = edge.from_opening?.[0];
-      const toFace = edge.to_opening?.[0];
+      const fromFace = planFace(conduitFrom, edge.from_opening?.[0]);
+      const toFace = planFace(conduitTo, edge.to_opening?.[0]);
       const op1 = openingAnchorAbs(
         conduitFrom,
         edge.from_opening,
-        fromFace,
+        edge.from_opening?.[0],
         placeById
       );
       const op2 = openingAnchorAbs(
         conduitTo,
         edge.to_opening,
-        toFace,
+        edge.to_opening?.[0],
         placeById
       );
       // Element → opening → along conduit (S) → opening → element.
@@ -961,10 +988,11 @@
       );
       for (const op of sides) {
         const anchor = openingAnchorLocal(node, op.id, op.face);
+        const drawn = planFace(node, op.face);
         const labelX =
-          op.face === "W" ? 4 : op.face === "E" ? w - 4 : anchor.x;
+          drawn === "W" ? 4 : drawn === "E" ? w - 4 : anchor.x;
         const labelY =
-          op.face === "N" ? 10 : op.face === "S" ? h - 3 : anchor.y + 3;
+          drawn === "N" ? 10 : drawn === "S" ? h - 3 : anchor.y + 3;
         g.appendChild(
           el(
             "text",
@@ -973,7 +1001,7 @@
               x: labelX,
               y: labelY,
               "text-anchor":
-                op.face === "W" ? "start" : op.face === "E" ? "end" : "middle",
+                drawn === "W" ? "start" : drawn === "E" ? "end" : "middle",
             },
             op.id
           )

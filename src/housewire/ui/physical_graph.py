@@ -789,6 +789,12 @@ def build_physical_graph(
                 "w": width,
                 "h": height,
                 "rotation": rotation,
+                "mount": (
+                    str(meta["mount"]).strip().lower()
+                    if meta.get("mount") is not None
+                    and str(meta.get("mount")).strip()
+                    else None
+                ),
                 "expandable": has_deeper,
             }
         )
