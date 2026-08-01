@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+_Changes not yet released in a tagged version._
+
+## [0.21.0] — 2026-08-01
+
+### Added
+
+- Physical UI side panel: click a place for show-like detail; recipe forms
+  for ``socket`` / ``lamp`` / ``feed`` (``POST /api/recipes/…``,
+  ``GET /api/place``). Shared orchestration in ``project.recipe_actions``.
+- Tube/line edge tooltips list conduit ``contains``.
+
 ### Fixed
 
 - Physical UI drag: moving a box no longer freezes when crossing another node

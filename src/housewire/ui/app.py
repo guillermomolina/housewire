@@ -31,7 +31,7 @@ def create_app(site_root: Path) -> Any:
 
     root = site_root.resolve()
     session = ProjectSession(root)
-    app = FastAPI(title="housewire UI", version="0.20.1")
+    app = FastAPI(title="housewire UI", version="0.21.0")
 
     def _session_docs() -> dict[Path, dict[str, Any]]:
         return {p: buf.doc for p, buf in session._buffers.items()}
@@ -40,9 +40,17 @@ def create_app(site_root: Path) -> Any:
         loc_dir = pg.location_dir(root, location_id)
         loc_yaml = loc_dir / HOUSEWIRE_YAML
         session.ensure_doc(loc_yaml)
-        for _parts, path in pg.iter_place_yaml_under(loc_dir):
+        for _parts, path in pg.iter_place_yaml_under(
+            loc_dir, session_docs=_session_docs()
+        ):
             session.ensure_doc(path)
         return loc_dir
+
+    def _graph(location_id: str) -> dict[str, Any]:
+        _preload_location(location_id)
+        return pg.build_physical_graph(
+            root, location_id, session_docs=_session_docs()
+        )
 
     async def _json_body(request: Request) -> dict[str, Any]:
         data = await request.json()
@@ -66,9 +74,20 @@ def create_app(site_root: Path) -> Any:
     @app.get("/api/physical")
     def api_physical(location: str) -> dict[str, Any]:
         try:
+            return _graph(location)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.get("/api/place")
+    def api_place(location: str, id: str) -> dict[str, Any]:
+        from housewire.project.recipe_actions import place_detail
+
+        try:
             _preload_location(location)
-            return pg.build_physical_graph(
-                root, location, session_docs=_session_docs()
+            return place_detail(
+                session, canvas_location_id=location, place_id=id
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
@@ -99,9 +118,7 @@ def create_app(site_root: Path) -> Any:
             session.mark_dirty(yaml_path)
         return {
             "updated": updated,
-            "graph": pg.build_physical_graph(
-                root, location_id, session_docs=_session_docs()
-            ),
+            "graph": _graph(location_id),
         }
 
     @app.patch("/api/physical/positions")
@@ -147,6 +164,106 @@ def create_app(site_root: Path) -> Any:
             raise HTTPException(400, str(exc)) from exc
         session.mark_dirty(loc_yaml)
         return {"page": get_physical_page(doc)}
+
+    @app.post("/api/recipes/socket")
+    async def api_recipe_socket(request: Request) -> dict[str, Any]:
+        from housewire.project.recipe_actions import run_socket_recipe
+
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or "").strip()
+        name = str(payload.get("name") or "").strip()
+        from_ref = str(payload.get("from") or "").strip()
+        strip = str(payload.get("strip") or "").strip()
+        if not location_id or not name or not from_ref or not strip:
+            raise HTTPException(
+                400, "location_id, name, from, and strip are required"
+            )
+        try:
+            _preload_location(location_id)
+            result = run_socket_recipe(
+                session,
+                name=name,
+                from_ref=from_ref,
+                strip=strip,
+                pins=payload.get("pins"),
+                to_opening=payload.get("to_opening"),
+                colors=payload.get("colors"),
+                section=payload.get("section"),
+                label=payload.get("label"),
+                notes=payload.get("notes"),
+                canvas_location_id=location_id,
+            )
+            return {"result": result, "graph": _graph(location_id)}
+        except (ValueError, FileExistsError, FileNotFoundError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.post("/api/recipes/lamp")
+    async def api_recipe_lamp(request: Request) -> dict[str, Any]:
+        from housewire.project.recipe_actions import run_lamp_recipe
+
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or "").strip()
+        name = str(payload.get("name") or "").strip()
+        from_ref = str(payload.get("from") or "").strip()
+        strip = str(payload.get("strip") or "").strip()
+        pins = payload.get("pins")
+        if not location_id or not name or not from_ref or not strip or not pins:
+            raise HTTPException(
+                400, "location_id, name, from, strip, and pins are required"
+            )
+        try:
+            _preload_location(location_id)
+            result = run_lamp_recipe(
+                session,
+                name=name,
+                from_ref=from_ref,
+                strip=strip,
+                pins=pins,
+                to_pins=payload.get("to_pins"),
+                to_opening=payload.get("to_opening"),
+                colors=payload.get("colors"),
+                section=payload.get("section"),
+                label=payload.get("label"),
+                notes=payload.get("notes"),
+                canvas_location_id=location_id,
+            )
+            return {"result": result, "graph": _graph(location_id)}
+        except (ValueError, FileExistsError, FileNotFoundError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.post("/api/recipes/feed")
+    async def api_recipe_feed(request: Request) -> dict[str, Any]:
+        from housewire.project.recipe_actions import run_feed_recipe
+
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or "").strip()
+        name = str(payload.get("name") or "").strip()
+        from_ref = str(payload.get("from") or "").strip()
+        to_ref = str(payload.get("to") or "").strip()
+        from_pin = str(payload.get("from_pin") or "").strip()
+        to_pin = str(payload.get("to_pin") or "").strip()
+        if not all([location_id, name, from_ref, to_ref, from_pin, to_pin]):
+            raise HTTPException(
+                400,
+                "location_id, name, from, to, from_pin, and to_pin are required",
+            )
+        try:
+            _preload_location(location_id)
+            result = run_feed_recipe(
+                session,
+                name=name,
+                from_ref=from_ref,
+                to_ref=to_ref,
+                from_pin=from_pin,
+                to_pin=to_pin,
+                colors=payload.get("colors"),
+                section=payload.get("section"),
+                notes=payload.get("notes"),
+                canvas_location_id=location_id,
+            )
+            return {"result": result, "graph": _graph(location_id)}
+        except (ValueError, FileExistsError, FileNotFoundError) as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     @app.post("/api/save")
     def api_save() -> dict[str, Any]:

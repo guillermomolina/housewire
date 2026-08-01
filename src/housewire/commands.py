@@ -88,14 +88,9 @@ def _parse_add_args(argv: list[str]) -> tuple[str, list[str]]:
 
 
 def _opening_grid_for(opening_id: str) -> dict[str, int]:
-    """Derive a minimal opening_grid from an opening id (N1 → {N: 1}, B1-1 → {B: 1})."""
-    text = str(opening_id).strip()
-    if not text:
-        return {}
-    face = text[0].upper()
-    if face.isalpha():
-        return {face: 1}
-    return {}
+    from housewire.project.recipe_actions import opening_grid_for
+
+    return opening_grid_for(opening_id)
 
 
 def _create_recipe_place(
@@ -113,81 +108,27 @@ def _create_recipe_place(
     want_inline: bool,
     as_dir: bool,
 ) -> tuple[str, dict]:
-    """Create destination place for socket/lamp recipes; return (leaf_id, place_map)."""
-    from pathlib import Path as _Path
+    from housewire.project.recipe_actions import create_recipe_place
 
-    from housewire.house import location_id_from_name
-
-    raw = _Path(name)
-    if str(raw.parent) not in (".", ""):
-        raise ValueError(
-            "recipe NAME must be a leaf (no path); cd to the parent location first"
-        )
-    leaf_id, auto_label = location_id_from_name(raw.name)
-    resolved_label = label or auto_label
-    cursor = session.cursor()
-    use_inline = want_inline or (not as_dir and cursor.is_inline)
-    if as_dir and cursor.is_inline:
-        raise ValueError(
-            "Cannot create recipe location --dir under an inline place. "
-            "cd to the parent outline or use --inline."
-        )
-
-    set_specs = [f"openings=[{', '.join(openings)}]"]
-    grid = opening_grid
-    if grid is None and openings:
-        grid = _opening_grid_for(openings[0])
-    if grid:
-        for face, count in grid.items():
-            set_specs.append(f"opening_grid.{face}={count}")
-    if install:
-        set_specs.append(f"install={install}")
-    if mount:
-        set_specs.append(f"mount={mount}")
-
-    if use_inline:
-        for child in session.list_location_children():
-            if child.name == leaf_id and child.storage == "dir":
-                raise ValueError(
-                    f"Outline location {leaf_id!r} already exists; "
-                    "cannot create the same id inline"
-                )
-        path, doc = session.ensure_doc()
-        parent_place = session.place_node(doc)
-        entry = create_inline_location(
-            parent_place,
-            leaf_id,
-            type_id=type_id,
-            subtype=subtype,
-            notes=notes,
-            label=resolved_label,
-        )
-        abm.apply_set_specs(entry, set_specs, target="place")
-        session.mark_dirty(path)
-        return leaf_id, entry
-
-    for child in session.list_location_children():
-        if child.name == leaf_id and child.storage == "inline":
-            raise ValueError(
-                f"Inline location {leaf_id!r} already exists; "
-                "cannot create the same id as a folder"
-            )
-    target = session.resolve_under_root(leaf_id)
-    index_path = session.stage_outline_location(
-        target,
+    return create_recipe_place(
+        session,
+        name,
         type_id=type_id,
         subtype=subtype,
+        label=label,
         notes=notes,
-        label=resolved_label,
+        openings=openings,
+        opening_grid=opening_grid,
+        install=install,
+        mount=mount,
+        want_inline=want_inline,
+        as_dir=as_dir,
     )
-    _path, staged = session.ensure_doc(index_path)
-    abm.apply_set_specs(staged, set_specs, target="place")
-    session.mark_dirty(index_path)
-    return leaf_id, staged
 
 
 def cmd_add_socket(session: ProjectSession, rest: list[str]) -> int:
     from housewire.project import recipes
+    from housewire.project.recipe_actions import run_socket_recipe
 
     p = argparse.ArgumentParser(prog="add socket", add_help=False)
     p.add_argument("name")
@@ -204,53 +145,30 @@ def cmd_add_socket(session: ProjectSession, rest: list[str]) -> int:
     mode.add_argument("--dir", dest="as_dir", action="store_true")
     args = p.parse_args(rest)
 
-    parent_path, parent_doc = session.ensure_doc()
-    parent_place = session.place_node(parent_doc)
-    to_opening = str(args.to_opening).strip()
-    leaf_id, place_map = _create_recipe_place(
+    result = run_socket_recipe(
         session,
-        args.name,
-        type_id=recipes.SOCKET_PLACE_TYPE,
-        subtype=recipes.SOCKET_PLACE_SUBTYPE,
+        name=args.name,
+        from_ref=args.from_ref,
+        strip=args.strip,
+        pins=args.pins,
+        to_opening=args.to_opening,
+        colors=args.colors,
+        section=args.section,
         label=args.label,
-        notes=None,
-        openings=[to_opening],
-        opening_grid=None,
-        install="surface",
-        mount="wall",
+        notes=args.notes,
         want_inline=args.inline,
         as_dir=args.as_dir,
     )
-    abm.add_element(
-        place_map,
-        recipes.SOCKET_ELEMENT,
-        type_id="Socket",
-        subtype=recipes.SOCKET_ELEMENT_SUBTYPE,
-        label=args.label,
-        notes=args.notes,
-    )
-    # Outline child already marked dirty; inline shares parent_path.
-    result = recipes.socket_wired_run(
-        parent_place,
-        place_id=leaf_id,
-        from_ref=args.from_ref,
-        strip=args.strip,
-        pins=recipes.parse_pins(args.pins) or None,
-        to_opening=to_opening,
-        colors=_colors_list(args.colors) if args.colors else None,
-        section=args.section,
-        notes=args.notes,
-    )
-    session.mark_dirty(parent_path)
     print(
-        f"Socket {leaf_id}: {result.cable_name} + {result.conduit_name}; "
-        f"{result.from_terminals} → {result.to_terminals}"
+        f"Socket {result['place_id']}: {result['cable_name']} + {result['conduit_name']}; "
+        f"{result['from_terminals']} → {result['to_terminals']}"
     )
     return 0
 
 
 def cmd_add_lamp(session: ProjectSession, rest: list[str]) -> int:
     from housewire.project import recipes
+    from housewire.project.recipe_actions import run_lamp_recipe
 
     p = argparse.ArgumentParser(prog="add lamp", add_help=False)
     p.add_argument("name")
@@ -268,52 +186,30 @@ def cmd_add_lamp(session: ProjectSession, rest: list[str]) -> int:
     mode.add_argument("--dir", dest="as_dir", action="store_true")
     args = p.parse_args(rest)
 
-    parent_path, parent_doc = session.ensure_doc()
-    parent_place = session.place_node(parent_doc)
-    to_opening = str(args.to_opening).strip()
-    leaf_id, place_map = _create_recipe_place(
+    result = run_lamp_recipe(
         session,
-        args.name,
-        type_id=recipes.LAMP_PLACE_TYPE,
-        subtype=recipes.LAMP_PLACE_SUBTYPE,
+        name=args.name,
+        from_ref=args.from_ref,
+        strip=args.strip,
+        pins=args.pins,
+        to_pins=args.to_pins,
+        to_opening=args.to_opening,
+        colors=args.colors,
+        section=args.section,
         label=args.label,
-        notes=None,
-        openings=[to_opening],
-        opening_grid=None,
-        install="surface",
-        mount="ceiling",
+        notes=args.notes,
         want_inline=args.inline,
         as_dir=args.as_dir,
     )
-    abm.add_element(
-        place_map,
-        recipes.LAMP_ELEMENT,
-        type_id="Luminaire",
-        label=args.label,
-        notes=args.notes,
-    )
-    result = recipes.lamp_wired_run(
-        parent_place,
-        place_id=leaf_id,
-        from_ref=args.from_ref,
-        strip=args.strip,
-        pins=recipes.parse_pins(args.pins),
-        to_pins=recipes.parse_pins(args.to_pins) or None,
-        to_opening=to_opening,
-        colors=_colors_list(args.colors) if args.colors else None,
-        section=args.section,
-        notes=args.notes,
-    )
-    session.mark_dirty(parent_path)
     print(
-        f"Lamp {leaf_id}: {result.cable_name} + {result.conduit_name}; "
-        f"{result.from_terminals} → {result.to_terminals}"
+        f"Lamp {result['place_id']}: {result['cable_name']} + {result['conduit_name']}; "
+        f"{result['from_terminals']} → {result['to_terminals']}"
     )
     return 0
 
 
 def cmd_add_feed(session: ProjectSession, rest: list[str]) -> int:
-    from housewire.project import recipes
+    from housewire.project.recipe_actions import run_feed_recipe
 
     p = argparse.ArgumentParser(prog="add feed", add_help=False)
     p.add_argument("name", help="Cable id (conduit becomes Conducto_<name>)")
@@ -334,23 +230,20 @@ def cmd_add_feed(session: ProjectSession, rest: list[str]) -> int:
     p.add_argument("--notes")
     args = p.parse_args(rest)
 
-    path, doc = session.ensure_doc()
-    place = session.place_node(doc)
-    result = recipes.feed_wired_run(
-        place,
+    result = run_feed_recipe(
+        session,
         name=args.name,
-        from_opening=args.from_ref,
-        to_opening=args.to_ref,
+        from_ref=args.from_ref,
+        to_ref=args.to_ref,
         from_pin=args.from_pin,
         to_pin=args.to_pin,
-        colors=_colors_list(args.colors) if args.colors else None,
+        colors=args.colors,
         section=args.section,
         notes=args.notes,
     )
-    session.mark_dirty(path)
     print(
-        f"Feed {result.cable_name} + {result.conduit_name}; "
-        f"{result.from_terminals} → {result.to_terminals}"
+        f"Feed {result['cable_name']} + {result['conduit_name']}; "
+        f"{result['from_terminals']} → {result['to_terminals']}"
     )
     return 0
 

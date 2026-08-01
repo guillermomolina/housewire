@@ -40,11 +40,14 @@ def location_dir(site_root: Path, location_id: str) -> Path:
 
 def iter_place_yaml_under(
     location_dir_path: Path,
+    *,
+    session_docs: dict[Path, dict[str, Any]] | None = None,
 ) -> list[tuple[tuple[str, ...], Path]]:
     """Child outline place yaml paths under a location (excluding itself)."""
     rows: list[tuple[tuple[str, ...], Path]] = []
     root_yaml = (location_dir_path / HOUSEWIRE_YAML).resolve()
     base = location_dir_path.resolve()
+    seen: set[Path] = set()
     for yaml_path in sorted(location_dir_path.rglob(HOUSEWIRE_YAML)):
         resolved = yaml_path.resolve()
         if resolved == root_yaml:
@@ -59,7 +62,24 @@ def iter_place_yaml_under(
         if not parts:
             continue
         rows.append((parts, resolved))
-    return rows
+        seen.add(resolved)
+    if session_docs:
+        for path in session_docs:
+            resolved = path.resolve()
+            if resolved in seen or resolved == root_yaml:
+                continue
+            if resolved.name != HOUSEWIRE_YAML:
+                continue
+            try:
+                rel = resolved.parent.relative_to(base)
+            except ValueError:
+                continue
+            parts = tuple(rel.parts)
+            if not parts:
+                continue
+            rows.append((parts, resolved))
+            seen.add(resolved)
+    return sorted(rows, key=lambda row: row[0])
 
 
 def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
@@ -123,7 +143,7 @@ def build_physical_graph(
     loc_meta = place_meta_from_mapping(loc_doc) or {}
     page = get_physical_page(loc_doc)
 
-    place_paths = iter_place_yaml_under(ldir)
+    place_paths = iter_place_yaml_under(ldir, session_docs=session_docs)
     places: list[tuple[tuple[str, ...], Path, dict[str, Any]]] = []
     for parts, path in place_paths:
         try:

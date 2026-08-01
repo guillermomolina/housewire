@@ -40,7 +40,8 @@ housewire serve "$SITE"
 ```
 
 Drag places on a location canvas (any place with child locations), auto-layout,
-toggle conduit `line`/`tube`, then **Save**. Positions go to `view.physical` on
+toggle conduit `line`/`tube`, then **Save**. Click a box for the side panel
+(inspector + socket/lamp/feed recipes). Positions go to `view.physical` on
 places; page settings to `views.physical` on the canvas root.
 Requires the `ui` optional dependency (included in `.[dev,ui]` / `make prepare`).
 

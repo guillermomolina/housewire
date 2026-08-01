@@ -195,6 +195,59 @@ class TestServeApi(unittest.TestCase):
             loc_doc = abm.load_editable(parking_yaml, root)
             self.assertEqual(loc_doc["views"]["physical"]["representation"], "tube")
 
+    def test_place_detail_and_socket_recipe(self) -> None:
+        try:
+            from fastapi.testclient import TestClient
+        except (ImportError, RuntimeError):
+            self.skipTest("fastapi/httpx not installed")
+
+        from housewire.ui.app import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            create_location_index(root, type_id="House", label="Site")
+            parking = root / "Parking"
+            create_location_index(parking, type_id="Floor", label="Parking")
+            create_location_index(
+                parking / "Caja_4", type_id="JunctionBox", label="Caja 4"
+            )
+            caja_yaml = parking / "Caja_4" / "housewire.yaml"
+            caja = abm.load_editable(caja_yaml, root)
+            caja["openings"] = ["N1", "W2"]
+            abm.add_element(caja, "Regleta", type_id="TerminalStrip", subtype="3")
+            abm.persist(caja, caja_yaml, root)
+            set_physical_position(caja, 100, 80)
+            abm.persist(caja, caja_yaml, root)
+
+            client = TestClient(create_app(root))
+            detail = client.get(
+                "/api/place",
+                params={"location": "Parking", "id": "Caja_4"},
+            ).json()
+            self.assertEqual(detail["type"], "JunctionBox")
+            self.assertIn("N1", detail["openings"])
+            self.assertTrue(
+                any(e["id"] == "Regleta" for e in detail["elements"])
+            )
+
+            cooked = client.post(
+                "/api/recipes/socket",
+                json={
+                    "location_id": "Parking",
+                    "name": "Enchufe_9",
+                    "from": "Caja_4.N1",
+                    "strip": "Regleta",
+                },
+            )
+            self.assertEqual(cooked.status_code, 200, cooked.text)
+            body = cooked.json()
+            self.assertEqual(body["result"]["place_id"], "Enchufe_9")
+            ids = {n["id"] for n in body["graph"]["nodes"]}
+            self.assertIn("Enchufe_9", ids)
+            self.assertTrue(
+                any(e["to"] == "Enchufe_9" for e in body["graph"]["edges"])
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
