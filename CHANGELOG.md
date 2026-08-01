@@ -25,6 +25,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   (Reset greys out; undo/redo history is kept). Undo/redo back to the saved
   layout clears dirty and disables **Save**. Conduit edges use orthogonal
   (axis-aligned) elbows instead of diagonal segments.
+- Physical UI **Elements** / **Cables** toggles (session LOD, like depth): show
+  electrical elements inside places and connection edges on the same canvas.
+  Element positions persist as ``view.electrical``; missing coords auto-fill on
+  load. ``PATCH /api/electrical/positions``, ``POST /api/electrical/auto-layout``.
+  Graph JSON includes ``elements`` and ``cable_edges``.
 
 ### Changed
 

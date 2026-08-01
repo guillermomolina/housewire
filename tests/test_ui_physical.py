@@ -8,13 +8,17 @@ from pathlib import Path
 from housewire.project import abm
 from housewire.project.io import create_location_index
 from housewire.project.view_layout import (
+    get_electrical_position,
     get_physical_page,
     get_physical_position,
+    set_electrical_position,
     set_physical_page,
     set_physical_position,
 )
 from housewire.ui.physical_graph import (
     apply_auto_layout,
+    apply_electrical_auto_layout,
+    apply_electrical_positions,
     apply_positions,
     build_physical_graph,
     list_canvas_locations,
@@ -50,6 +54,15 @@ class TestViewLayout(unittest.TestCase):
         with self.assertRaises(ValueError):
             set_physical_page(place, representation="blob")
 
+    def test_set_get_electrical_position(self) -> None:
+        element: dict = {"type": "Socket"}
+        self.assertIsNone(get_electrical_position(element))
+        set_electrical_position(element, 24, 40, rotation=90)
+        self.assertEqual(get_electrical_position(element), (24.0, 40.0))
+        self.assertEqual(element["view"]["electrical"]["rotation"], 90)
+        with self.assertRaises(ValueError):
+            set_electrical_position(element, -1, 0)
+
 
 class TestPhysicalGraph(unittest.TestCase):
     def test_build_graph_and_layout(self) -> None:
@@ -71,7 +84,13 @@ class TestPhysicalGraph(unittest.TestCase):
             caja_yaml = parking / "Caja_4" / "housewire.yaml"
             caja_doc = abm.load_editable(caja_yaml, root)
             caja_doc["openings"] = ["W2", "B1-1"]
+            abm.add_element(caja_doc, "Regleta", type_id="TerminalStrip")
             abm.persist(caja_doc, caja_yaml, root)
+
+            enchufe_yaml = parking / "Enchufe_1" / "housewire.yaml"
+            enchufe_doc = abm.load_editable(enchufe_yaml, root)
+            abm.add_element(enchufe_doc, "Socket", type_id="Socket")
+            abm.persist(enchufe_doc, enchufe_yaml, root)
 
             parking_yaml = parking / "housewire.yaml"
             doc = abm.load_editable(parking_yaml, root)
@@ -82,6 +101,12 @@ class TestPhysicalGraph(unittest.TestCase):
                 contains=["Linea_1"],
                 from_ref="Caja_4.W2",
                 to_ref="Enchufe_1.N1",
+            )
+            abm.add_connection(
+                doc,
+                from_ref="Caja_4/Regleta.1",
+                via_ref="Linea_1.1",
+                to_ref="Enchufe_1/Socket.L",
             )
             abm.persist(doc, parking_yaml, root)
 
@@ -141,6 +166,11 @@ class TestPhysicalGraph(unittest.TestCase):
             self.assertEqual(len(graph["edges"]), 1)
             self.assertEqual(graph["edges"][0]["from"], "Caja_4")
             self.assertEqual(graph["edges"][0]["to"], "Enchufe_1")
+            elem_ids = {e["id"] for e in graph["elements"]}
+            self.assertEqual(elem_ids, {"Caja_4/Regleta", "Enchufe_1/Socket"})
+            self.assertEqual(len(graph["cable_edges"]), 1)
+            self.assertEqual(graph["cable_edges"][0]["from"], "Caja_4/Regleta")
+            self.assertEqual(graph["cable_edges"][0]["to"], "Enchufe_1/Socket")
             caja_node = next(n for n in graph["nodes"] if n["id"] == "Caja_4")
             faces = {o["id"]: o["face"] for o in caja_node["openings"]}
             self.assertEqual(faces.get("B1-1"), "B")
@@ -152,17 +182,32 @@ class TestPhysicalGraph(unittest.TestCase):
                 root, "Parking", session_docs=session_docs, force=False
             )
             self.assertEqual(sorted(updated), ["Caja_4", "Enchufe_1"])
+            elem_updated = apply_electrical_auto_layout(
+                root, "Parking", session_docs=session_docs, force=False
+            )
+            self.assertEqual(
+                sorted(elem_updated), ["Caja_4/Regleta", "Enchufe_1/Socket"]
+            )
             graph2 = build_physical_graph(
                 root, "Parking", session_docs=session_docs
             )
             for node in graph2["nodes"]:
                 self.assertIsNotNone(node["x"])
                 self.assertIsNotNone(node["y"])
+            for elem in graph2["elements"]:
+                self.assertIsNotNone(elem["x"])
+                self.assertIsNotNone(elem["y"])
 
             apply_positions(
                 root,
                 "Parking",
                 {"Caja_4": {"x": 42, "y": 99}},
+                session_docs=session_docs,
+            )
+            apply_electrical_positions(
+                root,
+                "Parking",
+                {"Caja_4/Regleta": {"x": 12, "y": 34}},
                 session_docs=session_docs,
             )
             graph3 = build_physical_graph(
@@ -171,6 +216,11 @@ class TestPhysicalGraph(unittest.TestCase):
             caja = next(n for n in graph3["nodes"] if n["id"] == "Caja_4")
             self.assertEqual(caja["x"], 42.0)
             self.assertEqual(caja["y"], 99.0)
+            regleta = next(
+                e for e in graph3["elements"] if e["id"] == "Caja_4/Regleta"
+            )
+            self.assertEqual(regleta["x"], 12.0)
+            self.assertEqual(regleta["y"], 34.0)
 
 
 class TestServeApi(unittest.TestCase):
@@ -193,6 +243,10 @@ class TestServeApi(unittest.TestCase):
             create_location_index(
                 parking / "Enchufe_1", type_id="DeviceBox", label="Enchufe 1"
             )
+            caja_yaml = parking / "Caja_4" / "housewire.yaml"
+            caja_doc = abm.load_editable(caja_yaml, root)
+            abm.add_element(caja_doc, "Regleta", type_id="TerminalStrip")
+            abm.persist(caja_doc, caja_yaml, root)
             parking_yaml = parking / "housewire.yaml"
             doc = abm.load_editable(parking_yaml, root)
             abm.add_cable(doc, "Linea_1", section="1.5", colors=["BN"])
@@ -215,6 +269,7 @@ class TestServeApi(unittest.TestCase):
             ).json()
             self.assertEqual(len(graph["nodes"]), 2)
             self.assertEqual(graph["location"]["id"], "Parking")
+            self.assertIn("Caja_4/Regleta", {e["id"] for e in graph["elements"]})
 
             house = client.get(
                 "/api/physical", params={"location": ".", "depth": 2}
@@ -230,6 +285,12 @@ class TestServeApi(unittest.TestCase):
             ).json()
             self.assertEqual(len(laid["updated"]), 2)
 
+            el_laid = client.post(
+                "/api/electrical/auto-layout",
+                json={"location_id": "Parking", "force": True},
+            ).json()
+            self.assertIn("Caja_4/Regleta", el_laid["updated"])
+
             patched = client.patch(
                 "/api/physical/positions",
                 json={
@@ -238,6 +299,15 @@ class TestServeApi(unittest.TestCase):
                 },
             ).json()
             self.assertEqual(patched["updated"], ["Caja_4"])
+
+            el_patched = client.patch(
+                "/api/electrical/positions",
+                json={
+                    "location_id": "Parking",
+                    "positions": {"Caja_4/Regleta": {"x": 5, "y": 6}},
+                },
+            ).json()
+            self.assertEqual(el_patched["updated"], ["Caja_4/Regleta"])
 
             page = client.patch(
                 "/api/physical/page",
@@ -273,6 +343,9 @@ class TestServeApi(unittest.TestCase):
                 parking / "Caja_4" / "housewire.yaml", root
             )
             self.assertEqual(caja["view"]["physical"]["x"], 11.0)
+            self.assertEqual(
+                caja["elements"]["Regleta"]["view"]["electrical"]["x"], 5.0
+            )
             loc_doc = abm.load_editable(parking_yaml, root)
             self.assertEqual(loc_doc["views"]["physical"]["representation"], "tube")
 

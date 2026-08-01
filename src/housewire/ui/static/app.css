@@ -8,6 +8,8 @@
   --node: #2d333b;
   --node-stroke: #6e7681;
   --edge: #58a6ff;
+  --cable: #3fb950;
+  --element: #388bfd;
   --opening: #d2a8ff;
   --back: #f0883e;
 }
@@ -59,6 +61,22 @@ body {
   padding: 0.35rem 0.5rem;
   font-size: 0.85rem;
   text-transform: none;
+}
+
+.field.toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  text-transform: none;
+  font-size: 0.8rem;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.field.toggle input {
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 .actions {
@@ -323,6 +341,38 @@ button:hover {
   stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.cable-edge {
+  fill: none;
+  stroke: var(--cable);
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.element-node .element-box {
+  fill: var(--node);
+  stroke: var(--element);
+  stroke-width: 1.5;
+  cursor: grab;
+}
+
+.element-node .element-box.selected {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.element-label {
+  fill: var(--text);
+  font-size: 9px;
+  pointer-events: none;
+}
+
+.element-type {
+  fill: var(--muted);
+  font-size: 8px;
   pointer-events: none;
 }
 

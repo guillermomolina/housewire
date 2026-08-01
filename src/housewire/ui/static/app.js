@@ -27,14 +27,20 @@
   let saveTimer = null;
   let worldEl = null;
   let nodesById = {};
+  let elementsById = {};
   let edgePaths = [];
+  let cablePaths = [];
   let lastTap = { id: null, t: 0 };
   let layoutHistory = [];
   let layoutIndex = -1;
   let layoutBaseline = null;
+  let showElements = false;
+  let showCables = false;
   const HISTORY_MAX = 50;
   const DRAG_THRESHOLD = 4;
   const DBLCLICK_MS = 400;
+  const ELEM_W = 72;
+  const ELEM_H = 28;
 
   const ns = "http://www.w3.org/2000/svg";
 
@@ -43,18 +49,22 @@
   }
 
   function snapshotPositions() {
-    const snap = {};
+    const places = {};
     for (const n of graph?.nodes || []) {
-      snap[n.id] = { x: n.x ?? 0, y: n.y ?? 0 };
+      places[n.id] = { x: n.x ?? 0, y: n.y ?? 0 };
     }
-    return snap;
+    const elements = {};
+    for (const e of graph?.elements || []) {
+      elements[e.id] = { x: e.x ?? 0, y: e.y ?? 0 };
+    }
+    return { places, elements };
   }
 
   function cloneSnap(snap) {
-    return JSON.parse(JSON.stringify(snap || {}));
+    return JSON.parse(JSON.stringify(snap || { places: {}, elements: {} }));
   }
 
-  function snapsEqual(a, b) {
+  function xyMapEqual(a, b) {
     const ka = Object.keys(a || {}).sort();
     const kb = Object.keys(b || {}).sort();
     if (ka.length !== kb.length) return false;
@@ -67,6 +77,17 @@
       }
     }
     return true;
+  }
+
+  function snapsEqual(a, b) {
+    if (!a || !b) return false;
+    // Legacy flat snaps (places only) from older sessions — not used after load.
+    if (!a.places && !a.elements) {
+      return xyMapEqual(a, b.places || b);
+    }
+    return (
+      xyMapEqual(a.places, b.places) && xyMapEqual(a.elements, b.elements)
+    );
   }
 
   function updateHistoryButtons() {
@@ -120,10 +141,20 @@
 
   async function persistSnapshot(snap) {
     if (!locationId || !snap) return;
-    await api(`/api/physical/positions`, {
-      method: "PATCH",
-      body: JSON.stringify({ location_id: locationId, positions: snap }),
-    });
+    const places = snap.places || {};
+    const elements = snap.elements || {};
+    if (Object.keys(places).length) {
+      await api(`/api/physical/positions`, {
+        method: "PATCH",
+        body: JSON.stringify({ location_id: locationId, positions: places }),
+      });
+    }
+    if (Object.keys(elements).length) {
+      await api(`/api/electrical/positions`, {
+        method: "PATCH",
+        body: JSON.stringify({ location_id: locationId, positions: elements }),
+      });
+    }
     syncLayoutDirty();
     updateSaveButton(dirtyLocal);
     scheduleStatusRefresh();
@@ -131,15 +162,23 @@
 
   async function applyLayoutSnapshot(snap, status) {
     if (!graph || !snap) return;
-    for (const n of graph.nodes) {
-      const p = snap[n.id];
+    const places = snap.places || snap;
+    const elements = snap.elements || {};
+    for (const n of graph.nodes || []) {
+      const p = places[n.id];
       if (!p) continue;
       n.x = p.x;
       n.y = p.y;
     }
+    for (const e of graph.elements || []) {
+      const p = elements[e.id];
+      if (!p) continue;
+      e.x = p.x;
+      e.y = p.y;
+    }
     updateNodeVisual(graph.nodes[0] || null);
     try {
-      await persistSnapshot(snap);
+      await persistSnapshot({ places, elements });
       setStatus(
         dirtyLocal ? status || "layout" : status ? `${status} · saved` : "saved"
       );
@@ -391,7 +430,9 @@
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     worldEl = null;
     nodesById = {};
+    elementsById = {};
     edgePaths = [];
+    cablePaths = [];
   }
 
   function el(name, attrs, text) {
@@ -484,6 +525,31 @@
     return orthoPathD(p1, p2, fromFace);
   }
 
+  function elementAbsXY(elem, placeById) {
+    if (!elem.parent) return { x: elem.x ?? 0, y: elem.y ?? 0 };
+    const parent = placeById[elem.parent];
+    if (!parent) return { x: elem.x ?? 0, y: elem.y ?? 0 };
+    const a = absXY(parent, placeById);
+    return { x: a.x + (elem.x ?? 0), y: a.y + (elem.y ?? 0) };
+  }
+
+  function cablePathD(edge, placeById, elemById) {
+    const a = elemById[edge.from];
+    const b = elemById[edge.to];
+    if (!a || !b) return null;
+    const p1 = elementAbsXY(a, placeById);
+    const p2 = elementAbsXY(b, placeById);
+    const c1 = {
+      x: p1.x + (a.w ?? ELEM_W) / 2,
+      y: p1.y + (a.h ?? ELEM_H) / 2,
+    };
+    const c2 = {
+      x: p2.x + (b.w ?? ELEM_W) / 2,
+      y: p2.y + (b.h ?? ELEM_H) / 2,
+    };
+    return orthoPathD(c1, c2, null);
+  }
+
   function refreshEdges() {
     if (!graph) return;
     const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
@@ -493,6 +559,22 @@
         for (const path of item.paths) path.setAttribute("d", d);
       }
     }
+    const elemById = Object.fromEntries(
+      (graph.elements || []).map((e) => [e.id, e])
+    );
+    for (const item of cablePaths) {
+      const d = cablePathD(item.edge, byId, elemById);
+      if (d) {
+        for (const path of item.paths) path.setAttribute("d", d);
+      }
+    }
+  }
+
+  function updateElementVisual(elem, placeById) {
+    const g = elementsById[elem.id];
+    if (!g) return;
+    const a = elementAbsXY(elem, placeById);
+    g.setAttribute("transform", `translate(${a.x},${a.y})`);
   }
 
   function updateNodeVisual(_node) {
@@ -508,6 +590,9 @@
         box.setAttribute("width", String(nodeW(n)));
         box.setAttribute("height", String(nodeH(n)));
       }
+    }
+    for (const e of graph.elements || []) {
+      updateElementVisual(e, byId);
     }
     refreshEdges();
   }
@@ -608,6 +693,7 @@
       raiseNode(node.id);
       // Defer capture until real drag — early capture kills dblclick.
       drag = {
+        kind: "place",
         id: node.id,
         pointerId: ev.pointerId,
         startClientX: ev.clientX,
@@ -621,6 +707,61 @@
 
     layerG.appendChild(g);
     nodesById[node.id] = g;
+  }
+
+  function paintElement(elem, layerG, placeById) {
+    const a = elementAbsXY(elem, placeById);
+    const w = elem.w ?? ELEM_W;
+    const h = elem.h ?? ELEM_H;
+    const g = el("g", {
+      class: "element-node",
+      "data-id": elem.id,
+      transform: `translate(${a.x},${a.y})`,
+    });
+    const box = el("rect", {
+      class: "element-box" + (selectedId === elem.id ? " selected" : ""),
+      width: w,
+      height: h,
+      rx: 3,
+    });
+    g.appendChild(box);
+    const title =
+      (elem.display_label || elem.label || elem.name || elem.id) +
+      (elem.type ? ` · ${elem.type}` : "");
+    g.appendChild(el("title", null, title));
+    g.appendChild(
+      el(
+        "text",
+        { class: "element-label", x: 4, y: 12 },
+        fitLabel(elem.name || elem.id, w - 4)
+      )
+    );
+    g.appendChild(
+      el(
+        "text",
+        { class: "element-type", x: 4, y: 22 },
+        fitLabel(elem.type || "", w - 4)
+      )
+    );
+    box.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0) return;
+      ev.stopPropagation();
+      const gEl = elementsById[elem.id];
+      if (gEl && gEl.parentNode) gEl.parentNode.appendChild(gEl);
+      drag = {
+        kind: "element",
+        id: elem.id,
+        pointerId: ev.pointerId,
+        startClientX: ev.clientX,
+        startClientY: ev.clientY,
+        origX: elem.x,
+        origY: elem.y,
+        moved: false,
+        captured: false,
+      };
+    });
+    layerG.appendChild(g);
+    elementsById[elem.id] = g;
   }
 
   function raiseNode(id) {
@@ -643,14 +784,21 @@
     const representation =
       representationSelect.value || page.representation || "line";
     const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+    const elemById = Object.fromEntries(
+      (graph.elements || []).map((e) => [e.id, e])
+    );
 
-    // Containers under edges under leaves so nested conduits stay visible.
+    // Containers under conduits under leaves; cables then elements on top.
     const containersG = el("g", { class: "containers" });
     const edgesG = el("g", { class: "edges" });
     const leavesG = el("g", { class: "leaves" });
+    const cablesG = el("g", { class: "cables" });
+    const elementsG = el("g", { class: "elements" });
     worldEl.appendChild(containersG);
     worldEl.appendChild(edgesG);
     worldEl.appendChild(leavesG);
+    worldEl.appendChild(cablesG);
+    worldEl.appendChild(elementsG);
 
     const byDepth = [...graph.nodes].sort(
       (a, b) => (a.parts?.length || 0) - (b.parts?.length || 0)
@@ -687,6 +835,28 @@
     for (const node of graph.nodes) {
       if (!childrenOf(node.id).length) paintNode(node, leavesG, byId);
     }
+
+    if (showCables) {
+      for (const edge of graph.cable_edges || []) {
+        const d = cablePathD(edge, byId, elemById);
+        if (!d) continue;
+        const colors = (edge.colors || []).join(",");
+        const title = colors
+          ? `${edge.id} (${colors})`
+          : String(edge.id || edge.via || "");
+        const line = el("path", { class: "cable-edge", d });
+        line.appendChild(el("title", null, title));
+        cablesG.appendChild(line);
+        cablePaths.push({ edge, paths: [line] });
+      }
+    }
+
+    if (showElements) {
+      for (const elem of graph.elements || []) {
+        if (elem.parent && !byId[elem.parent]) continue;
+        paintElement(elem, elementsG, byId);
+      }
+    }
     updateDepthLabel();
   }
 
@@ -697,9 +867,51 @@
       if (nid === id) box.classList.add("selected");
       else box.classList.remove("selected");
     }
+    for (const [eid, g] of Object.entries(elementsById)) {
+      const box = g.querySelector(".element-box");
+      if (!box) continue;
+      if (eid === id) box.classList.add("selected");
+      else box.classList.remove("selected");
+    }
+  }
+
+  function selectElement(elem) {
+    selectedId = elem.id;
+    setSelectedVisual(elem.id);
+    const empty = document.getElementById("panel-empty");
+    const show = document.getElementById("panel-show");
+    empty.classList.add("hidden");
+    show.classList.remove("hidden");
+    const meta = document.getElementById("show-meta");
+    meta.innerHTML = "";
+    const rows = [
+      ["id", elem.id],
+      ["name", elem.name],
+      ["type", elem.type],
+      ["subtype", elem.subtype],
+      ["label", elem.label],
+      ["parent", elem.parent || "(canvas root)"],
+      ["terminals", (elem.terminals || []).join(", ")],
+    ];
+    for (const [k, v] of rows) {
+      if (v == null || v === "") continue;
+      const dt = document.createElement("dt");
+      dt.textContent = k;
+      const dd = document.createElement("dd");
+      dd.textContent = String(v);
+      meta.appendChild(dt);
+      meta.appendChild(dd);
+    }
+    const ul = document.getElementById("show-elements");
+    ul.innerHTML = "";
   }
 
   async function selectNode(id) {
+    const elem = (graph?.elements || []).find((e) => e.id === id);
+    if (elem) {
+      selectElement(elem);
+      return;
+    }
     selectedId = id;
     setSelectedVisual(id);
     const empty = document.getElementById("panel-empty");
@@ -798,7 +1010,15 @@
   async function endDrag(ev) {
     if (!drag) return;
     if (ev && drag.pointerId != null && ev.pointerId !== drag.pointerId) return;
-    const node = graph?.nodes.find((n) => n.id === drag.id);
+    const kind = drag.kind || "place";
+    const placeNode =
+      kind === "place"
+        ? graph?.nodes.find((n) => n.id === drag.id)
+        : null;
+    const elemNode =
+      kind === "element"
+        ? (graph?.elements || []).find((e) => e.id === drag.id)
+        : null;
     svg.classList.remove("dragging");
     try {
       if (
@@ -818,29 +1038,45 @@
       const isDbl =
         lastTap.id === finished.id && now - lastTap.t <= DBLCLICK_MS;
       lastTap = isDbl ? { id: null, t: 0 } : { id: finished.id, t: now };
-      if (isDbl && node) {
-        await enterNode(node);
+      if (kind === "place" && isDbl && placeNode) {
+        await enterNode(placeNode);
         return;
       }
       await selectNode(finished.id);
       return;
     }
     lastTap = { id: null, t: 0 };
-    if (!node || !locationId) return;
+    if (!locationId) return;
     await selectNode(finished.id);
     try {
-      await api(`/api/physical/positions`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          location_id: locationId,
-          positions: { [finished.id]: { x: node.x, y: node.y } },
-        }),
-      });
+      if (kind === "element" && elemNode) {
+        await api(`/api/electrical/positions`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            location_id: locationId,
+            positions: {
+              [finished.id]: { x: elemNode.x, y: elemNode.y },
+            },
+          }),
+        });
+      } else if (placeNode) {
+        await api(`/api/physical/positions`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            location_id: locationId,
+            positions: { [finished.id]: { x: placeNode.x, y: placeNode.y } },
+          }),
+        });
+      } else {
+        return;
+      }
       pushLayoutHistory();
       syncLayoutDirty();
       updateSaveButton(dirtyLocal);
       setStatus(
-        dirtyLocal ? `Moved ${finished.id} · unsaved` : `Moved ${finished.id}`
+        dirtyLocal
+          ? `Moved ${finished.id} · unsaved`
+          : `Moved ${finished.id}`
       );
       scheduleStatusRefresh();
     } catch (err) {
@@ -850,7 +1086,16 @@
 
   svg.addEventListener("pointermove", (ev) => {
     if (drag) {
-      const node = graph?.nodes.find((n) => n.id === drag.id);
+      const kind = drag.kind || "place";
+      const placeNode =
+        kind === "place"
+          ? graph?.nodes.find((n) => n.id === drag.id)
+          : null;
+      const elemNode =
+        kind === "element"
+          ? (graph?.elements || []).find((e) => e.id === drag.id)
+          : null;
+      const node = placeNode || elemNode;
       if (!node) return;
       const dist = Math.hypot(
         ev.clientX - drag.startClientX,
@@ -873,8 +1118,13 @@
       const dy = (ev.clientY - drag.startClientY) / scale;
       node.x = Math.max(0, Math.round(drag.origX + dx));
       node.y = Math.max(0, Math.round(drag.origY + dy));
-      dirtyLocal = true;
-      updateNodeVisual(node);
+      if (kind === "element") {
+        const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+        updateElementVisual(node, byId);
+        refreshEdges();
+      } else {
+        updateNodeVisual(node);
+      }
       return;
     }
     if (panDrag) {
@@ -944,6 +1194,24 @@
     return data.updated || [];
   }
 
+  async function fillMissingElectricalLayout() {
+    if (!locationId) return [];
+    const data = await api(`/api/electrical/auto-layout`, {
+      method: "POST",
+      body: JSON.stringify({
+        location_id: locationId,
+        force: false,
+        depth: depthLevel,
+      }),
+    });
+    if (data.graph) {
+      graph = data.graph;
+      depthLevel = graph.depth || depthLevel;
+      maxDepth = graph.max_depth || maxDepth;
+    }
+    return data.updated || [];
+  }
+
   async function loadLocations() {
     const data = await api("/api/locations");
     locationSelect.innerHTML = "";
@@ -988,8 +1256,10 @@
     if (depthLevel > maxDepth) depthLevel = Math.max(maxDepth, 1);
     representationSelect.value = graph.page?.representation || "line";
     let filled = [];
+    let filledElem = [];
     try {
       filled = await fillMissingLayout();
+      filledElem = await fillMissingElectricalLayout();
     } catch (err) {
       setStatus(String(err.message || err));
     }
@@ -997,10 +1267,15 @@
     resetLayoutHistory();
     fitView();
     await refreshStatus();
+    const bits = [];
     if (filled.length) {
-      setStatus(
-        `auto-placed ${filled.length} place(s) missing x/y · unsaved`
-      );
+      bits.push(`${filled.length} place(s)`);
+    }
+    if (filledElem.length) {
+      bits.push(`${filledElem.length} element(s)`);
+    }
+    if (bits.length) {
+      setStatus(`auto-placed ${bits.join(" + ")} missing x/y · unsaved`);
     }
   }
 
@@ -1035,6 +1310,21 @@
     }
   });
 
+  const toggleElements = document.getElementById("toggle-elements");
+  const toggleCables = document.getElementById("toggle-cables");
+  if (toggleElements) {
+    toggleElements.addEventListener("change", () => {
+      showElements = Boolean(toggleElements.checked);
+      render();
+    });
+  }
+  if (toggleCables) {
+    toggleCables.addEventListener("change", () => {
+      showCables = Boolean(toggleCables.checked);
+      render();
+    });
+  }
+
   document.getElementById("btn-auto-force").addEventListener("click", async () => {
     try {
       const data = await api(`/api/physical/auto-layout`, {
@@ -1048,9 +1338,25 @@
       graph = data.graph;
       depthLevel = graph.depth || depthLevel;
       maxDepth = graph.max_depth || maxDepth;
+      let elemUpdated = [];
+      if (showElements) {
+        const elData = await api(`/api/electrical/auto-layout`, {
+          method: "POST",
+          body: JSON.stringify({
+            location_id: locationId,
+            force: true,
+            depth: depthLevel,
+          }),
+        });
+        if (elData.graph) graph = elData.graph;
+        elemUpdated = elData.updated || [];
+      }
       render();
-      if (data.updated.length) pushLayoutHistory();
-      setStatus(`auto-layout: ${data.updated.length} node(s)`);
+      if (data.updated.length || elemUpdated.length) pushLayoutHistory();
+      setStatus(
+        `auto-layout: ${data.updated.length} place(s)` +
+          (elemUpdated.length ? `, ${elemUpdated.length} element(s)` : "")
+      );
       scheduleStatusRefresh();
     } catch (err) {
       setStatus(String(err.message || err));

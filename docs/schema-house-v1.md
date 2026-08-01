@@ -332,7 +332,7 @@ If `opening_grid` is also set, each id must fit the grid for its face.
 
 ### Canvas layout (`view` / `views`)
 
-Optional UI positions for the interactive physical editor (`housewire serve`):
+Optional UI positions for the interactive editor (`housewire serve`):
 
 ```yaml
 # On any place drawn as a node (JunctionBox, DeviceBox, …)
@@ -341,6 +341,16 @@ view:
     x: 120
     y: 80
     rotation: 0    # optional: 0 | 90 | 180 | 270
+
+# On an element inside a place (electrical LOD layer)
+elements:
+  Socket:
+    type: Socket
+    view:
+      electrical:
+        x: 24
+        y: 40
+        rotation: 0    # optional: 0 | 90 | 180 | 270
 
 # On the canvas root place (any location that has child places)
 views:
@@ -352,11 +362,16 @@ views:
 
 - **`view.physical`**: canvas coordinates for that place under its parent canvas.
   ``x`` and ``y`` must be ``>= 0`` (parent-local origin at the content top-left).
+- **`view.electrical`**: coordinates of an **element** inside its hosting place
+  box (parent-local, ``>= 0``). Used when the UI **Elements** layer is on.
 - **`views.physical`**: page size and preferred conduit drawing mode for the
   canvas root location (often a `Floor` or `Room`, but any place type works).
 - Canvas zoom (pan/wheel) is independent of `representation` (line vs tube).
 - **Depth zoom** (`depth` query / toolbar) controls how many nested outline
   levels are drawn inside parent boxes; it does not change representation.
+- **Elements / Cables** toolbar toggles show or hide the electrical LOD on the
+  same canvas (session UI state; not persisted). Conduit `line`/`tube` is
+  independent of cable edges.
 - Back openings (`B…`) are drawn at the symbol center, not as a fourth side.
 - Omitted when unused; Graphviz/WireViz generate does not require these fields.
 

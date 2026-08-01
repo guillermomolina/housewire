@@ -160,6 +160,77 @@ def create_app(site_root: Path) -> Any:
             session.reconcile_dirty(yaml_path)
         return {"updated": updated}
 
+    @app.patch("/api/electrical/positions")
+    async def api_electrical_positions(request: Request) -> dict[str, Any]:
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or "").strip()
+        if not location_id:
+            raise HTTPException(400, "location_id is required")
+        positions = payload.get("positions") or {}
+        if not isinstance(positions, dict):
+            raise HTTPException(400, "positions must be a map")
+        try:
+            loc_dir = _preload_location(location_id)
+            docs = _session_docs()
+            updated = pg.apply_electrical_positions(
+                root, location_id, positions, session_docs=docs
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        touched: set[Path] = set()
+        for node_id in updated:
+            place_parts, _ename = pg.split_element_node_id(str(node_id))
+            yaml_path = (
+                (loc_dir / HOUSEWIRE_YAML).resolve()
+                if not place_parts
+                else (loc_dir.joinpath(*place_parts) / HOUSEWIRE_YAML).resolve()
+            )
+            touched.add(yaml_path)
+        for yaml_path in touched:
+            session.reconcile_dirty(yaml_path)
+        return {"updated": updated}
+
+    @app.post("/api/electrical/auto-layout")
+    async def api_electrical_auto_layout(request: Request) -> dict[str, Any]:
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or "").strip()
+        if not location_id:
+            raise HTTPException(400, "location_id is required")
+        force = bool(payload.get("force", False))
+        depth = _depth_from(payload)
+        try:
+            loc_dir = _preload_location(location_id)
+            docs = _session_docs()
+            updated = pg.apply_electrical_auto_layout(
+                root,
+                location_id,
+                session_docs=docs,
+                depth=depth,
+                force=force,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        touched: set[Path] = set()
+        for node_id in updated:
+            place_parts, _ename = pg.split_element_node_id(str(node_id))
+            yaml_path = (
+                (loc_dir / HOUSEWIRE_YAML).resolve()
+                if not place_parts
+                else (loc_dir.joinpath(*place_parts) / HOUSEWIRE_YAML).resolve()
+            )
+            if yaml_path in docs and yaml_path not in session._buffers:
+                session.ensure_doc(yaml_path)
+                session._buffers[yaml_path].doc = docs[yaml_path]
+            touched.add(yaml_path)
+        for yaml_path in touched:
+            session.reconcile_dirty(yaml_path)
+        return {
+            "updated": updated,
+            "graph": _graph(location_id, depth),
+        }
+
     @app.patch("/api/physical/page")
     async def api_page(request: Request) -> dict[str, Any]:
         payload = await _json_body(request)

@@ -10,6 +10,11 @@ from housewire.house import (
     place_meta_from_mapping,
     place_name,
 )
+from housewire.house import (  # connection endpoint parsing (shared with WireViz)
+    _expand_endpoint_token,
+    _parse_element_path,
+    _split_element_terminal,
+)
 from housewire.house.conduit_ref import (
     conduit_endpoints,
     resolve_location_ref,
@@ -19,9 +24,12 @@ from housewire.project.io import HOUSEWIRE_YAML, load_yaml
 from housewire.project.openings import declared_opening_ids
 from housewire.project.paths import is_excluded_path
 from housewire.project.view_layout import (
+    get_electrical_position,
+    get_electrical_rotation,
     get_physical_page,
     get_physical_position,
     get_physical_view,
+    set_electrical_position,
     set_physical_position,
 )
 
@@ -33,6 +41,13 @@ CONTENT_PAD = 28.0  # margin on each side inside a parent window
 CONTENT_HEADER = 36.0
 LABEL_CHAR_W = 6.6  # approx. 11px sans glyph width
 LABEL_INSET = 16.0
+# Electrical element symbols inside a place (match static/app.js).
+ELEM_W = 72.0
+ELEM_H = 28.0
+ELEM_GAP_X = 80.0
+ELEM_GAP_Y = 36.0
+ELEM_ORIGIN_X = 8.0
+ELEM_ORIGIN_Y = 40.0
 
 
 def _leaf_size(display_name: str) -> tuple[float, float]:
@@ -89,6 +104,192 @@ def _opening_face(opening_id: str) -> str:
     if not text:
         return "?"
     return text[0].upper()
+
+
+def _default_element_pos(index: int) -> tuple[float, float]:
+    cols = 2
+    return (
+        ELEM_ORIGIN_X + (index % cols) * ELEM_GAP_X,
+        ELEM_ORIGIN_Y + (index // cols) * ELEM_GAP_Y,
+    )
+
+
+def _iter_electrical_elements(
+    doc: dict[str, Any],
+) -> list[tuple[str, dict[str, Any]]]:
+    """Non-place entries under ``elements:`` (Socket, TerminalStrip, …)."""
+    raw = doc.get("elements") or {}
+    if not isinstance(raw, dict):
+        return []
+    out: list[tuple[str, dict[str, Any]]] = []
+    for name, defn in sorted(raw.items(), key=lambda kv: str(kv[0]).lower()):
+        if not isinstance(defn, dict):
+            continue
+        type_id = defn.get("type")
+        if type_id is not None and is_place_type(type_id):
+            continue
+        out.append((str(name), defn))
+    return out
+
+
+def _element_node_id(place_parts: tuple[str, ...], element_name: str) -> str:
+    if place_parts:
+        return "/".join((*place_parts, element_name))
+    return element_name
+
+
+def split_element_node_id(node_id: str) -> tuple[tuple[str, ...], str]:
+    parts = tuple(p for p in str(node_id).split("/") if p)
+    if not parts:
+        raise ValueError("empty element id")
+    if len(parts) == 1:
+        return (), parts[0]
+    return parts[:-1], parts[-1]
+
+
+def _via_cable_name(via_token: str) -> str:
+    text = str(via_token).strip()
+    if "." in text:
+        text = text.split(".", 1)[0]
+    return text.strip().rstrip("/")
+
+
+def _connection_end_element_id(
+    endpoint: str,
+    *,
+    current_parts: tuple[str, ...],
+) -> str | None:
+    """Resolve ``from``/``to`` to a canvas-relative element node id."""
+    try:
+        tokens = _expand_endpoint_token(str(endpoint))
+        if not tokens:
+            return None
+        elem_ref, _terminal = _split_element_terminal(tokens[0])
+        loc_parts, elem_name = _parse_element_path(
+            elem_ref, current_location=list(current_parts)
+        )
+    except ValueError:
+        return None
+    return _element_node_id(tuple(loc_parts), elem_name)
+
+
+def _build_element_nodes(
+    *,
+    places: list[tuple[tuple[str, ...], dict[str, Any]]],
+    loc_doc: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Electrical elements for places in the graph (+ canvas root doc)."""
+    sources: list[tuple[tuple[str, ...], dict[str, Any]]] = [
+        (tuple(), loc_doc),
+        *places,
+    ]
+    nodes: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for place_parts, doc in sources:
+        parent_id = "/".join(place_parts) if place_parts else None
+        index = 0
+        for name, defn in _iter_electrical_elements(doc):
+            eid = _element_node_id(place_parts, name)
+            if eid in seen:
+                continue
+            seen.add(eid)
+            stored = get_electrical_position(defn)
+            if stored is None:
+                ex, ey = _default_element_pos(index)
+            else:
+                ex, ey = stored
+            terminals_raw = defn.get("terminals") or {}
+            terminals: list[str] = []
+            if isinstance(terminals_raw, dict):
+                terminals = [str(k) for k in terminals_raw.keys()]
+            label = defn.get("label")
+            nodes.append(
+                {
+                    "id": eid,
+                    "name": name,
+                    "parent": parent_id,
+                    "place_parts": list(place_parts),
+                    "type": str(defn.get("type") or "Element"),
+                    "subtype": defn.get("subtype"),
+                    "label": (
+                        str(label).strip()
+                        if label is not None and str(label).strip()
+                        else None
+                    ),
+                    "display_label": (
+                        str(label).strip()
+                        if label is not None and str(label).strip()
+                        else name
+                    ),
+                    "terminals": terminals,
+                    "x": ex,
+                    "y": ey,
+                    "w": ELEM_W,
+                    "h": ELEM_H,
+                    "rotation": get_electrical_rotation(defn),
+                }
+            )
+            index += 1
+    return nodes
+
+
+def _build_cable_edges(
+    *,
+    places: list[tuple[tuple[str, ...], dict[str, Any]]],
+    loc_doc: dict[str, Any],
+    element_ids: set[str],
+) -> list[dict[str, Any]]:
+    """Connection edges whose endpoints are both in ``element_ids``."""
+    sources: list[tuple[tuple[str, ...], dict[str, Any]]] = [
+        (tuple(), loc_doc),
+        *places,
+    ]
+    edges: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for current_parts, doc in sources:
+        connections = doc.get("connections") or []
+        if not isinstance(connections, list):
+            continue
+        cables = doc.get("cables") or {}
+        if not isinstance(cables, dict):
+            cables = {}
+        for index, conn in enumerate(connections):
+            if not isinstance(conn, dict):
+                continue
+            from_id = _connection_end_element_id(
+                str(conn.get("from") or ""), current_parts=current_parts
+            )
+            to_id = _connection_end_element_id(
+                str(conn.get("to") or ""), current_parts=current_parts
+            )
+            if not from_id or not to_id:
+                continue
+            if from_id not in element_ids or to_id not in element_ids:
+                continue
+            if from_id == to_id:
+                continue
+            via = str(conn.get("via") or "")
+            cable_name = _via_cable_name(via)
+            key = (cable_name or f"conn-{index}", from_id, to_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            colors: list[str] = []
+            cable = cables.get(cable_name)
+            if isinstance(cable, dict):
+                raw_colors = cable.get("colors") or []
+                if isinstance(raw_colors, list):
+                    colors = [str(c) for c in raw_colors]
+            edges.append(
+                {
+                    "id": cable_name or f"connection_{index}",
+                    "from": from_id,
+                    "to": to_id,
+                    "via": via,
+                    "colors": colors,
+                }
+            )
+    return edges
 
 
 def location_dir(site_root: Path, location_id: str) -> Path:
@@ -465,6 +666,12 @@ def build_physical_graph(
                 }
             )
 
+    elements = _build_element_nodes(places=places, loc_doc=loc_doc)
+    element_ids = {e["id"] for e in elements}
+    cable_edges = _build_cable_edges(
+        places=places, loc_doc=loc_doc, element_ids=element_ids
+    )
+
     return {
         "location": {
             "id": location_id,
@@ -489,6 +696,8 @@ def build_physical_graph(
         "max_depth": max_depth,
         "nodes": nodes,
         "edges": edges,
+        "elements": elements,
+        "cable_edges": cable_edges,
     }
 
 
@@ -573,4 +782,88 @@ def apply_positions(
             session_docs[yaml_path] = doc
         set_physical_position(doc, float(pos["x"]), float(pos["y"]))
         updated.append(str(node_id))
+    return updated
+
+
+def apply_electrical_positions(
+    site_root: Path,
+    location_id: str,
+    positions: dict[str, dict[str, Any]],
+    *,
+    session_docs: dict[Path, dict[str, Any]],
+) -> list[str]:
+    """Write ``view.electrical`` for ``{place/element: {x,y}}``. Return ids."""
+    ldir = location_dir(site_root, location_id)
+    updated: list[str] = []
+    for node_id, pos in positions.items():
+        place_parts, element_name = split_element_node_id(str(node_id))
+        yaml_path = (
+            (ldir / HOUSEWIRE_YAML).resolve()
+            if not place_parts
+            else (ldir.joinpath(*place_parts) / HOUSEWIRE_YAML).resolve()
+        )
+        doc = session_docs.get(yaml_path)
+        if doc is None:
+            if not yaml_path.is_file():
+                raise FileNotFoundError(f"Unknown element host: {node_id}")
+            doc = load_yaml(yaml_path)
+            session_docs[yaml_path] = doc
+        elements = doc.get("elements")
+        if not isinstance(elements, dict) or element_name not in elements:
+            raise FileNotFoundError(f"Unknown element: {node_id}")
+        elem = elements[element_name]
+        if not isinstance(elem, dict):
+            raise ValueError(f"Element {node_id} is not a map")
+        set_electrical_position(elem, float(pos["x"]), float(pos["y"]))
+        updated.append(str(node_id))
+    return updated
+
+
+def apply_electrical_auto_layout(
+    site_root: Path,
+    location_id: str,
+    *,
+    session_docs: dict[Path, dict[str, Any]],
+    depth: int = 1,
+    force: bool = False,
+) -> list[str]:
+    """Assign grid ``view.electrical`` when missing (or all if force)."""
+    graph = build_physical_graph(
+        site_root, location_id, depth=depth, session_docs=session_docs
+    )
+    ldir = location_dir(site_root, location_id)
+    by_parent: dict[str | None, list[dict[str, Any]]] = {}
+    for elem in graph.get("elements") or []:
+        by_parent.setdefault(elem.get("parent"), []).append(elem)
+
+    updated: list[str] = []
+    for siblings in by_parent.values():
+        index = 0
+        for elem in siblings:
+            place_parts = tuple(elem.get("place_parts") or [])
+            element_name = str(elem["name"])
+            yaml_path = (
+                (ldir / HOUSEWIRE_YAML).resolve()
+                if not place_parts
+                else (ldir.joinpath(*place_parts) / HOUSEWIRE_YAML).resolve()
+            )
+            doc = session_docs.get(yaml_path)
+            if doc is None:
+                if not yaml_path.is_file():
+                    continue
+                doc = load_yaml(yaml_path)
+                session_docs[yaml_path] = doc
+            elements = doc.get("elements")
+            if not isinstance(elements, dict):
+                continue
+            defn = elements.get(element_name)
+            if not isinstance(defn, dict):
+                continue
+            stored = get_electrical_position(defn)
+            if not force and stored is not None:
+                continue
+            x, y = _default_element_pos(index)
+            set_electrical_position(defn, x, y)
+            updated.append(str(elem["id"]))
+            index += 1
     return updated
