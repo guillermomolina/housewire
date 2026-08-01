@@ -1258,6 +1258,13 @@ button:hover {
   stroke-width: 2.5;
 }
 
+.element-terminal {
+  fill: #e6edf3;
+  stroke: #1f6feb;
+  stroke-width: 1.25;
+  pointer-events: none;
+}
+
 .element-label {
   fill: var(--text);
   font-size: 9px;

@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.23] — 2026-08-01
+
+### Changed
+
+- Draw terminal cell marks on elements; in-box cable tails stub out of the
+  pin and route through the place interior instead of hugging box borders.
+
 ## [0.28.22] — 2026-08-01
 
 ### Changed

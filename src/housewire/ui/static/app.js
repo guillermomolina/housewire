@@ -1511,9 +1511,8 @@
     return Math.min(96, 6 + n * 4);
   }
 
-  /** Side opening-style cell on an element (``N1``, ``S2``, …). */
-  function terminalCellAnchor(elem, cellId, placeById) {
-    const p = elementAbsXY(elem, placeById);
+  /** Local (element-space) anchor for a terminal cell id. */
+  function terminalCellAnchorLocal(elem, cellId) {
     const w = elem.w ?? ELEM_W;
     const h = elem.h ?? ELEM_H;
     const side = parseSideOpening(cellId);
@@ -1523,18 +1522,24 @@
     let n = index;
     if (Array.isArray(raw) && raw.length >= 1) {
       n = Math.max(1, Number(raw[0]) || 1);
-      if (raw.length >= 2) n = Math.max(n, (Number(raw[0]) || 1) * (Number(raw[1]) || 1));
+      if (raw.length >= 2) {
+        n = Math.max(n, (Number(raw[0]) || 1) * (Number(raw[1]) || 1));
+      }
     }
     n = Math.max(n, index);
     const t = index / (n + 1);
-    if (face === "N") return { x: p.x + t * w, y: p.y };
-    if (face === "S") return { x: p.x + t * w, y: p.y + h };
-    if (face === "W") return { x: p.x, y: p.y + t * h };
-    if (face === "E") return { x: p.x + w, y: p.y + t * h };
-    return {
-      x: p.x + w / 2,
-      y: p.y + h / 2,
-    };
+    if (face === "N") return { x: t * w, y: 0, face };
+    if (face === "S") return { x: t * w, y: h, face };
+    if (face === "W") return { x: 0, y: t * h, face };
+    if (face === "E") return { x: w, y: t * h, face };
+    return { x: w / 2, y: h / 2, face: "?" };
+  }
+
+  /** Side opening-style cell on an element (``N1``, ``S2``, …). */
+  function terminalCellAnchor(elem, cellId, placeById) {
+    const p = elementAbsXY(elem, placeById);
+    const local = terminalCellAnchorLocal(elem, cellId);
+    return { x: p.x + local.x, y: p.y + local.y, face: local.face };
   }
 
   function pickPinCell(elem, pin, toward, placeById) {
@@ -1547,12 +1552,25 @@
     const match = cells.find(
       (c) => String(c || "")[0]?.toUpperCase() === face
     );
-    return match || cells[0];
+    if (match) return match;
+    // Approach face not in pin cells (e.g. W toward NS grid): pick the cell
+    // whose anchor is closest to ``toward``.
+    let best = cells[0];
+    let bestD = Infinity;
+    for (const c of cells) {
+      const a = terminalCellAnchor(elem, c, placeById);
+      const d = Math.hypot(a.x - toward.x, a.y - toward.y);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    return best;
   }
 
   /**
    * Attach for a connection pin when ``terminal_grid`` is known; otherwise
-   * fall back to fanned mid-face slots.
+   * fall back to fanned mid-face slots. Returns ``{x,y,face}``.
    */
   function resolveElementAttach(
     elem,
@@ -1564,7 +1582,89 @@
   ) {
     const cell = pickPinCell(elem, pin, toward, placeById);
     if (cell) return terminalCellAnchor(elem, cell, placeById);
-    return elementAttachPoint(elem, toward, placeById, slot, slotCount);
+    const pt = elementAttachPoint(elem, toward, placeById, slot, slotCount);
+    const face = elementAttachFace(elem, toward, placeById);
+    return { x: pt.x, y: pt.y, face };
+  }
+
+  const INBOX_STUB = 10;
+
+  function faceOutwardDelta(face) {
+    const f = String(face || "").toUpperCase();
+    if (f === "N") return { x: 0, y: -1 };
+    if (f === "S") return { x: 0, y: 1 };
+    if (f === "W") return { x: -1, y: 0 };
+    if (f === "E") return { x: 1, y: 0 };
+    return { x: 0, y: 0 };
+  }
+
+  /** Opening face inward (into the place interior). */
+  function openingInwardDelta(face) {
+    const f = String(face || "").toUpperCase();
+    if (f === "N") return { x: 0, y: 1 };
+    if (f === "S") return { x: 0, y: -1 };
+    if (f === "W") return { x: 1, y: 0 };
+    if (f === "E") return { x: -1, y: 0 };
+    return { x: 0, y: 0 };
+  }
+
+  function stubPoint(pt, dx, dy, dist) {
+    return { x: pt.x + dx * dist, y: pt.y + dy * dist };
+  }
+
+  /**
+   * Orthogonal path between two points preferring the bend nearer ``prefer``.
+   * Avoids always hugging a wall when a vertical-first L stays interior.
+   */
+  function orthoPtsPrefer(p1, p2, prefer) {
+    if (Math.abs(p1.x - p2.x) < 1e-6 || Math.abs(p1.y - p2.y) < 1e-6) {
+      return simpleOrthoPts(p1, p2);
+    }
+    const hv = [
+      [p1.x, p1.y],
+      [p2.x, p1.y],
+      [p2.x, p2.y],
+    ];
+    const vh = [
+      [p1.x, p1.y],
+      [p1.x, p2.y],
+      [p2.x, p2.y],
+    ];
+    if (!prefer) return hv;
+    const dHv = Math.hypot(p2.x - prefer.x, p1.y - prefer.y);
+    const dVh = Math.hypot(p1.x - prefer.x, p2.y - prefer.y);
+    return dVh < dHv ? vh : hv;
+  }
+
+  /**
+   * In-box route: stub out of each endpoint, then ortho through the place
+   * interior (not along the place border).
+   * @param {"element"|"opening"} toKind
+   */
+  function inboxRoutePts(fromPt, fromFace, toPt, toFace, preferCenter, toKind) {
+    const fo = faceOutwardDelta(fromFace);
+    const aStub = stubPoint(fromPt, fo.x, fo.y, INBOX_STUB);
+    let bStub;
+    if (toKind === "opening") {
+      const oi = openingInwardDelta(toFace);
+      bStub = stubPoint(toPt, oi.x, oi.y, INBOX_STUB);
+    } else {
+      const eo = faceOutwardDelta(toFace);
+      bStub = stubPoint(toPt, eo.x, eo.y, INBOX_STUB);
+    }
+    const mid = orthoPtsPrefer(aStub, bStub, preferCenter);
+    /** @type {number[][]} */
+    const pts = [[fromPt.x, fromPt.y], [aStub.x, aStub.y]];
+    for (let i = 1; i < mid.length - 1; i++) pts.push(mid[i]);
+    pts.push([bStub.x, bStub.y], [toPt.x, toPt.y]);
+    /** @type {number[][]} */
+    const clean = [];
+    for (const p of pts) {
+      const prev = clean[clean.length - 1];
+      if (prev && Math.hypot(prev[0] - p[0], prev[1] - p[1]) < 1e-6) continue;
+      clean.push(p);
+    }
+    return clean;
   }
 
   function pathDToPoints(d) {
@@ -1836,6 +1936,11 @@
     if (!elem || !place || !openingId) return null;
     if (elem.parent && place.id && elem.parent !== place.id) return null;
     const op = openingAnchorAbs(place, openingId, openingId?.[0], placeById);
+    const opFace = (
+      parseSideOpening(openingId)?.face ||
+      String(openingId || "?")[0] ||
+      "?"
+    ).toUpperCase();
     const attach = resolveElementAttach(
       elem,
       pin,
@@ -1844,7 +1949,19 @@
       slot,
       slotCount
     );
-    return simpleOrthoPts(attach, op);
+    const placeAbs = absXY(place, placeById);
+    const prefer = {
+      x: placeAbs.x + nodeW(place) / 2,
+      y: placeAbs.y + nodeH(place) / 2,
+    };
+    return inboxRoutePts(
+      attach,
+      attach.face || elementAttachFace(elem, op, placeById),
+      op,
+      opFace,
+      prefer,
+      "opening"
+    );
   }
 
   /**
@@ -1918,7 +2035,7 @@
       });
     };
 
-    // Same box: per-connection L with pin cells or slotted terminals.
+    // Same box: stub out of each terminal, then ortho through the box.
     if (a.parent && b.parent && a.parent === b.parent) {
       const p1 = resolveElementAttach(
         a,
@@ -1936,8 +2053,23 @@
         toSlot.slot,
         toSlot.count
       );
-      const pts = simpleOrthoPts(p1, p2);
-      // Jacket (unslotted) may use a slight lane; strands rely on slots/pins.
+      const parent = placeById[a.parent];
+      let prefer = { x: (c1.x + c2.x) / 2, y: (c1.y + c2.y) / 2 };
+      if (parent) {
+        const pa = absXY(parent, placeById);
+        prefer = {
+          x: pa.x + nodeW(parent) / 2,
+          y: pa.y + nodeH(parent) / 2,
+        };
+      }
+      const pts = inboxRoutePts(
+        p1,
+        p1.face || elementAttachFace(a, c2, placeById),
+        p2,
+        p2.face || elementAttachFace(b, c1, placeById),
+        prefer,
+        "element"
+      );
       if (
         fromSlot.count <= 1 &&
         toSlot.count <= 1 &&
@@ -2418,6 +2550,33 @@
       maxW: w - 8,
       textClass: "element-type",
     });
+    // Terminal cells from terminal_grid (N1, S2, …).
+    const grid = elem.terminal_grid;
+    if (grid && typeof grid === "object") {
+      for (const face of Object.keys(grid)) {
+        const raw = grid[face];
+        let cols = 1;
+        let rows = 1;
+        if (Array.isArray(raw)) {
+          cols = Math.max(1, Number(raw[0]) || 1);
+          rows = Math.max(1, Number(raw[1]) || 1);
+        }
+        const n = cols * rows;
+        for (let i = 1; i <= n; i++) {
+          const cellId = `${face}${i}`;
+          const local = terminalCellAnchorLocal(elem, cellId);
+          const mark = el("circle", {
+            class: "element-terminal",
+            cx: String(local.x),
+            cy: String(local.y),
+            r: "2.75",
+            "data-terminal": cellId,
+          });
+          mark.appendChild(el("title", null, cellId));
+          g.appendChild(mark);
+        }
+      }
+    }
     box.addEventListener("pointerdown", (ev) => {
       if (ev.button !== 0) return;
       ev.stopPropagation();
