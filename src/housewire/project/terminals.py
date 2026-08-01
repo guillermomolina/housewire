@@ -253,6 +253,16 @@ def element_terminal_layout(
                 type_grid_raw = sub.get("terminal_grid")
 
     terminals = _merge_terminal_dicts(type_terminals, instance.get("terminals"))
+    # If the instance lists terminals, those are the pins that exist on the
+    # device (catalog still supplies meta for shared keys). Avoid mapping
+    # unused catalog pins onto a smaller terminal_grid.
+    inst_terms = instance.get("terminals")
+    if isinstance(inst_terms, dict) and inst_terms:
+        terminals = {
+            str(k): terminals[str(k)]
+            for k in inst_terms
+            if str(k) in terminals
+        }
     collapse = instance.get("wireviz_collapse")
     if collapse is None:
         collapse = type_collapse

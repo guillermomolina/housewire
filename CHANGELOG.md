@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.22] — 2026-08-01
+
+### Changed
+
+- Canvas ``terminal_grid`` uses only pins listed on the element instance when
+  present (so a 1-way strip is not padded with unused catalog terminals).
+
 ## [0.28.21] — 2026-08-01
 
 ### Added

@@ -4,6 +4,8 @@ icon: fa-plug
 title: Socket outlet
 description_es: Toma de corriente (Schuko / 2P+T).
 qet_hint: socket_schuko
+terminal_grid:
+  N: 3
 terminals:
   L:
     label: L

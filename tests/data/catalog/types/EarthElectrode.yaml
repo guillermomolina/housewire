@@ -4,6 +4,8 @@ icon: fa-arrow-down-long
 title: Earth electrode
 description_es: Toma de tierra / jabalina.
 qet_hint: earth_electrode
+terminal_grid:
+  S: 1
 terminals:
   PE:
     label: PE

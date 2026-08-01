@@ -6,6 +6,9 @@ description_es: >
   Relé o interruptor inteligente (p.ej. Sonoff ZBMini). Alimentación LIn+N,
   salida conmutada LOut, entradas de interruptor externo S1/S2.
 qet_hint: relay
+terminal_grid:
+  N: 4
+  S: 1
 terminals:
   N:
     label: N
@@ -40,6 +43,9 @@ subtypes:
   mini_zbd:
     title: Sonoff MINI Zigbee Dry (MINI-ZBD)
     # Power L+N; dry contact NO/COM/(NC). No switched mains LOut.
+    terminal_grid:
+      N: 2
+      S: 3
     terminals:
       L:
         label: L

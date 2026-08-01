@@ -6,6 +6,8 @@ description_es: >
   Luminaria o portalámparas. Bornes tipicos 1/2/3 cuando llegan fase conmutada,
   fase permanente y neutro (o solo L+N si la instancia reduce terminals).
 qet_hint: luminaire
+terminal_grid:
+  N: 3
 terminals:
   "1":
     label: "1"
