@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.14] — 2026-08-01
+
+### Fixed
+
+- Same-box cables A→B and B→A no longer draw opposite L routes that close into
+  a hollow green rectangle (e.g. Regleta ↔ relay feed + load bridges).
+
 ## [0.28.13] — 2026-08-01
 
 ### Fixed

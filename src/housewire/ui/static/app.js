@@ -1631,9 +1631,19 @@
 
     // Same box: local bridges only (edge-to-edge L). Hop cables do not paint
     // inside — stubs/tails stacked into a lattice and floating fragments.
+    // Canonical endpoint order so A→B and B→A share one L (otherwise HV + VH
+    // close into a hollow rectangle — the green "mesh" between two devices).
     if (a.parent && b.parent && a.parent === b.parent) {
-      const p1 = elementAttachPoint(a, c2, placeById);
-      const p2 = elementAttachPoint(b, c1, placeById);
+      let e1 = a;
+      let e2 = b;
+      if (String(a.id) > String(b.id)) {
+        e1 = b;
+        e2 = a;
+      }
+      const ca = elementCenter(e1, placeById);
+      const cb = elementCenter(e2, placeById);
+      const p1 = elementAttachPoint(e1, cb, placeById);
+      const p2 = elementAttachPoint(e2, ca, placeById);
       return pointsToPathD(simpleOrthoPts(p1, p2));
     }
 
