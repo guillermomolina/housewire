@@ -828,13 +828,38 @@
     try {
       const st = await api("/api/status");
       const n = (st.dirty || []).length;
+      const dirty = n > 0 || dirtyLocal;
       setStatus(
         n ? `${n} dirty file(s)` : dirtyLocal ? "layout pending" : "saved"
       );
       if (!n) dirtyLocal = false;
+      updateSaveButton(dirty || dirtyLocal);
     } catch {
       /* ignore */
     }
+  }
+
+  function updateSaveButton(dirty) {
+    const btn = document.getElementById("btn-save");
+    if (btn) btn.disabled = !dirty;
+  }
+
+  async function fillMissingLayout() {
+    if (!locationId) return [];
+    const data = await api(`/api/physical/auto-layout`, {
+      method: "POST",
+      body: JSON.stringify({
+        location_id: locationId,
+        force: false,
+        depth: depthLevel,
+      }),
+    });
+    if (data.graph) {
+      graph = data.graph;
+      depthLevel = graph.depth || depthLevel;
+      maxDepth = graph.max_depth || maxDepth;
+    }
+    return data.updated || [];
   }
 
   async function loadLocations() {
@@ -880,9 +905,20 @@
     maxDepth = graph.max_depth || 1;
     if (depthLevel > maxDepth) depthLevel = Math.max(maxDepth, 1);
     representationSelect.value = graph.page?.representation || "line";
+    let filled = [];
+    try {
+      filled = await fillMissingLayout();
+    } catch (err) {
+      setStatus(String(err.message || err));
+    }
     render();
     resetLayoutHistory();
     await refreshStatus();
+    if (filled.length) {
+      setStatus(
+        `auto-placed ${filled.length} place(s) missing x/y · unsaved`
+      );
+    }
   }
 
   async function setDepth(next) {
@@ -916,32 +952,6 @@
     }
   });
 
-  document.getElementById("btn-auto").addEventListener("click", async () => {
-    try {
-      const data = await api(`/api/physical/auto-layout`, {
-        method: "POST",
-        body: JSON.stringify({
-          location_id: locationId,
-          force: false,
-          depth: depthLevel,
-        }),
-      });
-      graph = data.graph;
-      depthLevel = graph.depth || depthLevel;
-      maxDepth = graph.max_depth || maxDepth;
-      render();
-      if (data.updated.length) pushLayoutHistory();
-      setStatus(
-        data.updated.length
-          ? `auto-layout gaps: ${data.updated.length} node(s)`
-          : "auto-layout gaps: nothing to do (all places already have x/y)"
-      );
-      scheduleStatusRefresh();
-    } catch (err) {
-      setStatus(String(err.message || err));
-    }
-  });
-
   document.getElementById("btn-auto-force").addEventListener("click", async () => {
     try {
       const data = await api(`/api/physical/auto-layout`, {
@@ -957,7 +967,7 @@
       maxDepth = graph.max_depth || maxDepth;
       render();
       if (data.updated.length) pushLayoutHistory();
-      setStatus(`auto-layout all: ${data.updated.length} node(s)`);
+      setStatus(`auto-layout: ${data.updated.length} node(s)`);
       scheduleStatusRefresh();
     } catch (err) {
       setStatus(String(err.message || err));
@@ -994,6 +1004,7 @@
       const data = await api("/api/save", { method: "POST", body: "{}" });
       setStatus(`saved ${data.saved.length} file(s)`);
       dirtyLocal = false;
+      updateSaveButton(false);
     } catch (err) {
       setStatus(String(err.message || err));
     }

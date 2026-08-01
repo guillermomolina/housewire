@@ -17,7 +17,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   (``+`` / ``−`` / wheel). ``GET /api/physical?depth=N``.
 - Physical UI layout **Undo** / **Redo** / **Reset** (positions only;
   Ctrl+Z / Ctrl+Y). Reset restores the snapshot from the last location load.
-  Auto-layout buttons clarified: **gaps** (missing x/y only) vs **all**.
+  Missing ``x``/``y`` are filled automatically on location load (marks dirty;
+  **Save** enabled only when there are unsaved changes). Manual **Auto-layout**
+  repositions all visible places.
 
 ### Changed
 
