@@ -14,7 +14,7 @@ from housewire.project.io import HOUSEWIRE_YAML, load_yaml
 from housewire.project.openings import declared_opening_ids
 from housewire.project.paths import is_excluded_path
 from housewire.project.view_layout import (
-    get_floor_physical_page,
+    get_physical_page,
     get_physical_position,
     get_physical_view,
     set_physical_position,
@@ -28,54 +28,26 @@ def _opening_face(opening_id: str) -> str:
     return text[0].upper()
 
 
-def list_floors(site_root: Path) -> list[dict[str, Any]]:
-    """Return outline places with ``type: Floor`` under the site."""
-    rows: list[dict[str, Any]] = []
+def location_dir(site_root: Path, location_id: str) -> Path:
+    """Resolve an outline location directory under the site root."""
     root = site_root.resolve()
-    seen: set[str] = set()
-    for yaml_path in sorted(root.rglob(HOUSEWIRE_YAML)):
-        if is_excluded_path(yaml_path):
-            continue
-        try:
-            doc = load_yaml(yaml_path)
-        except ValueError:
-            continue
-        meta = place_meta_from_mapping(doc)
-        if meta is None or str(meta.get("type")) != "Floor":
-            continue
-        rel = yaml_path.parent.relative_to(root)
-        floor_id = "." if str(rel) == "." else str(rel).replace("\\", "/")
-        if floor_id in seen:
-            continue
-        seen.add(floor_id)
-        rows.append(
-            {
-                "id": floor_id,
-                "label": str(meta.get("label") or yaml_path.parent.name),
-                "path": floor_id,
-            }
-        )
-    return rows
-
-
-def floor_dir(site_root: Path, floor_id: str) -> Path:
-    """Resolve floor directory under the site root."""
-    root = site_root.resolve()
-    if floor_id in {".", "", "/"}:
+    if location_id in {".", "", "/"}:
         return root
-    candidate = (site_root / floor_id).resolve()
+    candidate = (site_root / location_id).resolve()
     candidate.relative_to(root)
     return candidate
 
 
-def iter_place_yaml_under(floor_dir: Path) -> list[tuple[tuple[str, ...], Path]]:
-    """Child outline place yaml paths under the floor (excluding the floor itself)."""
+def iter_place_yaml_under(
+    location_dir_path: Path,
+) -> list[tuple[tuple[str, ...], Path]]:
+    """Child outline place yaml paths under a location (excluding itself)."""
     rows: list[tuple[tuple[str, ...], Path]] = []
-    floor_yaml = (floor_dir / HOUSEWIRE_YAML).resolve()
-    base = floor_dir.resolve()
-    for yaml_path in sorted(floor_dir.rglob(HOUSEWIRE_YAML)):
+    root_yaml = (location_dir_path / HOUSEWIRE_YAML).resolve()
+    base = location_dir_path.resolve()
+    for yaml_path in sorted(location_dir_path.rglob(HOUSEWIRE_YAML)):
         resolved = yaml_path.resolve()
-        if resolved == floor_yaml:
+        if resolved == root_yaml:
             continue
         if is_excluded_path(resolved):
             continue
@@ -90,15 +62,49 @@ def iter_place_yaml_under(floor_dir: Path) -> list[tuple[tuple[str, ...], Path]]
     return rows
 
 
+def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
+    """Outline places that have at least one child outline place (any type)."""
+    rows: list[dict[str, Any]] = []
+    root = site_root.resolve()
+    seen: set[str] = set()
+    for yaml_path in sorted(root.rglob(HOUSEWIRE_YAML)):
+        if is_excluded_path(yaml_path):
+            continue
+        try:
+            doc = load_yaml(yaml_path)
+        except ValueError:
+            continue
+        meta = place_meta_from_mapping(doc)
+        if meta is None:
+            continue
+        parent = yaml_path.parent
+        if not iter_place_yaml_under(parent):
+            continue
+        rel = parent.relative_to(root)
+        location_id = "." if str(rel) == "." else str(rel).replace("\\", "/")
+        if location_id in seen:
+            continue
+        seen.add(location_id)
+        rows.append(
+            {
+                "id": location_id,
+                "label": str(meta.get("label") or parent.name),
+                "type": str(meta.get("type") or "Location"),
+                "path": location_id,
+            }
+        )
+    return rows
+
+
 def build_physical_graph(
     site_root: Path,
-    floor_id: str,
+    location_id: str,
     *,
     session_docs: dict[Path, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Build UI graph for one floor: nodes = child places, edges = conduits."""
-    fdir = floor_dir(site_root, floor_id)
-    floor_yaml = (fdir / HOUSEWIRE_YAML).resolve()
+    """Build UI graph for one location: nodes = child places, edges = conduits."""
+    ldir = location_dir(site_root, location_id)
+    loc_yaml = (ldir / HOUSEWIRE_YAML).resolve()
 
     def _doc_for(path: Path) -> dict[str, Any]:
         resolved = path.resolve()
@@ -106,16 +112,18 @@ def build_physical_graph(
             return session_docs[resolved]
         return load_yaml(resolved)
 
-    if not floor_yaml.is_file() and not (
-        session_docs and floor_yaml in {p.resolve() for p in session_docs}
+    if not loc_yaml.is_file() and not (
+        session_docs and loc_yaml in {p.resolve() for p in session_docs}
     ):
-        raise FileNotFoundError(f"No {HOUSEWIRE_YAML} for floor {floor_id!r}")
+        raise FileNotFoundError(
+            f"No {HOUSEWIRE_YAML} for location {location_id!r}"
+        )
 
-    floor_doc = _doc_for(floor_yaml)
-    floor_meta = place_meta_from_mapping(floor_doc) or {}
-    page = get_floor_physical_page(floor_doc)
+    loc_doc = _doc_for(loc_yaml)
+    loc_meta = place_meta_from_mapping(loc_doc) or {}
+    page = get_physical_page(loc_doc)
 
-    place_paths = iter_place_yaml_under(fdir)
+    place_paths = iter_place_yaml_under(ldir)
     places: list[tuple[tuple[str, ...], Path, dict[str, Any]]] = []
     for parts, path in place_paths:
         try:
@@ -164,7 +172,7 @@ def build_physical_graph(
 
     edges: list[dict[str, Any]] = []
     edge_sources: list[tuple[tuple[str, ...], dict[str, Any]]] = [
-        (tuple(), floor_doc),
+        (tuple(), loc_doc),
         *[(parts, doc) for parts, _, doc in places],
     ]
     for current_parts, doc in edge_sources:
@@ -202,10 +210,10 @@ def build_physical_graph(
             )
 
     return {
-        "floor": {
-            "id": floor_id,
-            "label": str(floor_meta.get("label") or fdir.name),
-            "type": str(floor_meta.get("type") or "Floor"),
+        "location": {
+            "id": location_id,
+            "label": str(loc_meta.get("label") or ldir.name),
+            "type": str(loc_meta.get("type") or "Location"),
         },
         "page": page,
         "nodes": nodes,
@@ -215,7 +223,7 @@ def build_physical_graph(
 
 def apply_auto_layout(
     site_root: Path,
-    floor_id: str,
+    location_id: str,
     *,
     session_docs: dict[Path, dict[str, Any]],
     force: bool = False,
@@ -227,9 +235,9 @@ def apply_auto_layout(
 ) -> list[str]:
     """Assign grid positions to nodes missing x/y (or all if force)."""
     graph = build_physical_graph(
-        site_root, floor_id, session_docs=session_docs
+        site_root, location_id, session_docs=session_docs
     )
-    fdir = floor_dir(site_root, floor_id)
+    ldir = location_dir(site_root, location_id)
     updated: list[str] = []
     for index, node in enumerate(graph["nodes"]):
         if not force and node.get("x") is not None and node.get("y") is not None:
@@ -239,7 +247,7 @@ def apply_auto_layout(
         x = origin_x + col * gap_x
         y = origin_y + row * gap_y
         parts = tuple(node["parts"])
-        yaml_path = (fdir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
+        yaml_path = (ldir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
         doc = session_docs.get(yaml_path)
         if doc is None:
             if not yaml_path.is_file():
@@ -253,19 +261,19 @@ def apply_auto_layout(
 
 def apply_positions(
     site_root: Path,
-    floor_id: str,
+    location_id: str,
     positions: dict[str, dict[str, Any]],
     *,
     session_docs: dict[Path, dict[str, Any]],
 ) -> list[str]:
     """Write positions ``{node_id: {x,y}}``. Return updated ids."""
-    fdir = floor_dir(site_root, floor_id)
+    ldir = location_dir(site_root, location_id)
     updated: list[str] = []
     for node_id, pos in positions.items():
         parts = tuple(p for p in str(node_id).split("/") if p)
         if not parts:
             continue
-        yaml_path = (fdir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
+        yaml_path = (ldir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
         doc = session_docs.get(yaml_path)
         if doc is None:
             if not yaml_path.is_file():

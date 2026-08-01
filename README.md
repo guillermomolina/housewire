@@ -23,7 +23,7 @@ sudo pacman -S graphviz   # Arch
 python -m venv .venv --prompt housewire
 source .venv/bin/activate
 python -m pip install -e .
-python -m pip install -e '.[ui]'   # optional: interactive floor canvas
+python -m pip install -e '.[ui]'   # optional: interactive physical canvas
 # or: make prepare
 ```
 
@@ -40,8 +40,9 @@ housewire serve "$SITE"
 # → http://127.0.0.1:8765/
 ```
 
-Drag places on a Floor canvas, auto-layout, toggle conduit `line`/`tube`, then **Save**.
-Positions go to `view.physical` on places; floor page settings to `views.physical`.
+Drag places on a location canvas (any place with child locations), auto-layout,
+toggle conduit `line`/`tube`, then **Save**. Positions go to `view.physical` on
+places; page settings to `views.physical` on the canvas root.
 Requires the `ui` optional dependency (`fastapi`, `uvicorn`).
 
 ## Shell and ABM

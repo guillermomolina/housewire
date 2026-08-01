@@ -8,16 +8,16 @@ from pathlib import Path
 from housewire.project import abm
 from housewire.project.io import create_location_index
 from housewire.project.view_layout import (
-    get_floor_physical_page,
+    get_physical_page,
     get_physical_position,
-    set_floor_physical_page,
+    set_physical_page,
     set_physical_position,
 )
 from housewire.ui.physical_graph import (
     apply_auto_layout,
     apply_positions,
     build_physical_graph,
-    list_floors,
+    list_canvas_locations,
 )
 
 
@@ -29,17 +29,17 @@ class TestViewLayout(unittest.TestCase):
         self.assertEqual(get_physical_position(place), (10.0, 20.0))
         self.assertEqual(place["view"]["physical"]["rotation"], 90)
 
-    def test_floor_page_defaults_and_set(self) -> None:
-        floor: dict = {"schema": "house/v1", "type": "Floor"}
-        page = get_floor_physical_page(floor)
+    def test_page_defaults_and_set(self) -> None:
+        place: dict = {"schema": "house/v1", "type": "Room"}
+        page = get_physical_page(place)
         self.assertEqual(page["representation"], "line")
         self.assertEqual(page["width"], 2000.0)
-        set_floor_physical_page(floor, representation="tube", width=1200)
-        page2 = get_floor_physical_page(floor)
+        set_physical_page(place, representation="tube", width=1200)
+        page2 = get_physical_page(place)
         self.assertEqual(page2["representation"], "tube")
         self.assertEqual(page2["width"], 1200.0)
         with self.assertRaises(ValueError):
-            set_floor_physical_page(floor, representation="blob")
+            set_physical_page(place, representation="blob")
 
 
 class TestPhysicalGraph(unittest.TestCase):
@@ -76,11 +76,13 @@ class TestPhysicalGraph(unittest.TestCase):
             )
             abm.persist(doc, parking_yaml, root)
 
-            floors = list_floors(root)
-            self.assertEqual(len(floors), 1)
-            self.assertEqual(floors[0]["id"], "Parking")
+            locations = list_canvas_locations(root)
+            ids = {row["id"] for row in locations}
+            self.assertIn("Parking", ids)
+            self.assertIn(".", ids)  # House root also has children
 
             graph = build_physical_graph(root, "Parking")
+            self.assertEqual(graph["location"]["id"], "Parking")
             self.assertEqual(len(graph["nodes"]), 2)
             self.assertEqual(len(graph["edges"]), 1)
             self.assertEqual(graph["edges"][0]["from"], "Caja_4")
@@ -149,22 +151,26 @@ class TestServeApi(unittest.TestCase):
             abm.persist(doc, parking_yaml, root)
 
             client = TestClient(create_app(root))
-            floors = client.get("/api/floors").json()
-            self.assertEqual(floors["floors"][0]["id"], "Parking")
+            locations = client.get("/api/locations").json()
+            ids = {row["id"] for row in locations["locations"]}
+            self.assertIn("Parking", ids)
 
-            graph = client.get("/api/physical", params={"floor": "Parking"}).json()
+            graph = client.get(
+                "/api/physical", params={"location": "Parking"}
+            ).json()
             self.assertEqual(len(graph["nodes"]), 2)
+            self.assertEqual(graph["location"]["id"], "Parking")
 
             laid = client.post(
                 "/api/physical/auto-layout",
-                json={"floor_id": "Parking", "force": True},
+                json={"location_id": "Parking", "force": True},
             ).json()
             self.assertEqual(len(laid["updated"]), 2)
 
             patched = client.patch(
                 "/api/physical/positions",
                 json={
-                    "floor_id": "Parking",
+                    "location_id": "Parking",
                     "positions": {"Caja_4": {"x": 11, "y": 22}},
                 },
             ).json()
@@ -172,7 +178,7 @@ class TestServeApi(unittest.TestCase):
 
             page = client.patch(
                 "/api/physical/page",
-                json={"floor_id": "Parking", "representation": "tube"},
+                json={"location_id": "Parking", "representation": "tube"},
             ).json()
             self.assertEqual(page["page"]["representation"], "tube")
 
@@ -186,8 +192,8 @@ class TestServeApi(unittest.TestCase):
                 parking / "Caja_4" / "housewire.yaml", root
             )
             self.assertEqual(caja["view"]["physical"]["x"], 11.0)
-            floor_doc = abm.load_editable(parking_yaml, root)
-            self.assertEqual(floor_doc["views"]["physical"]["representation"], "tube")
+            loc_doc = abm.load_editable(parking_yaml, root)
+            self.assertEqual(loc_doc["views"]["physical"]["representation"], "tube")
 
 
 if __name__ == "__main__":

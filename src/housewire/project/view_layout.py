@@ -1,4 +1,4 @@
-"""Persisted canvas layout: ``view.physical`` on places, ``views.physical`` on floors."""
+"""Persisted canvas layout: ``view.physical`` / ``views.physical`` on places."""
 from __future__ import annotations
 
 from typing import Any
@@ -59,9 +59,9 @@ def set_physical_position(
         phys["rotation"] = rot
 
 
-def get_floor_physical_page(floor: dict[str, Any]) -> dict[str, Any]:
+def get_physical_page(place: dict[str, Any]) -> dict[str, Any]:
     """Return ``views.physical`` with defaults for page size / representation."""
-    views = floor.get("views")
+    views = place.get("views")
     phys: dict[str, Any] = {}
     if isinstance(views, dict) and isinstance(views.get("physical"), dict):
         phys = dict(views["physical"])
@@ -77,20 +77,20 @@ def get_floor_physical_page(floor: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def set_floor_physical_page(
-    floor: dict[str, Any],
+def set_physical_page(
+    place: dict[str, Any],
     *,
     width: float | None = None,
     height: float | None = None,
     representation: str | None = None,
 ) -> None:
-    """Update ``views.physical`` page settings on a Floor place."""
-    if not isinstance(floor, dict):
-        raise ValueError("floor must be a map")
-    views = floor.get("views")
+    """Update ``views.physical`` page settings on a place (canvas root)."""
+    if not isinstance(place, dict):
+        raise ValueError("place must be a map")
+    views = place.get("views")
     if views is None:
         views = {}
-        floor["views"] = views
+        place["views"] = views
     elif not isinstance(views, dict):
         raise ValueError("views must be a map")
     phys = views.get("physical")

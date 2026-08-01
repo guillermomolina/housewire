@@ -1,11 +1,11 @@
-"""FastAPI app: interactive physical floor canvas."""
+"""FastAPI app: interactive physical location canvas."""
 
 from pathlib import Path
 from typing import Any
 
 from housewire.project.io import HOUSEWIRE_YAML
 from housewire.project.session import ProjectSession
-from housewire.project.view_layout import get_floor_physical_page, set_floor_physical_page
+from housewire.project.view_layout import get_physical_page, set_physical_page
 from housewire.ui import physical_graph as pg
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -31,18 +31,18 @@ def create_app(site_root: Path) -> Any:
 
     root = site_root.resolve()
     session = ProjectSession(root)
-    app = FastAPI(title="housewire UI", version="0.20.0")
+    app = FastAPI(title="housewire UI", version="0.20.1")
 
     def _session_docs() -> dict[Path, dict[str, Any]]:
         return {p: buf.doc for p, buf in session._buffers.items()}
 
-    def _preload_floor(floor_id: str) -> Path:
-        floor_dir = pg.floor_dir(root, floor_id)
-        floor_yaml = floor_dir / HOUSEWIRE_YAML
-        session.ensure_doc(floor_yaml)
-        for _parts, path in pg.iter_place_yaml_under(floor_dir):
+    def _preload_location(location_id: str) -> Path:
+        loc_dir = pg.location_dir(root, location_id)
+        loc_yaml = loc_dir / HOUSEWIRE_YAML
+        session.ensure_doc(loc_yaml)
+        for _parts, path in pg.iter_place_yaml_under(loc_dir):
             session.ensure_doc(path)
-        return floor_dir
+        return loc_dir
 
     async def _json_body(request: Request) -> dict[str, Any]:
         data = await request.json()
@@ -59,16 +59,16 @@ def create_app(site_root: Path) -> Any:
             raise HTTPException(404, "UI static files missing")
         return FileResponse(index_path)
 
-    @app.get("/api/floors")
-    def api_floors() -> dict[str, Any]:
-        return {"floors": pg.list_floors(root)}
+    @app.get("/api/locations")
+    def api_locations() -> dict[str, Any]:
+        return {"locations": pg.list_canvas_locations(root)}
 
     @app.get("/api/physical")
-    def api_physical(floor: str) -> dict[str, Any]:
+    def api_physical(location: str) -> dict[str, Any]:
         try:
-            _preload_floor(floor)
+            _preload_location(location)
             return pg.build_physical_graph(
-                root, floor, session_docs=_session_docs()
+                root, location, session_docs=_session_docs()
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
@@ -78,21 +78,21 @@ def create_app(site_root: Path) -> Any:
     @app.post("/api/physical/auto-layout")
     async def api_auto_layout(request: Request) -> dict[str, Any]:
         payload = await _json_body(request)
-        floor_id = str(payload.get("floor_id") or "").strip()
-        if not floor_id:
-            raise HTTPException(400, "floor_id is required")
+        location_id = str(payload.get("location_id") or "").strip()
+        if not location_id:
+            raise HTTPException(400, "location_id is required")
         force = bool(payload.get("force", False))
         try:
-            floor_dir = _preload_floor(floor_id)
+            loc_dir = _preload_location(location_id)
             docs = _session_docs()
             updated = pg.apply_auto_layout(
-                root, floor_id, session_docs=docs, force=force
+                root, location_id, session_docs=docs, force=force
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
         for node_id in updated:
             parts = tuple(p for p in node_id.split("/") if p)
-            yaml_path = (floor_dir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
+            yaml_path = (loc_dir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
             if yaml_path in docs and yaml_path not in session._buffers:
                 session.ensure_doc(yaml_path)
                 session._buffers[yaml_path].doc = docs[yaml_path]
@@ -100,44 +100,44 @@ def create_app(site_root: Path) -> Any:
         return {
             "updated": updated,
             "graph": pg.build_physical_graph(
-                root, floor_id, session_docs=_session_docs()
+                root, location_id, session_docs=_session_docs()
             ),
         }
 
     @app.patch("/api/physical/positions")
     async def api_positions(request: Request) -> dict[str, Any]:
         payload = await _json_body(request)
-        floor_id = str(payload.get("floor_id") or "").strip()
-        if not floor_id:
-            raise HTTPException(400, "floor_id is required")
+        location_id = str(payload.get("location_id") or "").strip()
+        if not location_id:
+            raise HTTPException(400, "location_id is required")
         positions = payload.get("positions") or {}
         if not isinstance(positions, dict):
             raise HTTPException(400, "positions must be a map")
         try:
-            floor_dir = _preload_floor(floor_id)
+            loc_dir = _preload_location(location_id)
             docs = _session_docs()
             updated = pg.apply_positions(
-                root, floor_id, positions, session_docs=docs
+                root, location_id, positions, session_docs=docs
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
         for node_id in updated:
             parts = tuple(p for p in node_id.split("/") if p)
-            yaml_path = (floor_dir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
+            yaml_path = (loc_dir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
             session.mark_dirty(yaml_path)
         return {"updated": updated}
 
     @app.patch("/api/physical/page")
     async def api_page(request: Request) -> dict[str, Any]:
         payload = await _json_body(request)
-        floor_id = str(payload.get("floor_id") or "").strip()
-        if not floor_id:
-            raise HTTPException(400, "floor_id is required")
-        floor_dir = pg.floor_dir(root, floor_id)
-        floor_yaml = floor_dir / HOUSEWIRE_YAML
-        _path, doc = session.ensure_doc(floor_yaml)
+        location_id = str(payload.get("location_id") or "").strip()
+        if not location_id:
+            raise HTTPException(400, "location_id is required")
+        loc_dir = pg.location_dir(root, location_id)
+        loc_yaml = loc_dir / HOUSEWIRE_YAML
+        _path, doc = session.ensure_doc(loc_yaml)
         try:
-            set_floor_physical_page(
+            set_physical_page(
                 doc,
                 width=payload.get("width"),
                 height=payload.get("height"),
@@ -145,8 +145,8 @@ def create_app(site_root: Path) -> Any:
             )
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
-        session.mark_dirty(floor_yaml)
-        return {"page": get_floor_physical_page(doc)}
+        session.mark_dirty(loc_yaml)
+        return {"page": get_physical_page(doc)}
 
     @app.post("/api/save")
     def api_save() -> dict[str, Any]:

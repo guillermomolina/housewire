@@ -498,7 +498,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     serve_p = sub.add_parser(
         "serve",
-        help="Interactive physical floor UI (requires housewire[ui])",
+        help="Interactive physical location UI (requires housewire[ui])",
     )
     serve_p.add_argument("project_path", help="Site project path")
     serve_p.add_argument(

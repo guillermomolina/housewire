@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.20.1] — 2026-08-01
+
+### Changed
+
+- Physical UI: canvas root is any location with children (``location_id``), not
+  a Floor-only ``floor_id``. API ``/api/locations``, query ``location=…``.
+
 ## [0.20.0] — 2026-08-01
 
 ### Added

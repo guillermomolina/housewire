@@ -1,6 +1,6 @@
 (() => {
   const svg = document.getElementById("canvas");
-  const floorSelect = document.getElementById("floor-select");
+  const locationSelect = document.getElementById("location-select");
   const representationSelect = document.getElementById("representation");
   const statusEl = document.getElementById("status");
   const viewport = document.getElementById("viewport");
@@ -9,7 +9,7 @@
   const NODE_H = 56;
 
   let graph = null;
-  let floorId = null;
+  let locationId = null;
   let scale = 1;
   let panX = 40;
   let panY = 40;
@@ -214,7 +214,7 @@
           await api(`/api/physical/positions`, {
             method: "PATCH",
             body: JSON.stringify({
-              floor_id: floorId,
+              location_id: locationId,
               positions: { [node.id]: moved },
             }),
           });
@@ -245,44 +245,44 @@
     }
   }
 
-  async function loadFloors() {
-    const data = await api("/api/floors");
-    floorSelect.innerHTML = "";
-    for (const floor of data.floors || []) {
+  async function loadLocations() {
+    const data = await api("/api/locations");
+    locationSelect.innerHTML = "";
+    for (const loc of data.locations || []) {
       const opt = document.createElement("option");
-      opt.value = floor.id;
-      opt.textContent = floor.label || floor.id;
-      floorSelect.appendChild(opt);
+      opt.value = loc.id;
+      opt.textContent = (loc.label || loc.id) + (loc.type ? ` (${loc.type})` : '');
+      locationSelect.appendChild(opt);
     }
-    if ((data.floors || []).length) {
-      floorId = data.floors[0].id;
-      floorSelect.value = floorId;
-      await loadFloor();
+    if ((data.locations || []).length) {
+      locationId = data.locations[0].id;
+      locationSelect.value = locationId;
+      await loadLocation();
     } else {
-      setStatus("No Floor places found");
+      setStatus("No locations with children found");
     }
   }
 
-  async function loadFloor() {
-    floorId = floorSelect.value;
-    graph = await api(`/api/physical?floor=${encodeURIComponent(floorId)}`);
+  async function loadLocation() {
+    locationId = locationSelect.value;
+    graph = await api(`/api/physical?location=${encodeURIComponent(locationId)}`);
     representationSelect.value = graph.page?.representation || "line";
     render();
     await refreshStatus();
   }
 
-  floorSelect.addEventListener("change", () => {
-    loadFloor().catch((err) => setStatus(String(err.message || err)));
+  locationSelect.addEventListener("change", () => {
+    loadLocation().catch((err) => setStatus(String(err.message || err)));
   });
 
   representationSelect.addEventListener("change", async () => {
     const value = representationSelect.value;
     render();
-    if (!floorId) return;
+    if (!locationId) return;
     try {
       await api(`/api/physical/page`, {
         method: "PATCH",
-        body: JSON.stringify({ floor_id: floorId, representation: value }),
+        body: JSON.stringify({ location_id: locationId, representation: value }),
       });
       setStatus(`representation=${value} · unsaved`);
       scheduleStatusRefresh();
@@ -295,7 +295,7 @@
     try {
       const data = await api(`/api/physical/auto-layout`, {
         method: "POST",
-        body: JSON.stringify({ floor_id: floorId, force: false }),
+        body: JSON.stringify({ location_id: locationId, force: false }),
       });
       graph = data.graph;
       render();
@@ -310,7 +310,7 @@
     try {
       const data = await api(`/api/physical/auto-layout`, {
         method: "POST",
-        body: JSON.stringify({ floor_id: floorId, force: true }),
+        body: JSON.stringify({ location_id: locationId, force: true }),
       });
       graph = data.graph;
       render();
@@ -372,5 +372,5 @@
     { passive: false }
   );
 
-  loadFloors().catch((err) => setStatus(String(err.message || err)));
+  loadLocations().catch((err) => setStatus(String(err.message || err)));
 })();
