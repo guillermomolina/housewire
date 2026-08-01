@@ -31,6 +31,8 @@ defaults:
 subtypes:
   smart:
     title: Smart relay (Zigbee / Wi-Fi)
+  zbmini_r2:
+    title: Sonoff ZBMiniR2
+    # Physical pins: N (pair tied internally), LOut, LIn, S1, S2.
   zbmini_extreme:
-    title: Sonoff ZBMini Extreme
-    # Physical pins 1–6: N, N, LOut, LIn, S1, S2 (both N tied in the device).
+    title: Sonoff ZBMini Extreme (legacy alias)

@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.19.2] — 2026-08-01
+
+### Changed
+
+- Catalog ``Relay`` subtype ``zbmini_r2`` (Sonoff ZBMiniR2); ``zbmini_extreme``
+  kept as legacy alias.
+
 ## [0.19.1] — 2026-07-31
 
 ### Added
