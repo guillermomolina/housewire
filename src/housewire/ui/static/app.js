@@ -31,6 +31,7 @@
   let elementsById = {};
   let edgePaths = [];
   let cablePaths = [];
+  let openingsOverlayEl = null;
   let lastTap = { id: null, t: 0 };
   let layoutHistory = [];
   let layoutIndex = -1;
@@ -567,7 +568,6 @@
     return Math.max(maxDeclared, preferIndex || 1, declared.length, 1);
   }
 
-  const PLANE_MARGIN = 12;
   const PLANE_R = 6;
 
   function planeGridDims(node, face, plane) {
@@ -594,7 +594,15 @@
     return { cols, rows };
   }
 
-  /** Local coords for B/F openings on a face grid, inset near the box border. */
+  /** Center of cell index (1-based) along size; outer cells hug the border. */
+  function planeCellCenter(size, count, index, radius) {
+    const margin = radius + 1;
+    if (count <= 1) return size / 2;
+    const span = Math.max(0, size - 2 * margin);
+    return margin + ((index - 1) / (count - 1)) * span;
+  }
+
+  /** Local coords for B/F openings on a face grid, almost touching the border. */
   function planeAnchorLocal(node, openingId, face) {
     const w = nodeW(node);
     const h = nodeH(node);
@@ -604,12 +612,9 @@
       return { x: w / 2, y: h / 2 };
     }
     const { cols, rows } = planeGridDims(node, f, plane);
-    const margin = Math.min(PLANE_MARGIN, Math.max(4, Math.min(w, h) / 5));
-    const innerW = Math.max(PLANE_R * 2, w - 2 * margin);
-    const innerH = Math.max(PLANE_R * 2, h - 2 * margin);
     return {
-      x: margin + ((plane.col - 0.5) / cols) * innerW,
-      y: margin + ((plane.row - 0.5) / rows) * innerH,
+      x: planeCellCenter(w, cols, plane.col, PLANE_R),
+      y: planeCellCenter(h, rows, plane.row, PLANE_R),
     };
   }
 
@@ -1059,7 +1064,11 @@
           op.face === "F" ? "opening-front-mark" : "opening-back-mark";
         const textClass =
           op.face === "F" ? "opening-front" : "opening-back";
-        g.appendChild(
+        const markG = el("g", {
+          class: "opening-plane",
+          transform: `translate(${a.x},${a.y})`,
+        });
+        markG.appendChild(
           el("circle", {
             class: markClass,
             cx: anchor.x,
@@ -1067,7 +1076,7 @@
             r: PLANE_R,
           })
         );
-        g.appendChild(
+        markG.appendChild(
           el(
             "text",
             {
@@ -1079,6 +1088,8 @@
             op.id
           )
         );
+        if (openingsOverlayEl) openingsOverlayEl.appendChild(markG);
+        else g.appendChild(markG);
       }
     }
 
@@ -1205,17 +1216,21 @@
       (graph.elements || []).map((e) => [e.id, e])
     );
 
-    // Containers under conduits under leaves; cables then elements on top.
+    // Containers → leaves → conduits (above fill so paths reach B/F marks) →
+    // opening overlay → cables → elements.
     const containersG = el("g", { class: "containers" });
-    const edgesG = el("g", { class: "edges" });
     const leavesG = el("g", { class: "leaves" });
+    const edgesG = el("g", { class: "edges" });
+    const openingsG = el("g", { class: "openings-overlay" });
     const cablesG = el("g", { class: "cables" });
     const elementsG = el("g", { class: "elements" });
     worldEl.appendChild(containersG);
-    worldEl.appendChild(edgesG);
     worldEl.appendChild(leavesG);
+    worldEl.appendChild(edgesG);
+    worldEl.appendChild(openingsG);
     worldEl.appendChild(cablesG);
     worldEl.appendChild(elementsG);
+    openingsOverlayEl = openingsG;
 
     const byDepth = [...graph.nodes].sort(
       (a, b) => (a.parts?.length || 0) - (b.parts?.length || 0)
