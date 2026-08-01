@@ -2120,9 +2120,16 @@
     const conduits = document.getElementById("props-conduits-block");
     const cables = document.getElementById("props-cables-block");
     const placeMode = mode === "place";
-    elements.classList.toggle("hidden", !placeMode);
-    conduits.classList.toggle("hidden", !placeMode);
-    cables.classList.toggle("hidden", placeMode);
+    if (elements) elements.classList.toggle("hidden", !placeMode);
+    if (conduits) conduits.classList.toggle("hidden", !placeMode);
+    if (cables) cables.classList.toggle("hidden", placeMode);
+  }
+
+  function ensurePropertiesVisible() {
+    const side = document.getElementById("side-panel");
+    if (side && side.classList.contains("collapsed")) {
+      setSidePanelCollapsed("inspector", false);
+    }
   }
 
   /** @type {{kind:"place"|"element", placeId:string, element?:string}|null} */
@@ -2223,6 +2230,11 @@
   function fillElementInspector(elem) {
     const empty = document.getElementById("panel-empty");
     const panel = document.getElementById("panel-props");
+    if (!empty || !panel) {
+      setStatus("Properties panel missing — hard-reload the page (Ctrl+Shift+R)");
+      return;
+    }
+    ensurePropertiesVisible();
     empty.classList.add("hidden");
     panel.classList.remove("hidden");
     setInspectorMode("element");
@@ -2233,6 +2245,7 @@
       element: leaf,
     };
     const meta = document.getElementById("props-meta");
+    if (!meta) return;
     meta.innerHTML = "";
     appendPropsRow(meta, {
       key: "id",
@@ -2353,6 +2366,10 @@
   async function fillPlaceInspector(id, detailOpt) {
     const empty = document.getElementById("panel-empty");
     const panel = document.getElementById("panel-props");
+    if (!empty || !panel) {
+      setStatus("Properties panel missing — hard-reload the page (Ctrl+Shift+R)");
+      return;
+    }
     if (!id || !locationId) {
       propsTarget = null;
       empty.classList.remove("hidden");
@@ -2365,11 +2382,13 @@
         (await api(
           `/api/place?location=${encodeURIComponent(locationId)}&id=${encodeURIComponent(id)}`
         ));
+      ensurePropertiesVisible();
       empty.classList.add("hidden");
       panel.classList.remove("hidden");
       setInspectorMode("place");
       propsTarget = { kind: "place", placeId: id };
       const meta = document.getElementById("props-meta");
+      if (!meta) return;
       meta.innerHTML = "";
       appendPropsRow(meta, { key: "id", value: detail.id, editable: false });
       appendPropsRow(meta, {

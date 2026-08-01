@@ -6,7 +6,7 @@
   <title>HouseWire — physical</title>
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <link rel="stylesheet" href="/static/app.css?v=0.28.11" />
+  <link rel="stylesheet" href="/static/app.css?v=0.28.12" />
 </head>
 <body>
   <nav class="menubar" aria-label="Application">
@@ -177,11 +177,11 @@
       <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
       <div id="marquee" class="marquee hidden" aria-hidden="true"></div>
     </main>
-    <button type="button" class="panel-expand right hidden" id="btn-expand-inspector" title="Show inspector" aria-controls="side-panel">Inspector</button>
+    <button type="button" class="panel-expand right hidden" id="btn-expand-inspector" title="Show properties" aria-controls="side-panel">Properties</button>
     <aside id="side-panel" class="side-panel">
       <div class="panel-head">
-        <h2>Inspector</h2>
-        <button type="button" class="panel-collapse" id="btn-collapse-inspector" title="Collapse inspector" aria-expanded="true" aria-controls="side-panel">»</button>
+        <h2>Properties</h2>
+        <button type="button" class="panel-collapse" id="btn-collapse-inspector" title="Collapse properties" aria-expanded="true" aria-controls="side-panel">»</button>
       </div>
       <div class="panel-body">
         <div id="panel-empty" class="panel-empty">Selecciona una caja o elemento</div>
@@ -285,6 +285,6 @@
     </div>
   </div>
   <input type="file" id="file-open-input" accept=".yaml,.yml,text/yaml,application/x-yaml" hidden />
-  <script src="/static/app.js?v=0.28.11"></script>
+  <script src="/static/app.js?v=0.28.12"></script>
 </body>
 </html>

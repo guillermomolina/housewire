@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.12] — 2026-08-01
+
+### Fixed
+
+- Selecting a place/element expands the Properties side panel if it was
+  collapsed. Serve ``index.html`` with ``Cache-Control: no-store`` so the UI
+  does not stick on an old shell (and stale ``app.js?v=…``).
+
 ## [0.28.11] — 2026-08-01
 
 ### Changed

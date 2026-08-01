@@ -89,7 +89,14 @@ def create_app(site_root: Path | None = None) -> Any:
         index_path = STATIC_DIR / "index.html"
         if not index_path.is_file():
             raise HTTPException(404, "UI static files missing")
-        return FileResponse(index_path)
+        # Always revalidate: query-busted JS/CSS are useless if index stays cached.
+        return FileResponse(
+            index_path,
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+            },
+        )
 
     @app.get("/api/workspace")
     def api_workspace() -> dict[str, Any]:
