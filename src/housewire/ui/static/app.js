@@ -927,18 +927,106 @@
     applyWorldTransform();
   }
 
-  function orthoPathD(p1, p2, fromFace, toFace) {
+  function pointsToPathD(pts) {
+    if (!pts.length) return "";
+    let d = `M ${pts[0][0]} ${pts[0][1]}`;
+    for (let i = 1; i < pts.length; i++) {
+      d += ` L ${pts[i][0]} ${pts[i][1]}`;
+    }
+    return d;
+  }
+
+  function segsFromPoints(pts) {
+    /** @type {{axis:string,x?:number,y?:number,a:number,b:number}[]} */
+    const segs = [];
+    for (let i = 1; i < pts.length; i++) {
+      const x1 = pts[i - 1][0];
+      const y1 = pts[i - 1][1];
+      const x2 = pts[i][0];
+      const y2 = pts[i][1];
+      if (Math.abs(x1 - x2) < 1e-6 && Math.abs(y1 - y2) < 1e-6) continue;
+      if (Math.abs(y1 - y2) < 1e-6) {
+        segs.push({
+          axis: "H",
+          y: y1,
+          a: Math.min(x1, x2),
+          b: Math.max(x1, x2),
+        });
+      } else if (Math.abs(x1 - x2) < 1e-6) {
+        segs.push({
+          axis: "V",
+          x: x1,
+          a: Math.min(y1, y2),
+          b: Math.max(y1, y2),
+        });
+      }
+    }
+    return segs;
+  }
+
+  function rangeOverlapLen(a1, a2, b1, b2) {
+    return Math.max(0, Math.min(a2, b2) - Math.max(a1, b1));
+  }
+
+  /** Colinear stack is expensive; a proper crossing is a smaller penalty. */
+  function segConflict(s, o, eps) {
+    if (s.axis === "H" && o.axis === "H") {
+      if (Math.abs(s.y - o.y) > eps) return 0;
+      const ov = rangeOverlapLen(s.a, s.b, o.a, o.b);
+      if (ov <= eps) return 0;
+      return 200 + ov;
+    }
+    if (s.axis === "V" && o.axis === "V") {
+      if (Math.abs(s.x - o.x) > eps) return 0;
+      const ov = rangeOverlapLen(s.a, s.b, o.a, o.b);
+      if (ov <= eps) return 0;
+      return 200 + ov;
+    }
+    if (s.axis === "H" && o.axis === "V") {
+      const y = s.y;
+      const x = o.x;
+      if (x > s.a + 1 && x < s.b - 1 && y > o.a + 1 && y < o.b - 1) {
+        return 25;
+      }
+    } else if (s.axis === "V" && o.axis === "H") {
+      const x = s.x;
+      const y = o.y;
+      if (y > s.a + 1 && y < s.b - 1 && x > o.a + 1 && x < o.b - 1) {
+        return 25;
+      }
+    }
+    return 0;
+  }
+
+  function pathConflictCost(pts, occupied, eps) {
+    if (!occupied || !occupied.length) return 0;
+    let cost = 0;
+    for (const s of segsFromPoints(pts)) {
+      for (const o of occupied) {
+        cost += segConflict(s, o, eps);
+      }
+    }
+    return cost;
+  }
+
+  /**
+   * Orthogonal route points from p1 to p2. When ``occupied`` is set, prefer
+   * candidates that avoid colinear overlap (and lightly avoid crossings).
+   */
+  function orthoRoute(p1, p2, fromFace, toFace, occupied) {
     const x1 = p1.x;
     const y1 = p1.y;
     const x2 = p2.x;
     const y2 = p2.y;
     if (x1 === x2 && y1 === y2) {
-      return `M ${x1} ${y1}`;
+      return [[x1, y1]];
     }
 
     const STUB = 20;
     const DETOUR = 48;
-    const parts = [`M ${x1} ${y1}`];
+    const LANE = 14;
+    const OVERLAP_EPS = 6;
+    const pts = [[x1, y1]];
     let ax = x1;
     let ay = y1;
     let bx = x2;
@@ -946,30 +1034,46 @@
 
     if (fromFace === "E") {
       ax = x1 + STUB;
-      parts.push(`L ${ax} ${ay}`);
+      pts.push([ax, ay]);
     } else if (fromFace === "W") {
       ax = x1 - STUB;
-      parts.push(`L ${ax} ${ay}`);
+      pts.push([ax, ay]);
     } else if (fromFace === "S") {
       ay = y1 + STUB;
-      parts.push(`L ${ax} ${ay}`);
+      pts.push([ax, ay]);
     } else if (fromFace === "N") {
       ay = y1 - STUB;
-      parts.push(`L ${ax} ${ay}`);
+      pts.push([ax, ay]);
     }
     if (toFace === "E") bx = x2 + STUB;
     else if (toFace === "W") bx = x2 - STUB;
     else if (toFace === "S") by = y2 + STUB;
     else if (toFace === "N") by = y2 - STUB;
 
-    const mid = minBendOrtho(ax, ay, bx, by, fromFace, toFace, DETOUR, STUB);
-    for (const [x, y] of mid) {
-      parts.push(`L ${x} ${y}`);
+    const mid = minBendOrtho(
+      ax,
+      ay,
+      bx,
+      by,
+      fromFace,
+      toFace,
+      DETOUR,
+      STUB,
+      LANE,
+      occupied,
+      OVERLAP_EPS
+    );
+    for (const p of mid) {
+      pts.push(p);
     }
     if (bx !== x2 || by !== y2) {
-      parts.push(`L ${x2} ${y2}`);
+      pts.push([x2, y2]);
     }
-    return parts.join(" ");
+    return cleanOrthoPoly(pts);
+  }
+
+  function orthoPathD(p1, p2, fromFace, toFace, occupied) {
+    return pointsToPathD(orthoRoute(p1, p2, fromFace, toFace, occupied));
   }
 
   /** First step from the exit stub must not reverse back into the box. */
@@ -1070,8 +1174,21 @@
   /**
    * Manhattan connectors from exit stub to entry stub with the fewest bends.
    * Returns intermediate points including the entry stub (bx, by).
+   * When ``occupied`` is set, also minimize conflict with prior routes.
    */
-  function minBendOrtho(ax, ay, bx, by, fromFace, toFace, detour, stub) {
+  function minBendOrtho(
+    ax,
+    ay,
+    bx,
+    by,
+    fromFace,
+    toFace,
+    detour,
+    stub,
+    lane,
+    occupied,
+    overlapEps
+  ) {
     const start = [ax, ay];
     const end = [bx, by];
     /** @type {number[][][]} */
@@ -1096,43 +1213,63 @@
     push([[bx, ay]]);
     push([[ax, by]]);
 
-    // 2 bends (Z through mid)
+    // 2 bends (Z through mid) + parallel lanes to dodge prior routes
     const mx = (ax + bx) / 2;
     const my = (ay + by) / 2;
-    push([[mx, ay], [mx, by]]);
-    push([[ax, my], [bx, my]]);
+    const laneOffs = [0];
+    if (occupied && occupied.length && lane) {
+      for (let k = 1; k <= 4; k++) {
+        laneOffs.push(k * lane, -k * lane);
+      }
+    }
+    for (const off of laneOffs) {
+      push([[mx + off, ay], [mx + off, by]]);
+      push([[ax, my + off], [bx, my + off]]);
+    }
 
     // 2 bends: outer rails (approach from beyond the entry stub)
     if (toFace === "S" || fromFace === "S") {
-      const yOut = Math.max(ay, by) + stub;
-      push([[ax, yOut], [bx, yOut]]);
+      for (const off of laneOffs) {
+        const yOut = Math.max(ay, by) + stub + Math.max(0, off);
+        push([[ax, yOut], [bx, yOut]]);
+      }
     }
     if (toFace === "N" || fromFace === "N") {
-      const yOut = Math.min(ay, by) - stub;
-      push([[ax, yOut], [bx, yOut]]);
+      for (const off of laneOffs) {
+        const yOut = Math.min(ay, by) - stub - Math.max(0, off);
+        push([[ax, yOut], [bx, yOut]]);
+      }
     }
     if (toFace === "E" || fromFace === "E") {
-      const xOut = Math.max(ax, bx) + stub;
-      push([[xOut, ay], [xOut, by]]);
+      for (const off of laneOffs) {
+        const xOut = Math.max(ax, bx) + stub + Math.max(0, off);
+        push([[xOut, ay], [xOut, by]]);
+      }
     }
     if (toFace === "W" || fromFace === "W") {
-      const xOut = Math.min(ax, bx) - stub;
-      push([[xOut, ay], [xOut, by]]);
+      for (const off of laneOffs) {
+        const xOut = Math.min(ax, bx) - stub - Math.max(0, off);
+        push([[xOut, ay], [xOut, by]]);
+      }
     }
 
-    // 3 bends: side C loops (only when reverse on the exit axis would overlap)
-    push([[Math.max(ax, bx) + detour, ay], [Math.max(ax, bx) + detour, by]]);
-    push([[Math.min(ax, bx) - detour, ay], [Math.min(ax, bx) - detour, by]]);
-    push([
-      [Math.max(ax, bx) + detour, ay],
-      [Math.max(ax, bx) + detour, Math.max(ay, by) + stub],
-      [bx, Math.max(ay, by) + stub],
-    ]);
-    push([
-      [Math.min(ax, bx) - detour, ay],
-      [Math.min(ax, bx) - detour, Math.min(ay, by) - stub],
-      [bx, Math.min(ay, by) - stub],
-    ]);
+    // 3 bends: side C loops
+    for (const off of laneOffs) {
+      const right = Math.max(ax, bx) + detour + Math.max(0, off);
+      const left = Math.min(ax, bx) - detour - Math.max(0, off);
+      push([[right, ay], [right, by]]);
+      push([[left, ay], [left, by]]);
+      push([
+        [right, ay],
+        [right, Math.max(ay, by) + stub],
+        [bx, Math.max(ay, by) + stub],
+      ]);
+      push([
+        [left, ay],
+        [left, Math.min(ay, by) - stub],
+        [bx, Math.min(ay, by) - stub],
+      ]);
+    }
 
     if (!raw.length) {
       // Fallback: forced side C
@@ -1144,25 +1281,35 @@
     }
 
     let best = raw[0];
-    let bestBends = Infinity;
+    let bestBendEquiv = Infinity;
+    let bestConflict = Infinity;
     let bestLen = Infinity;
+    const eps = overlapEps ?? 6;
     for (const pts of raw) {
       const full = [[ax, ay], ...pts];
       const bends = polyBends(full);
+      const conflict = pathConflictCost(full, occupied, eps);
       const len = polyLength(full);
+      // ~150 conflict ≈ one bend: dodge stacked corridors with a lane/Z.
+      const bendEquiv = bends + conflict / 150;
       if (
-        bends < bestBends ||
-        (bends === bestBends && len < bestLen)
+        bendEquiv < bestBendEquiv - 1e-9 ||
+        (Math.abs(bendEquiv - bestBendEquiv) < 1e-9 &&
+          conflict < bestConflict) ||
+        (Math.abs(bendEquiv - bestBendEquiv) < 1e-9 &&
+          conflict === bestConflict &&
+          len < bestLen)
       ) {
         best = pts;
-        bestBends = bends;
+        bestBendEquiv = bendEquiv;
+        bestConflict = conflict;
         bestLen = len;
       }
     }
     return best;
   }
 
-  function edgePathD(edge, byId) {
+  function edgePathD(edge, byId, occupied) {
     const a = byId[edge.from];
     const b = byId[edge.to];
     if (!a || !b) return null;
@@ -1170,7 +1317,8 @@
     const toFace = routeFace(b, edge.to_opening, edge.to_opening?.[0], byId);
     const p1 = openingAnchorAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
     const p2 = openingAnchorAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
-    return orthoPathD(p1, p2, fromFace, toFace);
+    const pts = orthoRoute(p1, p2, fromFace, toFace, occupied);
+    return { d: pointsToPathD(pts), segs: segsFromPoints(pts) };
   }
 
   function elementAbsXY(elem, placeById) {
@@ -1193,14 +1341,18 @@
     };
   }
 
-  function appendOrtho(d, p1, p2, fromFace, toFace) {
-    const seg = orthoPathD(p1, p2, fromFace, toFace);
-    if (!d) return seg;
+  function appendOrtho(d, p1, p2, fromFace, toFace, occupied) {
+    const pts = orthoRoute(p1, p2, fromFace, toFace, occupied);
+    const seg = pointsToPathD(pts);
+    if (!d) return { d: seg, segs: segsFromPoints(pts) };
     // Drop leading M; continue with L segments.
-    return d + seg.replace(/^M\s+[-\d.]+(?:\s+|,)[-\d.]+\s*/, " ");
+    return {
+      d: d + seg.replace(/^M\s+[-\d.]+(?:\s+|,)[-\d.]+\s*/, " "),
+      segs: segsFromPoints(pts),
+    };
   }
 
-  function cablePathD(edge, placeById, elemById) {
+  function cablePathD(edge, placeById, elemById, occupied) {
     const a = elemById[edge.from];
     const b = elemById[edge.to];
     if (!a || !b) return null;
@@ -1230,7 +1382,7 @@
         !first.from_opening ||
         !last.to_opening
       ) {
-        return orthoPathD(c1, c2, null, null);
+        return orthoPathD(c1, c2, null, null, occupied);
       }
       const opStart = openingAnchorAbs(
         startPlace,
@@ -1238,15 +1390,15 @@
         first.from_opening?.[0],
         placeById
       );
-      // Element → opening on the box contour (no outward stub).
-      let d = appendOrtho("", c1, opStart, null, null);
+      // Along a tube: do not dodge occupancy (cable should ride on the conduit).
+      let d = appendOrtho("", c1, opStart, null, null, null).d;
       let prevArrive = null;
       for (let i = 0; i < hops.length; i++) {
         const hop = hops[i];
         const pf = placeById[hop.from];
         const pt = placeById[hop.to];
         if (!pf || !pt || !hop.from_opening || !hop.to_opening) {
-          return orthoPathD(c1, c2, null, null);
+          return orthoPathD(c1, c2, null, null, occupied);
         }
         const opA = openingAnchorAbs(
           pf,
@@ -1262,7 +1414,7 @@
         );
         if (prevArrive) {
           // Through intermediate box: arrive opening → leave opening.
-          d = appendOrtho(d, prevArrive, opA, null, null);
+          d = appendOrtho(d, prevArrive, opA, null, null, null).d;
         }
         const fromFace = routeFace(
           pf,
@@ -1276,7 +1428,7 @@
           hop.to_opening?.[0],
           placeById
         );
-        d = appendOrtho(d, opA, opB, fromFace, toFace);
+        d = appendOrtho(d, opA, opB, fromFace, toFace, null).d;
         prevArrive = opB;
       }
       const opEnd = openingAnchorAbs(
@@ -1285,26 +1437,29 @@
         last.to_opening?.[0],
         placeById
       );
-      d = appendOrtho(d, opEnd, c2, null, null);
+      d = appendOrtho(d, opEnd, c2, null, null, null).d;
       return d;
     }
-    return orthoPathD(c1, c2, null, null);
+    return orthoPathD(c1, c2, null, null, occupied);
   }
 
   function refreshEdges() {
     if (!graph) return;
     const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+    /** @type {{axis:string,x?:number,y?:number,a:number,b:number}[]} */
+    const occupied = [];
     for (const item of edgePaths) {
-      const d = edgePathD(item.edge, byId);
-      if (d) {
-        for (const path of item.paths) path.setAttribute("d", d);
+      const routed = edgePathD(item.edge, byId, occupied);
+      if (routed) {
+        for (const path of item.paths) path.setAttribute("d", routed.d);
+        for (const s of routed.segs) occupied.push(s);
       }
     }
     const elemById = Object.fromEntries(
       (graph.elements || []).map((e) => [e.id, e])
     );
     for (const item of cablePaths) {
-      const d = cablePathD(item.edge, byId, elemById);
+      const d = cablePathD(item.edge, byId, elemById, occupied);
       if (d) {
         for (const path of item.paths) path.setAttribute("d", d);
       }
@@ -1635,9 +1790,13 @@
       if (childrenOf(node.id).length) paintNode(node, containersG, byId);
     }
 
+    /** @type {{axis:string,x?:number,y?:number,a:number,b:number}[]} */
+    const occupied = [];
     for (const edge of graph.edges) {
-      const d = edgePathD(edge, byId);
-      if (!d) continue;
+      const routed = edgePathD(edge, byId, occupied);
+      if (!routed) continue;
+      const d = routed.d;
+      for (const s of routed.segs) occupied.push(s);
       const contains = (edge.contains || []).join(", ");
       const edgeName = edge.name || edge.id;
       const title = contains
@@ -1667,7 +1826,7 @@
 
     if (showCables) {
       for (const edge of graph.cable_edges || []) {
-        const d = cablePathD(edge, byId, elemById);
+        const d = cablePathD(edge, byId, elemById, occupied);
         if (!d) continue;
         const colors = (edge.colors || []).join(",");
         const edgeName = edge.name || edge.id || edge.via || "";

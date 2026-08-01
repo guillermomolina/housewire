@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.6] — 2026-08-01
+
+### Fixed
+
+- Orthogonal conduit routing avoids stacking on the same corridor: later edges
+  prefer parallel lanes / alternate elbows when a candidate would overlap a
+  prior segment (crossings are only a light penalty).
+
 ## [0.27.5] — 2026-08-01
 
 ### Fixed
