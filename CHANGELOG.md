@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.3] — 2026-08-01
+
+### Fixed
+
+- Stop drawing cable transit across intermediate junction boxes (green mesh
+  between openings); cables only show endpoint tails and tube overlays.
+
 ## [0.28.2] — 2026-08-01
 
 ### Fixed

@@ -1520,11 +1520,10 @@
         first.from_opening?.[0],
         placeById
       );
-      // Element → opening, then ride the tube geometry on top of the conduit.
+      // Element → opening, then ride each tube hop. Do not draw cross-box
+      // transit between openings (that became a green mesh inside junction boxes).
       let d = appendOrthoSubpath("", c1, innerStart, null, null, null).d;
       d = appendOrtho(d, innerStart, opStart, null, null, null).d;
-      let prevArrive = null;
-      let prevToOpening = null;
       for (let i = 0; i < hops.length; i++) {
         const hop = hops[i];
         const pf = placeById[hop.from];
@@ -1544,23 +1543,6 @@
           hop.to_opening?.[0],
           placeById
         );
-        if (prevArrive && prevToOpening) {
-          const innerIn = openingInteriorPoint(
-            pf,
-            prevToOpening,
-            prevToOpening?.[0],
-            placeById
-          );
-          const innerOut = openingInteriorPoint(
-            pf,
-            hop.from_opening,
-            hop.from_opening?.[0],
-            placeById
-          );
-          d = appendOrthoSubpath(d, prevArrive, innerIn, null, null, null).d;
-          d = appendOrtho(d, innerIn, innerOut, null, null, null).d;
-          d = appendOrtho(d, innerOut, opA, null, null, null).d;
-        }
         const tubeD = hopTubePathD(hop);
         if (tubeD) {
           d = `${d} ${tubeD}`;
@@ -1579,8 +1561,6 @@
           );
           d = appendOrthoSubpath(d, opA, opB, fromFace, toFace, null).d;
         }
-        prevArrive = opB;
-        prevToOpening = hop.to_opening;
       }
       const opEnd = openingAnchorAbs(
         endPlace,
