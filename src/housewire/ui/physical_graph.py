@@ -20,6 +20,51 @@ from housewire.project.view_layout import (
     set_physical_position,
 )
 
+# Window-style nested layout (must match UI constants in static/app.js).
+LEAF_W = 120.0
+LEAF_H = 56.0
+CONTENT_PAD = 16.0
+CONTENT_HEADER = 28.0
+
+
+def _default_local_pos(index: int, *, nested: bool) -> tuple[float, float]:
+    cols = 4
+    if nested:
+        origin_x, origin_y, gap_x, gap_y = 16.0, 36.0, 140.0, 100.0
+    else:
+        origin_x, origin_y, gap_x, gap_y = 80.0, 80.0, 180.0, 140.0
+    return (
+        origin_x + (index % cols) * gap_x,
+        origin_y + (index // cols) * gap_y,
+    )
+
+
+def _content_size(
+    parts: tuple[str, ...],
+    children_map: dict[tuple[str, ...], list[tuple[str, ...]]],
+    pos_map: dict[tuple[str, ...], tuple[float, float]],
+    cache: dict[tuple[str, ...], tuple[float, float]],
+) -> tuple[float, float]:
+    """Bounding window size for a place from its full descendant layout."""
+    if parts in cache:
+        return cache[parts]
+    kids = children_map.get(parts, [])
+    if not kids:
+        cache[parts] = (LEAF_W, LEAF_H)
+        return cache[parts]
+    max_r = 0.0
+    max_b = 0.0
+    for kid in kids:
+        kw, kh = _content_size(kid, children_map, pos_map, cache)
+        kx, ky = pos_map[kid]
+        max_r = max(max_r, kx + kw)
+        max_b = max(max_b, ky + kh)
+    cache[parts] = (
+        max(LEAF_W, max_r + CONTENT_PAD),
+        max(LEAF_H, CONTENT_HEADER + max_b + CONTENT_PAD),
+    )
+    return cache[parts]
+
 
 def _opening_face(opening_id: str) -> str:
     text = str(opening_id).strip()
@@ -198,6 +243,9 @@ def build_physical_graph(
 
     ``depth`` is how many outline levels under the canvas root are visible
     (1 = direct children only; 2 = children nested inside parents; …).
+
+    Each node includes ``w``/``h`` from the full descendant window layout so a
+    parent keeps the same footprint whether or not its interior is shown.
     """
     if depth < 1:
         raise ValueError("depth must be >= 1")
@@ -221,36 +269,53 @@ def build_physical_graph(
     loc_meta = place_meta_from_mapping(loc_doc) or {}
     page = get_physical_page(loc_doc)
 
-    all_under = {
-        parts
-        for parts, _path in iter_place_yaml_under(ldir, session_docs=session_docs)
-    }
+    all_rows = list(iter_place_yaml_under(ldir, session_docs=session_docs))
+    all_under = {parts for parts, _path in all_rows}
     max_depth = max((len(parts) for parts in all_under), default=0)
     depth = min(depth, max(max_depth, 1))
 
-    place_paths = [
-        (parts, path)
-        for parts, path in iter_place_yaml_under(ldir, session_docs=session_docs)
-        if 1 <= len(parts) <= depth
-    ]
-    places: list[tuple[tuple[str, ...], Path, dict[str, Any]]] = []
-    for parts, path in place_paths:
+    # Full outline catalog (any depth) for window sizes and conduit resolve.
+    all_docs: dict[tuple[str, ...], dict[str, Any]] = {}
+    for parts, path in all_rows:
         try:
             doc = _doc_for(path)
         except ValueError:
             continue
-        meta = place_meta_from_mapping(doc)
-        if meta is None:
+        if place_meta_from_mapping(doc) is None:
             continue
-        places.append((parts, path, doc))
+        all_docs[parts] = doc
 
-    known_full = {parts for parts, _, _ in places}
-    # Resolve conduits against the full outline under this canvas so refs to
-    # deeper places still parse; then map endpoints to a visible ancestor.
-    known_resolve = all_under | known_full
+    children_map: dict[tuple[str, ...], list[tuple[str, ...]]] = {}
+    for parts in all_docs:
+        parent = parts[:-1]
+        children_map.setdefault(parent, []).append(parts)
+    for kids in children_map.values():
+        kids.sort()
+
+    pos_map: dict[tuple[str, ...], tuple[float, float]] = {}
+    for parent, kids in children_map.items():
+        nested = len(parent) > 0
+        for index, kid in enumerate(kids):
+            stored = get_physical_position(all_docs[kid])
+            pos_map[kid] = (
+                stored
+                if stored is not None
+                else _default_local_pos(index, nested=nested)
+            )
+
+    size_cache: dict[tuple[str, ...], tuple[float, float]] = {}
+
+    places: list[tuple[tuple[str, ...], dict[str, Any]]] = [
+        (parts, all_docs[parts])
+        for parts in sorted(all_docs)
+        if 1 <= len(parts) <= depth
+    ]
+
+    known_full = {parts for parts, _ in places}
+    known_resolve = set(all_docs) | known_full
     nodes: list[dict[str, Any]] = []
 
-    for parts, _path, doc in places:
+    for parts, doc in places:
         meta = place_meta_from_mapping(doc) or {}
         type_id = str(meta.get("type") or "Location")
         if not is_place_type(type_id):
@@ -259,7 +324,6 @@ def build_physical_graph(
             openings = sorted(declared_opening_ids(meta.get("openings")) or [])
         except ValueError:
             openings = []
-        pos = get_physical_position(doc)
         phys = get_physical_view(doc) or {}
         rotation = phys.get("rotation", 0)
         if not isinstance(rotation, int):
@@ -272,6 +336,8 @@ def build_physical_graph(
             len(other) > depth and other[: len(parts)] == parts
             for other in all_under
         )
+        width, height = _content_size(parts, children_map, pos_map, size_cache)
+        px, py = pos_map[parts]
         nodes.append(
             {
                 "id": "/".join(parts),
@@ -282,8 +348,10 @@ def build_physical_graph(
                 "openings": [
                     {"id": oid, "face": _opening_face(oid)} for oid in openings
                 ],
-                "x": pos[0] if pos else None,
-                "y": pos[1] if pos else None,
+                "x": px,
+                "y": py,
+                "w": width,
+                "h": height,
                 "rotation": rotation,
                 "expandable": has_deeper,
             }
@@ -304,7 +372,7 @@ def build_physical_graph(
     edges: list[dict[str, Any]] = []
     edge_sources: list[tuple[tuple[str, ...], dict[str, Any]]] = [
         (tuple(), loc_doc),
-        *[(parts, doc) for parts, _, doc in places],
+        *[(parts, doc) for parts, doc in places],
     ]
     seen_edges: set[tuple[str, str, str, str, str]] = set()
     for current_parts, doc in edge_sources:
@@ -394,7 +462,16 @@ def apply_auto_layout(
     for siblings in by_parent.values():
         index = 0
         for node in siblings:
-            if not force and node.get("x") is not None and node.get("y") is not None:
+            parts = tuple(node["parts"])
+            yaml_path = (ldir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
+            doc = session_docs.get(yaml_path)
+            if doc is None:
+                if not yaml_path.is_file():
+                    continue
+                doc = load_yaml(yaml_path)
+                session_docs[yaml_path] = doc
+            stored = get_physical_position(doc)
+            if not force and stored is not None:
                 continue
             col = index % cols
             row = index // cols
@@ -406,14 +483,6 @@ def apply_auto_layout(
             gy = 100.0 if nested else gap_y
             x = ox + col * gx
             y = oy + row * gy
-            parts = tuple(node["parts"])
-            yaml_path = (ldir.joinpath(*parts) / HOUSEWIRE_YAML).resolve()
-            doc = session_docs.get(yaml_path)
-            if doc is None:
-                if not yaml_path.is_file():
-                    continue
-                doc = load_yaml(yaml_path)
-                session_docs[yaml_path] = doc
             set_physical_position(doc, x, y)
             updated.append(node["id"])
             index += 1

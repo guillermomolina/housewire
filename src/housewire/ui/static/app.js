@@ -69,75 +69,59 @@
     );
   }
 
-  /**
-   * Map child local coords into a fixed parent box (LEAF_W×LEAF_H).
-   * Parent footprint never grows when depth increases — interior is scaled.
-   */
-  function parentContentTransform(parent) {
-    const kids = childrenOf(parent.id);
-    if (!kids.length) return { ox: PAD, oy: HEADER, scale: 1 };
-    let maxR = 0;
-    let maxB = 0;
-    for (const kid of kids) {
-      maxR = Math.max(maxR, (kid.x ?? 0) + LEAF_W);
-      maxB = Math.max(maxB, (kid.y ?? 0) + LEAF_H);
+  function nodeW(node) {
+    return node.w || LEAF_W;
+  }
+
+  function nodeH(node) {
+    return node.h || LEAF_H;
+  }
+
+  /** Recompute window sizes bottom-up from visible children (keeps drag live). */
+  function measureVisibleSizes() {
+    if (!graph) return;
+    function measure(node) {
+      const kids = childrenOf(node.id);
+      if (!kids.length) {
+        // Keep server size when children are hidden (depth zoom).
+        if (node.w == null) node.w = LEAF_W;
+        if (node.h == null) node.h = LEAF_H;
+        return;
+      }
+      for (const kid of kids) measure(kid);
+      let maxR = 0;
+      let maxB = 0;
+      for (const kid of kids) {
+        maxR = Math.max(maxR, (kid.x ?? 0) + nodeW(kid));
+        maxB = Math.max(maxB, (kid.y ?? 0) + nodeH(kid));
+      }
+      node.w = Math.max(LEAF_W, maxR + PAD);
+      node.h = Math.max(LEAF_H, HEADER + maxB + PAD);
     }
-    const availW = Math.max(LEAF_W - 2 * PAD, 1);
-    const availH = Math.max(LEAF_H - HEADER - PAD, 1);
-    const scale = Math.min(
-      availW / Math.max(maxR, 1e-6),
-      availH / Math.max(maxB, 1e-6)
-    );
-    return { ox: PAD, oy: HEADER, scale };
-  }
-
-  function worldTransform(node, byId) {
-    const map = idMap(byId);
-    if (!node.parent) {
-      return { x: node.x ?? 0, y: node.y ?? 0, scale: 1 };
-    }
-    const parent = map[node.parent];
-    if (!parent) {
-      return { x: node.x ?? 0, y: node.y ?? 0, scale: 1 };
-    }
-    const pt = worldTransform(parent, map);
-    const ct = parentContentTransform(parent);
-    return {
-      x: pt.x + (ct.ox + (node.x ?? 0) * ct.scale) * pt.scale,
-      y: pt.y + (ct.oy + (node.y ?? 0) * ct.scale) * pt.scale,
-      scale: pt.scale * ct.scale,
-    };
-  }
-
-  /** World pixels per local (x,y) unit when dragging this node. */
-  function localDragScale(node, byId) {
-    const map = idMap(byId);
-    if (!node.parent) return 1;
-    const parent = map[node.parent];
-    if (!parent) return 1;
-    const pt = worldTransform(parent, map);
-    const ct = parentContentTransform(parent);
-    return pt.scale * ct.scale;
-  }
-
-  function nodeW(node, byId) {
-    return LEAF_W * worldTransform(node, byId).scale;
-  }
-
-  function nodeH(node, byId) {
-    return LEAF_H * worldTransform(node, byId).scale;
+    for (const node of childrenOf(null)) measure(node);
   }
 
   function absXY(node, byId) {
-    const t = worldTransform(node, byId);
-    return { x: t.x, y: t.y };
+    const map = idMap(byId);
+    if (!node.parent) {
+      return { x: node.x ?? 0, y: node.y ?? 0 };
+    }
+    const parent = map[node.parent];
+    if (!parent) {
+      return { x: node.x ?? 0, y: node.y ?? 0 };
+    }
+    const pa = absXY(parent, map);
+    return {
+      x: pa.x + PAD + (node.x ?? 0),
+      y: pa.y + HEADER + (node.y ?? 0),
+    };
   }
 
   function nodeCenterAbs(node, byId) {
     const a = absXY(node, byId);
     return {
-      x: a.x + nodeW(node, byId) / 2,
-      y: a.y + nodeH(node, byId) / 2,
+      x: a.x + nodeW(node) / 2,
+      y: a.y + nodeH(node) / 2,
     };
   }
 
@@ -168,8 +152,8 @@
 
   function openingAnchorAbs(node, openingId, face, byId) {
     const a = absXY(node, byId);
-    const w = nodeW(node, byId);
-    const h = nodeH(node, byId);
+    const w = nodeW(node);
+    const h = nodeH(node);
     const side = parseSideOpening(openingId);
     const plane = parsePlaneOpening(openingId);
     const f = (
@@ -201,10 +185,10 @@
     return nodeCenterAbs(node, byId);
   }
 
-  /** Local (0,0) anchors inside the unscaled LEAF box (group applies scale). */
+  /** Local (0,0) anchor for labels drawn inside the node group. */
   function openingAnchorLocal(node, openingId, face) {
-    const w = LEAF_W;
-    const h = LEAF_H;
+    const w = nodeW(node);
+    const h = nodeH(node);
     const side = parseSideOpening(openingId);
     const plane = parsePlaneOpening(openingId);
     const f = (
@@ -308,27 +292,30 @@
 
   function updateNodeVisual(_node) {
     const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+    measureVisibleSizes();
     for (const n of graph.nodes) {
       const g = nodesById[n.id];
       if (!g) continue;
-      const t = worldTransform(n, byId);
-      g.setAttribute(
-        "transform",
-        `translate(${t.x},${t.y}) scale(${t.scale})`
-      );
+      const a = absXY(n, byId);
+      g.setAttribute("transform", `translate(${a.x},${a.y})`);
+      const box = g.querySelector(".node-box");
+      if (box) {
+        box.setAttribute("width", String(nodeW(n)));
+        box.setAttribute("height", String(nodeH(n)));
+      }
     }
     refreshEdges();
   }
 
   function paintNode(node, layerG, byId) {
-    const t = worldTransform(node, byId);
-    const w = LEAF_W;
-    const h = LEAF_H;
+    const a = absXY(node, byId);
+    const w = nodeW(node);
+    const h = nodeH(node);
     const hasKids = childrenOf(node.id).length > 0;
     const g = el("g", {
       class: "node" + (hasKids ? " container" : ""),
       "data-id": node.id,
-      transform: `translate(${t.x},${t.y}) scale(${t.scale})`,
+      transform: `translate(${a.x},${a.y})`,
     });
     const box = el("rect", {
       class:
@@ -431,6 +418,7 @@
   function render() {
     if (!graph) return;
     ensurePositions();
+    measureVisibleSizes();
     clearSvg();
 
     worldEl = el("g", { id: "world" });
@@ -663,9 +651,8 @@
       }
       const dx = (ev.clientX - drag.startClientX) / scale;
       const dy = (ev.clientY - drag.startClientY) / scale;
-      const ls = localDragScale(node);
-      node.x = Math.round(drag.origX + dx / ls);
-      node.y = Math.round(drag.origY + dy / ls);
+      node.x = Math.round(drag.origX + dx);
+      node.y = Math.round(drag.origY + dy);
       dirtyLocal = true;
       updateNodeVisual(node);
       return;

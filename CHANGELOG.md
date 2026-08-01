@@ -26,8 +26,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   captures the pointer on ``pointerdown``, which had blocked dblclick.
 - Physical UI depth zoom: nested conduit lines were hidden under opaque
   parent fills; draw containers → edges → leaves.
-- Depth zoom keeps parent box size fixed (interior scaled to fit) so the
-  coarser layout does not jump when deepening.
+- Depth zoom uses window-style nesting: parent ``w``/``h`` is the bounding
+  box of its full descendant layout (same whether interior is drawn), and
+  children sit at natural size in parent-local coordinates.
 
 ## [0.22.0] — 2026-08-01
 

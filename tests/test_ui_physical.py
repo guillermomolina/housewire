@@ -102,6 +102,9 @@ class TestPhysicalGraph(unittest.TestCase):
             )
             self.assertTrue(parking_node["expandable"])
             self.assertIsNone(parking_node["parent"])
+            # Window size includes hidden descendants (same at deeper depth).
+            self.assertGreater(parking_node["w"], 120)
+            self.assertGreater(parking_node["h"], 56)
 
             # House depth 2: boxes nested under Parking
             deep = build_physical_graph(root, ".", depth=2)
@@ -109,6 +112,9 @@ class TestPhysicalGraph(unittest.TestCase):
                 {n["id"] for n in deep["nodes"]},
                 {"Parking", "Parking/Caja_4", "Parking/Enchufe_1"},
             )
+            parking_deep = next(n for n in deep["nodes"] if n["id"] == "Parking")
+            self.assertEqual(parking_deep["w"], parking_node["w"])
+            self.assertEqual(parking_deep["h"], parking_node["h"])
             caja_nested = next(
                 n for n in deep["nodes"] if n["id"] == "Parking/Caja_4"
             )
@@ -126,7 +132,8 @@ class TestPhysicalGraph(unittest.TestCase):
             caja_node = next(n for n in graph["nodes"] if n["id"] == "Caja_4")
             faces = {o["id"]: o["face"] for o in caja_node["openings"]}
             self.assertEqual(faces.get("B1-1"), "B")
-            self.assertIsNone(caja_node["x"])
+            self.assertIsNotNone(caja_node["x"])
+            self.assertIsNotNone(caja_node["w"])
 
             session_docs: dict[Path, dict] = {}
             updated = apply_auto_layout(
