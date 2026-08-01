@@ -6,7 +6,7 @@
   <title>HouseWire — physical</title>
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <link rel="stylesheet" href="/static/app.css?v=0.27.0" />
+  <link rel="stylesheet" href="/static/app.css?v=0.27.1" />
 </head>
 <body>
   <nav class="menubar" aria-label="Application">
@@ -134,7 +134,15 @@
     </aside>
   </div>
   <footer id="status" class="statusbar" aria-live="polite"></footer>
+  <div id="app-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-dismiss></div>
+    <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="app-modal-title" aria-describedby="app-modal-message">
+      <h2 id="app-modal-title">Confirm</h2>
+      <p id="app-modal-message" class="modal-hint"></p>
+      <div class="modal-actions" id="app-modal-actions"></div>
+    </div>
+  </div>
   <input type="file" id="file-open-input" accept=".yaml,.yml,text/yaml,application/x-yaml" hidden />
-  <script src="/static/app.js?v=0.27.0"></script>
+  <script src="/static/app.js?v=0.27.1"></script>
 </body>
 </html>

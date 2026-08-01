@@ -246,6 +246,22 @@ body {
   font-weight: 600;
 }
 
+.modal-actions button.danger {
+  background: transparent;
+  border-color: #f85149;
+  color: #ff7b72;
+}
+
+.modal-actions button.danger:hover {
+  background: color-mix(in srgb, #f85149 18%, transparent);
+  border-color: #ff7b72;
+}
+
+.modal-actions button:focus-visible {
+  outline: 2px solid var(--edge);
+  outline-offset: 2px;
+}
+
 .modal-error {
   margin: 0.65rem 0 0;
   font-size: 0.8rem;

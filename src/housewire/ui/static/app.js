@@ -114,6 +114,98 @@
     statusEl.textContent = text || "";
   }
 
+  /**
+   * In-app modal. Returns the chosen button id, or null if dismissed.
+   * @param {{
+   *   title?: string,
+   *   message?: string,
+   *   buttons?: { id: string, label: string, primary?: boolean, danger?: boolean }[]
+   * }} opts
+   */
+  function appDialog(opts) {
+    const modal = document.getElementById("app-modal");
+    const titleEl = document.getElementById("app-modal-title");
+    const msgEl = document.getElementById("app-modal-message");
+    const actions = document.getElementById("app-modal-actions");
+    if (!modal || !titleEl || !msgEl || !actions) {
+      return Promise.resolve(null);
+    }
+    const buttons = opts.buttons || [
+      { id: "cancel", label: "Cancel" },
+      { id: "ok", label: "OK", primary: true },
+    ];
+    return new Promise((resolve) => {
+      titleEl.textContent = opts.title || "HouseWire";
+      msgEl.textContent = opts.message || "";
+      actions.innerHTML = "";
+      modal.classList.remove("hidden");
+      modal.setAttribute("aria-hidden", "false");
+
+      function finish(result) {
+        modal.classList.add("hidden");
+        modal.setAttribute("aria-hidden", "true");
+        document.removeEventListener("keydown", onKey);
+        modal
+          .querySelectorAll("[data-modal-dismiss]")
+          .forEach((el) => el.removeEventListener("click", onDismiss));
+        resolve(result);
+      }
+
+      function onDismiss() {
+        finish(null);
+      }
+
+      function onKey(ev) {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          finish(null);
+        } else if (ev.key === "Enter") {
+          const primary = buttons.find((b) => b.primary) || buttons[buttons.length - 1];
+          if (primary) {
+            ev.preventDefault();
+            finish(primary.id);
+          }
+        }
+      }
+
+      for (const spec of buttons) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = spec.label;
+        if (spec.primary) btn.classList.add("primary");
+        if (spec.danger) btn.classList.add("danger");
+        btn.addEventListener("click", () => finish(spec.id));
+        actions.appendChild(btn);
+      }
+
+      document.addEventListener("keydown", onKey);
+      modal
+        .querySelectorAll("[data-modal-dismiss]")
+        .forEach((el) => el.addEventListener("click", onDismiss));
+
+      const focusBtn =
+        actions.querySelector("button.primary") ||
+        actions.querySelector("button:last-child");
+      setTimeout(() => focusBtn && focusBtn.focus(), 0);
+    });
+  }
+
+  /** @returns {Promise<"save"|"discard"|null>} */
+  async function confirmUnsavedClose(docTitle) {
+    const name = docTitle || "This file";
+    const choice = await appDialog({
+      title: "Unsaved changes",
+      message: `${name} has unsaved changes. Save before closing?`,
+      buttons: [
+        { id: "cancel", label: "Cancel" },
+        { id: "discard", label: "Discard", danger: true },
+        { id: "save", label: "Save", primary: true },
+      ],
+    });
+    if (choice === "save" || choice === "discard") return choice;
+    return null;
+  }
+
   function snapshotPositions() {
     const places = {};
     for (const n of graph?.nodes || []) {
@@ -2130,10 +2222,12 @@
   async function closeDocument(docId) {
     if (!docId) return;
     let dirty = false;
+    let title = "This file";
     try {
       const st = await api("/api/workspace");
       const row = (st.documents || []).find((d) => d.id === docId);
       dirty = Boolean(row && row.dirty);
+      if (row && (row.title || row.yaml)) title = row.title || row.yaml;
       if (docId === activeDocId) {
         syncLayoutDirty();
         dirty = dirty || dirtyLocal || (st.dirty || []).length > 0;
@@ -2142,10 +2236,29 @@
       dirty = docId === activeDocId && dirtyLocal;
     }
     if (dirty) {
-      const discard = window.confirm(
-        "There are unsaved changes. Close and discard them?"
-      );
-      if (!discard) return;
+      const choice = await confirmUnsavedClose(title);
+      if (!choice) return;
+      if (choice === "save") {
+        const wasActive = docId === activeDocId;
+        if (!wasActive) {
+          try {
+            await api("/api/workspace/activate", {
+              method: "POST",
+              body: JSON.stringify({ id: docId }),
+            });
+            applyWorkspaceStatus(await api("/api/workspace"));
+          } catch (err) {
+            setStatus(String(err.message || err));
+            return;
+          }
+        }
+        try {
+          await saveDocument();
+        } catch (err) {
+          setStatus(String(err.message || err));
+          return;
+        }
+      }
     }
     const wasActive = docId === activeDocId;
     rememberCurrentDocView();

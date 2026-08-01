@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.1] — 2026-08-01
+
+### Changed
+
+- Unsaved-close uses an in-app dialog (Save / Discard / Cancel) instead of
+  ``window.confirm``.
+
 ## [0.27.0] — 2026-08-01
 
 ### Changed
