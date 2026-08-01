@@ -1,5 +1,6 @@
 kind: conduit_type
 id: Conduit
+icon: fa-grip-lines-vertical
 title: Conduit / hose
 description_es: >
   Tubo o manguera entre locations (capa fisica). Une aberturas con from/to

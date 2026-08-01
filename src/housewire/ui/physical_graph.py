@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import Any
 
 from housewire.house import (
+    catalog_icon,
     is_place_type,
+    load_catalog,
     place_label,
     place_meta_from_mapping,
     place_name,
@@ -506,8 +508,10 @@ def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
     Place ids are site-relative (``.`` for the project root). Element ids are
     ``{place_id}/{element_name}`` (or just the element name under ``.``).
     ``selectable`` means the place can be a canvas root (has child places).
+    ``icon`` is resolved from instance → site/package catalog.
     """
     root = site_root.resolve()
+    catalog = load_catalog(root)
     places: dict[str, dict[str, Any]] = {}
     elements_by_place: dict[str, list[dict[str, Any]]] = {}
 
@@ -531,6 +535,7 @@ def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
         place_id = root.name if location_id == "." else parent.name
         raw_name = meta.get("name")
         raw_label = meta.get("label")
+        type_id = str(meta.get("type") or "Location")
         places[location_id] = {
             "id": location_id,
             "name": (
@@ -544,7 +549,8 @@ def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
                 else None
             ),
             "display_name": place_name(meta, place_id),
-            "type": str(meta.get("type") or "Location"),
+            "type": type_id,
+            "icon": catalog_icon(type_id, catalog=catalog, instance=doc),
             "parts": parts,
         }
         elem_rows: list[dict[str, Any]] = []
@@ -553,13 +559,15 @@ def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
                 ename if location_id == "." else f"{location_id}/{ename}"
             )
             elabel = defn.get("label")
+            etype = str(defn.get("type") or "Element")
             elem_rows.append(
                 {
                     "kind": "element",
                     "id": eid,
                     "name": ename,
                     "parent": location_id,
-                    "type": str(defn.get("type") or "Element"),
+                    "type": etype,
+                    "icon": catalog_icon(etype, catalog=catalog, instance=defn),
                     "subtype": defn.get("subtype"),
                     "label": (
                         str(elabel).strip()
@@ -611,6 +619,7 @@ def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
                     "label": info["label"],
                     "display_name": info["display_name"],
                     "type": info["type"],
+                    "icon": info.get("icon") or "fa-circle",
                     "depth": depth,
                     "selectable": loc_id in selectable,
                 }
@@ -620,7 +629,6 @@ def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
             _walk(loc_id, depth + 1)
 
     _walk(None, 0)
-    return rows
     return rows
 
 

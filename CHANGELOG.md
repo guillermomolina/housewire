@@ -36,8 +36,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - Physical UI left **Outline** tree (all places + elements). Click a place to
   switch the canvas view (or open the nearest canvas ancestor and select it);
   click an element to focus it (enables Elements if needed). ``GET /api/outline``.
-  Collapsible branches (session-remembered); Font Awesome icons by type. Toolbar
-  location dropdown removed (outline is the navigator).
+  Collapsible branches (session-remembered); icons from catalog ``icon:``
+  (site ``catalog/`` overlay + optional per-instance ``icon:``). Toolbar
+  location dropdown removed (outline is the navigator). ``GET /api/catalog``.
 
 ### Changed
 

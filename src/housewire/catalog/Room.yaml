@@ -1,5 +1,6 @@
 kind: place_type
 id: Room
+icon: fa-door-open
 title: Room
 description_es: >
   Habitacion o estancia. Metadatos de la carpeta (housewire.yaml root (type/label/…)).

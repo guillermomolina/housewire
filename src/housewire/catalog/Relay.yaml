@@ -1,5 +1,6 @@
 kind: element_type
 id: Relay
+icon: fa-diagram-project
 title: Relay / smart switch
 description_es: >
   Relé o interruptor inteligente (p.ej. Sonoff ZBMini). Alimentación LIn+N,

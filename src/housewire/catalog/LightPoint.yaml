@@ -1,5 +1,6 @@
 kind: place_type
 id: LightPoint
+icon: fa-lightbulb
 title: Light point / luminaire outlet
 description_es: >
   Punto de luz (agujero de techo/pared, portalámparas, salida a luminaria).

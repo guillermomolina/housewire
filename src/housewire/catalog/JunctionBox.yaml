@@ -1,5 +1,6 @@
 kind: place_type
 id: JunctionBox
+icon: fa-cube
 title: Junction box
 description_es: >
   Caja de derivacion. Metadatos de la carpeta (housewire.yaml root (type/label/…)).

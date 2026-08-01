@@ -1,5 +1,6 @@
 kind: element_type
 id: PETerminal
+icon: fa-earth-europe
 title: PE terminal bar
 description_es: Bornera de tierra (PE) del cuadro; reparte la tierra a la vivienda.
 qet_hint: pe_terminal_bar

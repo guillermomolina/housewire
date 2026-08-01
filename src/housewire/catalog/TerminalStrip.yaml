@@ -1,5 +1,6 @@
 kind: element_type
 id: TerminalStrip
+icon: fa-grip-lines
 title: Terminal strip / connector block
 description_es: >
   Regleta o bornes de empalme en caja de derivacion.

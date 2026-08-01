@@ -85,6 +85,23 @@ def create_app(site_root: Path) -> Any:
     def api_outline() -> dict[str, Any]:
         return {"nodes": pg.list_site_outline(root)}
 
+    @app.get("/api/catalog")
+    def api_catalog() -> dict[str, Any]:
+        from housewire.house import load_catalog
+
+        cat = load_catalog(root)
+        types = {
+            type_id: {
+                "id": type_id,
+                "kind": data.get("kind"),
+                "title": data.get("title"),
+                "icon": data.get("icon") or "fa-circle",
+            }
+            for type_id, data in sorted(cat.items())
+            if isinstance(data, dict)
+        }
+        return {"types": types}
+
     @app.get("/api/physical")
     def api_physical(location: str, depth: int = 1) -> dict[str, Any]:
         try:

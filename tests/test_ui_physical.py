@@ -233,6 +233,10 @@ class TestPhysicalGraph(unittest.TestCase):
             self.assertIn(("place", "Parking/Caja_4"), kinds)
             self.assertIn(("element", "Parking/Caja_4/Regleta"), kinds)
             self.assertIn(("element", "Parking/Enchufe_1/Socket"), kinds)
+            socket = next(
+                r for r in outline if r["id"] == "Parking/Enchufe_1/Socket"
+            )
+            self.assertEqual(socket.get("icon"), "fa-plug")
 
 
 class TestServeApi(unittest.TestCase):

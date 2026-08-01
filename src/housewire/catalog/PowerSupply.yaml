@@ -1,5 +1,6 @@
 kind: element_type
 id: PowerSupply
+icon: fa-battery-full
 title: AC/DC power supply
 description_es: Fuente / transformador (p.ej. portero). Primario AC, secundario DC.
 qet_hint: power_supply_ac_dc

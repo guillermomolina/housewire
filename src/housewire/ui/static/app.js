@@ -43,30 +43,6 @@
   const DBLCLICK_MS = 400;
   const ELEM_W = 72;
   const ELEM_H = 28;
-  const TYPE_ICONS = {
-    House: "fa-house",
-    Floor: "fa-layer-group",
-    Room: "fa-door-open",
-    Stair: "fa-stairs",
-    Panel: "fa-server",
-    JunctionBox: "fa-cube",
-    DeviceBox: "fa-box",
-    LightPoint: "fa-lightbulb",
-    Location: "fa-location-dot",
-    Socket: "fa-plug",
-    Switch: "fa-toggle-on",
-    Luminaire: "fa-lightbulb",
-    TerminalStrip: "fa-grip-lines",
-    PETerminal: "fa-earth-europe",
-    MCB: "fa-bolt",
-    MCB2P: "fa-bolt",
-    RCD: "fa-shield-halved",
-    Supply: "fa-plug-circle-bolt",
-    EarthElectrode: "fa-arrow-down-long",
-    PowerSupply: "fa-battery-full",
-    Intercom: "fa-phone",
-    Relay: "fa-diagram-project",
-  };
 
   function loadCollapsedOutline() {
     try {
@@ -90,7 +66,13 @@
   }
 
   function iconClassForType(typeId) {
-    return TYPE_ICONS[typeId] || "fa-circle";
+    return "fa-circle";
+  }
+
+  function faClass(icon) {
+    const raw = String(icon || "fa-circle").trim() || "fa-circle";
+    if (raw.includes(" ")) return raw;
+    return `fa-solid ${raw}`;
   }
 
   const ns = "http://www.w3.org/2000/svg";
@@ -1464,7 +1446,7 @@
       row.appendChild(twist);
 
       const icon = document.createElement("i");
-      icon.className = `fa-solid ${iconClassForType(node.type)} outline-icon`;
+      icon.className = `${faClass(node.icon || iconClassForType(node.type))} outline-icon`;
       icon.setAttribute("aria-hidden", "true");
       row.appendChild(icon);
 

@@ -9,6 +9,34 @@ Editing: `housewire shell <site>` or non-interactive `add` / `rm` / `show` (see 
 Element and place types live in the package: `src/housewire/catalog/`.
 Installation YAML lives in a **separate site directory/repo** (not in the program repo).
 
+### Catalog icons (UI)
+
+Each catalog type may declare a Font Awesome glyph:
+
+```yaml
+# package: src/housewire/catalog/Socket.yaml
+kind: element_type
+id: Socket
+icon: fa-plug
+```
+
+Resolution order for the outline / UI:
+
+1. Instance field ``icon:`` on the place or element YAML (optional override).
+2. Site overlay ``$SITE/catalog/<Type>.yaml`` (shallow merge over the package type).
+3. Package catalog ``icon:``.
+4. Fallback ``fa-circle``.
+
+Site overlay example (only customize the icon):
+
+```yaml
+# $SITE/catalog/Socket.yaml
+id: Socket
+icon: fa-outlet
+```
+
+Values are Font Awesome class tokens (``fa-plug`` or full ``fa-solid fa-plug``).
+
 ## Two layers (do not mix)
 
 | Layer | Nodes | Edges | Export |

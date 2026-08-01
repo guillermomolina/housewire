@@ -126,6 +126,32 @@ class TestDirectoryLocation(unittest.TestCase):
         ):
             self.assertIn(type_id, catalog)
             self.assertTrue(catalog[type_id].get("wireviz_skip"))
+            self.assertTrue(str(catalog[type_id].get("icon") or "").startswith("fa-"))
+
+    def test_site_catalog_icon_overlay(self) -> None:
+        from housewire.house import catalog_icon
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cat = root / "catalog"
+            cat.mkdir()
+            (cat / "Socket.yaml").write_text(
+                "id: Socket\nicon: fa-outlet\n", encoding="utf-8"
+            )
+            merged = load_catalog(root)
+            self.assertEqual(merged["Socket"]["icon"], "fa-outlet")
+            self.assertEqual(merged["Socket"]["kind"], "element_type")
+            self.assertEqual(
+                catalog_icon("Socket", catalog=merged), "fa-outlet"
+            )
+            self.assertEqual(
+                catalog_icon(
+                    "Socket",
+                    catalog=merged,
+                    instance={"type": "Socket", "icon": "fa-star"},
+                ),
+                "fa-star",
+            )
 
 
 class TestLocationElementLegacyInline(unittest.TestCase):

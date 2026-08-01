@@ -1,5 +1,6 @@
 kind: place_type
 id: DeviceBox
+icon: fa-box
 title: Device / mechanism box
 description_es: >
   Caja de mecanismo (enchufe, interruptor, …). Suele ser 1-gang; 2-gang / 3-gang

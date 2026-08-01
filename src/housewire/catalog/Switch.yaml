@@ -1,5 +1,6 @@
 kind: element_type
 id: Switch
+icon: fa-toggle-on
 title: Switch
 description_es: >
   Interruptor de mecanismo (luz / carga). Subtypes: unipolar (1↔2),

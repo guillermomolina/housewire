@@ -176,13 +176,10 @@ def catalog_dir() -> Path:
     return package_dir() / "catalog"
 
 
-def load_catalog(repo_root: Path | None = None) -> dict[str, dict[str, Any]]:
-    # repo_root kept for API compat; catalog ships inside the package.
-    root = catalog_dir()
+def _load_catalog_dir(root: Path) -> dict[str, dict[str, Any]]:
     catalog: dict[str, dict[str, Any]] = {}
     if not root.is_dir():
         return catalog
-
     for path in sorted(root.glob("*.yaml")) + sorted(root.glob("*.yml")):
         with path.open("r", encoding="utf-8") as handle:
             data = yaml.safe_load(handle) or {}
@@ -191,6 +188,53 @@ def load_catalog(repo_root: Path | None = None) -> dict[str, dict[str, Any]]:
         type_id = str(data.get("id") or path.stem)
         catalog[type_id] = data
     return catalog
+
+
+def load_catalog(repo_root: Path | None = None) -> dict[str, dict[str, Any]]:
+    """Load package catalog, optionally merged with ``$SITE/catalog/*.yaml``.
+
+    Site files overlay package entries by ``id`` (shallow key merge). A site
+    file may contain only ``id`` + ``icon`` to customize the UI glyph.
+    """
+    catalog = _load_catalog_dir(catalog_dir())
+    if repo_root is not None:
+        site_dir = Path(repo_root).resolve() / "catalog"
+        for type_id, data in _load_catalog_dir(site_dir).items():
+            base = catalog.get(type_id)
+            if base is None:
+                catalog[type_id] = dict(data)
+            else:
+                merged = dict(base)
+                merged.update(data)
+                catalog[type_id] = merged
+    return catalog
+
+
+def normalize_icon_class(raw: object, *, default: str = "fa-circle") -> str:
+    """Return a Font Awesome class token (``fa-plug`` or ``fa-solid fa-plug``)."""
+    if raw is None:
+        return default
+    text = str(raw).strip()
+    if not text:
+        return default
+    return text
+
+
+def catalog_icon(
+    type_id: object,
+    *,
+    catalog: dict[str, dict[str, Any]] | None = None,
+    instance: dict[str, Any] | None = None,
+    default: str = "fa-circle",
+) -> str:
+    """Resolve UI icon: instance ``icon:`` → catalog ``icon:`` → default."""
+    if isinstance(instance, dict) and instance.get("icon") is not None:
+        return normalize_icon_class(instance.get("icon"), default=default)
+    cat = catalog if catalog is not None else load_catalog()
+    type_def = cat.get(str(type_id or ""))
+    if isinstance(type_def, dict) and type_def.get("icon") is not None:
+        return normalize_icon_class(type_def.get("icon"), default=default)
+    return default
 
 
 def _catalog_defaults_for_subtype(

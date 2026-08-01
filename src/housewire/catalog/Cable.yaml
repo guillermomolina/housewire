@@ -1,5 +1,6 @@
 kind: cable_type
 id: Cable
+icon: fa-minus
 title: Cable / logical line
 description_es: >
   Línea lógica (uno o varios conductores) entre extremos. No es un conector;
