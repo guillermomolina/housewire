@@ -32,7 +32,9 @@ from housewire.shell import run_repl
 OUTPUT_SUFFIXES = (".html", ".svg", ".bom.tsv", ".yaml")
 PACKAGE_ROOT = Path(__file__).resolve().parent
 EXCLUDED_DIR_NAMES = {".venv", "__pycache__", ".git", "out"}
-KNOWN_SUBCOMMANDS = frozenset({"generate", "shell", "ls", "show", "add", "rm", "version"})
+KNOWN_SUBCOMMANDS = frozenset(
+    {"generate", "shell", "ls", "show", "add", "rm", "version", "serve"}
+)
 
 
 def run_wireviz(input_file: Path, output_dir: Path) -> None:
@@ -494,6 +496,23 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("version", help="Show housewire version")
 
+    serve_p = sub.add_parser(
+        "serve",
+        help="Interactive physical floor UI (requires housewire[ui])",
+    )
+    serve_p.add_argument("project_path", help="Site project path")
+    serve_p.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Bind host (default: 127.0.0.1)",
+    )
+    serve_p.add_argument(
+        "--port",
+        type=int,
+        default=8765,
+        help="Bind port (default: 8765)",
+    )
+
     ls_p = sub.add_parser("ls", help="List locations (cd) and elements")
     ls_p.add_argument("project_path")
     ls_p.add_argument("path", nargs="?", default=".", help="Relative path")
@@ -646,6 +665,16 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
     cmd = args.command
     if cmd == "version":
         print(f"housewire {__version__}")
+        return 0
+    if cmd == "serve":
+        from housewire.ui.app import run_serve
+
+        project_path = Path(args.project_path).resolve()
+        try:
+            run_serve(project_path, host=args.host, port=args.port)
+        except RuntimeError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
         return 0
     if cmd == "generate":
         project_path = Path(args.project_path).resolve()

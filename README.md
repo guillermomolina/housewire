@@ -23,6 +23,7 @@ sudo pacman -S graphviz   # Arch
 python -m venv .venv --prompt housewire
 source .venv/bin/activate
 python -m pip install -e .
+python -m pip install -e '.[ui]'   # optional: interactive floor canvas
 # or: make prepare
 ```
 
@@ -31,6 +32,17 @@ Point the CLI at any site directory (outside this repo):
 ```bash
 export SITE="$HOME/electrical-sites/my-site"
 ```
+
+## Interactive physical UI
+
+```bash
+housewire serve "$SITE"
+# → http://127.0.0.1:8765/
+```
+
+Drag places on a Floor canvas, auto-layout, toggle conduit `line`/`tube`, then **Save**.
+Positions go to `view.physical` on places; floor page settings to `views.physical`.
+Requires the `ui` optional dependency (`fastapi`, `uvicorn`).
 
 ## Shell and ABM
 

@@ -303,6 +303,32 @@ openings: [B1-1, W1, N1]
 If `openings` is set, `pend` requires enter/exit ids to be in that list.
 If `opening_grid` is also set, each id must fit the grid for its face.
 
+### Canvas layout (`view` / `views`)
+
+Optional UI positions for the interactive physical editor (`housewire serve`):
+
+```yaml
+# On a place (JunctionBox, DeviceBox, …)
+view:
+  physical:
+    x: 120
+    y: 80
+    rotation: 0    # optional: 0 | 90 | 180 | 270
+
+# On a Floor
+views:
+  physical:
+    width: 2000
+    height: 1400
+    representation: line   # line | tube
+```
+
+- **`view.physical`**: canvas coordinates for that place on its floor page.
+- **`views.physical`**: page size and preferred conduit drawing mode for the floor.
+- Zoom in the UI is independent of `representation` (line vs tube).
+- Back openings (`B…`) are drawn at the symbol center, not as a fourth side.
+- Omitted when unused; Graphviz/WireViz generate does not require these fields.
+
 ### Mounting
 
 | `mount` | `F` faces… | `B` is… | Local N/S/E/W |

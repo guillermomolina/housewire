@@ -9,6 +9,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 _Changes not yet released in a tagged version._
 
+## [0.20.0] — 2026-08-01
+
+### Added
+
+- Interactive physical floor UI: ``housewire serve SITE`` (optional extra
+  ``housewire[ui]`` with FastAPI/uvicorn). Canvas for Floor places: drag
+  components, auto-layout, ``line``/``tube`` conduit representation, zoom
+  independent of representation. Persists ``view.physical`` on places and
+  ``views.physical`` on floors.
+- Schema helpers for canvas layout (``view.physical.x/y``, floor page size /
+  representation).
+
 ## [0.19.3] — 2026-08-01
 
 ### Added

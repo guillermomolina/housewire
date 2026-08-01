@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>housewire — physical</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <header class="toolbar">
+    <div class="brand">housewire</div>
+    <label class="field">
+      Floor
+      <select id="floor-select"></select>
+    </label>
+    <label class="field">
+      Representation
+      <select id="representation">
+        <option value="line">line</option>
+        <option value="tube">tube</option>
+      </select>
+    </label>
+    <div class="actions">
+      <button type="button" id="btn-auto">Auto-layout</button>
+      <button type="button" id="btn-auto-force" title="Reposition all nodes">Auto-layout (force)</button>
+      <button type="button" id="btn-save">Save</button>
+      <button type="button" id="btn-zoom-in">+</button>
+      <button type="button" id="btn-zoom-out">−</button>
+      <button type="button" id="btn-zoom-reset">1:1</button>
+    </div>
+    <div id="status" class="status" aria-live="polite"></div>
+  </header>
+  <main id="viewport">
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

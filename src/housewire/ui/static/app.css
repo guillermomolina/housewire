@@ -1,0 +1,176 @@
+:root {
+  --bg: #1a1d21;
+  --panel: #24292f;
+  --border: #3d444d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #3fb950;
+  --node: #2d333b;
+  --node-stroke: #6e7681;
+  --edge: #58a6ff;
+  --opening: #d2a8ff;
+  --back: #f0883e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 0.6rem 1rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-right: 0.5rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.field select {
+  min-width: 10rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+  text-transform: none;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+button {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--edge);
+}
+
+#btn-save {
+  border-color: var(--accent);
+}
+
+.status {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+#viewport {
+  height: calc(100% - 3.5rem);
+  overflow: hidden;
+  cursor: grab;
+  background:
+    radial-gradient(circle at 1px 1px, #30363d 1px, transparent 0) 0 0 / 24px 24px;
+}
+
+#viewport.panning {
+  cursor: grabbing;
+}
+
+#canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  user-select: none;
+}
+
+.node-box {
+  fill: var(--node);
+  stroke: var(--node-stroke);
+  stroke-width: 1.5;
+  cursor: move;
+}
+
+.node-box.selected {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.node-label {
+  fill: var(--text);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.node-type {
+  fill: var(--muted);
+  font-size: 9px;
+  pointer-events: none;
+}
+
+.edge-line {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.edge-tube {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 8;
+  stroke-opacity: 0.35;
+  pointer-events: none;
+}
+
+.edge-tube-core {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.opening-side {
+  fill: var(--opening);
+  font-size: 8px;
+  pointer-events: none;
+}
+
+.opening-back {
+  fill: var(--back);
+  font-size: 8px;
+  pointer-events: none;
+}
+
+.opening-back-mark {
+  fill: none;
+  stroke: var(--back);
+  stroke-width: 1.2;
+  pointer-events: none;
+}
