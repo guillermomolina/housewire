@@ -7,6 +7,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.14] — 2026-08-02
+
+### Fixed
+
+- Opening joins no longer snap the offset spine end onto the mouth (that
+  painted diagonal funnels). Inbox→mouth uses a Manhattan L, with a
+  near-mouth diagonal rewrite as a safety net.
+
+### Added
+
+- Route-quality regression for the screenshot-style opening funnel snap.
+
 ## [0.34.13] — 2026-08-02
 
 ### Changed

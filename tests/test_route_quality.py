@@ -321,6 +321,8 @@ class TestElementBorderAndVEntry(unittest.TestCase):
     def test_opening_forbids_diagonals(self) -> None:
         from housewire.ui.route_quality import (
             count_diagonals_near_point,
+            ensure_manhattan_near_point,
+            manhattan_join_end,
             opening_approach_is_manhattan,
         )
 
@@ -340,6 +342,77 @@ class TestElementBorderAndVEntry(unittest.TestCase):
             assess_bundle([good], openings=[mouth]),
             [],
         )
+
+    def test_screenshot_opening_funnel_snap_is_detected_and_fixed(self) -> None:
+        """Live Cuadro bug: horizontal then diagonal snap into the S opening."""
+        from housewire.ui.route_quality import (
+            count_diagonals_near_point,
+            ensure_manhattan_near_point,
+            manhattan_join_end,
+            opening_approach_is_manhattan,
+        )
+
+        mouth = (200.0, 200.0)
+        # Brown/green style: corridor then forced snap to mouth (= diagonal).
+        brown_snap = [
+            (120.0, 120.0),
+            (120.0, 160.0),
+            (160.0, 160.0),
+            mouth,  # diagonal from (160,160) → (200,200)
+        ]
+        green_snap = [
+            (280.0, 120.0),
+            (280.0, 160.0),
+            (240.0, 160.0),
+            mouth,
+        ]
+        self.assertGreaterEqual(
+            count_diagonals_near_point(brown_snap, mouth), 1
+        )
+        self.assertGreaterEqual(
+            count_diagonals_near_point(green_snap, mouth), 1
+        )
+        issues = assess_bundle(
+            [brown_snap, green_snap],
+            openings=[mouth],
+            allow_crossings=True,
+            min_separation=0.5,
+        )
+        self.assertTrue(any("opening" in x for x in issues), msg=issues)
+
+        # Fix path: drop snapped mouth, Manhattan-join (arrive vertically).
+        brown_fix = manhattan_join_end(
+            brown_snap[:-1], mouth, face="S"
+        )
+        green_fix = manhattan_join_end(
+            green_snap[:-1], mouth, face="S"
+        )
+        self.assertTrue(opening_approach_is_manhattan(brown_fix, mouth))
+        self.assertTrue(opening_approach_is_manhattan(green_fix, mouth))
+        self.assertEqual(
+            count_diagonals_near_point(brown_fix, mouth), 0
+        )
+        self.assertEqual(
+            count_diagonals_near_point(green_fix, mouth), 0
+        )
+        self.assertEqual(
+            assess_bundle(
+                [brown_fix],
+                openings=[mouth],
+            ),
+            [],
+        )
+        self.assertEqual(
+            assess_bundle(
+                [green_fix],
+                openings=[mouth],
+            ),
+            [],
+        )
+
+        # Safety net: rewrite an already-snapped diagonal near the mouth.
+        rewritten = ensure_manhattan_near_point(brown_snap, mouth)
+        self.assertEqual(count_diagonals_near_point(rewritten, mouth), 0)
 
     def test_outline_extra_is_thin(self) -> None:
         # Rim must stay a hairline beyond the tube (was roadW+2.5).

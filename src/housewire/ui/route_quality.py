@@ -187,6 +187,56 @@ def opening_approach_is_manhattan(
     return count_diagonals_near_point(pts, mouth, radius=radius) == 0
 
 
+def manhattan_join_end(
+    pts: Poly, target: Point, face: str = "S"
+) -> list[Point]:
+    """Append a Manhattan L from ``pts`` end to ``target`` (opening join).
+
+    Mirrors ``orthoJoinEnd`` in ``app.js``. Never introduces a diagonal.
+    """
+    tx, ty = target
+    if not pts:
+        return [(tx, ty)]
+    out: list[Point] = [(p[0], p[1]) for p in pts]
+    lx, ly = out[-1]
+    if _dist((lx, ly), (tx, ty)) < 1e-6:
+        return out
+    if abs(lx - tx) < 1e-6 or abs(ly - ty) < 1e-6:
+        out.append((tx, ty))
+        return out
+    f = (face or "S").upper()
+    if f in ("E", "W"):
+        out.append((lx, ty))
+        out.append((tx, ty))
+    else:
+        out.append((tx, ly))
+        out.append((tx, ty))
+    return out
+
+
+def ensure_manhattan_near_point(
+    pts: Poly, point: Point, *, radius: float = OPENING_DIAG_RADIUS
+) -> list[Point]:
+    """Rewrite diagonals near ``point`` into Manhattan L corners."""
+    if len(pts) < 2:
+        return [(p[0], p[1]) for p in pts]
+    out: list[Point] = [(p[0], p[1]) for p in pts]
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(out) - 1):
+            a, b = out[i], out[i + 1]
+            if not is_diagonal_segment(a, b):
+                continue
+            if _dist(a, point) > radius and _dist(b, point) > radius:
+                continue
+            corner = (b[0], a[1])
+            out = out[: i + 1] + [corner] + out[i + 1 :]
+            changed = True
+            break
+    return out
+
+
 def max_diagonal_length(pts: Poly) -> float:
     """Longest diagonal segment length, or 0 if none."""
     best = 0.0

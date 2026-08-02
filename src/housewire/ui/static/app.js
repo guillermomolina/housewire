@@ -2918,6 +2918,76 @@
   }
 
   /**
+   * Append a Manhattan path from the polyline end to ``target``.
+   * Used at openings (never diagonal). For N/S faces arrive on a vertical;
+   * for E/W arrive on a horizontal.
+   */
+  function orthoJoinEnd(pts, target, face) {
+    if (!pts || !pts.length) {
+      const t0 = Array.isArray(target) ? target : [target.x, target.y];
+      return [[t0[0], t0[1]]];
+    }
+    /** @type {number[][]} */
+    const out = pts.map((p) => [p[0], p[1]]);
+    const tx = Array.isArray(target) ? target[0] : target.x;
+    const ty = Array.isArray(target) ? target[1] : target.y;
+    const last = out[out.length - 1];
+    if (Math.hypot(last[0] - tx, last[1] - ty) < 1e-6) {
+      return cleanOrthoPoly(out);
+    }
+    if (Math.abs(last[0] - tx) < 1e-6 || Math.abs(last[1] - ty) < 1e-6) {
+      out.push([tx, ty]);
+      return cleanOrthoPoly(out);
+    }
+    const f = String(face || "").toUpperCase();
+    if (f === "E" || f === "W") {
+      out.push([last[0], ty]);
+      out.push([tx, ty]);
+    } else {
+      // N/S/default: match mouth x first, arrive vertically.
+      out.push([tx, last[1]]);
+      out.push([tx, ty]);
+    }
+    return cleanOrthoPoly(out);
+  }
+
+  /**
+   * Rewrite any diagonal with an endpoint near ``point`` into a Manhattan L.
+   * Safety net so openings never keep a funnel snap.
+   */
+  function ensureManhattanNearPoint(pts, point, radius = 48) {
+    if (!pts || pts.length < 2 || point == null) {
+      return pts ? pts.map((p) => [p[0], p[1]]) : [];
+    }
+    const px = Array.isArray(point) ? point[0] : point.x;
+    const py = Array.isArray(point) ? point[1] : point.y;
+    /** @type {number[][]} */
+    let out = pts.map((p) => [p[0], p[1]]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = 0; i < out.length - 1; i++) {
+        const a = out[i];
+        const b = out[i + 1];
+        const diag =
+          Math.abs(a[0] - b[0]) > 1e-6 && Math.abs(a[1] - b[1]) > 1e-6;
+        if (!diag) continue;
+        const near =
+          Math.hypot(a[0] - px, a[1] - py) <= radius ||
+          Math.hypot(b[0] - px, b[1] - py) <= radius;
+        if (!near) continue;
+        // Insert a corner; prefer keeping a's x then b's y when closer to point
+        // on the vertical through the point.
+        const corner = [b[0], a[1]];
+        out = [...out.slice(0, i + 1), corner, ...out.slice(i + 1)];
+        changed = true;
+        break;
+      }
+    }
+    return cleanOrthoPoly(out);
+  }
+
+  /**
    * Mouth → exterior lane join: one cable per opening, Manhattan only.
    */
   function mouthToLanePts(mouth, face, lanePt) {
@@ -3530,7 +3600,17 @@
               [startAtt.x, startAtt.y],
               startFace
             );
-            startOff[startOff.length - 1] = [startJoin[0], startJoin[1]];
+            // Never snap last→join (that paints a diagonal funnel into the
+            // opening). Drop the offset mouth vertex and Manhattan-join.
+            const mouthFace = routeFace(
+              startPlace,
+              first.from_opening,
+              first.from_opening?.[0],
+              placeById
+            );
+            if (startOff.length >= 2) startOff = startOff.slice(0, -1);
+            startOff = orthoJoinEnd(startOff, startJoin, mouthFace);
+            startOff = ensureManhattanNearPoint(startOff, startJoin);
             const head = pinToLanePts(
               [startAtt.x, startAtt.y],
               startFace,
@@ -3542,12 +3622,18 @@
           }
         }
         if (!chain) {
-          chain = pinToLanePts(
-            [startAtt.x, startAtt.y],
-            startFace,
+          const mouthFace = routeFace(
+            startPlace,
+            first.from_opening,
+            first.from_opening?.[0],
+            placeById
+          );
+          chain = orthoJoinEnd(
+            [
+              [startAtt.x, startAtt.y],
+            ],
             startJoin,
-            fromSlot.slot,
-            fromSlot.count
+            mouthFace
           );
         }
         for (const ext of exOff) {
@@ -3573,7 +3659,15 @@
               [endAtt.x, endAtt.y],
               endFace
             );
-            endOff[endOff.length - 1] = [endJoin[0], endJoin[1]];
+            const mouthFace = routeFace(
+              endPlace,
+              last.to_opening,
+              last.to_opening?.[0],
+              placeById
+            );
+            if (endOff.length >= 2) endOff = endOff.slice(0, -1);
+            endOff = orthoJoinEnd(endOff, endJoin, mouthFace);
+            endOff = ensureManhattanNearPoint(endOff, endJoin);
             const head = pinToLanePts(
               [endAtt.x, endAtt.y],
               endFace,
@@ -3585,14 +3679,22 @@
             chain = mergeOrthoPolys(chain, endPart.slice().reverse());
           }
         } else {
-          const lead = pinToLanePts(
-            [endAtt.x, endAtt.y],
-            endFace,
+          const mouthFace = routeFace(
+            endPlace,
+            last.to_opening,
+            last.to_opening?.[0],
+            placeById
+          );
+          const lead = orthoJoinEnd(
+            [[endAtt.x, endAtt.y]],
             endJoin,
-            toSlot.slot,
-            toSlot.count
+            mouthFace
           );
           chain = mergeOrthoPolys(chain, lead.slice().reverse());
+        }
+        if (chain) {
+          chain = ensureManhattanNearPoint(chain, startJoin);
+          chain = ensureManhattanNearPoint(chain, endJoin);
         }
       } else {
         const startTail = hopEndpointTailPts(
@@ -3659,7 +3761,11 @@
         }
       }
       if (!chain || chain.length < 2) return [];
-      return [stripShortZJogs(stripOutAndBack(chain))];
+      let cleaned = stripShortZJogs(stripOutAndBack(chain));
+      // Openings must stay Manhattan even after Z-stripping.
+      cleaned = ensureManhattanNearPoint(cleaned, startOp);
+      cleaned = ensureManhattanNearPoint(cleaned, endOp);
+      return [cleaned];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
     return d
