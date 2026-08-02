@@ -1046,12 +1046,34 @@
     return cost;
   }
 
+  /** Soft cost for vertices that leave a parent content rect (same-room tubes). */
+  function pathOutsideBoundsCost(pts, bounds) {
+    if (!bounds || !pts || !pts.length) return 0;
+    let cost = 0;
+    const x0 = bounds.x;
+    const y0 = bounds.y;
+    const x1 = bounds.x + bounds.w;
+    const y1 = bounds.y + bounds.h;
+    const pad = 2;
+    for (const p of pts) {
+      if (
+        p[0] < x0 - pad ||
+        p[0] > x1 + pad ||
+        p[1] < y0 - pad ||
+        p[1] > y1 + pad
+      ) {
+        cost += 400;
+      }
+    }
+    return cost;
+  }
+
   /**
    * Orthogonal route points from p1 to p2. When ``occupied`` is set, prefer
    * candidates that avoid colinear overlap (and lightly avoid crossings).
    * ``obstacles`` are place rects to go around (C / outer rails).
    */
-  function orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles) {
+  function orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles, stayBounds) {
     const x1 = p1.x;
     const y1 = p1.y;
     const x2 = p2.x;
@@ -1102,7 +1124,8 @@
       OVERLAP_EPS,
       obstacles,
       [x1, y1],
-      [x2, y2]
+      [x2, y2],
+      stayBounds
     );
     for (const p of mid) {
       pts.push(p);
@@ -1113,9 +1136,9 @@
     return cleanOrthoPoly(pts);
   }
 
-  function orthoPathD(p1, p2, fromFace, toFace, occupied, obstacles) {
+  function orthoPathD(p1, p2, fromFace, toFace, occupied, obstacles, stayBounds) {
     return pointsToPathD(
-      orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles)
+      orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles, stayBounds)
     );
   }
 
@@ -1234,7 +1257,8 @@
     overlapEps,
     obstacles,
     prePoint,
-    postPoint
+    postPoint,
+    stayBounds
   ) {
     const start = [ax, ay];
     const end = [bx, by];
@@ -1417,6 +1441,7 @@
 
     let best = raw[0];
     let bestObstacle = Infinity;
+    let bestOutside = Infinity;
     let bestBends = Infinity;
     let bestConflict = Infinity;
     let bestLen = Infinity;
@@ -1428,21 +1453,29 @@
       const bends = polyBends(full);
       const conflict = pathConflictCost(full, occupied, eps);
       const obstacle = pathObstacleCost(full, obstacles);
+      const outside = pathOutsideBoundsCost(full, stayBounds);
       const len = polyLength(full);
-      // Lexicographic: clear of boxes, fewest bends, less conflict, shorter.
+      // Lexicographic: clear of boxes, stay in parent, fewest bends, …
       if (
         obstacle < bestObstacle - 1e-9 ||
-        (Math.abs(obstacle - bestObstacle) < 1e-9 && bends < bestBends) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+          outside < bestOutside - 1e-9) ||
+        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+          Math.abs(outside - bestOutside) < 1e-9 &&
+          bends < bestBends) ||
+        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+          Math.abs(outside - bestOutside) < 1e-9 &&
           bends === bestBends &&
           conflict < bestConflict - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+          Math.abs(outside - bestOutside) < 1e-9 &&
           bends === bestBends &&
           Math.abs(conflict - bestConflict) < 1e-9 &&
           len < bestLen)
       ) {
         best = pts;
         bestObstacle = obstacle;
+        bestOutside = outside;
         bestBends = bends;
         bestConflict = conflict;
         bestLen = len;
@@ -1462,7 +1495,29 @@
     // Include endpoints: stubs leave the faces, so mid-routes must go around
     // the boxes themselves (otherwise L/Z cuts back through the interior).
     const obstacles = placeObstacles(byId, []);
-    const pts = orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles);
+    /** @type {{x:number,y:number,w:number,h:number}|null} */
+    let stayBounds = null;
+    if (a.parent && a.parent === b.parent) {
+      const parent = byId[a.parent];
+      if (parent) {
+        const pa = absXY(parent, byId);
+        stayBounds = {
+          x: pa.x + PAD,
+          y: pa.y + HEADER,
+          w: Math.max(4, nodeW(parent) - 2 * PAD),
+          h: Math.max(4, nodeH(parent) - HEADER - PAD),
+        };
+      }
+    }
+    const pts = orthoRoute(
+      p1,
+      p2,
+      fromFace,
+      toFace,
+      occupied,
+      obstacles,
+      stayBounds
+    );
     return { d: pointsToPathD(pts), segs: segsFromPoints(pts) };
   }
 
@@ -1805,11 +1860,67 @@
         stubDistToToward(toPt, eo, fromPt)
       );
     }
-    const mid = orthoPtsPrefer(aStub, bStub, preferCenter);
+    /** @type {number[][][]} */
+    const mids = [];
+    if (
+      Math.abs(aStub.x - bStub.x) < 1e-6 ||
+      Math.abs(aStub.y - bStub.y) < 1e-6
+    ) {
+      mids.push([
+        [aStub.x, aStub.y],
+        [bStub.x, bStub.y],
+      ]);
+    } else {
+      mids.push(
+        [
+          [aStub.x, aStub.y],
+          [bStub.x, aStub.y],
+          [bStub.x, bStub.y],
+        ],
+        [
+          [aStub.x, aStub.y],
+          [aStub.x, bStub.y],
+          [bStub.x, bStub.y],
+        ]
+      );
+    }
+    let bestMid = mids[0];
+    let bestScore = Infinity;
+    for (const mid of mids) {
+      // Prefer interior (near place center) over wall-sliding L's.
+      let pref = 0;
+      if (preferCenter) {
+        for (const p of mid) {
+          pref += Math.hypot(p[0] - preferCenter.x, p[1] - preferCenter.y);
+        }
+        pref /= mid.length;
+      }
+      const bends = orthoBendCount([
+        [fromPt.x, fromPt.y],
+        ...mid,
+        [toPt.x, toPt.y],
+      ]);
+      const score = pref * 10 + bends;
+      if (score < bestScore) {
+        bestScore = score;
+        bestMid = mid;
+      }
+    }
     /** @type {number[][]} */
-    const pts = [[fromPt.x, fromPt.y], [aStub.x, aStub.y]];
-    for (let i = 1; i < mid.length - 1; i++) pts.push(mid[i]);
-    pts.push([bStub.x, bStub.y], [toPt.x, toPt.y]);
+    const pts = [[fromPt.x, fromPt.y]];
+    for (const p of bestMid) {
+      const prev = pts[pts.length - 1];
+      if (prev && Math.hypot(prev[0] - p[0], prev[1] - p[1]) < 1e-6) continue;
+      pts.push(p);
+    }
+    const last = pts[pts.length - 1];
+    if (
+      !last ||
+      Math.abs(last[0] - toPt.x) > 1e-6 ||
+      Math.abs(last[1] - toPt.y) > 1e-6
+    ) {
+      pts.push([toPt.x, toPt.y]);
+    }
     /** @type {number[][]} */
     const clean = [];
     for (const p of pts) {
@@ -2214,11 +2325,13 @@
     if (!elem || !place || !openingId) return null;
     if (elem.parent && place.id && elem.parent !== place.id) return null;
     const op = openingAnchorAbs(place, openingId, openingId?.[0], placeById);
-    const opFace = (
+    const rawFace = (
       parseSideOpening(openingId)?.face ||
+      parsePlaneOpening(openingId)?.face ||
       String(openingId || "?")[0] ||
       "?"
     ).toUpperCase();
+    const opFace = rawFace;
     const attach = resolveElementAttach(
       elem,
       pin,
@@ -2240,6 +2353,145 @@
       prefer,
       "opening"
     );
+  }
+
+  /** Merge orthogonal polylines; drop duplicated joint vertex. */
+  function mergeOrthoPolys(a, b) {
+    if (!a || a.length < 2) return b && b.length >= 2 ? b.map((p) => [p[0], p[1]]) : null;
+    if (!b || b.length < 2) return a.map((p) => [p[0], p[1]]);
+    /** @type {number[][]} */
+    const out = a.map((p) => [p[0], p[1]]);
+    for (const p of b) {
+      const prev = out[out.length - 1];
+      if (prev && Math.hypot(prev[0] - p[0], prev[1] - p[1]) < 1e-6) continue;
+      out.push([p[0], p[1]]);
+    }
+    return out.length >= 2 ? out : null;
+  }
+
+  /**
+   * Short path from a place opening through the mouth to an exterior lane join.
+   * Keeps the inbox tail aimed at the opening (not sliding along the wall).
+   */
+  function mouthBridgePts(place, openingId, join, placeById) {
+    if (!place || !openingId || join == null) return null;
+    const op = openingAnchorAbs(place, openingId, openingId?.[0], placeById);
+    const j = xyOf(join);
+    if (Math.hypot(j.x - op.x, j.y - op.y) < 1.5) {
+      return [
+        [op.x, op.y],
+        [j.x, j.y],
+      ];
+    }
+    const exitFace = routeFace(place, openingId, openingId?.[0], placeById);
+    const fo = faceOutwardDelta(exitFace);
+    if (!fo.x && !fo.y) {
+      return simpleOrthoPts(op, j);
+    }
+    const stub = stubPoint(op, fo.x, fo.y, stubDistToToward(op, fo, j));
+    /** @type {number[][][]} */
+    const candidates = [];
+    if (Math.abs(stub.x - j.x) < 1e-6 || Math.abs(stub.y - j.y) < 1e-6) {
+      candidates.push([
+        [stub.x, stub.y],
+        [j.x, j.y],
+      ]);
+    } else {
+      // Prefer leaving along the mouth normal first (vertical-first on S/N,
+      // horizontal-first on E/W) so the bridge does not slide on the wall.
+      if (exitFace === "N" || exitFace === "S") {
+        candidates.push(
+          [
+            [stub.x, stub.y],
+            [stub.x, j.y],
+            [j.x, j.y],
+          ],
+          [
+            [stub.x, stub.y],
+            [j.x, stub.y],
+            [j.x, j.y],
+          ]
+        );
+      } else {
+        candidates.push(
+          [
+            [stub.x, stub.y],
+            [j.x, stub.y],
+            [j.x, j.y],
+          ],
+          [
+            [stub.x, stub.y],
+            [stub.x, j.y],
+            [j.x, j.y],
+          ]
+        );
+      }
+    }
+    let best = candidates[0];
+    let bestBends = Infinity;
+    for (const c of candidates) {
+      const full = [[op.x, op.y], ...c];
+      const bends = orthoBendCount(full);
+      if (bends < bestBends) {
+        bestBends = bends;
+        best = c;
+      }
+    }
+    /** @type {number[][]} */
+    const pts = [[op.x, op.y]];
+    for (const p of best) {
+      const prev = pts[pts.length - 1];
+      if (prev && Math.hypot(prev[0] - p[0], prev[1] - p[1]) < 1e-6) continue;
+      pts.push(p);
+    }
+    return pts.length >= 2 ? pts : null;
+  }
+
+  /**
+   * Element → opening (interior) → exterior lane join.
+   * @returns {number[][]|null}
+   */
+  function hopTailViaOpening(
+    elem,
+    place,
+    openingId,
+    exteriorJoin,
+    placeById,
+    slot,
+    slotCount,
+    pin
+  ) {
+    const inbox = hopEndpointTailPts(
+      elem,
+      place,
+      openingId,
+      placeById,
+      slot,
+      slotCount,
+      pin
+    );
+    const bridge = mouthBridgePts(place, openingId, exteriorJoin, placeById);
+    if (inbox && bridge) return mergeOrthoPolys(inbox, bridge);
+    if (inbox) return inbox;
+    if (bridge) {
+      // No in-box element route — at least exit through the mouth.
+      const attach = resolveElementAttach(
+        elem,
+        pin,
+        openingAnchorAbs(place, openingId, openingId?.[0], placeById),
+        placeById,
+        slot,
+        slotCount
+      );
+      return mergeOrthoPolys(
+        [
+          [attach.x, attach.y],
+          [bridge[0][0], bridge[0][1]],
+        ],
+        bridge
+      );
+    }
+    return null;
   }
 
   /**
@@ -2385,33 +2637,6 @@
         return d ? pathDToSubpaths(d).map(parallel) : [];
       }
 
-      const pStart = resolveElementAttach(
-        a,
-        fromPin,
-        openingAnchorAbs(
-          startPlace,
-          first.from_opening,
-          first.from_opening?.[0],
-          placeById
-        ),
-        placeById,
-        fromSlot.slot,
-        fromSlot.count
-      );
-      const pEnd = resolveElementAttach(
-        b,
-        toPin,
-        openingAnchorAbs(
-          endPlace,
-          last.to_opening,
-          last.to_opening?.[0],
-          placeById
-        ),
-        placeById,
-        toSlot.slot,
-        toSlot.count
-      );
-
       /** @type {number[][][]} */
       const exteriors = [];
       for (let i = 0; i < hops.length; i++) {
@@ -2476,24 +2701,33 @@
         const endJoin = exteriors[exteriors.length - 1][
           exteriors[exteriors.length - 1].length - 1
         ];
-        const startAbs = absXY(startPlace, placeById);
-        const endAbs = absXY(endPlace, placeById);
-        const preferStart = {
-          x: startAbs.x + nodeW(startPlace) / 2,
-          y: startAbs.y + nodeH(startPlace) / 2,
-        };
-        const preferEnd = {
-          x: endAbs.x + nodeW(endPlace) / 2,
-          y: endAbs.y + nodeH(endPlace) / 2,
-        };
-        const startTail = routeAttachToJoin(pStart, startJoin, preferStart);
-        if (startTail.length >= 2) subs.push(startTail);
+        // Inbox via the place mouth (not along the wall to the exterior join),
+        // then a short bridge out to the offset lane.
+        const startTail = hopTailViaOpening(
+          a,
+          startPlace,
+          first.from_opening,
+          startJoin,
+          placeById,
+          fromSlot.slot,
+          fromSlot.count,
+          fromPin
+        );
+        if (startTail && startTail.length >= 2) subs.push(startTail);
         for (const ext of exteriors) subs.push(ext);
-        const endTail = routeAttachToJoin(pEnd, endJoin, preferEnd);
-        // endTail is attach→join; reverse so it continues the path join→attach.
-        if (endTail.length >= 2) {
-          const rev = endTail.slice().reverse();
-          subs.push(rev);
+        const endTail = hopTailViaOpening(
+          b,
+          endPlace,
+          last.to_opening,
+          endJoin,
+          placeById,
+          toSlot.slot,
+          toSlot.count,
+          toPin
+        );
+        // endTail is attach→opening→join; reverse so it continues join→opening→attach.
+        if (endTail && endTail.length >= 2) {
+          subs.push(endTail.slice().reverse());
         }
       } else {
         // No exterior geometry — fall back to opening-centered tails.

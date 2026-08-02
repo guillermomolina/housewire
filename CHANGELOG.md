@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.5] — 2026-08-02
+
+### Fixed
+
+- Cable tails route through the place opening (mouth) via the interior,
+  not along the wall to the exterior lane join.
+- Same-parent conduit routes prefer staying inside the parent content
+  bounds instead of hugging outer rails.
+
 ## [0.32.4] — 2026-08-02
 
 ### Fixed
