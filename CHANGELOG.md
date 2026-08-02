@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.33.0] — 2026-08-02
+
+### Changed
+
+- Conduit tubes and cable jackets stop at leaf place mouths (no tube
+  painted inside junction boxes).
+- Cable strands keep lane offset through openings and inbox tails so they
+  do not funnel to one point or stack on the same centerline.
+
 ## [0.32.9] — 2026-08-02
 
 ### Fixed

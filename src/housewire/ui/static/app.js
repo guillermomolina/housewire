@@ -2861,9 +2861,9 @@
           ext = exteriorPathD(pointsToPathD(routed), leafObstacles);
         }
         if (ext) {
+          // Centerline exterior only — lane offset applied to the full chain.
           for (const sub of pathDToSubpaths(ext)) {
-            const off = parallel(sub);
-            if (off.length >= 2) exteriors.push(off);
+            if (sub.length >= 2) exteriors.push(sub.map((p) => [p[0], p[1]]));
           }
         }
       }
@@ -2885,39 +2885,8 @@
       /** @type {number[][][]} */
       const pieces = [];
       if (oriented.length) {
-        const startJoin = oriented[0][0];
-        const endJoin = oriented[oriented.length - 1][
-          oriented[oriented.length - 1].length - 1
-        ];
-        // Inbox via the place mouth, then short bridge to the offset lane.
-        const startTail = hopTailViaOpening(
-          a,
-          startPlace,
-          first.from_opening,
-          startJoin,
-          placeById,
-          fromSlot.slot,
-          fromSlot.count,
-          fromPin
-        );
-        if (startTail && startTail.length >= 2) pieces.push(startTail);
-        for (const ext of oriented) pieces.push(ext);
-        const endTail = hopTailViaOpening(
-          b,
-          endPlace,
-          last.to_opening,
-          endJoin,
-          placeById,
-          toSlot.slot,
-          toSlot.count,
-          toPin
-        );
-        // endTail is attach→opening→join; reverse so it continues join→opening→attach.
-        if (endTail && endTail.length >= 2) {
-          pieces.push(endTail.slice().reverse());
-        }
-      } else {
-        // No exterior geometry — fall back to opening-centered tails.
+        // Inbox to the mouth (centerline); whole chain is lane-offset later so
+        // strands keep spacing through the opening instead of funneling in.
         const startTail = hopEndpointTailPts(
           a,
           startPlace,
@@ -2927,7 +2896,8 @@
           fromSlot.count,
           fromPin
         );
-        if (startTail) pieces.push(parallel(startTail));
+        if (startTail && startTail.length >= 2) pieces.push(startTail);
+        for (const ext of oriented) pieces.push(ext);
         const endTail = hopEndpointTailPts(
           b,
           endPlace,
@@ -2937,20 +2907,62 @@
           toSlot.count,
           toPin
         );
-        if (endTail) pieces.push(parallel(endTail));
+        if (endTail && endTail.length >= 2) {
+          pieces.push(endTail.slice().reverse());
+        }
+      } else {
+        const startTail = hopEndpointTailPts(
+          a,
+          startPlace,
+          first.from_opening,
+          placeById,
+          fromSlot.slot,
+          fromSlot.count,
+          fromPin
+        );
+        if (startTail) pieces.push(startTail);
+        const endTail = hopEndpointTailPts(
+          b,
+          endPlace,
+          last.to_opening,
+          placeById,
+          toSlot.slot,
+          toSlot.count,
+          toPin
+        );
+        if (endTail) pieces.push(endTail);
       }
-      // One continuous strand: merge pieces and cancel any out-and-back.
+      // One continuous centerline, then parallel offset for this strand lane.
       /** @type {number[][]|null} */
       let chain = null;
       for (const piece of pieces) {
         if (!piece || piece.length < 2) continue;
-        chain = chain ? mergeOrthoPolys(chain, piece) : piece.map((p) => [p[0], p[1]]);
+        chain = chain
+          ? mergeOrthoPolys(chain, piece)
+          : piece.map((p) => [p[0], p[1]]);
       }
       if (!chain || chain.length < 2) return [];
-      return [stripOutAndBack(chain)];
+      const base = stripOutAndBack(chain);
+      if (base.length < 2) return [];
+      const off = parallel(base);
+      if (!off.length) return [base];
+      // Keep terminal pins fixed; offset the run (including through mouths).
+      off[0] = [base[0][0], base[0][1]];
+      off[off.length - 1] = [
+        base[base.length - 1][0],
+        base[base.length - 1][1],
+      ];
+      return [cleanOrthoPoly(off)];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
     return d ? pathDToSubpaths(d).map(parallel) : [];
+  }
+
+  /** Tube geometry drawn only outside leaf places (stops at the mouth). */
+  function conduitDisplayD(fullD, byId) {
+    if (!fullD) return "";
+    const leafObs = placeObstacles(byId, [], 2);
+    return exteriorPathD(fullD, leafObs) || "";
   }
 
   /** How many strand lanes ride a conduit edge (for road width). */
@@ -2992,23 +3004,29 @@
         laneDist: midOff,
       });
       const jw = highwaySpanWidth(i1 - i0 + 1);
+      const leafObs = placeObstacles(placeById, [], 2);
       for (const sub of jacketSubs) {
-        // Jacket only on conduit-parallel runs (skip very short tails).
+        // Jacket only on exterior conduit runs (not inside junction boxes).
         if (sub.length < 2) continue;
-        const jacket = el("path", {
-          class: "cable-jacket",
-          d: pointsToPathD(sub),
-        });
-        jacket.style.strokeWidth = String(jw);
-        jacket.appendChild(
-          el(
-            "title",
-            null,
-            `${edgeName}${colors.length ? ` [${colors.join(",")}]` : ""}`
-          )
-        );
-        cablesG.appendChild(jacket);
-        paths.push(jacket);
+        const clipped = exteriorPathD(pointsToPathD(sub), leafObs);
+        if (!clipped) continue;
+        for (const piece of pathDToSubpaths(clipped)) {
+          if (piece.length < 2) continue;
+          const jacket = el("path", {
+            class: "cable-jacket",
+            d: pointsToPathD(piece),
+          });
+          jacket.style.strokeWidth = String(jw);
+          jacket.appendChild(
+            el(
+              "title",
+              null,
+              `${edgeName}${colors.length ? ` [${colors.join(",")}]` : ""}`
+            )
+          );
+          cablesG.appendChild(jacket);
+          paths.push(jacket);
+        }
       }
     }
 
@@ -3068,7 +3086,8 @@
       const routed = edgePathD(item.edge, byId, occupied);
       if (routed) {
         item.d = routed.d;
-        for (const path of item.paths) path.setAttribute("d", routed.d);
+        const displayD = conduitDisplayD(routed.d, byId);
+        for (const path of item.paths) path.setAttribute("d", displayD);
         for (const s of routed.segs) occupied.push(s);
         const n = (item.edge.contains || []).length;
         const lanes = conduitLaneHint(item.edge, graph.cable_edges || []);
@@ -3463,13 +3482,15 @@
       const n = (edge.contains || []).length;
       const lanes = conduitLaneHint(edge, graph.cable_edges || []);
       const roadW = conduitRoadWidth(n, lanes);
-      const tube = el("path", { class: "edge-tube", d });
+      const displayD = conduitDisplayD(d, byId);
+      const tube = el("path", { class: "edge-tube", d: displayD });
       tube.style.strokeWidth = String(roadW);
-      const core = el("path", { class: "edge-tube-core", d });
+      const core = el("path", { class: "edge-tube-core", d: displayD });
       tube.appendChild(el("title", null, title));
       core.appendChild(el("title", null, title));
       edgesG.appendChild(tube);
       edgesG.appendChild(core);
+      // Keep full ``d`` for cable hop overlays; display uses clipped geometry.
       edgePaths.push({ edge, paths: [tube, core], d });
     }
 
