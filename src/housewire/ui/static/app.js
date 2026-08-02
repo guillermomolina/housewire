@@ -1592,9 +1592,9 @@
     let best = raw[0];
     let bestObstacle = Infinity;
     let bestOutside = Infinity;
+    let bestBends = Infinity;
     let bestHug = Infinity;
     let bestEntry = Infinity;
-    let bestBends = Infinity;
     let bestConflict = Infinity;
     let bestLen = Infinity;
     const eps = overlapEps ?? 6;
@@ -1609,44 +1609,44 @@
       const hug = pathBorderHugCost(full, hugRects);
       const entry = pathEntryExcessCost(full, toFace);
       const len = polyLength(full);
-      // Lexicographic: clear boxes, stay in parent, leave walls, short
-      // entry arm, fewest bends…
+      // Lexicographic: clear boxes, stay in parent, fewest bends first
+      // (avoid staircases), then soft wall/entry preference.
       if (
         obstacle < bestObstacle - 1e-9 ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           outside < bestOutside - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
+          bends < bestBends) ||
+        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+          Math.abs(outside - bestOutside) < 1e-9 &&
+          bends === bestBends &&
           hug < bestHug - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
+          bends === bestBends &&
           Math.abs(hug - bestHug) < 1e-9 &&
           entry < bestEntry - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
-          Math.abs(hug - bestHug) < 1e-9 &&
-          Math.abs(entry - bestEntry) < 1e-9 &&
-          bends < bestBends) ||
-        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          Math.abs(outside - bestOutside) < 1e-9 &&
-          Math.abs(hug - bestHug) < 1e-9 &&
-          Math.abs(entry - bestEntry) < 1e-9 &&
           bends === bestBends &&
+          Math.abs(hug - bestHug) < 1e-9 &&
+          Math.abs(entry - bestEntry) < 1e-9 &&
           conflict < bestConflict - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
+          bends === bestBends &&
           Math.abs(hug - bestHug) < 1e-9 &&
           Math.abs(entry - bestEntry) < 1e-9 &&
-          bends === bestBends &&
           Math.abs(conflict - bestConflict) < 1e-9 &&
           len < bestLen)
       ) {
         best = pts;
         bestObstacle = obstacle;
         bestOutside = outside;
+        bestBends = bends;
         bestHug = hug;
         bestEntry = entry;
-        bestBends = bends;
         bestConflict = conflict;
         bestLen = len;
       }

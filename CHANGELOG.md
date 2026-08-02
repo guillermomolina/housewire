@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.8] — 2026-08-02
+
+### Fixed
+
+- Orthogonal scoring prefers fewest bends again before soft wall/entry
+  costs (stops staircase detours that only shortened the last arm).
+
 ## [0.32.7] — 2026-08-02
 
 ### Fixed
