@@ -3184,6 +3184,39 @@
   }
 
   /**
+   * Join a terminal lead (pin→…→rail) to a mouth-fan tip without collapsing
+   * onto a shared horizontal at rail-Y (Test_01 y=420 trunk).
+   * Prefer travel along the lead's lateral (rail.x / rail.y) first, then across
+   * at the fan-tip latitude — each lane keeps its own corridor.
+   */
+  function joinLeadToFanTip(lead, fanTip) {
+    if (!lead || lead.length < 1) {
+      return fanTip ? [[fanTip[0], fanTip[1]]] : [];
+    }
+    if (!fanTip) return lead.map((p) => [p[0], p[1]]);
+    const rail = lead[lead.length - 1];
+    if (Math.hypot(rail[0] - fanTip[0], rail[1] - fanTip[1]) < 1e-6) {
+      return lead.map((p) => [p[0], p[1]]);
+    }
+    /** @type {number[][]} */
+    const bridge = [[rail[0], rail[1]]];
+    // Match fan-tip latitude/longitude on the lead's column first.
+    if (Math.abs(rail[0] - fanTip[0]) >= Math.abs(rail[1] - fanTip[1])) {
+      // More horizontal travel: go vertical to fanTip.y on rail.x, then across.
+      if (Math.abs(rail[1] - fanTip[1]) > 1e-6) {
+        bridge.push([rail[0], fanTip[1]]);
+      }
+      bridge.push([fanTip[0], fanTip[1]]);
+    } else {
+      if (Math.abs(rail[0] - fanTip[0]) > 1e-6) {
+        bridge.push([fanTip[0], rail[1]]);
+      }
+      bridge.push([fanTip[0], fanTip[1]]);
+    }
+    return mergeOrthoPolys(lead, bridge) || lead;
+  }
+
+  /**
    * Join a terminal lead to the offset spine with Manhattan only (no diagonal
    * gap after trimming spine points near the tip).
    */
@@ -4050,9 +4083,8 @@
 
       const startFan = mouthFanPts(startOp, startMouthFace, laneDist);
       const endFan = mouthFanPts(endOp, endMouthFace, laneDist);
-      // Toward mouth: fan → stub → mouth. Join the terminal lead ONLY at the
-      // fan tip — joining onto stub/mouth collapses every lane onto one shared
-      // inbox trunk (Test_01: common y=420 / x=534 corridor).
+      // Toward mouth: fan → stub → mouth. Join lead to fan tip via
+      // joinLeadToFanTip (column-first) so lanes do not share rail-Y.
       const startFanRev = startFan.slice().reverse();
       const startLead = pinToLanePts(
         [startAtt.x, startAtt.y],
@@ -4061,10 +4093,13 @@
         fromSlot.slot,
         fromSlot.count
       );
-      let head = mergeLeadToSpine(startLead, [startFanRev[0]], startFace);
+      let head = joinLeadToFanTip(startLead, startFanRev[0]);
       if (startFanRev.length > 1) {
         head = mergeOrthoPolys(head, startFanRev.slice(1)) || head;
       }
+      head = stripShortZJogs(
+        stripOutAndBack(head, [startOp, startFanRev[0], ...startFan])
+      );
 
       const endFanFwd = endFan.map((p) => [p[0], p[1]]);
       const endFanTip = endFanFwd[endFanFwd.length - 1];
@@ -4076,33 +4111,33 @@
         toSlot.count
       );
       // pin → … → fan tip → stub → mouth, then reverse to mouth→…→pin.
-      let tailFromPin = mergeLeadToSpine(endLead, [endFanTip], endFace);
+      let tailFromPin = joinLeadToFanTip(endLead, endFanTip);
       const fanToMouth = endFanFwd.slice().reverse(); // fan, stub, mouth
       if (fanToMouth.length > 1) {
         tailFromPin =
           mergeOrthoPolys(tailFromPin, fanToMouth.slice(1)) || tailFromPin;
       }
+      tailFromPin = stripShortZJogs(
+        stripOutAndBack(tailFromPin, [endOp, endFanTip, ...endFanFwd])
+      );
       const tail = tailFromPin.slice().reverse();
 
+      // Tube stays pristine (never stripOutAndBack across mouth converges —
+      // that collapsed boca zigzags into a shortcut past the mouth).
       let chain = mergeOrthoPolys(head, tube);
       chain = mergeOrthoPolys(chain, tail);
       if (!chain || chain.length < 2) return [];
 
-      const mouths = [startOp, endOp];
-      // Only strip out-and-back / short Z while protecting mouths. Do not run
-      // full-path ensureManhattan / lift / tube-splice — those reintroduced
-      // shared inbox trunks and pin↔mouth loops (0.34.25–26).
-      let cleaned = stripShortZJogs(stripOutAndBack(chain, mouths));
       if (fromSlot.count > 1) {
-        cleaned = preserveTerminalVLead(startLead, cleaned);
+        chain = preserveTerminalVLead(startLead, chain);
       }
       if (toSlot.count > 1) {
-        cleaned = preserveTerminalVLead(
+        chain = preserveTerminalVLead(
           endLead,
-          cleaned.slice().reverse()
+          chain.slice().reverse()
         ).reverse();
       }
-      return [cleaned];
+      return [chain];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
     return d

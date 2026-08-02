@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.30] — 2026-08-02
+
+### Fixed
+
+- Hop inbox join: ``joinLeadToFanTip`` travels along the lead column to the
+  fan-tip latitude before crossing (avoids the shared rail-Y trunk).
+- Strip out-and-back only on head/tail with mouth+stub+fan protected; never
+  strip the pristine tube segment across mouth converges.
+
+### Added
+
+- Route-quality helpers and tests for the shared rail-Y anti-pattern vs
+  column-first fan-tip joins.
+
 ## [0.34.29] — 2026-08-02
 
 ### Fixed

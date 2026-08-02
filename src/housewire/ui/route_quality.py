@@ -1468,6 +1468,47 @@ def mouth_fan_join_correct(
     return out
 
 
+def join_lead_to_fan_tip(lead: Poly, fan_tip: Point) -> list[Point]:
+    """Mirror of ``joinLeadToFanTip``: column-first bridge, no shared rail-Y."""
+    if not lead:
+        return [(float(fan_tip[0]), float(fan_tip[1]))]
+    out: list[Point] = [(float(p[0]), float(p[1])) for p in lead]
+    fx, fy = float(fan_tip[0]), float(fan_tip[1])
+    rail = out[-1]
+    if _dist(rail, (fx, fy)) < 1e-6:
+        return out
+    if abs(rail[0] - fx) >= abs(rail[1] - fy):
+        if abs(rail[1] - fy) > 1e-6:
+            out.append((rail[0], fy))
+        out.append((fx, fy))
+    else:
+        if abs(rail[0] - fx) > 1e-6:
+            out.append((fx, rail[1]))
+        out.append((fx, fy))
+    return out
+
+
+def shared_rail_y_join_anti_pattern(
+    leads: Sequence[Poly], fan_tips: Sequence[Point]
+) -> list[list[Point]]:
+    """Bug: from each rail, go horizontal at rail-Y to stub-x then to fan tip.
+
+    That puts every strand on the same horizontal (Test_01 y=420 trunk).
+    """
+    out: list[list[Point]] = []
+    for lead, tip in zip(leads, fan_tips):
+        rail = (float(lead[-1][0]), float(lead[-1][1]))
+        fx, fy = float(tip[0]), float(tip[1])
+        # Shared horizontal at rail Y toward fan tip x, then vertical.
+        chain = [(float(p[0]), float(p[1])) for p in lead]
+        if abs(rail[0] - fx) > 1e-6:
+            chain.append((fx, rail[1]))
+        if abs(rail[1] - fy) > 1e-6:
+            chain.append((fx, fy))
+        out.append(chain)
+    return out
+
+
 def hop_lanes_through_mouths(
     centerline: Poly,
     mouths: Sequence[Point],

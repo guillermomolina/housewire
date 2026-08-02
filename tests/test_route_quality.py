@@ -1262,6 +1262,53 @@ class TestBipolarVAndLiftPreservesDiagonal(unittest.TestCase):
         )
         self.assertLessEqual(d, 1.5, msg=fixed)
 
+    def test_shared_rail_y_trunk_detected_column_join_ok(self) -> None:
+        """V rails share a Y; joining along that Y stacks every lane."""
+        from housewire.ui.route_quality import (
+            join_lead_to_fan_tip,
+            shared_rail_y_join_anti_pattern,
+            terminal_v_lead,
+        )
+
+        pin = (200.0, 160.0)
+        face = "N"
+        # Three bipolar-style leads into fan tips at different latitudes.
+        leads = [
+            terminal_v_lead(pin, face, (160.0, 100.0), 0, 3),
+            terminal_v_lead(pin, face, (200.0, 100.0), 1, 3),
+            terminal_v_lead(pin, face, (240.0, 100.0), 2, 3),
+        ]
+        tips = [(100.0, 120.0), (100.0, 100.0), (100.0, 80.0)]
+        bad = shared_rail_y_join_anti_pattern(leads, tips)
+        good = [join_lead_to_fan_tip(leads[i], tips[i]) for i in range(3)]
+        rail_y = leads[0][-1][1]
+        tip_xs = {float(t[0]) for t in tips}
+
+        def horiz_at_rail_toward_tip(poly: list) -> bool:
+            """True if poly travels horizontally on rail_y into the tip column."""
+            for a, b in zip(poly, poly[1:]):
+                if abs(a[1] - rail_y) > 0.5 or abs(b[1] - rail_y) > 0.5:
+                    continue
+                if abs(a[0] - b[0]) < 1.0:
+                    continue
+                lo, hi = sorted((a[0], b[0]))
+                if any(lo - 0.5 <= tx <= hi + 0.5 for tx in tip_xs):
+                    return True
+            return False
+
+        self.assertTrue(all(horiz_at_rail_toward_tip(p) for p in bad), msg=bad)
+        # Column-first join: when tip.y != rail_y, do not crawl on rail_y.
+        for lead, tip, poly in zip(leads, tips, good):
+            if abs(float(tip[1]) - rail_y) < 0.5:
+                continue
+            self.assertFalse(horiz_at_rail_toward_tip(poly), msg=(tip, poly))
+            rail = (float(lead[-1][0]), float(lead[-1][1]))
+            self.assertIn(
+                (rail[0], float(tip[1])),
+                [(float(p[0]), float(p[1])) for p in poly],
+                msg=poly,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
