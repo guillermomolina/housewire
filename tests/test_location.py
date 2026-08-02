@@ -1,4 +1,4 @@
-"""Tests for place metadata at YAML root, wireviz_skip, physical, inline."""
+"""Tests for place metadata at YAML root, physical, inline."""
 from __future__ import annotations
 
 import tempfile
@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml as _yaml
 
 from fixtures import add_place, init_site, save_site
-from housewire.house import house_document_to_wireviz, load_catalog, _walk_locations
+from housewire.house import is_place_type, load_catalog, validate_house_tree, _walk_locations
 from housewire.project import abm
 from housewire.project.io import HOUSEWIRE_YAML, create_empty_house_file
 from housewire.project.tree import get_place_node
@@ -17,7 +17,7 @@ from housewire.project.tree import get_place_node
 class TestDirectoryLocation(unittest.TestCase):
     """Root place fields in housewire.yaml supply metadata for nested places."""
 
-    def test_location_not_in_wireviz_connectors(self) -> None:
+    def test_location_place_validates_with_element(self) -> None:
         doc = _yaml.safe_load(
             "schema: house/v1\n"
             "type: JunctionBox\n"
@@ -27,15 +27,9 @@ class TestDirectoryLocation(unittest.TestCase):
             "  Regleta:\n"
             "    type: TerminalStrip\n"
         )
-        wv = house_document_to_wireviz(
+        validate_house_tree(
             doc, catalog=load_catalog(), file_location_parts=["Parking", "Caja 1"]
         )
-        names = list(wv["connectors"])
-        self.assertTrue(
-            any(n.endswith("__Regleta") or n == "Parking__Caja_1__Regleta" for n in names),
-            names,
-        )
-        self.assertEqual(len(names), 1, names)
 
     def test_physical_subtitle_from_location(self) -> None:
         from housewire.house.physical import build_physical_model
@@ -115,7 +109,7 @@ class TestDirectoryLocation(unittest.TestCase):
             "    type: TerminalStrip\n"
         )
         with self.assertRaises(ValueError) as ctx:
-            house_document_to_wireviz(
+            validate_house_tree(
                 doc, catalog=load_catalog(), file_location_parts=["Parking"]
             )
         self.assertTrue("self" in str(ctx.exception).lower() or "raiz" in str(ctx.exception).lower())
@@ -133,7 +127,8 @@ class TestDirectoryLocation(unittest.TestCase):
             "Location",
         ):
             self.assertIn(type_id, catalog)
-            self.assertTrue(catalog[type_id].get("wireviz_skip"))
+            self.assertTrue(is_place_type(type_id))
+            self.assertNotIn("wireviz_skip", catalog[type_id])
             self.assertTrue(str(catalog[type_id].get("icon") or "").startswith("fa-"))
 
     def test_site_catalog_icon_overlay(self) -> None:
@@ -165,14 +160,8 @@ class TestDirectoryLocation(unittest.TestCase):
 class TestLocationElementLegacyInline(unittest.TestCase):
     """Inline place types with nested content still work (escape hatch)."""
 
-    def _wv(self, doc_yaml: str, file_parts: list[str]) -> dict:
-        doc = _yaml.safe_load(doc_yaml)
-        return house_document_to_wireviz(
-            doc, catalog=load_catalog(), file_location_parts=file_parts
-        )
-
-    def test_nested_element_gets_sublocation_prefix(self) -> None:
-        wv = self._wv(
+    def test_nested_element_validates(self) -> None:
+        doc = _yaml.safe_load(
             """
 schema: house/v1
 elements:
@@ -181,10 +170,11 @@ elements:
     elements:
       Regleta:
         type: TerminalStrip
-""",
-            ["Parking"],
+"""
         )
-        self.assertIn("Parking__Caja_1__Regleta", wv["connectors"])
+        validate_house_tree(
+            doc, catalog=load_catalog(), file_location_parts=["Parking"]
+        )
 
     def test_location_metadata_preserved_in_sublevel(self) -> None:
         doc = _yaml.safe_load(

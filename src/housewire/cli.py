@@ -2,488 +2,21 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import os
-import shutil
 import sys
-import unicodedata
 from pathlib import Path
 
-import yaml
-
-from housewire.house import (
-    house_document_to_wireviz,
-    is_house_document,
-    load_catalog,
-    path_location_parts,
-)
 from housewire.commands import cmd_ls, show_file
-from housewire.house.physical import export_physical_zone
 from housewire import __version__
 from housewire.project import abm
-from housewire.project.paths import (
-    YAML_EXTENSIONS,
-    collect_yaml_from_directory,
-    is_excluded_path,
-    is_yaml,
-    split_project_arg,
-)
+from housewire.project.paths import split_project_arg
 from housewire.project.session import ProjectSession
 from housewire.shell import run_repl
 
-OUTPUT_SUFFIXES = (".html", ".svg", ".bom.tsv", ".yaml")
 PACKAGE_ROOT = Path(__file__).resolve().parent
-EXCLUDED_DIR_NAMES = {".venv", "__pycache__", ".git", "out"}
 KNOWN_SUBCOMMANDS = frozenset(
-    {"generate", "shell", "ls", "show", "add", "rm", "version", "serve"}
+    {"shell", "ls", "show", "add", "rm", "version", "serve"}
 )
-
-
-def run_wireviz(input_file: Path, output_dir: Path) -> None:
-    if shutil.which("dot") is None:
-        raise RuntimeError(
-            "Could not find 'dot' (Graphviz). Install the system package 'graphviz'."
-        )
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    from housewire.house.wireviz_patch import apply_wireviz_asymmetric_pinlabel_patch
-    from wireviz.wireviz import parse as wireviz_parse
-
-    apply_wireviz_asymmetric_pinlabel_patch()
-    print()
-    print("WireViz (house patch)")
-    print("Input file:  ", input_file)
-    print(
-        "Output file: ",
-        f"{output_dir / input_file.stem}.[html|svg|tsv]",
-    )
-    wireviz_parse(
-        str(input_file),
-        output_formats=("html", "svg", "tsv"),
-        output_dir=output_dir,
-        output_name=input_file.stem,
-        image_paths=[input_file.parent],
-    )
-    print()
-
-
-def resolve_inputs(
-    project_path: Path, raw_inputs: list[str] | None, output_dir: Path
-) -> list[Path]:
-    excluded_dirs = {output_dir.resolve()}
-    if not raw_inputs:
-        return collect_yaml_from_directory(project_path, excluded_dirs)
-
-    resolved_files: list[Path] = []
-    for item in raw_inputs:
-        candidate = (project_path / item).resolve()
-        if not candidate.exists():
-            raise FileNotFoundError(f"Input path does not exist: {candidate}")
-
-        if candidate.is_file():
-            if not is_yaml(candidate):
-                raise ValueError(f"Not a valid YAML file: {candidate}")
-            resolved_files.append(candidate)
-            continue
-
-        if candidate.is_dir():
-            yaml_files = collect_yaml_from_directory(candidate, excluded_dirs)
-            if not yaml_files:
-                raise FileNotFoundError(
-                    f"No YAML files found in directory: {candidate}"
-                )
-            resolved_files.extend(yaml_files)
-            continue
-
-        raise ValueError(f"Unsupported input type: {candidate}")
-
-    return sorted(set(resolved_files))
-
-
-def normalize_token(value: str) -> str:
-    ascii_value = (
-        unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
-    )
-    cleaned = "".join(ch if ch.isalnum() else "_" for ch in ascii_value).strip("_")
-    while "__" in cleaned:
-        cleaned = cleaned.replace("__", "_")
-    return cleaned or "sin_nombre"
-
-
-def build_prefix(project_path: Path, yaml_file: Path) -> str:
-    relative_parent = yaml_file.relative_to(project_path).parent
-    if str(relative_parent) == ".":
-        return ""
-    parts = [normalize_token(part) for part in relative_parent.parts]
-    return "__".join(part for part in parts if part)
-
-
-def prefixed_name(prefix: str, name: str) -> str:
-    normalized_name = normalize_token(name)
-    if not prefix:
-        return normalized_name
-    return f"{prefix}__{normalized_name}"
-
-
-def rename_connection_endpoint(endpoint: object, name_map: dict[str, str]) -> object:
-    if not isinstance(endpoint, dict):
-        return endpoint
-
-    renamed: dict[object, object] = {}
-    for key, value in endpoint.items():
-        renamed[name_map.get(str(key), key)] = value
-    return renamed
-
-
-def _apply_pin_remaps_to_connections(
-    connections: list[object],
-    pin_remap_by_element: dict[str, dict[str, object]],
-) -> None:
-    for connection in connections:
-        if not isinstance(connection, list):
-            continue
-        for endpoint in connection:
-            if not isinstance(endpoint, dict):
-                continue
-            for name, pins in endpoint.items():
-                remap = pin_remap_by_element.get(str(name))
-                if not remap or not isinstance(pins, list):
-                    continue
-                endpoint[name] = [remap.get(str(pin), pin) for pin in pins]
-
-
-def _merge_wireviz_piece(
-    *,
-    connectors: dict[str, object],
-    cables: dict[str, object],
-    connections: list[object],
-    pin_remaps: dict[str, dict[str, object]],
-    merged: dict[str, object],
-    options_already_set: bool,
-    data: dict,
-    prefix: str,
-    already_qualified: bool,
-) -> bool:
-    local_map: dict[str, str] = {}
-
-    local_connectors = data.get("connectors", {}) or {}
-    if not isinstance(local_connectors, dict):
-        raise ValueError("'connectors' must be a map")
-    for name, definition in local_connectors.items():
-        new_name = str(name) if already_qualified else prefixed_name(prefix, str(name))
-        if new_name in connectors:
-            raise ValueError(f"Name collision in connectors after prefix: {new_name}")
-        connectors[new_name] = copy.deepcopy(definition)
-        local_map[str(name)] = new_name
-
-    local_cables = data.get("cables", {}) or {}
-    if not isinstance(local_cables, dict):
-        raise ValueError("'cables' must be a map")
-    for name, definition in local_cables.items():
-        new_name = str(name) if already_qualified else prefixed_name(prefix, str(name))
-        if new_name in cables:
-            raise ValueError(f"Name collision in cables after prefix: {new_name}")
-        cables[new_name] = copy.deepcopy(definition)
-        local_map[str(name)] = new_name
-
-    local_connections = data.get("connections", []) or []
-    if not isinstance(local_connections, list):
-        raise ValueError("'connections' must be a list")
-    for connection in local_connections:
-        if not isinstance(connection, list):
-            raise ValueError("Each connection must be a list")
-        if already_qualified:
-            connections.append(copy.deepcopy(connection))
-        else:
-            renamed = [
-                rename_connection_endpoint(endpoint, local_map) for endpoint in connection
-            ]
-            connections.append(renamed)
-
-    for name, remap in (data.get("_pin_remaps") or {}).items():
-        name_s = str(name)
-        if name_s in pin_remaps:
-            raise ValueError(f"pin_remap collision: {name_s}")
-        pin_remaps[name_s] = copy.deepcopy(remap)
-
-    if "options" in data and not options_already_set:
-        merged["options"] = copy.deepcopy(data["options"])
-        options_already_set = True
-
-    for key, value in data.items():
-        if key in {
-            "options",
-            "connectors",
-            "cables",
-            "connections",
-            "schema",
-            "_pin_remaps",
-        }:
-            continue
-        if key not in merged:
-            merged[key] = copy.deepcopy(value)
-            continue
-        if isinstance(merged[key], dict) and isinstance(value, dict):
-            merged[key].update(copy.deepcopy(value))
-        elif isinstance(merged[key], list) and isinstance(value, list):
-            merged[key].extend(copy.deepcopy(value))
-        else:
-            merged[key] = copy.deepcopy(value)
-
-    return options_already_set
-
-
-def merge_yaml_files(project_path: Path, input_files: list[Path]) -> dict:
-    merged: dict[str, object] = {}
-    options_already_set = False
-    catalog = load_catalog(project_path)
-
-    connectors: dict[str, object] = {}
-    cables: dict[str, object] = {}
-    connections: list[object] = []
-    pin_remaps: dict[str, dict[str, object]] = {}
-
-    for yaml_file in input_files:
-        with yaml_file.open("r", encoding="utf-8") as handle:
-            data = yaml.safe_load(handle) or {}
-
-        if not isinstance(data, dict):
-            raise ValueError(f"YAML does not contain a valid object: {yaml_file}")
-
-        if is_house_document(data):
-            wireviz_data = house_document_to_wireviz(
-                data,
-                catalog=catalog,
-                file_location_parts=path_location_parts(project_path, yaml_file),
-            )
-            options_already_set = _merge_wireviz_piece(
-                connectors=connectors,
-                cables=cables,
-                connections=connections,
-                pin_remaps=pin_remaps,
-                merged=merged,
-                options_already_set=options_already_set,
-                data=wireviz_data,
-                prefix="",
-                already_qualified=True,
-            )
-            continue
-
-        prefix = build_prefix(project_path, yaml_file)
-        options_already_set = _merge_wireviz_piece(
-            connectors=connectors,
-            cables=cables,
-            connections=connections,
-            pin_remaps=pin_remaps,
-            merged=merged,
-            options_already_set=options_already_set,
-            data=data,
-            prefix=prefix,
-            already_qualified=False,
-        )
-
-    _apply_pin_remaps_to_connections(connections, pin_remaps)
-
-    merged["connectors"] = connectors
-    merged["cables"] = cables
-    merged["connections"] = connections
-    return merged
-
-
-def add_external_stubs(merged: dict[str, object]) -> None:
-    """Add simple connectors for names referenced in connections but missing."""
-    connectors = merged.get("connectors") or {}
-    if not isinstance(connectors, dict):
-        return
-    connections = merged.get("connections") or []
-    used_pins: dict[str, list[object]] = {}
-
-    for connection in connections:
-        if not isinstance(connection, list):
-            continue
-        for endpoint in connection:
-            if not isinstance(endpoint, dict):
-                continue
-            for name, pins in endpoint.items():
-                name_s = str(name)
-                if name_s in connectors:
-                    continue
-                # skip cable endpoints (present in cables)
-                cables = merged.get("cables") or {}
-                if isinstance(cables, dict) and name_s in cables:
-                    continue
-                if not isinstance(pins, list):
-                    continue
-                bucket = used_pins.setdefault(name_s, [])
-                for pin in pins:
-                    if pin not in bucket:
-                        bucket.append(pin)
-
-    for name, pins in used_pins.items():
-        short = name.split("_")[-1] if "_" in name else name
-        connectors[name] = {
-            "type": "External",
-            "subtype": "fuera de zona",
-            "pins": pins or ["x"],
-            "pinlabels": [str(p) for p in (pins or ["x"])],
-            "notes": f"Stub: {short} referenced from this zone but defined outside",
-        }
-
-
-def output_base_name(project_path: Path) -> str:
-    """Basename for generated artifacts (directory name or YAML stem)."""
-    label = project_path.stem if is_yaml(project_path) else project_path.name
-    return normalize_token(label)
-
-
-def expected_output_files(base_name: str, output_dir: Path) -> list[Path]:
-    return [
-        output_dir / f"{base_name}{suffix}"
-        for suffix in (".html", ".svg", ".bom.tsv")
-    ]
-
-
-def ensure_overwrite_allowed(
-    base_name: str, output_dir: Path, *, force: bool = False
-) -> None:
-    existing_outputs = [
-        path for path in expected_output_files(base_name, output_dir) if path.exists()
-    ]
-    if not existing_outputs:
-        return
-
-    if force:
-        for file_path in sorted(set(existing_outputs)):
-            file_path.unlink()
-        return
-
-    output_list = "\n".join(f" - {path}" for path in sorted(set(existing_outputs)))
-    answer = input(
-        "Existing output files detected:\n"
-        f"{output_list}\n"
-        "Overwrite them? [y/N]: "
-    ).strip().lower()
-
-    if answer in {"s", "si", "y", "yes"}:
-        for file_path in sorted(set(existing_outputs)):
-            file_path.unlink()
-        return
-
-    raise FileExistsError("Operation cancelled by user.")
-
-
-def write_and_render_wireviz(
-    project_path: Path,
-    input_files: list[Path],
-    output_dir: Path,
-    base_name: str,
-    *,
-    with_stubs: bool = False,
-) -> None:
-    print(f"Merging {len(input_files)} YAML → {base_name}...")
-    for input_file in input_files:
-        print(f" - {input_file}")
-
-    merged_data = merge_yaml_files(project_path, input_files)
-    if with_stubs:
-        add_external_stubs(merged_data)
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    merged_input = output_dir / f"{base_name}.yaml"
-    with merged_input.open("w", encoding="utf-8") as handle:
-        yaml.safe_dump(merged_data, handle, sort_keys=False, allow_unicode=True)
-
-    run_wireviz(merged_input, output_dir)
-
-
-def run_generate_project(
-    project_path: Path,
-    *,
-    inputs: list[str] | None = None,
-    force: bool = False,
-) -> int:
-    """Generate WireViz + physical for a site YAML file or site directory.
-
-    Output goes to ``<site_root>/out/``. Cross-tree refs become External stubs.
-    """
-    try:
-        site_root, site_yaml = split_project_arg(project_path)
-    except (FileNotFoundError, ValueError) as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-
-    output_dir = (site_root / "out").resolve()
-
-    try:
-        if site_yaml is not None and not inputs:
-            input_files = [site_yaml]
-        else:
-            input_files = resolve_inputs(site_root, inputs, output_dir)
-        if not input_files:
-            print(f"No YAML files found in: {site_root}", file=sys.stderr)
-            return 1
-
-        base_source = site_yaml if site_yaml is not None else site_root
-        base_name = output_base_name(base_source)
-        ensure_overwrite_allowed(base_name, output_dir, force=force)
-
-        write_and_render_wireviz(
-            site_root, input_files, output_dir, base_name, with_stubs=True
-        )
-
-        physical_dir = output_dir / "physical"
-        if force and physical_dir.exists():
-            shutil.rmtree(physical_dir)
-        phys_svg = physical_dir / f"{base_name}.svg"
-        print(f"Physical diagram → {phys_svg}")
-        title_label = base_source.stem if is_yaml(base_source) else base_source.name
-        export_physical_zone(
-            site_root,
-            input_files,
-            phys_svg,
-            title=f"{title_label} (physical)",
-        )
-
-    except Exception as exc:
-        if hasattr(exc, "returncode"):
-            print(f"Error running WireViz (code {exc.returncode}).", file=sys.stderr)
-            return int(exc.returncode)
-        if isinstance(exc, RuntimeError):
-            print(str(exc), file=sys.stderr)
-            return 2
-        if isinstance(exc, (FileNotFoundError, ValueError, FileExistsError)):
-            print(str(exc), file=sys.stderr)
-            return 1
-        raise
-
-    print(f"Diagram generated in: {output_dir}")
-    print(f"Physical topology: {output_dir / 'physical'}")
-    return 0
-
-
-def _add_generate_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "project_path",
-        help="Site YAML file or site directory; output in <site>/out/",
-    )
-    parser.add_argument(
-        "--input",
-        action="append",
-        dest="inputs",
-        help="Relative path to YAML or folder inside the tree",
-    )
-    parser.add_argument(
-        "-f",
-        "--force",
-        action="store_true",
-        help="Overwrite existing output without prompting",
-    )
-    parser.add_argument(
-        "--catalog",
-        default=None,
-        help="Type catalog name or path (default: catalogs/default or HOUSEWIRE_CATALOG)",
-    )
 
 
 def _catalog_parent() -> argparse.ArgumentParser:
@@ -504,7 +37,7 @@ def _apply_catalog_option(catalog: str | None) -> None:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="housewire",
-        description="housewire: diagrams, shell, and ABM for house/v1 installations.",
+        description="housewire: UI, shell, and ABM for house/v1 installations.",
     )
     parser.add_argument(
         "-V",
@@ -514,13 +47,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command")
 
-    gen = sub.add_parser("generate", help="Merge YAML and generate diagrams")
-    _add_generate_arguments(gen)
 
     sh = sub.add_parser(
         "shell",
         parents=[_catalog_parent()],
-        help="REPL: cd, ls, use, add, rm, generate",
+        help="REPL: cd, ls, use, add, rm, save",
     )
     sh.add_argument("project_path", help="Site YAML file or site directory")
 
@@ -709,16 +240,8 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
         return 0
-    if cmd == "generate":
-        return run_generate_project(
-            Path(args.project_path),
-            inputs=args.inputs,
-            force=args.force,
-        )
     if cmd == "shell":
-        return run_repl(
-            Path(args.project_path), generate_fn=_run_generate_from_shell
-        )
+        return run_repl(Path(args.project_path))
     if cmd == "ls":
         session = ProjectSession.open(Path(args.project_path))
         session.cd(args.path)
@@ -870,33 +393,11 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
     return 1
 
 
-def _run_generate_from_shell(scope_path: Path, *, force: bool = False) -> int:
-    """Generate for ``scope_path`` (shell cwd filesystem dir, or CLI path)."""
-    return run_generate_project(scope_path, force=force)
-
-
-def _legacy_generate_argv(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(add_help=False)
-    _add_generate_arguments(parser)
-    return parser.parse_args(argv)
-
-
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv:
         _build_parser().print_help()
         return 0
-
-    first = argv[0]
-    if first not in KNOWN_SUBCOMMANDS and not first.startswith("-"):
-        candidate = Path(first)
-        if candidate.exists():
-            args = _legacy_generate_argv(argv)
-            return run_generate_project(
-                Path(args.project_path).resolve(),
-                inputs=args.inputs,
-                force=args.force,
-            )
 
     parser = _build_parser()
     args = parser.parse_args(argv)

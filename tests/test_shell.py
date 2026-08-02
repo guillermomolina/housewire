@@ -28,12 +28,10 @@ class TestShellDispatcher(unittest.TestCase):
 
         return ProjectSession(self.root)
 
-    def _run(self, session, line, generate_fn=None):
+    def _run(self, session, line):
         from housewire.commands import run_shell_line
 
-        if generate_fn is None:
-            generate_fn = lambda root, force=False: 0
-        return run_shell_line(session, line, generate_fn=generate_fn)
+        return run_shell_line(session, line)
 
     def test_empty_line_returns_none(self) -> None:
         s = self._session()
@@ -245,44 +243,6 @@ class TestShellDispatcher(unittest.TestCase):
         (self.root / "full_dir" / "file.txt").write_text("x", encoding="utf-8")
         code = self._run(s, "rm dir full_dir")
         self.assertEqual(code, 1)
-
-    def test_generate_calls_fn(self) -> None:
-        s = self._session()
-        called = []
-
-        def mock_gen(scope, force=False):
-            called.append((scope, force))
-            return 0
-
-        self._run(s, "generate -f", generate_fn=mock_gen)
-        self.assertEqual(called, [(s.cwd_path(), True)])
-
-    def test_generate_without_force(self) -> None:
-        s = self._session()
-        called = []
-
-        def mock_gen(scope, force=False):
-            called.append((scope, force))
-            return 0
-
-        self._run(s, "generate", generate_fn=mock_gen)
-        self.assertEqual(called, [(s.cwd_path(), False)])
-
-    def test_generate_uses_site_root_regardless_of_cd(self) -> None:
-        doc = abm.load_editable(self.site_yaml, self.root)
-        add_place(doc, "Parking", type_id="Floor", label="Parking")
-        save_site(self.root, doc)
-        s = self._session()
-        self._run(s, "cd Parking")
-        called = []
-
-        def mock_gen(scope, force=False):
-            called.append(scope)
-            return 0
-
-        self._run(s, "generate -f", generate_fn=mock_gen)
-        self.assertEqual(called, [s.root.resolve()])
-        self.assertEqual(called[0], s.cwd_path())
 
     def test_add_location_via_shell(self) -> None:
         s = self._session()

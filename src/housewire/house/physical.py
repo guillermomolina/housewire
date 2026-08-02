@@ -1,7 +1,7 @@
 """Physical topology diagram from house/v1 (locations + conduits).
 
 Physical layer only: nested location clusters linked by conduits (openings).
-Electrical connections (elements + cables) belong to WireViz, not here.
+Electrical connections (elements + cables) belong to the interactive UI, not here.
 """
 from __future__ import annotations
 

@@ -5,18 +5,18 @@ import unittest
 
 import yaml as _yaml
 
-from housewire.house import house_document_to_wireviz, load_catalog
+from housewire.house import load_catalog, validate_house_tree
 
 
 class TestConnectionScope(unittest.TestCase):
-    def _wv(self, doc_yaml: str, parts: list[str]) -> dict:
+    def _validate(self, doc_yaml: str, parts: list[str]) -> None:
         doc = _yaml.safe_load(doc_yaml)
-        return house_document_to_wireviz(
+        validate_house_tree(
             doc, catalog=load_catalog(), file_location_parts=parts
         )
 
     def test_local_and_child_relative_ok(self) -> None:
-        wv = self._wv(
+        self._validate(
             """
 schema: house/v1
 elements:
@@ -39,13 +39,10 @@ connections:
 """,
             ["Parking"],
         )
-        flat = str(wv["connections"])
-        self.assertIn("Parking__Caja_1__Regleta", flat)
-        self.assertIn("Parking__Enchufe", flat)
 
     def test_parent_relative_rejected(self) -> None:
         with self.assertRaises(ValueError) as ctx:
-            self._wv(
+            self._validate(
                 """
 schema: house/v1
 elements:
@@ -67,7 +64,7 @@ connections:
 
     def test_sibling_absolute_rejected(self) -> None:
         with self.assertRaises(ValueError) as ctx:
-            self._wv(
+            self._validate(
                 """
 schema: house/v1
 elements:
@@ -92,7 +89,7 @@ connections:
         )
 
     def test_absolute_into_child_ok(self) -> None:
-        wv = self._wv(
+        self._validate(
             """
 schema: house/v1
 elements:
@@ -115,4 +112,7 @@ connections:
 """,
             ["Parking"],
         )
-        self.assertTrue(wv["connections"])
+
+
+if __name__ == "__main__":
+    unittest.main()

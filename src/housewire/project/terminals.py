@@ -91,7 +91,7 @@ def pin_to_cells(
 ) -> dict[str, list[str]]:
     """Map each pin id to preferred terminal cell ids (e.g. ``1`` → ``[N1]``).
 
-    - ``wireviz_collapse`` pairs become columns: first pin → entry face, second → exit.
+    - ``terminal_pairs`` pairs become columns: first pin → entry face, second → exit.
     - ``inout`` pins without collapse share a column on both axis faces.
     - ``in`` / ``out`` without collapse fill entry / exit columns in pin order.
     """
@@ -239,7 +239,7 @@ def element_terminal_layout(
     if subtype is None and isinstance(type_def.get("defaults"), dict):
         subtype = type_def["defaults"].get("subtype")
     type_terminals = type_def.get("terminals") or {}
-    type_collapse = type_def.get("wireviz_collapse")
+    type_collapse = type_def.get("terminal_pairs")
     type_grid_raw = type_def.get("terminal_grid")
     subtypes = type_def.get("subtypes") if isinstance(type_def, dict) else None
     if isinstance(subtypes, dict) and subtype is not None:
@@ -247,8 +247,8 @@ def element_terminal_layout(
         if isinstance(sub, dict):
             if sub.get("terminals") is not None:
                 type_terminals = sub.get("terminals") or {}
-            if "wireviz_collapse" in sub:
-                type_collapse = sub.get("wireviz_collapse")
+            if "terminal_pairs" in sub:
+                type_collapse = sub.get("terminal_pairs")
             if sub.get("terminal_grid") is not None:
                 type_grid_raw = sub.get("terminal_grid")
 
@@ -263,7 +263,7 @@ def element_terminal_layout(
             for k in inst_terms
             if str(k) in terminals
         }
-    collapse = instance.get("wireviz_collapse")
+    collapse = instance.get("terminal_pairs")
     if collapse is None:
         collapse = type_collapse
 

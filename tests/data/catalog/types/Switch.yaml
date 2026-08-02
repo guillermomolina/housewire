@@ -17,7 +17,7 @@ terminals:
     label: "2"
     direction: out
     role: phase
-wireviz_collapse:
+terminal_pairs:
   - [1, 2]
 defaults:
   subtype: unipolar
@@ -42,7 +42,7 @@ subtypes:
         label: "2"
         direction: inout
         role: phase
-    wireviz_collapse: []
+    terminal_pairs: []
   intermediate:
     title: Intermediate / cruzamiento
     terminal_grid:
@@ -64,4 +64,4 @@ subtypes:
         label: "4"
         direction: inout
         role: phase
-    wireviz_collapse: []
+    terminal_pairs: []

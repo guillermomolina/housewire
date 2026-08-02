@@ -1,21 +1,13 @@
 # housewire
 
-Document electrical installations in YAML (`schema: house/v1`) and generate diagrams:
-
-- **WireViz** (terminals / cables)
-- **Physical topology** (boxes, conduits, openings)
-- Future: QElectroTech or other exporters
+Document electrical installations in YAML (`schema: house/v1`) and edit them
+with the interactive UI and shell (physical canvas + electrical wiring).
 
 This repository is the **program only**. Site/installation YAML lives in a **separate** (often private) repository or directory. Do not commit private site data into this repo.
 
 ## Requirements
 
 - Python 3.10+
-- Graphviz (`dot` on `PATH`)
-
-```bash
-sudo pacman -S graphviz   # Arch
-```
 
 ## Install
 
@@ -40,7 +32,7 @@ Or:
 
 ```bash
 export HOUSEWIRE_CATALOG=/path/to/housewire-catalog
-# or: housewire generate --catalog /path/to/housewire-catalog "$SITE"
+# or: housewire serve --catalog /path/to/housewire-catalog "$SITE"
 ```
 
 Site-specific overlays: `$SITE/catalog/*.yaml` (shallow merge by `id`). Optional
@@ -81,7 +73,7 @@ Interactive REPL (no TUI menus):
 housewire shell "$SITE"
 ```
 
-Commands: `cd`, `ls`, `pwd`, `use`, `show`, `pend`, `add` (incl. `add location`, recipes), `rm`, `generate`, `help`, `exit`.
+Commands: `cd`, `ls`, `pwd`, `use`, `show`, `pend`, `add` (incl. `add location`, recipes), `rm`, `save`, `help`, `exit`.
 Tab completes commands, subcommands, and paths. **One nested `housewire.yaml`** at the site root holds the whole place tree under `elements:`. `add location NAME --type JunctionBox` inserts a place under the current location (in memory → `save`).
 
 ```bash
@@ -128,31 +120,12 @@ pend N1 S1 2.5
 Non-interactive subcommands:
 
 ```bash
-housewire generate -f "$SITE"
 housewire ls "$SITE" "Garage"
 housewire show "$SITE" housewire.yaml
 housewire add element "$SITE" housewire.yaml MT_New --type MCB --subtype C10
 housewire add location "$SITE" Junction_9 --type JunctionBox --under Garage
 housewire rm element "$SITE" housewire.yaml MT_New
 ```
-
-## Generate diagrams
-
-```bash
-housewire generate -f "$SITE"
-# or
-python -m housewire -f "$SITE"
-```
-
-Output under `$SITE/out/`:
-
-| Path | Content |
-|---|---|
-| `out/<name>.svg` | WireViz (electrical: elements ↔ cables) |
-| `out/physical/<name>.svg` | Physical topology (locations ↔ conduits) |
-
-Scope is the path argument (or the shell current location’s directory). Example:
-`housewire generate "$SITE/Parking"` or `cd Parking` then `generate` in the shell.
 
 ```bash
 make prepare          # venv + pip install -e '.[dev,ui]'
@@ -164,8 +137,8 @@ make test
 ```
 src/housewire/          # package
   cli.py
-  catalog/              # types (MCB, RCD, Socket, …)
-  house/                # house/v1 schema + exporters
+  house/                # house/v1 schema + validation
+  ui/                   # interactive canvas
 docs/                   # schema-house-v1.md
 tests/
 ```
@@ -205,5 +178,5 @@ conduits:
 
 ## Version
 
-Package version: `pyproject.toml` / `housewire.__version__` (currently **0.16.9**).
+Package version: `pyproject.toml` / `housewire.__version__`.
 History: [CHANGELOG.md](CHANGELOG.md).

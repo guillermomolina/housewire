@@ -7,7 +7,7 @@ directory around it when known:
 
 - editable YAML with nested places under `elements:`
 - optional `$SITE/catalog/` overlay (when opened from a real site path)
-- optional `$SITE/out/` (generated; not part of the editable document identity)
+- optional leftover `$SITE/out/` directories (ignored; not part of the document)
 
 New sites still default to `housewire.yaml`.
 

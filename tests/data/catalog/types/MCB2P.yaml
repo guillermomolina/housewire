@@ -7,7 +7,7 @@ description_es: >
   No es un IGP (interruptor de corte sin proteccion magnetotermica).
 qet_hint: mcb_2P
 # 1/2 neutro in/out; 3/4 fase in/out.
-# wireviz_collapse: una fila visual por polo (entrada izquierda, salida derecha).
+# terminal_pairs: una fila visual por polo (entrada izquierda, salida derecha).
 terminal_grid:
   NS: 2
 terminals:
@@ -27,6 +27,6 @@ terminals:
     label: "4"
     direction: out
     role: phase
-wireviz_collapse:
+terminal_pairs:
   - [1, 2]
   - [3, 4]

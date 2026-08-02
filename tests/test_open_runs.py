@@ -143,7 +143,7 @@ class TestShellOpenClaimLand(unittest.TestCase):
         from housewire.commands import run_shell_line
 
         return run_shell_line(
-            session, line, generate_fn=lambda root, force=False: 0
+            session, line
         )
 
     def test_shell_open_claim_land(self) -> None:

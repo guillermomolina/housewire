@@ -4,8 +4,8 @@ icon: fa-battery-full
 title: AC/DC power supply
 description_es: Fuente / transformador (p.ej. portero). Primario AC, secundario DC.
 qet_hint: power_supply_ac_dc
-# Solo export WireViz: una fila visual por par (no implica continuidad AC↔DC).
-wireviz_collapse:
+# terminal_pairs: one visual column per pair (not AC↔DC continuity).
+terminal_pairs:
   - [L, "+"]
   - [N, "-"]
 terminal_grid:

@@ -7,7 +7,7 @@ description_es: >
   No es un magnetotermico.
 qet_hint: rcd_2P
 # 1/2 fase in/out (sin letra en Merlin Gerin); 3/4 neutro in/out (N).
-# wireviz_collapse: una fila visual por polo (entrada izquierda, salida derecha).
+# terminal_pairs: una fila visual por polo (entrada izquierda, salida derecha).
 terminal_grid:
   NS: 2
 terminals:
@@ -27,6 +27,6 @@ terminals:
     label: N
     direction: out
     role: neutral
-wireviz_collapse:
+terminal_pairs:
   - [1, 2]
   - [3, 4]

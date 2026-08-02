@@ -63,7 +63,7 @@ class TestTerminalGrid(unittest.TestCase):
                     "3": {"direction": "in"},
                     "4": {"direction": "out"},
                 },
-                "wireviz_collapse": [[1, 2], [3, 4]],
+                "terminal_pairs": [[1, 2], [3, 4]],
             }
         }
         terminals, grid, cells = element_terminal_layout(

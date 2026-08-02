@@ -1712,8 +1712,8 @@
     return pointsToPathD(pts);
   }
 
-  /** WireViz-ish conductor codes → CSS stroke colors. */
-  const WIREVIZ_COLORS = {
+  /** IEC / housewire conductor codes → CSS stroke colors. */
+  const IEC_WIRE_COLORS = {
     BN: "#a0522d",
     BK: "#1a1a1a",
     BU: "#1e90ff",
@@ -1732,7 +1732,7 @@
 
   function wireColorCss(code) {
     const key = String(code || "").trim().toUpperCase();
-    return WIREVIZ_COLORS[key] || "#8b949e";
+    return IEC_WIRE_COLORS[key] || "#8b949e";
   }
 
   function cableWireIndices(edge) {

@@ -162,7 +162,7 @@ class TestShellRecipes(unittest.TestCase):
     def _run(self, session, line):
         from housewire.commands import run_shell_line
 
-        return run_shell_line(session, line, generate_fn=lambda root, force=False: 0)
+        return run_shell_line(session, line)
 
     def test_add_socket_via_shell(self) -> None:
         s = self._session()

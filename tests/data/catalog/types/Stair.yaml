@@ -7,5 +7,4 @@ description_es: >
   (normalmente dos Floor). No es un Room: declara connects: [A, B] con
   refs a las plantas/espacios que enlaza. Puede contener cajas, puntos
   de luz e interruptores de la propia caja de escalera.
-wireviz_skip: true
 terminals: {}

@@ -13,7 +13,7 @@ from housewire.house import (
     place_meta_from_mapping,
     place_name,
 )
-from housewire.house import (  # connection endpoint parsing (shared with WireViz)
+from housewire.house import (  # connection endpoint parsing
     _expand_endpoint_token,
     _parse_element_path,
     _split_element_terminal,

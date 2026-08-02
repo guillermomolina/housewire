@@ -69,8 +69,6 @@ HELP_TEXT = """housewire shell commands:
   rm dir <path>                  only if empty
   save [--force]                 write all dirty YAML to disk (validate)
   reload                         discard current buffer and re-read from disk
-  generate [-f]                save dirty and generate the tree for cwd
-                               physical=locations↔conduits; WireViz=elements↔cables
   version                      program version
   help
   exit | quit                  prompts to save/discard each dirty YAML
@@ -908,7 +906,7 @@ def request_leave(session: ProjectSession) -> bool:
     return _confirm_unsaved(session, session.dirty_paths())
 
 
-def run_shell_line(session: ProjectSession, line: str, *, generate_fn) -> int | None:
+def run_shell_line(session: ProjectSession, line: str) -> int | None:
     line = line.strip()
     if not line:
         return None
@@ -966,13 +964,6 @@ def run_shell_line(session: ProjectSession, line: str, *, generate_fn) -> int | 
             return cmd_save(session, args)
         if cmd == "reload":
             return cmd_reload(session, args)
-        if cmd == "generate":
-            force = "-f" in args or "--force" in args
-            dirty = session.dirty_paths()
-            if dirty:
-                print(f"Saving {len(dirty)} dirty YAML before generate…")
-                session.save_all()
-            return generate_fn(session.cwd_path(), force=force)
         print(f"Unknown command: {cmd}. Type help.", file=sys.stderr)
         return 1
     except (ValueError, FileNotFoundError, FileExistsError, NotADirectoryError, OSError) as exc:

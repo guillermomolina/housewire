@@ -5,6 +5,5 @@ title: Floor / level
 description_es: >
   Planta o nivel del edificio (planta baja, -1/parking, planta 1, …).
   Usar label para el nombre humano (Planta baja, Parking).
-  No genera conector WireViz ni bornes.
-wireviz_skip: true
+  Tipo de lugar: sin bornes electricos.
 terminals: {}

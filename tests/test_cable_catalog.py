@@ -6,8 +6,8 @@ import unittest
 from housewire.house import (
     expand_cable,
     expand_conduit,
-    house_document_to_wireviz,
     load_catalog,
+    validate_house_tree,
 )
 
 
@@ -34,7 +34,12 @@ class TestCableCatalog(unittest.TestCase):
 
     def test_expand_cable_instance_overrides_defaults(self) -> None:
         out = expand_cable(
-            {"type": "Cable", "subtype": "power", "colors": ["GY", "BU"], "section": "2.5 mm2"},
+            {
+                "type": "Cable",
+                "subtype": "power",
+                "colors": ["GY", "BU"],
+                "section": "2.5 mm2",
+            },
             self.catalog,
         )
         self.assertEqual(out["colors"], ["GY", "BU"])
@@ -49,7 +54,7 @@ class TestCableCatalog(unittest.TestCase):
         self.assertEqual(out["subtype"], "M20")
         self.assertEqual(out["contains"], ["L1"])
 
-    def test_wireviz_uses_subtype_as_cable_type(self) -> None:
+    def test_validate_accepts_cable_with_subtype(self) -> None:
         doc = {
             "schema": "house/v1",
             "type": "Floor",
@@ -64,10 +69,9 @@ class TestCableCatalog(unittest.TestCase):
                 }
             },
         }
-        wv = house_document_to_wireviz(doc, catalog=self.catalog, file_location_parts=["Z"])
-        cable = next(iter(wv["cables"].values()))
-        self.assertEqual(cable["type"], "power")
-        self.assertIn("label: Feed", cable["notes"])
+        validate_house_tree(
+            doc, catalog=self.catalog, file_location_parts=["Z"]
+        )
 
     def test_cable_type_rejected_as_element(self) -> None:
         doc = {
@@ -75,7 +79,9 @@ class TestCableCatalog(unittest.TestCase):
             "elements": {"Bad": {"type": "Cable", "subtype": "power"}},
         }
         with self.assertRaises(ValueError) as ctx:
-            house_document_to_wireviz(doc, catalog=self.catalog, file_location_parts=[])
+            validate_house_tree(
+                doc, catalog=self.catalog, file_location_parts=[]
+            )
         self.assertIn("cables:", str(ctx.exception).lower())
 
 

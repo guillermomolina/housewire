@@ -1,8 +1,7 @@
 # Schema house/v1
 
-Canonical format for **housewire**: document a home electrical installation in YAML,
-then export WireViz (electrical) and physical topology diagrams.
-A future QElectroTech exporter can reuse the same YAML.
+Canonical format for **housewire**: document a home electrical installation in YAML
+and edit it with the interactive UI / shell (physical canvas + electrical wiring).
 
 Editing: `housewire shell <site>` or non-interactive `add` / `rm` / `show` (see README).
 
@@ -40,10 +39,10 @@ Values are Font Awesome class tokens (``fa-plug`` or full ``fa-solid fa-plug``).
 
 ## Two layers (do not mix)
 
-| Layer | Nodes | Edges | Export |
-|-------|-------|-------|--------|
-| **Physical** | locations (`JunctionBox`, `DeviceBox`, `Panel`, `Floor`, …) | **conduits** between openings (`from` / `to`) | `out/physical/` |
-| **Electrical** | elements (`Socket`, `TerminalStrip`, `MCB`, …) | **connections** with a cable as `via` | WireViz |
+| Layer | Nodes | Edges | UI |
+|-------|-------|-------|-----|
+| **Physical** | locations (`JunctionBox`, `DeviceBox`, `Panel`, `Floor`, …) | **conduits** between openings (`from` / `to`) | location canvas |
+| **Electrical** | elements (`Socket`, `TerminalStrip`, `MCB`, …) | **connections** with a cable as `via` | electrical overlay |
 
 Bridge: `conduit.contains: [cable_ids]`. The cable rides in the conduit; the connection joins terminals.
 
@@ -129,7 +128,7 @@ elements:
 The shell (`cd` / `ls` / `pwd`) walks place-typed children under `elements:`.
 Devices (`Socket`, `MCB`, …) stay under `elements:` of the current place (non-place types).
 
-Place types (catalog, `wireviz_skip`):
+Place types (catalog; see `PLACE_TYPES` in code):
 
 | type | Meaning |
 |------|---------|
@@ -155,7 +154,7 @@ connects: [Parking, Planta_baja]
 ```
 
 - ``connects``: list of two location refs (usually sibling ``Floor`` ids).
-- Optional for generate today; used by docs/UI to show what the stair joins.
+- Optional; used by docs/UI to show what the stair joins.
 - Children (junction boxes, switches, light points) nest under the stair’s `elements:`.
 
 The **site root** is the directory you pass to `housewire` (`project_path`), containing
@@ -288,13 +287,12 @@ Regleta_1:
 - `NS: 2` ≡ `N: 2` **and** `S: 2` (not “2 total”).
 - `N: 2` ≡ only the north face.
 - Cell ids: `N1`, `S2`, `W1`, … (same tokens as openings).
-- Pins map to cells via `wireviz_collapse` pairs (column = pair index; first
-  pin → entry face, second → exit) or, for `inout`, one column shared by both
-  faces. The canvas routes each connection pin to that cell.
+- Pins map to cells via `terminal_pairs` (column = pair index; first pin →
+  entry face, second → exit) or, for `inout`, one column shared by both faces.
+  The canvas routes each connection pin to that cell.
 
-Catalog `wireviz_collapse` pairs terminals for the **WireViz export**: each pair
-becomes one visual pin (cables left and right). That is layout only, not WireViz
-`loops`, and not necessarily electrical continuity.
+Catalog `terminal_pairs` pairs in/out pins for canvas layout only (not
+electrical continuity).
 
 ### Catalog element types
 
@@ -410,7 +408,7 @@ views:
   place (like nested locations); elements draw only when the place is a leaf in
   the current depth view. Cables ride on conduit paths when visible.
 - Back openings (`B…`) are drawn at the symbol center, not as a fourth side.
-- Omitted when unused; Graphviz/WireViz generate does not require these fields.
+- Omitted when unused; the UI does not require these fields.
 
 ### Mounting
 
@@ -461,8 +459,8 @@ Catalog: `catalog/Cable.yaml` (`kind: cable_type`) with per-subtype defaults for
 
 ### Color codes (`colors:`)
 
-Codes are **IEC 60757** letter abbreviations (WireViz vocabulary). Use uppercase
-in YAML (`BN`, not `bn`).
+Codes are **IEC 60757** letter abbreviations. Use uppercase in YAML (`BN`, not
+`bn`).
 
 | Code | Color | Typical use |
 |------|-------|-------------|
@@ -492,8 +490,8 @@ colors: [BN, BU, GNYE]   # wire 1 brown, 2 blue, 3 PE
 ### Logical line ≠ one physical sheath
 
 A `cables` entry with several colors (e.g. `[BN, BU]`) is a **logical line**: the
-set of conductors from A to B. WireViz draws it as one multipolar block on purpose
-(circuit clarity), not as a claim that it is one jacketed multicore.
+set of conductors from A to B (circuit clarity), not a claim that it is one
+jacketed multicore.
 
 In panels these are often **loose singles**. Record construction in:
 
@@ -617,9 +615,9 @@ Not allowed (lift the connection to the common ancestor):
 
 The `via` cable must be defined in the **same** place node as the connection.
 
-## WireViz name prefixes
+## Qualified name prefixes
 
-The logical place path defines the export prefix:
+Internal qualified names join location segments with `__`:
 
 - Place `Parking/Caja_derivacion_1` → element `Regleta` →
   `Parking__Caja_derivacion_1__Regleta`
@@ -645,14 +643,5 @@ conduits:
   `Parking/Caja_derivacion_4.B2-1`, or `.N1` = current place). Required.
 - Catalog: `catalog/Conduit.yaml`.
 
-Electrical `connections` still target cables. Contained cables are annotated for
-WireViz; the **physical** diagram draws edges only between locations via conduits.
-
-## Generate outputs
-
-`housewire generate <path>` (or shell `generate` after `cd`):
-
-- `out/<name>.*` — WireViz (**electrical**: elements ↔ cables); out-of-scope ends as `External` stubs
-- `out/physical/<name>.svg` — **physical** topology (locations ↔ conduits); `.dot` beside the SVG
-
-Generate only a subtree: `housewire generate $SITE/Parking` or `cd Parking` then `generate`.
+Electrical `connections` still target cables. The interactive UI draws conduits
+between locations and cables on the electrical overlay.

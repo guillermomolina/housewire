@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 
 from housewire.commands import request_leave, run_shell_line
@@ -41,10 +40,7 @@ def read_logical_line(
     return " ".join(cleaned)
 
 
-def run_repl(
-    project_path: Path,
-    generate_fn: Callable[..., int],
-) -> int:
+def run_repl(project_path: Path) -> int:
     session = ProjectSession.open(project_path)
     print(f"housewire shell — {session.site_yaml()}")
     print(
@@ -71,7 +67,7 @@ def run_repl(
                 "Put \\ at the end of the previous line, or paste everything on one line."
             )
             continue
-        code = run_shell_line(session, line, generate_fn=generate_fn)
+        code = run_shell_line(session, line)
         if code == -1:
             if not request_leave(session):
                 continue

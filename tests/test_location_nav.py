@@ -133,7 +133,7 @@ class TestAddLocationNested(unittest.TestCase):
     def _run(self, session, line: str) -> int:
         from housewire.commands import run_shell_line
 
-        return run_shell_line(session, line, generate_fn=lambda root, force=False: 0)
+        return run_shell_line(session, line)
 
     def _session(self):
         from housewire.project.session import ProjectSession

@@ -27,7 +27,6 @@ SHELL_COMMANDS = (
     "rm",
     "save",
     "reload",
-    "generate",
     "version",
     "help",
     "exit",
