@@ -1390,6 +1390,84 @@ def build_hop_lane(
     return clean
 
 
+def ensure_vertex_near(
+    pts: Poly, target: Point, *, tol: float = 1.5
+) -> list[Point]:
+    """If ``pts`` misses ``target``, splice a Manhattan detour through it."""
+    if len(pts) < 2:
+        return [(float(p[0]), float(p[1])) for p in pts]
+    tx, ty = float(target[0]), float(target[1])
+    src = [(float(p[0]), float(p[1])) for p in pts]
+    if min(_dist(p, (tx, ty)) for p in src) <= tol:
+        return src
+    seg_best = 0
+    seg_dist = float("inf")
+    for i in range(len(src) - 1):
+        a, b = src[i], src[i + 1]
+        abx, aby = b[0] - a[0], b[1] - a[1]
+        lab2 = abx * abx + aby * aby
+        t = 0.0
+        if lab2 > 1e-12:
+            t = max(
+                0.0,
+                min(1.0, ((tx - a[0]) * abx + (ty - a[1]) * aby) / lab2),
+            )
+        px, py = a[0] + t * abx, a[1] + t * aby
+        d = _dist((px, py), (tx, ty))
+        if d < seg_dist:
+            seg_dist = d
+            seg_best = i
+    a, b = src[seg_best], src[seg_best + 1]
+    mid: list[Point] = [(tx, ty)]
+    if abs(a[0] - tx) > 1e-6 and abs(a[1] - ty) > 1e-6:
+        mid.insert(0, (tx, a[1]))
+    if abs(b[0] - tx) > 1e-6 and abs(b[1] - ty) > 1e-6:
+        mid.append((tx, b[1]))
+    return src[: seg_best + 1] + mid + src[seg_best + 1 :]
+
+
+def mouth_fan_join_anti_pattern(
+    mouth: Point,
+    inward: Point,
+    lane_dists: Sequence[float],
+    pin: Point,
+    face: str,
+) -> list[list[Point]]:
+    """Bug: merge every lead onto the shared stub (collapses inbox lanes)."""
+    out: list[list[Point]] = []
+    for i, dist in enumerate(lane_dists):
+        fan = mouth_fan_pts(mouth, inward, float(dist))
+        # Wrong: join to stub (fan[1]) / whole fan path like mergeLeadToSpine
+        # exploring stub as a candidate — use stub as spine tip.
+        stub = fan[1] if len(fan) > 1 else fan[0]
+        lead = terminal_v_lead(pin, face, stub, i, len(lane_dists))
+        out.append(manhattan_join_end(lead, stub, face=face) + [mouth])
+    return out
+
+
+def mouth_fan_join_correct(
+    mouth: Point,
+    inward: Point,
+    lane_dists: Sequence[float],
+    pin: Point,
+    face: str,
+) -> list[list[Point]]:
+    """Join each lead to its fan tip, then stub → mouth (keeps separation)."""
+    out: list[list[Point]] = []
+    for i, dist in enumerate(lane_dists):
+        fan = mouth_fan_pts(mouth, inward, float(dist))
+        tip = fan[-1]
+        lead = terminal_v_lead(pin, face, tip, i, len(lane_dists))
+        # tip → stub → mouth (fan reversed without duplicating tip)
+        to_mouth = list(reversed(fan[:-1])) if len(fan) > 1 else [mouth]
+        chain = manhattan_join_end(lead, tip, face=face)
+        for p in to_mouth:
+            if _dist(chain[-1], p) > 1e-6:
+                chain.append(p)
+        out.append(chain)
+    return out
+
+
 def hop_lanes_through_mouths(
     centerline: Poly,
     mouths: Sequence[Point],

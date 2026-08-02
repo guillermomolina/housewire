@@ -1582,6 +1582,69 @@
   }
 
   /**
+   * If ``pts`` never comes within ``tol`` of ``target``, splice a Manhattan
+   * detour through ``target`` on the closest segment (keeps hop bocas).
+   */
+  function ensureVertexNear(pts, target, tol = 1.5) {
+    if (!pts || pts.length < 2 || target == null) {
+      return pts ? pts.map((p) => [p[0], p[1]]) : [];
+    }
+    const tx = Array.isArray(target) ? target[0] : target.x;
+    const ty = Array.isArray(target) ? target[1] : target.y;
+    /** @type {number[][]} */
+    const src = pts.map((p) => [p[0], p[1]]);
+    let bestD = Infinity;
+    let bestI = 0;
+    for (let i = 0; i < src.length; i++) {
+      const d = Math.hypot(src[i][0] - tx, src[i][1] - ty);
+      if (d < bestD) {
+        bestD = d;
+        bestI = i;
+      }
+    }
+    if (bestD <= tol) return src;
+    // Insert on the segment that passes closest to the target.
+    let segBest = 0;
+    let segDist = Infinity;
+    for (let i = 0; i < src.length - 1; i++) {
+      const a = src[i];
+      const b = src[i + 1];
+      const abx = b[0] - a[0];
+      const aby = b[1] - a[1];
+      const lab2 = abx * abx + aby * aby;
+      let t = 0;
+      if (lab2 > 1e-12) {
+        t = Math.max(
+          0,
+          Math.min(1, ((tx - a[0]) * abx + (ty - a[1]) * aby) / lab2)
+        );
+      }
+      const px = a[0] + t * abx;
+      const py = a[1] + t * aby;
+      const d = Math.hypot(px - tx, py - ty);
+      if (d < segDist) {
+        segDist = d;
+        segBest = i;
+      }
+    }
+    const a = src[segBest];
+    const b = src[segBest + 1];
+    /** @type {number[][]} */
+    const mid = [[tx, ty]];
+    if (Math.abs(a[0] - tx) > 1e-6 && Math.abs(a[1] - ty) > 1e-6) {
+      mid.unshift([tx, a[1]]);
+    }
+    if (Math.abs(b[0] - tx) > 1e-6 && Math.abs(b[1] - ty) > 1e-6) {
+      mid.push([tx, b[1]]);
+    }
+    return cleanOrthoPoly([
+      ...src.slice(0, segBest + 1),
+      ...mid,
+      ...src.slice(segBest + 1),
+    ]);
+  }
+
+  /**
    * mouth → inward stub → lateral fan. Separates lanes in free space AFTER
    * exiting the boca (never by peeling through the tube wall).
    */
@@ -3934,7 +3997,9 @@
 
       const startFan = mouthFanPts(startOp, startMouthFace, laneDist);
       const endFan = mouthFanPts(endOp, endMouthFace, laneDist);
-      // Toward mouth: fan → stub → mouth
+      // Toward mouth: fan → stub → mouth. Join the terminal lead ONLY at the
+      // fan tip — joining onto stub/mouth collapses every lane onto one shared
+      // inbox trunk (Test_01: common y=420 / x=534 corridor).
       const startFanRev = startFan.slice().reverse();
       const startLead = pinToLanePts(
         [startAtt.x, startAtt.y],
@@ -3943,22 +4008,27 @@
         fromSlot.slot,
         fromSlot.count
       );
-      let head = mergeLeadToSpine(startLead, startFanRev, startFace);
+      let head = mergeLeadToSpine(startLead, [startFanRev[0]], startFace);
+      if (startFanRev.length > 1) {
+        head = mergeOrthoPolys(head, startFanRev.slice(1)) || head;
+      }
 
-      let tail = endFan.map((p) => [p[0], p[1]]);
+      const endFanFwd = endFan.map((p) => [p[0], p[1]]);
+      const endFanTip = endFanFwd[endFanFwd.length - 1];
       const endLead = pinToLanePts(
         [endAtt.x, endAtt.y],
         endFace,
-        tail[tail.length - 1],
+        endFanTip,
         toSlot.slot,
         toSlot.count
       );
-      // Attach pin lead at the fan end, then reverse so path is mouth→…→pin
-      tail = mergeLeadToSpine(
-        endLead,
-        tail.slice().reverse(),
-        endFace
-      ).reverse();
+      let tailFromPin = mergeLeadToSpine(endLead, [endFanTip], endFace);
+      if (endFanFwd.length > 1) {
+        tailFromPin =
+          mergeOrthoPolys(endFanFwd.slice(0, -1), tailFromPin) ||
+          tailFromPin;
+      }
+      const tail = tailFromPin.slice().reverse();
 
       let chain = mergeOrthoPolys(head, tube);
       chain = mergeOrthoPolys(chain, tail);
@@ -3981,7 +4051,9 @@
       cleaned = ensureManhattanNearPoint(cleaned, startOp, 48, pins);
       cleaned = ensureManhattanNearPoint(cleaned, endOp, 48, pins);
       cleaned = stripShortZJogs(stripOutAndBack(cleaned, mouths));
-      // Strip / mouth Manhattan must not collapse multi-cable V at the pins.
+      // Offset lanes must still transit each boca after strip/merge.
+      cleaned = ensureVertexNear(cleaned, startOp, 1.5);
+      cleaned = ensureVertexNear(cleaned, endOp, 1.5);
       if (fromSlot.count > 1) {
         cleaned = preserveTerminalVLead(startLead, cleaned);
       }
@@ -3991,9 +4063,8 @@
           cleaned.slice().reverse()
         ).reverse();
       }
-      // Do NOT forceThroughMouth / convergeLaneToMouth on the full pin→pin
-      // path: that rewrites path ends (the pins) onto the mouths and peels
-      // mid-tube lanes out of the conduit. Mouth converge is tube-only above.
+      cleaned = ensureVertexNear(cleaned, startOp, 1.5);
+      cleaned = ensureVertexNear(cleaned, endOp, 1.5);
       return [cleaned];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);

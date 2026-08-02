@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.25] — 2026-08-02
+
+### Fixed
+
+- Hop inbox: terminal leads join the mouth **fan tip** (not the shared stub),
+  so lanes no longer collapse onto one trunk after the boca.
+- ``ensureVertexNear`` re-splices any hop path that skipped an opening mouth
+  after strip/merge (offset lanes continuing past the boca).
+- Static cache-bust query bumped so browsers load the new ``app.js``.
+
+### Added
+
+- Tests for stub-join anti-pattern vs fan-tip join, and mouth splice.
+
 ## [0.34.24] — 2026-08-02
 
 ### Fixed

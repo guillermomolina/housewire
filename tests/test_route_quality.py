@@ -1186,6 +1186,82 @@ class TestBipolarVAndLiftPreservesDiagonal(unittest.TestCase):
         issues = assess_bundle([a, b], min_separation=MIN_LANE_SEPARATION)
         self.assertTrue(any("overlap" in x for x in issues), msg=issues)
 
+    def test_join_to_stub_collapses_inbox_lanes(self) -> None:
+        from housewire.ui.route_quality import (
+            highway_lane_offset,
+            min_polyline_separation,
+            mouth_fan_join_anti_pattern,
+            mouth_fan_join_correct,
+            mouth_fan_pts,
+        )
+
+        mouth = (200.0, 200.0)
+        inward = (0.0, 1.0)
+        pin = (200.0, 260.0)
+        dists = [highway_lane_offset(i, 3) for i in range(3)]
+        bad = mouth_fan_join_anti_pattern(mouth, inward, dists, pin, "N")
+        good = mouth_fan_join_correct(mouth, inward, dists, pin, "N")
+        tips = [mouth_fan_pts(mouth, inward, d)[-1] for d in dists]
+        for i, tip in enumerate(tips):
+            self.assertTrue(
+                any(
+                    ((p[0] - tip[0]) ** 2 + (p[1] - tip[1]) ** 2) ** 0.5 < 1.5
+                    for p in good[i]
+                ),
+                msg=(i, tip, good[i]),
+            )
+        # Anti-pattern never visits the outer fan tips — all hug the stub.
+        stub = mouth_fan_pts(mouth, inward, 0.0)[-1]
+        for i, tip in enumerate(tips):
+            if abs(dists[i]) < 1e-9:
+                continue
+            self.assertFalse(
+                any(
+                    ((p[0] - tip[0]) ** 2 + (p[1] - tip[1]) ** 2) ** 0.5 < 1.5
+                    for p in bad[i]
+                ),
+                msg=(i, tip, bad[i]),
+            )
+            self.assertTrue(
+                any(
+                    ((p[0] - stub[0]) ** 2 + (p[1] - stub[1]) ** 2) ** 0.5 < 1.5
+                    for p in bad[i]
+                ),
+                msg=(i, stub, bad[i]),
+            )
+
+        def far(poly):
+            out = []
+            for p in poly:
+                if (
+                    ((p[0] - mouth[0]) ** 2 + (p[1] - mouth[1]) ** 2) ** 0.5 > 22
+                    and ((p[0] - pin[0]) ** 2 + (p[1] - pin[1]) ** 2) ** 0.5 > 22
+                ):
+                    out.append(p)
+            return out
+
+        good_far = [far(p) for p in good]
+        if all(len(p) >= 2 for p in good_far):
+            sep = min(
+                min_polyline_separation(good_far[i], good_far[j])
+                for i in range(3)
+                for j in range(i + 1, 3)
+            )
+            self.assertGreaterEqual(sep, MIN_LANE_SEPARATION, msg=good_far)
+
+    def test_ensure_vertex_near_splices_missed_mouth(self) -> None:
+        from housewire.ui.route_quality import ensure_vertex_near
+
+        mouth = (200.0, 100.0)
+        # Offset lane skips the mouth (continues past on a parallel).
+        skipped = [(100.0, 105.0), (300.0, 105.0), (300.0, 160.0)]
+        fixed = ensure_vertex_near(skipped, mouth, tol=1.5)
+        d = min(
+            ((p[0] - mouth[0]) ** 2 + (p[1] - mouth[1]) ** 2) ** 0.5
+            for p in fixed
+        )
+        self.assertLessEqual(d, 1.5, msg=fixed)
+
 
 if __name__ == "__main__":
     unittest.main()
