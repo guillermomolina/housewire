@@ -237,6 +237,62 @@ def ensure_manhattan_near_point(
     return out
 
 
+def terminal_v_lead(
+    pin: Point,
+    face: str,
+    lane_pt: Point,
+    slot: int,
+    slot_count: int,
+) -> list[Point]:
+    """Mirror of multi-cable ``pinToLanePts``: one V diagonal, then Manhattan."""
+    out_dir, lat = _face_axes(face)
+    stub = (pin[0] + out_dir[0] * 5.0, pin[1] + out_dir[1] * 5.0)
+    mid = (slot_count - 1) / 2.0
+    fan_lat = (slot - mid) * FAN_LATERAL_PITCH
+    tip = (
+        stub[0] + out_dir[0] * 10.0 + lat[0] * fan_lat,
+        stub[1] + out_dir[1] * 10.0 + lat[1] * fan_lat,
+    )
+    return manhattan_join_end([pin, stub, tip], lane_pt, face=face)
+
+
+def terminal_lead_issues(
+    pts: Poly,
+    pin: Point,
+    *,
+    multi_cable: bool,
+    radius: float = 36.0,
+) -> list[str]:
+    """Flag jagged terminal leads (screenshot Regleta peaks / multi-diags)."""
+    issues: list[str] = []
+    n_diag = count_diagonals_near_point(pts, pin, radius=radius)
+    if multi_cable:
+        if n_diag == 0:
+            issues.append("shared terminal: missing V diagonal")
+        elif n_diag > 1:
+            issues.append(
+                f"shared terminal: {n_diag} diagonals near pin (want exactly 1)"
+            )
+    elif n_diag:
+        issues.append(
+            f"single-cable terminal: {n_diag} diagonal(s) near pin "
+            "(must be Manhattan)"
+        )
+    # Spike / reverse near pin: short segment that turns back toward the pin.
+    if len(pts) >= 3:
+        seq = list(pts)
+        if _dist(seq[0], pin) > 1.5 and _dist(seq[-1], pin) <= 1.5:
+            seq = list(reversed(seq))
+        for i in range(1, min(len(seq) - 1, 6)):
+            d_prev = _dist(seq[i - 1], pin)
+            d_cur = _dist(seq[i], pin)
+            d_next = _dist(seq[i + 1], pin)
+            if d_cur > d_prev + 8 and d_next < d_cur - 8:
+                issues.append("terminal lead spikes away then back (jagged)")
+                break
+    return issues
+
+
 def max_diagonal_length(pts: Poly) -> float:
     """Longest diagonal segment length, or 0 if none."""
     best = 0.0

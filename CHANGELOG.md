@@ -7,6 +7,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.15] — 2026-08-02
+
+### Fixed
+
+- Multi-cable terminal V uses exactly one short diagonal (stub→tip) then
+  Manhattan to the lane; no second diagonal / spike near the pin.
+- Opening Manhattan rewrite skips segments near terminal pins so it cannot
+  shred a V into a jagged M.
+- Spine is trimmed after the terminal lead to avoid double-back merges.
+
+### Added
+
+- Route-quality checks for jagged terminal leads and a clean ``terminal_v_lead``
+  reference geometry.
+
 ## [0.34.14] — 2026-08-02
 
 ### Fixed

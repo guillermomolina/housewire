@@ -2825,15 +2825,15 @@
    *
    * Rules:
    * - One cable on the terminal → Manhattan only (stub + L, no diagonal).
-   * - Several cables on the same terminal → V fan (short diagonals OK).
-   * Openings never use this helper (mouth bridges stay Manhattan).
+   * - Several cables on the same terminal → exactly ONE short V diagonal
+   *   (stub → tip), then Manhattan only to the lane (never a second diagonal).
    */
   function pinToLanePts(pin, face, lanePt, slot = 0, slotCount = 1) {
     const p = {
       x: Array.isArray(pin) ? pin[0] : pin.x,
       y: Array.isArray(pin) ? pin[1] : pin.y,
     };
-    let t = {
+    const t = {
       x: Array.isArray(lanePt) ? lanePt[0] : lanePt.x,
       y: Array.isArray(lanePt) ? lanePt[1] : lanePt.y,
     };
@@ -2845,10 +2845,27 @@
     /** @type {number[][]} */
     const pts = [[p.x, p.y]];
     let from = p;
+
+    if (multiCable && (fo.x || fo.y)) {
+      // Clean V: pin → stub → tip (one diagonal), then Manhattan to lane.
+      const stub = stubPoint(p, fo.x, fo.y, 5);
+      pts.push([stub.x, stub.y]);
+      const nx = -fo.y;
+      const ny = fo.x;
+      const mid = (nSlots - 1) / 2;
+      const fanLat = (s - mid) * (STRAND_WIDTH + LANE_GAP);
+      const tip = {
+        x: stub.x + fo.x * 10 + nx * fanLat,
+        y: stub.y + fo.y * 10 + ny * fanLat,
+      };
+      pts.push([tip.x, tip.y]);
+      // Never add a second diagonal — ortho L only from tip to lane.
+      return orthoJoinEnd(pts, t, face);
+    }
+
+    // Single cable: stub when lane is outward, then Manhattan L only.
     if (fo.x || fo.y) {
-      const along =
-        (t.x - p.x) * fo.x + (t.y - p.y) * fo.y;
-      // Only stub when the join is further outward — otherwise stub+return = C.
+      const along = (t.x - p.x) * fo.x + (t.y - p.y) * fo.y;
       if (along > 2) {
         const want = Math.min(6, along - 0.5);
         if (want > 1e-6) {
@@ -2858,63 +2875,45 @@
             from = stub;
           }
         }
-      } else if (multiCable) {
-        // Shared terminal: always leave the face before fanning.
-        const stub = stubPoint(p, fo.x, fo.y, 5);
-        pts.push([stub.x, stub.y]);
-        from = stub;
-      }
-    }
-    // Multi-cable same terminal → V fan (lateral) before rejoining the lane.
-    if (multiCable && (fo.x || fo.y)) {
-      const nx = -fo.y;
-      const ny = fo.x;
-      const mid = (nSlots - 1) / 2;
-      const fanLat = (s - mid) * (STRAND_WIDTH + LANE_GAP);
-      const fanDepth = 10;
-      const fan = {
-        x: from.x + fo.x * fanDepth + nx * fanLat,
-        y: from.y + fo.y * fanDepth + ny * fanLat,
-      };
-      if (Math.hypot(from.x - fan.x, from.y - fan.y) > 1e-6) {
-        pts.push([fan.x, fan.y]);
-        from = fan;
       }
     }
     if (Math.hypot(from.x - t.x, from.y - t.y) < 1e-6) return pts;
-    const axisAligned =
-      Math.abs(from.x - t.x) < 1e-6 || Math.abs(from.y - t.y) < 1e-6;
-    if (axisAligned) {
+    if (Math.abs(from.x - t.x) < 1e-6 || Math.abs(from.y - t.y) < 1e-6) {
       pts.push([t.x, t.y]);
       return pts;
     }
-    const rem = Math.hypot(from.x - t.x, from.y - t.y);
-    // Diagonals only for multi-cable V entry — never at single-cable terminals
-    // and never as a substitute for a mouth approach.
-    if (multiCable && rem <= TERMINAL_DIAG_MAX) {
-      pts.push([t.x, t.y]);
-      return pts;
+    return orthoJoinEnd(pts, t, face);
+  }
+
+  /**
+   * Drop spine vertices that sit inside the terminal lead so head+spine
+   * do not double-back into a jagged M near the pin.
+   */
+  function trimSpineAfterLead(spine, leadEnd, minDist = 2) {
+    if (!spine || spine.length < 2 || leadEnd == null) {
+      return spine ? spine.map((p) => [p[0], p[1]]) : [];
     }
-    // One-bend L only (HV or VH) — never a 2-bend Z.
-    const hv = [
-      [from.x, from.y],
-      [t.x, from.y],
-      [t.x, t.y],
-    ];
-    const vh = [
-      [from.x, from.y],
-      [from.x, t.y],
-      [t.x, t.y],
-    ];
-    const pick =
-      Math.hypot(t.x - from.x, 0) <= Math.hypot(0, t.y - from.y) ? hv : vh;
-    for (let i = 1; i < pick.length; i++) {
-      const q = pick[i];
-      const prev = pts[pts.length - 1];
-      if (Math.hypot(prev[0] - q[0], prev[1] - q[1]) < 1e-6) continue;
-      pts.push([q[0], q[1]]);
+    const ex = Array.isArray(leadEnd) ? leadEnd[0] : leadEnd.x;
+    const ey = Array.isArray(leadEnd) ? leadEnd[1] : leadEnd.y;
+    /** @type {number[][]} */
+    const out = spine.map((p) => [p[0], p[1]]);
+    let start = 0;
+    while (start < out.length - 1) {
+      if (Math.hypot(out[start][0] - ex, out[start][1] - ey) <= minDist) {
+        start += 1;
+        continue;
+      }
+      const d0 = Math.hypot(out[start][0] - ex, out[start][1] - ey);
+      const d1 = Math.hypot(out[start + 1][0] - ex, out[start + 1][1] - ey);
+      if (d0 < 14 && d0 <= d1 + 1e-6) {
+        start += 1;
+        continue;
+      }
+      break;
     }
-    return cleanOrthoPoly(pts);
+    const trimmed = out.slice(start);
+    if (!trimmed.length) return [[ex, ey]];
+    return trimmed;
   }
 
   /**
@@ -2954,13 +2953,25 @@
   /**
    * Rewrite any diagonal with an endpoint near ``point`` into a Manhattan L.
    * Safety net so openings never keep a funnel snap.
+   * ``ignoreNear`` protects terminal V diagonals (do not rewrite near pins).
    */
-  function ensureManhattanNearPoint(pts, point, radius = 48) {
+  function ensureManhattanNearPoint(pts, point, radius = 48, ignoreNear = null) {
     if (!pts || pts.length < 2 || point == null) {
       return pts ? pts.map((p) => [p[0], p[1]]) : [];
     }
     const px = Array.isArray(point) ? point[0] : point.x;
     const py = Array.isArray(point) ? point[1] : point.y;
+    const ignore = (ignoreNear || [])
+      .map((q) =>
+        Array.isArray(q) ? { x: q[0], y: q[1] } : { x: q.x, y: q.y }
+      )
+      .filter((q) => q && Number.isFinite(q.x));
+    const nearIgnore = (a, b) =>
+      ignore.some(
+        (q) =>
+          Math.hypot(a[0] - q.x, a[1] - q.y) <= 36 ||
+          Math.hypot(b[0] - q.x, b[1] - q.y) <= 36
+      );
     /** @type {number[][]} */
     let out = pts.map((p) => [p[0], p[1]]);
     let changed = true;
@@ -2976,8 +2987,7 @@
           Math.hypot(a[0] - px, a[1] - py) <= radius ||
           Math.hypot(b[0] - px, b[1] - py) <= radius;
         if (!near) continue;
-        // Insert a corner; prefer keeping a's x then b's y when closer to point
-        // on the vertical through the point.
+        if (nearIgnore(a, b)) continue;
         const corner = [b[0], a[1]];
         out = [...out.slice(0, i + 1), corner, ...out.slice(i + 1)];
         changed = true;
@@ -3610,7 +3620,9 @@
             );
             if (startOff.length >= 2) startOff = startOff.slice(0, -1);
             startOff = orthoJoinEnd(startOff, startJoin, mouthFace);
-            startOff = ensureManhattanNearPoint(startOff, startJoin);
+            startOff = ensureManhattanNearPoint(startOff, startJoin, 48, [
+              startAtt,
+            ]);
             const head = pinToLanePts(
               [startAtt.x, startAtt.y],
               startFace,
@@ -3618,6 +3630,8 @@
               fromSlot.slot,
               fromSlot.count
             );
+            const leadEnd = head[head.length - 1];
+            startOff = trimSpineAfterLead(startOff, leadEnd);
             chain = mergeOrthoPolys(head, startOff);
           }
         }
@@ -3667,7 +3681,7 @@
             );
             if (endOff.length >= 2) endOff = endOff.slice(0, -1);
             endOff = orthoJoinEnd(endOff, endJoin, mouthFace);
-            endOff = ensureManhattanNearPoint(endOff, endJoin);
+            endOff = ensureManhattanNearPoint(endOff, endJoin, 48, [endAtt]);
             const head = pinToLanePts(
               [endAtt.x, endAtt.y],
               endFace,
@@ -3675,6 +3689,8 @@
               toSlot.slot,
               toSlot.count
             );
+            const leadEnd = head[head.length - 1];
+            endOff = trimSpineAfterLead(endOff, leadEnd);
             const endPart = mergeOrthoPolys(head, endOff);
             chain = mergeOrthoPolys(chain, endPart.slice().reverse());
           }
@@ -3762,9 +3778,10 @@
       }
       if (!chain || chain.length < 2) return [];
       let cleaned = stripShortZJogs(stripOutAndBack(chain));
-      // Openings must stay Manhattan even after Z-stripping.
-      cleaned = ensureManhattanNearPoint(cleaned, startOp);
-      cleaned = ensureManhattanNearPoint(cleaned, endOp);
+      // Openings must stay Manhattan; never rewrite terminal V diagonals.
+      const pins = [startAtt, endAtt];
+      cleaned = ensureManhattanNearPoint(cleaned, startOp, 48, pins);
+      cleaned = ensureManhattanNearPoint(cleaned, endOp, 48, pins);
       return [cleaned];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);

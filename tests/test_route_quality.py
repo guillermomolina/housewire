@@ -16,6 +16,7 @@ from housewire.ui.route_quality import (
     MIN_LANE_SEPARATION,
     OUTLINE_EXTRA,
     TERMINAL_DIAG_MAX,
+    approach_point_before_pin,
     assess_bundle,
     count_c_jogs,
     count_long_diagonals,
@@ -413,6 +414,43 @@ class TestElementBorderAndVEntry(unittest.TestCase):
         # Safety net: rewrite an already-snapped diagonal near the mouth.
         rewritten = ensure_manhattan_near_point(brown_snap, mouth)
         self.assertEqual(count_diagonals_near_point(rewritten, mouth), 0)
+
+    def test_screenshot_jagged_terminal_diags_detected_and_clean_v_ok(self) -> None:
+        """Live Regleta bug: multi-diagonal / spike at the pin instead of one V."""
+        from housewire.ui.route_quality import (
+            terminal_lead_issues,
+            terminal_v_lead,
+        )
+
+        pin = (340.0, 160.0)
+        face = "N"
+        lane = (340.0, 100.0)
+        # Screenshot-style jagged green: diagonal, spike out, diagonal back.
+        jagged = [
+            pin,
+            (340.0, 154.0),
+            (348.0, 140.0),  # first diag
+            (360.0, 110.0),  # spike + second diag
+            (340.0, 120.0),  # back
+            lane,
+        ]
+        issues = terminal_lead_issues(jagged, pin, multi_cable=True)
+        self.assertTrue(
+            any("diagonal" in x or "spike" in x for x in issues),
+            msg=issues,
+        )
+
+        clean = terminal_v_lead(pin, face, lane, slot=1, slot_count=2)
+        self.assertEqual(terminal_lead_issues(clean, pin, multi_cable=True), [])
+        # Sibling slot fans the other way — still one diagonal each.
+        clean0 = terminal_v_lead(pin, face, lane, slot=0, slot_count=2)
+        self.assertEqual(terminal_lead_issues(clean0, pin, multi_cable=True), [])
+        from housewire.ui.route_quality import shared_terminal_entry_is_v
+
+        a0 = approach_point_before_pin(clean0, pin)
+        a1 = approach_point_before_pin(clean, pin)
+        assert a0 is not None and a1 is not None
+        self.assertTrue(shared_terminal_entry_is_v(pin, face, [a0, a1]))
 
     def test_outline_extra_is_thin(self) -> None:
         # Rim must stay a hairline beyond the tube (was roadW+2.5).
