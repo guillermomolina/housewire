@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.23] — 2026-08-02
+
+### Changed
+
+- Canvas defaults: open at maximum depth and with the electrical diagram on
+  (toolbar + View menu). Saved per-document depth is still restored when
+  switching tabs.
+
 ## [0.34.22] — 2026-08-02
 
 ### Fixed

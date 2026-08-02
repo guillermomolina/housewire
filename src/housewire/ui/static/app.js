@@ -10,12 +10,14 @@
   const PAD = 28;
   const HEADER = 36;
   const LABEL_CHAR_W = 6.6;
+  /** Requested depth when no saved view; server/client cap to max_depth. */
+  const DEPTH_MAX_REQUEST = 999;
 
   let graph = null;
   let locationId = null;
   let selectedId = null;
   let selectedIds = new Set();
-  let depthLevel = 1;
+  let depthLevel = DEPTH_MAX_REQUEST;
   let maxDepth = 1;
   let scale = 1;
   let panX = 40;
@@ -42,7 +44,7 @@
   let canUndo = false;
   let canRedo = false;
   let canReset = false;
-  let showElectrical = false;
+  let showElectrical = true;
   let outlineNodes = [];
   let canvasLocations = [];
   let collapsedOutline = new Set();
@@ -5103,7 +5105,7 @@
       (r) => r.selectable !== false && r.id === nextId
     );
     if (opt) {
-      depthLevel = 1;
+      depthLevel = DEPTH_MAX_REQUEST;
       await setCanvasLocation(nextId);
       setStatus(`Entered ${nextId}`);
       return;
@@ -5856,7 +5858,7 @@
       canvasLocations.find((r) => r.selectable !== false);
     if (target) {
       if (saved && saved.depthLevel) depthLevel = saved.depthLevel;
-      else depthLevel = 1;
+      else depthLevel = DEPTH_MAX_REQUEST;
       await setCanvasLocation(target.id, { resetDepth: !saved });
     } else {
       setStatus("No locations with children found");
@@ -5927,7 +5929,7 @@
 
   async function setCanvasLocation(id, { resetDepth = true } = {}) {
     if (!id) return;
-    if (resetDepth) depthLevel = 1;
+    if (resetDepth) depthLevel = DEPTH_MAX_REQUEST;
     locationId = id;
     if (activeDocId) {
       docViews[activeDocId] = { locationId: id, depthLevel };
