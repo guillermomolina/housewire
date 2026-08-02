@@ -149,7 +149,7 @@ housewire rm element "$SITE" my-site.yaml MT_New
 ```
 
 ```bash
-make prepare          # venv + pip install -e '.[dev,ui]'
+make prepare          # venv + examples + pip install -e '.[dev,ui,examples]'
 make test
 ```
 

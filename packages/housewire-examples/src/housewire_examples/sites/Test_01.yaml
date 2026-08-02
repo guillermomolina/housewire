@@ -1,0 +1,319 @@
+schema: house/v2
+type: House
+label: Test 01
+notes: Minimal house — panel with supply and earth, room with switch and lamp via
+  junction box.
+elements:
+  Cuadro_General:
+    type: Panel
+    label: Cuadro general
+    name: Cuadro general
+    notes: Acometida y jabalina; sale hacia la caja de derivacion
+    install: surface
+    mount: wall
+    opening_grid:
+      S: 1
+    openings:
+    - S1
+    elements:
+      Acometida:
+        type: Supply
+        subtype: Entrada red
+        name: Acometida
+        label: Acometida
+        notes: Entrada de red (fase + neutro)
+        view:
+          electrical:
+            x: 40.0
+            y: 20.0
+      Jabalina:
+        type: EarthElectrode
+        subtype: Jabalina
+        name: Jabalina
+        label: Jabalina
+        notes: Toma de tierra / jabalina
+        view:
+          electrical:
+            x: 180.0
+            y: 20.0
+    cables: {}
+    view:
+      physical:
+        x: 187.0
+        y: 0.0
+  Habitacion:
+    type: Room
+    label: Habitacion
+    notes: Estancia de prueba con interruptor y lampara via caja de derivacion
+    install: surface
+    elements:
+      Caja_derivacion:
+        type: JunctionBox
+        subtype: 100x100 IP40
+        label: Caja derivacion
+        install: surface
+        mount: wall
+        opening_grid:
+          NS: 2
+          WE: 2
+        openings:
+        - N1
+        - S1
+        - E1
+        - W1
+        notes: Empalme interruptor / lampara / alimentacion desde cuadro
+        elements:
+          Regleta:
+            type: TerminalStrip
+            terminal_grid:
+              NS: 4
+            name: Regleta
+            label: Regleta 4 pares
+            notes: 1 fase permanente; 2 fase conmutada; 3 neutro; 4 PE
+            terminals:
+              N1:
+                label: 1 L
+                direction: inout
+                role: phase
+              N2:
+                label: 2 L sw
+                direction: inout
+                role: phase
+              N3:
+                label: 3 N
+                direction: inout
+                role: neutral
+              N4:
+                label: 4 PE
+                direction: inout
+                role: pe
+            view:
+              electrical:
+                x: 80.0
+                y: 84.0
+        cables: {}
+        view:
+          physical:
+            x: 52.0
+            y: 23.0
+        name: Caja derivacion
+      Interruptor:
+        type: DeviceBox
+        subtype: 1-gang
+        label: Interruptor
+        install: surface
+        mount: wall
+        opening_grid:
+          N: 1
+        openings:
+        - N1
+        notes: Interruptor unipolar hacia la caja
+        elements:
+          Switch:
+            type: Switch
+            subtype: unipolar
+            name: Switch
+            label: Interruptor
+            notes: 1 ← fase permanente; 2 → fase conmutada
+            view:
+              electrical:
+                x: 101.0
+                y: 6.0
+        cables: {}
+        view:
+          physical:
+            x: 408.0
+            y: 337.0
+        name: Interruptor
+      Lampara:
+        type: LightPoint
+        subtype: ceiling-hole
+        label: Lampara
+        install: surface
+        mount: ceiling
+        opening_grid:
+          B: 1
+        openings:
+        - B1-1
+        notes: Punto de luz alimentado desde la caja
+        elements:
+          Luminaire:
+            type: Luminaire
+            terminal_grid:
+              N: 3
+            name: Luminaire
+            label: Lampara
+            notes: 1 fase conmutada; 3 neutro
+            terminals:
+              N1:
+                label: '1'
+                direction: in
+                role: phase
+              N2:
+                label: '2'
+                direction: in
+                role: earth
+              N3:
+                label: '3'
+                direction: in
+                role: neutral
+            view:
+              electrical:
+                x: 116.0
+                y: 87.0
+        cables: {}
+        view:
+          physical:
+            x: 575.0
+            y: 79.0
+        name: Lampara
+    cables:
+      Linea_interruptor_1:
+        type: Conductor
+        section: 1.5 mm2
+        color: BN
+        subtype: power
+        notes: Fase permanente + fase conmutada al interruptor
+        from: Caja_derivacion/Regleta.N1
+        to: Interruptor/Switch.N1
+      Linea_interruptor_2:
+        type: Conductor
+        section: 1.5 mm2
+        color: BK
+        subtype: power
+        notes: Fase permanente + fase conmutada al interruptor
+        from: Interruptor/Switch.S1
+        to: Caja_derivacion/Regleta.N2
+      Linea_interruptor:
+        type: Cable
+        contains:
+        - Linea_interruptor_1
+        - Linea_interruptor_2
+        color: BK
+        subtype: power
+        section: 1.5 mm2
+        name: Linea interruptor
+        notes: Fase permanente + fase conmutada al interruptor
+      Linea_lampara_1:
+        type: Conductor
+        section: 1.5 mm2
+        color: BK
+        subtype: power
+        notes: Fase conmutada + neutro a la lampara
+        from: Caja_derivacion/Regleta.N2
+        to: Lampara/Luminaire.N1
+      Linea_lampara_2:
+        type: Conductor
+        section: 1.5 mm2
+        color: BU
+        subtype: power
+        notes: Fase conmutada + neutro a la lampara
+        from: Caja_derivacion/Regleta.N3
+        to: Lampara/Luminaire.N3
+      Linea_lampara_T:
+        type: Conductor
+        section: 1.5 mm2
+        color: GNYE
+        subtype: power
+        notes: Fase conmutada + neutro a la lampara
+        from: Caja_derivacion/Regleta.N4
+        to: Lampara/Luminaire.N2
+      Linea_lampara:
+        type: Cable
+        contains:
+        - Linea_lampara_1
+        - Linea_lampara_2
+        color: WH
+        subtype: power
+        section: 1.5 mm2
+        name: Linea lampara
+        notes: Fase conmutada + neutro a la lampara
+      Conducto_interruptor:
+        type: Conduit
+        subtype: tube
+        name: Conducto interruptor
+        from: Caja_derivacion.E1
+        to: Interruptor.N1
+        contains:
+        - Linea_interruptor
+        color: BK
+      Conducto_lampara:
+        type: Conduit
+        subtype: tube
+        name: Conducto lampara
+        from: Caja_derivacion.N1
+        to: Lampara.B1-1
+        contains:
+        - Linea_lampara
+        - Linea_lampara_T
+        color: BK
+    view:
+      physical:
+        x: 440.0
+        y: 273.0
+        page:
+          width: 480
+          height: 360
+    name: Habitacion
+cables:
+  Linea_acometida_1:
+    type: Conductor
+    section: 2.5 mm2
+    color: BN
+    subtype: power
+    notes: Fase + neutro desde acometida a regleta
+    from: Cuadro_General/Acometida.S1
+    to: Habitacion/Caja_derivacion/Regleta.N1
+  Linea_acometida_2:
+    type: Conductor
+    section: 2.5 mm2
+    color: BU
+    subtype: power
+    notes: Fase + neutro desde acometida a regleta
+    from: Cuadro_General/Acometida.S2
+    to: Habitacion/Caja_derivacion/Regleta.N3
+  Linea_acometida:
+    type: Cable
+    contains:
+    - Linea_acometida_1
+    - Linea_acometida_2
+    color: BK
+    subtype: power
+    section: 2.5 mm2
+    name: Linea acometida
+    notes: Fase + neutro desde acometida a regleta
+  Linea_tierra_1:
+    type: Conductor
+    section: 2.5 mm2
+    color: GNYE
+    subtype: earth
+    notes: Tierra jabalina a regleta PE
+    from: Cuadro_General/Jabalina.S1
+    to: Habitacion/Caja_derivacion/Regleta.N4
+  Linea_tierra:
+    type: Cable
+    contains:
+    - Linea_tierra_1
+    color: BK
+    subtype: earth
+    section: 2.5 mm2
+    name: Linea tierra
+    notes: Tierra jabalina a regleta PE
+  Conducto_cuadro_a_caja:
+    type: Conduit
+    subtype: tube
+    name: Conducto cuadro a caja
+    notes: Alimentacion y tierra del cuadro a la caja de derivacion
+    from: Cuadro_General.S1
+    to: Habitacion/Caja_derivacion.W1
+    contains:
+    - Linea_acometida
+    - Linea_tierra
+    color: BK
+view:
+  physical:
+    x: 0.0
+    y: 0.0
+    page:
+      width: 640
+      height: 480
