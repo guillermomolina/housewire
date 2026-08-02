@@ -1,0 +1,55 @@
+schema: house/v2
+type: House
+label: 'Route 02 — two boxes one tube'
+notes: 'Two device boxes, one conduit, one conductor.'
+elements:
+  Box_A:
+    type: DeviceBox
+    label: Box A
+    openings: [E1]
+    opening_grid: {E: 1}
+    elements:
+      Socket:
+        type: Socket
+        label: Socket
+        view:
+          electrical: {x: 40.0, y: 30.0}
+    cables: {}
+    view:
+      physical: {x: 40.0, y: 100.0}
+  Box_B:
+    type: DeviceBox
+    label: Box B
+    openings: [W1]
+    opening_grid: {W: 1}
+    elements:
+      Socket:
+        type: Socket
+        label: Socket
+        view:
+          electrical: {x: 40.0, y: 30.0}
+    cables: {}
+    view:
+      physical: {x: 320.0, y: 100.0}
+cables:
+  Run_1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Box_A/Socket.N1
+    to: Box_B/Socket.N1
+  Tube_1:
+    type: Conduit
+    subtype: tube
+    from: Box_A.E1
+    to: Box_B.W1
+    contains: [Run_1]
+    color: BK
+
+view:
+  physical:
+    x: 0.0
+    y: 0.0
+    page:
+      width: 640
+      height: 480

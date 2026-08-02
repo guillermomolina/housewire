@@ -1876,3 +1876,45 @@ def assess_live_canvas(
             f"across {n} strands"
         )
     return issues
+
+
+def assess_live_site(
+    tubes: Sequence[Poly],
+    strands: Sequence[Poly],
+    *,
+    tube_half_widths: Sequence[float] | None = None,
+    require_tubes: bool = False,
+    mouth_tol: float = 3.0,
+    envelope_margin: float = 2.5,
+    trunk_y_min: float = 400.0,
+    trunk_y_max: float = 440.0,
+    bipolar_y_min: float = 430.0,
+) -> list[str]:
+    """Live-canvas checks; sites without conduits skip tube mouth/envelope.
+
+    Same-box routes (no ``edge-tube``) still fail on empty canvas or
+    out-and-back. Pass ``require_tubes=True`` when the fixture must draw tubes.
+    """
+    if not tubes:
+        issues: list[str] = []
+        if require_tubes:
+            issues.append("no edge-tube paths on canvas")
+        if len(strands) < 1:
+            issues.append("no cable strands on canvas")
+            return issues
+        for si, strand in enumerate(strands):
+            pts = [(float(p[0]), float(p[1])) for p in strand]
+            n_back = count_out_and_back(pts)
+            if n_back:
+                issues.append(f"strand {si}: out-and-back ({n_back})")
+        return issues
+    return assess_live_canvas(
+        tubes,
+        strands,
+        tube_half_widths=tube_half_widths,
+        mouth_tol=mouth_tol,
+        envelope_margin=envelope_margin,
+        trunk_y_min=trunk_y_min,
+        trunk_y_max=trunk_y_max,
+        bipolar_y_min=bipolar_y_min,
+    )

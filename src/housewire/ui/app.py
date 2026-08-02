@@ -235,11 +235,17 @@ def create_app(site_root: Path | None = None) -> Any:
 
     @app.get("/api/locations")
     def api_locations() -> dict[str, Any]:
-        return {"locations": pg.list_canvas_locations(_root())}
+        return {
+            "locations": pg.list_canvas_locations(
+                _root(), site_yaml=_site_yaml()
+            )
+        }
 
     @app.get("/api/outline")
     def api_outline() -> dict[str, Any]:
-        return {"nodes": pg.list_site_outline(_root())}
+        return {
+            "nodes": pg.list_site_outline(_root(), site_yaml=_site_yaml())
+        }
 
     @app.get("/api/catalog")
     def api_catalog() -> dict[str, Any]:

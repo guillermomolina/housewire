@@ -1,0 +1,85 @@
+schema: house/v2
+type: House
+label: 'Route 06 — lamp plane boca'
+notes: 'Junction to light point via B1-1 plane opening.'
+elements:
+  Room:
+    type: Room
+    label: Room
+    elements:
+      JBox:
+        type: JunctionBox
+        label: JBox
+        openings: [N1, E1]
+        opening_grid: {NS: 1, WE: 1}
+        elements:
+          Strip:
+            type: TerminalStrip
+            terminal_grid: {NS: 3}
+            terminals:
+              N1: {label: L, direction: inout, role: phase}
+              N2: {label: N, direction: inout, role: neutral}
+              N3: {label: PE, direction: inout, role: pe}
+            view:
+              electrical: {x: 70.0, y: 70.0}
+        cables: {}
+        view:
+          physical: {x: 40.0, y: 120.0}
+      Lamp:
+        type: LightPoint
+        label: Lamp
+        openings: [B1-1]
+        opening_grid: {B: 1}
+        elements:
+          Luminaire:
+            type: Luminaire
+            terminal_grid: {N: 3}
+            terminals:
+              N1: {label: '1', direction: in, role: phase}
+              N2: {label: '2', direction: in, role: earth}
+              N3: {label: '3', direction: in, role: neutral}
+            view:
+              electrical: {x: 100.0, y: 80.0}
+        cables: {}
+        view:
+          physical: {x: 280.0, y: 40.0}
+    cables:
+      Ph:
+        type: Conductor
+        section: 1.5 mm2
+        color: BK
+        from: JBox/Strip.N1
+        to: Lamp/Luminaire.N1
+      Nu:
+        type: Conductor
+        section: 1.5 mm2
+        color: BU
+        from: JBox/Strip.N2
+        to: Lamp/Luminaire.N3
+      Pe:
+        type: Conductor
+        section: 1.5 mm2
+        color: GNYE
+        from: JBox/Strip.N3
+        to: Lamp/Luminaire.N2
+      Cable:
+        type: Cable
+        contains: [Ph, Nu]
+        color: WH
+        section: 1.5 mm2
+      Tube:
+        type: Conduit
+        subtype: tube
+        from: JBox.N1
+        to: Lamp.B1-1
+        contains: [Cable, Pe]
+    view:
+      physical: {x: 20.0, y: 20.0, page: {width: 480, height: 320}}
+
+view:
+  physical:
+    x: 0.0
+    y: 0.0
+    page:
+      width: 640
+      height: 480

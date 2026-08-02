@@ -1,0 +1,80 @@
+schema: house/v2
+type: House
+label: 'Route 07 — bipolar V'
+notes: 'Two exits from one strip via distinct openings (expects V at pin).'
+elements:
+  Box_A:
+    type: JunctionBox
+    label: A
+    openings: [E1, S1]
+    opening_grid: {E: 1, S: 1}
+    elements:
+      Strip:
+        type: TerminalStrip
+        terminal_grid: {NS: 1}
+        terminals:
+          N1: {label: L, direction: inout, role: phase}
+        view:
+          electrical: {x: 80.0, y: 60.0}
+    cables: {}
+    view:
+      physical: {x: 40.0, y: 80.0}
+  Box_B:
+    type: DeviceBox
+    label: B
+    openings: [W1]
+    opening_grid: {W: 1}
+    elements:
+      Socket:
+        type: Socket
+        view:
+          electrical: {x: 40.0, y: 30.0}
+    cables: {}
+    view:
+      physical: {x: 340.0, y: 80.0}
+  Box_C:
+    type: DeviceBox
+    label: C
+    openings: [N1]
+    opening_grid: {N: 1}
+    elements:
+      Socket:
+        type: Socket
+        view:
+          electrical: {x: 40.0, y: 30.0}
+    cables: {}
+    view:
+      physical: {x: 40.0, y: 280.0}
+cables:
+  To_B:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Box_A/Strip.N1
+    to: Box_B/Socket.N1
+  To_C:
+    type: Conductor
+    section: 1.5 mm2
+    color: BK
+    from: Box_A/Strip.N1
+    to: Box_C/Socket.N1
+  Tube_B:
+    type: Conduit
+    subtype: tube
+    from: Box_A.E1
+    to: Box_B.W1
+    contains: [To_B]
+  Tube_C:
+    type: Conduit
+    subtype: tube
+    from: Box_A.S1
+    to: Box_C.N1
+    contains: [To_C]
+
+view:
+  physical:
+    x: 0.0
+    y: 0.0
+    page:
+      width: 640
+      height: 480

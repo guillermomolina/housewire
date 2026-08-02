@@ -1,0 +1,74 @@
+schema: house/v2
+type: House
+label: 'Route 05 — switch drop'
+notes: 'Junction box to switch on east opening.'
+elements:
+  Room:
+    type: Room
+    label: Room
+    elements:
+      JBox:
+        type: JunctionBox
+        label: JBox
+        openings: [E1, W1]
+        opening_grid: {WE: 1}
+        elements:
+          Strip:
+            type: TerminalStrip
+            terminal_grid: {NS: 2}
+            terminals:
+              N1: {label: L, direction: inout, role: phase}
+              N2: {label: Lsw, direction: inout, role: phase}
+            view:
+              electrical: {x: 70.0, y: 60.0}
+        cables: {}
+        view:
+          physical: {x: 40.0, y: 40.0}
+      SwitchBox:
+        type: DeviceBox
+        label: Switch
+        openings: [W1]
+        opening_grid: {W: 1}
+        elements:
+          Switch:
+            type: Switch
+            subtype: unipolar
+            view:
+              electrical: {x: 80.0, y: 20.0}
+        cables: {}
+        view:
+          physical: {x: 320.0, y: 40.0}
+    cables:
+      Sw1:
+        type: Conductor
+        section: 1.5 mm2
+        color: BN
+        from: JBox/Strip.N1
+        to: SwitchBox/Switch.N1
+      Sw2:
+        type: Conductor
+        section: 1.5 mm2
+        color: BK
+        from: SwitchBox/Switch.S1
+        to: JBox/Strip.N2
+      SwCable:
+        type: Cable
+        contains: [Sw1, Sw2]
+        color: BK
+        section: 1.5 mm2
+      Tube:
+        type: Conduit
+        subtype: tube
+        from: JBox.E1
+        to: SwitchBox.W1
+        contains: [SwCable]
+    view:
+      physical: {x: 40.0, y: 40.0, page: {width: 480, height: 280}}
+
+view:
+  physical:
+    x: 0.0
+    y: 0.0
+    page:
+      width: 640
+      height: 480

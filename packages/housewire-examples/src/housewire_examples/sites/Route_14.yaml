@@ -1,0 +1,117 @@
+schema: house/v2
+type: House
+label: 'Route 14 — three hop chain'
+notes: 'Panel → junction → device → lamp (three tubes).'
+elements:
+  Panel:
+    type: Panel
+    label: Panel
+    openings: [S1]
+    opening_grid: {S: 1}
+    elements:
+      Supply:
+        type: Supply
+        view:
+          electrical: {x: 40.0, y: 20.0}
+    cables: {}
+    view:
+      physical: {x: 40.0, y: 20.0}
+  JBox:
+    type: JunctionBox
+    label: JBox
+    openings: [N1, E1]
+    opening_grid: {NS: 1, WE: 1}
+    elements:
+      Strip:
+        type: TerminalStrip
+        terminal_grid: {NS: 2}
+        terminals:
+          N1: {label: L, direction: inout, role: phase}
+          N2: {label: N, direction: inout, role: neutral}
+        view:
+          electrical: {x: 60.0, y: 60.0}
+    cables: {}
+    view:
+      physical: {x: 40.0, y: 200.0}
+  Mid:
+    type: DeviceBox
+    label: Mid
+    openings: [W1, E1]
+    opening_grid: {WE: 1}
+    elements:
+      Socket:
+        type: Socket
+        view:
+          electrical: {x: 40.0, y: 30.0}
+    cables: {}
+    view:
+      physical: {x: 280.0, y: 200.0}
+  End:
+    type: DeviceBox
+    label: End
+    openings: [W1]
+    opening_grid: {W: 1}
+    elements:
+      Socket:
+        type: Socket
+        view:
+          electrical: {x: 40.0, y: 30.0}
+    cables: {}
+    view:
+      physical: {x: 480.0, y: 200.0}
+cables:
+  FeedL:
+    type: Conductor
+    section: 2.5 mm2
+    color: BN
+    from: Panel/Supply.S1
+    to: JBox/Strip.N1
+  FeedN:
+    type: Conductor
+    section: 2.5 mm2
+    color: BU
+    from: Panel/Supply.S2
+    to: JBox/Strip.N2
+  Feed:
+    type: Cable
+    contains: [FeedL, FeedN]
+    color: BK
+    section: 2.5 mm2
+  M1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: JBox/Strip.N1
+    to: Mid/Socket.N1
+  M2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Mid/Socket.N1
+    to: End/Socket.N1
+  Tube0:
+    type: Conduit
+    subtype: tube
+    from: Panel.S1
+    to: JBox.N1
+    contains: [Feed]
+  Tube1:
+    type: Conduit
+    subtype: tube
+    from: JBox.E1
+    to: Mid.W1
+    contains: [M1]
+  Tube2:
+    type: Conduit
+    subtype: tube
+    from: Mid.E1
+    to: End.W1
+    contains: [M2]
+
+view:
+  physical:
+    x: 0.0
+    y: 0.0
+    page:
+      width: 640
+      height: 480

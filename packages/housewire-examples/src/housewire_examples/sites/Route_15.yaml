@@ -1,0 +1,85 @@
+schema: house/v2
+type: House
+label: 'Route 15 — two rooms'
+notes: 'Two rooms with a conduit between junction boxes.'
+elements:
+  Room_A:
+    type: Room
+    label: Room A
+    elements:
+      JBox:
+        type: JunctionBox
+        label: JA
+        openings: [E1]
+        opening_grid: {E: 1}
+        elements:
+          Strip:
+            type: TerminalStrip
+            terminal_grid: {NS: 2}
+            terminals:
+              N1: {label: L, direction: inout, role: phase}
+              N2: {label: N, direction: inout, role: neutral}
+            view:
+              electrical: {x: 60.0, y: 50.0}
+        cables: {}
+        view:
+          physical: {x: 30.0, y: 40.0}
+    cables: {}
+    view:
+      physical: {x: 20.0, y: 40.0, page: {width: 240, height: 200}}
+  Room_B:
+    type: Room
+    label: Room B
+    elements:
+      JBox:
+        type: JunctionBox
+        label: JB
+        openings: [W1]
+        opening_grid: {W: 1}
+        elements:
+          Strip:
+            type: TerminalStrip
+            terminal_grid: {NS: 2}
+            terminals:
+              N1: {label: L, direction: inout, role: phase}
+              N2: {label: N, direction: inout, role: neutral}
+            view:
+              electrical: {x: 60.0, y: 50.0}
+        cables: {}
+        view:
+          physical: {x: 30.0, y: 40.0}
+    cables: {}
+    view:
+      physical: {x: 320.0, y: 40.0, page: {width: 240, height: 200}}
+cables:
+  L:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Room_A/JBox/Strip.N1
+    to: Room_B/JBox/Strip.N1
+  N:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    from: Room_A/JBox/Strip.N2
+    to: Room_B/JBox/Strip.N2
+  Cable:
+    type: Cable
+    contains: [L, N]
+    color: BK
+    section: 1.5 mm2
+  Tube:
+    type: Conduit
+    subtype: tube
+    from: Room_A/JBox.E1
+    to: Room_B/JBox.W1
+    contains: [Cable]
+
+view:
+  physical:
+    x: 0.0
+    y: 0.0
+    page:
+      width: 640
+      height: 480

@@ -1,0 +1,123 @@
+schema: house/v2
+type: House
+label: 'Route 12 — switch and lamp'
+notes: 'Room with junction, switch, and lamp (subset of Test_01).'
+elements:
+  Room:
+    type: Room
+    label: Room
+    elements:
+      JBox:
+        type: JunctionBox
+        label: JBox
+        openings: [N1, E1, W1]
+        opening_grid: {NS: 1, WE: 1}
+        elements:
+          Strip:
+            type: TerminalStrip
+            terminal_grid: {NS: 4}
+            terminals:
+              N1: {label: L, direction: inout, role: phase}
+              N2: {label: Lsw, direction: inout, role: phase}
+              N3: {label: N, direction: inout, role: neutral}
+              N4: {label: PE, direction: inout, role: pe}
+            view:
+              electrical: {x: 70.0, y: 80.0}
+        cables: {}
+        view:
+          physical: {x: 40.0, y: 80.0}
+      SwitchBox:
+        type: DeviceBox
+        label: Switch
+        openings: [W1]
+        opening_grid: {W: 1}
+        elements:
+          Switch:
+            type: Switch
+            subtype: unipolar
+            view:
+              electrical: {x: 90.0, y: 20.0}
+        cables: {}
+        view:
+          physical: {x: 300.0, y: 200.0}
+      Lamp:
+        type: LightPoint
+        label: Lamp
+        openings: [B1-1]
+        opening_grid: {B: 1}
+        elements:
+          Luminaire:
+            type: Luminaire
+            terminal_grid: {N: 3}
+            terminals:
+              N1: {label: '1', direction: in, role: phase}
+              N2: {label: '2', direction: in, role: earth}
+              N3: {label: '3', direction: in, role: neutral}
+            view:
+              electrical: {x: 100.0, y: 80.0}
+        cables: {}
+        view:
+          physical: {x: 300.0, y: 40.0}
+    cables:
+      Sw1:
+        type: Conductor
+        section: 1.5 mm2
+        color: BN
+        from: JBox/Strip.N1
+        to: SwitchBox/Switch.N1
+      Sw2:
+        type: Conductor
+        section: 1.5 mm2
+        color: BK
+        from: SwitchBox/Switch.S1
+        to: JBox/Strip.N2
+      SwCable:
+        type: Cable
+        contains: [Sw1, Sw2]
+        color: BK
+        section: 1.5 mm2
+      Lp:
+        type: Conductor
+        section: 1.5 mm2
+        color: BK
+        from: JBox/Strip.N2
+        to: Lamp/Luminaire.N1
+      Ln:
+        type: Conductor
+        section: 1.5 mm2
+        color: BU
+        from: JBox/Strip.N3
+        to: Lamp/Luminaire.N3
+      Lpe:
+        type: Conductor
+        section: 1.5 mm2
+        color: GNYE
+        from: JBox/Strip.N4
+        to: Lamp/Luminaire.N2
+      LampCable:
+        type: Cable
+        contains: [Lp, Ln]
+        color: WH
+        section: 1.5 mm2
+      TubeSw:
+        type: Conduit
+        subtype: tube
+        from: JBox.E1
+        to: SwitchBox.W1
+        contains: [SwCable]
+      TubeLp:
+        type: Conduit
+        subtype: tube
+        from: JBox.N1
+        to: Lamp.B1-1
+        contains: [LampCable, Lpe]
+    view:
+      physical: {x: 20.0, y: 20.0, page: {width: 520, height: 360}}
+
+view:
+  physical:
+    x: 0.0
+    y: 0.0
+    page:
+      width: 640
+      height: 480

@@ -1,0 +1,67 @@
+schema: house/v2
+type: House
+label: 'Route 08 — strip two pairs'
+notes: 'Feed BN+BU into a 2-pair terminal strip via one tube.'
+elements:
+  Panel:
+    type: Panel
+    label: Panel
+    openings: [S1]
+    opening_grid: {S: 1}
+    elements:
+      Supply:
+        type: Supply
+        view:
+          electrical: {x: 40.0, y: 20.0}
+    cables: {}
+    view:
+      physical: {x: 160.0, y: 20.0}
+  Box:
+    type: JunctionBox
+    label: Box
+    openings: [N1]
+    opening_grid: {N: 1}
+    elements:
+      Strip:
+        type: TerminalStrip
+        terminal_grid: {NS: 2}
+        terminals:
+          N1: {label: L, direction: inout, role: phase}
+          N2: {label: N, direction: inout, role: neutral}
+        view:
+          electrical: {x: 70.0, y: 70.0}
+    cables: {}
+    view:
+      physical: {x: 160.0, y: 220.0}
+cables:
+  L:
+    type: Conductor
+    section: 2.5 mm2
+    color: BN
+    from: Panel/Supply.S1
+    to: Box/Strip.N1
+  N:
+    type: Conductor
+    section: 2.5 mm2
+    color: BU
+    from: Panel/Supply.S2
+    to: Box/Strip.N2
+  Cable:
+    type: Cable
+    contains: [L, N]
+    color: BK
+    section: 2.5 mm2
+  Tube:
+    type: Conduit
+    subtype: tube
+    from: Panel.S1
+    to: Box.N1
+    contains: [Cable]
+
+view:
+  physical:
+    x: 0.0
+    y: 0.0
+    page:
+      width: 640
+      height: 480

@@ -1,0 +1,105 @@
+schema: house/v2
+type: House
+label: 'Route 16 — dense strip exits'
+notes: 'Four conductors leave a strip through two tubes.'
+elements:
+  Box:
+    type: JunctionBox
+    label: Hub
+    openings: [E1, S1]
+    opening_grid: {E: 1, S: 1}
+    elements:
+      Strip:
+        type: TerminalStrip
+        terminal_grid: {NS: 4}
+        terminals:
+          N1: {label: '1', direction: inout, role: phase}
+          N2: {label: '2', direction: inout, role: phase}
+          N3: {label: '3', direction: inout, role: neutral}
+          N4: {label: '4', direction: inout, role: pe}
+        view:
+          electrical: {x: 70.0, y: 80.0}
+    cables: {}
+    view:
+      physical: {x: 40.0, y: 40.0}
+  East:
+    type: DeviceBox
+    label: East
+    openings: [W1]
+    opening_grid: {W: 1}
+    elements:
+      Socket:
+        type: Socket
+        view:
+          electrical: {x: 40.0, y: 30.0}
+    cables: {}
+    view:
+      physical: {x: 360.0, y: 40.0}
+  South:
+    type: DeviceBox
+    label: South
+    openings: [N1]
+    opening_grid: {N: 1}
+    elements:
+      Socket:
+        type: Socket
+        view:
+          electrical: {x: 40.0, y: 30.0}
+    cables: {}
+    view:
+      physical: {x: 40.0, y: 300.0}
+cables:
+  E1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Box/Strip.N1
+    to: East/Socket.N1
+  E2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    from: Box/Strip.N3
+    to: East/Socket.N3
+  S1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BK
+    from: Box/Strip.N2
+    to: South/Socket.N1
+  S2:
+    type: Conductor
+    section: 1.5 mm2
+    color: GNYE
+    from: Box/Strip.N4
+    to: South/Socket.N2
+  EastCable:
+    type: Cable
+    contains: [E1, E2]
+    color: BK
+    section: 1.5 mm2
+  SouthCable:
+    type: Cable
+    contains: [S1, S2]
+    color: BK
+    section: 1.5 mm2
+  TubeE:
+    type: Conduit
+    subtype: tube
+    from: Box.E1
+    to: East.W1
+    contains: [EastCable]
+  TubeS:
+    type: Conduit
+    subtype: tube
+    from: Box.S1
+    to: South.N1
+    contains: [SouthCable]
+
+view:
+  physical:
+    x: 0.0
+    y: 0.0
+    page:
+      width: 640
+      height: 480

@@ -604,12 +604,21 @@ def _load_site_doc(
     site_root: Path,
     *,
     session_docs: dict[Path, dict[str, Any]] | None = None,
+    site_yaml: Path | None = None,
 ) -> tuple[Path, dict[str, Any]]:
-    path = site_yaml_path(site_root)
+    if site_yaml is not None:
+        path = site_yaml.resolve()
+    else:
+        path = site_yaml_path(site_root)
     if session_docs:
         for key, doc in session_docs.items():
             if key.resolve() == path:
                 return path, doc
+        # Active buffer may be the only known document when several YAMLs
+        # share the site root (find_site_yaml is ambiguous).
+        if len(session_docs) == 1:
+            key, doc = next(iter(session_docs.items()))
+            return key.resolve(), doc
     if not path.is_file():
         raise FileNotFoundError(f"No site .yaml/.yml at site root {site_root}")
     return path, load_yaml(path)
@@ -632,15 +641,20 @@ def iter_place_yaml_under(
     return [(parts, yaml_path) for parts, _node in iter_places(doc, under=())]
 
 
-def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
+def list_canvas_locations(
+    site_root: Path,
+    *,
+    site_yaml: Path | None = None,
+) -> list[dict[str, Any]]:
     """Place tree (preorder), only nodes useful as canvas roots.
 
     Each row includes ``depth`` for UI indentation. A node is included if it
     has child places (selectable) or is an ancestor of such a node.
+    Pass ``site_yaml`` when the site root contains several YAML files.
     """
     root = site_root.resolve()
     try:
-        _path, site_doc = _load_site_doc(root)
+        _path, site_doc = _load_site_doc(root, site_yaml=site_yaml)
     except FileNotFoundError:
         return []
 
@@ -752,12 +766,16 @@ def list_canvas_locations(site_root: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
+def list_site_outline(
+    site_root: Path,
+    *,
+    site_yaml: Path | None = None,
+) -> list[dict[str, Any]]:
     """Full site outline: every place + electrical elements (preorder flat)."""
     root = site_root.resolve()
     catalog = load_catalog(root)
     try:
-        _path, site_doc = _load_site_doc(root)
+        _path, site_doc = _load_site_doc(root, site_yaml=site_yaml)
     except FileNotFoundError:
         return []
 

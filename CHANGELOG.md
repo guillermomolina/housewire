@@ -7,6 +7,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.2] — 2026-08-02
+
+### Added
+
+- ``docs/routing-rules.md`` — English routing rules for tube envelope, mouths,
+  inbox V, and hop assembly contract.
+- Twenty public route fixtures ``Route_01``…``Route_20`` in
+  ``housewire-examples``, plus Playwright E2E modules under
+  ``tests/route_e2e/`` (shared harness + ``assess_live_site``).
+
+### Fixed
+
+- UI ``/api/locations`` and ``/api/outline`` use the active site YAML when the
+  site root contains multiple documents (examples package multi-file folder).
+
 ## [0.35.1] — 2026-08-02
 
 ### Added

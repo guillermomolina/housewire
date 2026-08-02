@@ -41,3 +41,32 @@ export HOUSEWIRE_E2E_SITE=/path/to/any-site.yaml
 | Name | Description |
 |------|-------------|
 | `Test_01` | Panel + room with junction box, switch, and lamp (routing E2E) |
+| `Route_01` | Same-box conductor (no conduit) |
+| `Route_02` | Two boxes, one tube, one conductor |
+| `Route_03` | Twin BN+BU in one tube |
+| `Route_04` | L-shaped two-hop path |
+| `Route_05` | Switch drop |
+| `Route_06` | Lamp via plane boca |
+| `Route_07` | Bipolar terminal V |
+| `Route_08` | Strip two pairs |
+| `Route_09` | Strip four-pair feed |
+| `Route_10` | Feed plus earth |
+| `Route_11` | Two parallel tubes |
+| `Route_12` | Switch and lamp |
+| `Route_13` | Test_01 twin (full panel + room) |
+| `Route_14` | Three-hop chain |
+| `Route_15` | Two rooms |
+| `Route_16` | Dense strip exits |
+| `Route_17` | Parallel east tubes (fan-out stand-in) |
+| `Route_18` | Multi-cable stress |
+| `Route_19` | Staggered heights |
+| `Route_20` | Full stress |
+
+Regenerate Route fixtures:
+
+```bash
+python packages/housewire-examples/scripts/gen_route_sites.py
+```
+
+Live E2E modules: `tests/route_e2e/test_route_01.py` … `test_route_20.py`.
+Routing rules: [`docs/routing-rules.md`](../../docs/routing-rules.md).
