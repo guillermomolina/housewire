@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "housewire-examples"
+version = "0.1.0"
+description = "Public example sites for HouseWire (demos and E2E fixtures)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Guillermo Adrián Molina" }]
+keywords = ["housewire", "electrical", "examples"]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/guillermomolina/housewire"
+Repository = "https://github.com/guillermomolina/housewire"
+
+[project.entry-points."housewire.examples"]
+sites = "housewire_examples:iter_site_names"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+housewire_examples = ["sites/*.yaml"]

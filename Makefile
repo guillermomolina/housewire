@@ -4,10 +4,11 @@ PIP := .venv/bin/pip
 .PHONY: all prepare install test
 
 # Editable install with dev tools + UI extras (see pyproject.toml).
-EXTRAS := .[dev,ui]
+EXTRAS := .[dev,ui,examples]
 
 install:
 	$(PYTHON) -m pip install -U pip
+	$(PYTHON) -m pip install -e packages/housewire-examples
 	$(PYTHON) -m pip install -e "$(EXTRAS)"
 
 prepare:

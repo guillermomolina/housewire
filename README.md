@@ -22,9 +22,13 @@ MIT — see [LICENSE](LICENSE). Copyright (c) 2026 Guillermo Adrián Molina.
 ```bash
 python -m venv .venv --prompt HouseWire
 source .venv/bin/activate
-python -m pip install -e '.[dev,ui]'
+python -m pip install -e '.[dev,ui,examples]'
 # or: make prepare
 ```
+
+`examples` installs the sibling package [`packages/housewire-examples`](packages/housewire-examples)
+(public demo sites such as `Test_01`). Private installation YAML still lives
+outside this repo.
 
 ### Type catalog (required)
 
@@ -57,6 +61,12 @@ export SITE="$HOME/electrical-sites/my-site/my-site.yaml"
 ```bash
 housewire serve "$SITE"
 # → http://127.0.0.1:8765/
+```
+
+Public demo (after `pip install -e packages/housewire-examples` or `.[examples]`):
+
+```bash
+housewire serve "$(python -c 'from housewire_examples import site_yaml; print(site_yaml())')"
 ```
 
 Drag places on a location canvas (any place with child locations), auto-layout,

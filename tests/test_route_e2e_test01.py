@@ -1,7 +1,8 @@
 """E2E route invariants against the live Test_01 canvas.
 
 Synthetic unit tests below always run. The Playwright suite starts
-``housewire serve`` on Test_01.yaml when the fixture and playwright exist.
+``housewire serve`` on Test_01 when ``housewire-examples`` is installed,
+``HOUSEWIRE_E2E_SITE`` is set, or a local ``sites/Tests/Test_01.yaml`` exists.
 """
 from __future__ import annotations
 
@@ -21,7 +22,25 @@ from housewire.ui.route_quality import (
 )
 
 REPO = Path(__file__).resolve().parents[1]
-TEST01 = REPO / "sites" / "Tests" / "Test_01.yaml"
+
+
+def resolve_test01_yaml() -> Path | None:
+    """Locate Test_01 for live E2E (examples package, env, or local sites/)."""
+    env = os.environ.get("HOUSEWIRE_E2E_SITE", "").strip()
+    if env:
+        path = Path(env).expanduser()
+        return path if path.is_file() else None
+    try:
+        from housewire_examples import site_yaml
+
+        return site_yaml("Test_01")
+    except Exception:
+        pass
+    local = REPO / "sites" / "Tests" / "Test_01.yaml"
+    return local if local.is_file() else None
+
+
+TEST01 = resolve_test01_yaml()
 
 
 class TestLiveCanvasInvariantsUnit(unittest.TestCase):
@@ -107,7 +126,10 @@ def _free_port() -> int:
         return int(s.getsockname()[1])
 
 
-@unittest.skipUnless(TEST01.is_file(), "sites/Tests/Test_01.yaml not present")
+@unittest.skipUnless(
+    TEST01 is not None and TEST01.is_file(),
+    "Test_01 not found (pip install housewire-examples, or set HOUSEWIRE_E2E_SITE)",
+)
 class TestRouteE2ETest01(unittest.TestCase):
     """Live canvas invariants for Test_01 (requires playwright + chromium)."""
 
@@ -118,6 +140,8 @@ class TestRouteE2ETest01(unittest.TestCase):
         except ImportError as exc:  # pragma: no cover
             raise unittest.SkipTest(f"playwright not installed: {exc}") from exc
 
+        assert TEST01 is not None
+        cls.site = TEST01
         cls.port = _free_port()
         cls.base = f"http://127.0.0.1:{cls.port}/"
         env = os.environ.copy()
@@ -127,7 +151,7 @@ class TestRouteE2ETest01(unittest.TestCase):
                 "-m",
                 "housewire",
                 "serve",
-                str(TEST01),
+                str(cls.site),
                 "--host",
                 "127.0.0.1",
                 "--port",

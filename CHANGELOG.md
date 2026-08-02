@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.1] — 2026-08-02
+
+### Added
+
+- Optional ``housewire-examples`` package (``packages/housewire-examples``)
+  with public ``Test_01`` site; install via ``pip install -e '.[examples]'``
+  or ``make prepare``. E2E resolves the site from the package,
+  ``HOUSEWIRE_E2E_SITE``, or local ``sites/Tests/``.
+
 ## [0.35.0] — 2026-08-02
 
 ### Changed

@@ -11,6 +11,12 @@ After finishing a user-requested change that affects the program UI, routing, AP
 2. Preferred command (from the program repo, using the project venv):
 
 ```bash
+.venv/bin/python -m housewire serve "$(.venv/bin/python -c 'from housewire_examples import site_yaml; print(site_yaml())')"
+```
+
+   Fallback if examples is not installed but a local checkout exists:
+
+```bash
 .venv/bin/python -m housewire serve /home/guille/Red/Fuentes/housewire/sites/Tests/Test_01.yaml
 ```
 
