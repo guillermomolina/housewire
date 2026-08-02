@@ -22,7 +22,7 @@ def init_site(
     notes: str | None = None,
     working_name: str | None = None,
 ) -> dict[str, Any]:
-    """Create ``root/housewire.yaml`` and return the loaded document."""
+    """Create the default site YAML under ``root`` and return the loaded document."""
     create_site_document(
         root,
         type_id=type_id,

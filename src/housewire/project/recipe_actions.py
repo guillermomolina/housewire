@@ -18,7 +18,7 @@ from housewire.house.conduit_ref import (
     split_conduit_endpoint,
 )
 from housewire.project import abm, recipes
-from housewire.project.io import HOUSEWIRE_YAML, create_inline_location
+from housewire.project.io import create_inline_location
 from housewire.project.session import ProjectSession
 from housewire.project.view_layout import get_physical_position, set_physical_position
 
@@ -131,7 +131,7 @@ def _place_wiring(
     """Cables/conduits for a place: local defs + ancestor conduits that attach here.
 
     Ancestors are parent place nodes inside the single site YAML (not legacy
-    per-folder ``housewire.yaml`` files).
+    separate per-folder site YAML files).
     """
     from housewire.project.tree import get_place_node
 

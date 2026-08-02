@@ -3,7 +3,7 @@ id: JunctionBox
 icon: fa-cube
 title: Junction box
 description_es: >
-  Caja de derivacion. Metadatos de la carpeta (housewire.yaml root (type/label/…)).
+  Caja de derivacion. Metadatos del lugar (type/label/… en el nodo YAML).
   Declarar bocas en location.openings como lista de ids locales (N1, B1-1, …)
   y opcionalmente location.opening_grid. Tipo de lugar: sin bornes electricos.
 terminals: {}

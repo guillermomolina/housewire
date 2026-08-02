@@ -36,12 +36,12 @@ export HOUSEWIRE_CATALOG=/path/to/housewire-catalog
 ```
 
 Site-specific overlays: `$SITE/catalog/*.yaml` (shallow merge by `id`). Optional
-site field `catalog: default` (or a path) in the root `housewire.yaml`.
+site field `catalog: default` (or a path) in the site YAML.
 
 Point the CLI at a site YAML file (or its directory) outside this repo:
 
 ```bash
-export SITE="$HOME/electrical-sites/my-site/housewire.yaml"
+export SITE="$HOME/electrical-sites/my-site/my-site.yaml"
 ```
 
 ## Interactive physical UI
@@ -74,7 +74,10 @@ housewire shell "$SITE"
 ```
 
 Commands: `cd`, `ls`, `pwd`, `use`, `show`, `pend`, `add` (incl. `add location`, recipes), `rm`, `save`, `help`, `exit`.
-Tab completes commands, subcommands, and paths. **One nested `housewire.yaml`** at the site root holds the whole place tree under `elements:`. `add location NAME --type JunctionBox` inserts a place under the current location (in memory → `save`).
+Tab completes commands, subcommands, and paths. **One site YAML** at the site root
+holds the whole place tree under `elements:` (any ``.yaml`` / ``.yml`` name).
+`add location NAME --type JunctionBox` inserts a place under the current location
+(in memory → `save`).
 
 ```bash
 housewire shell "$SITE"
@@ -121,10 +124,10 @@ Non-interactive subcommands:
 
 ```bash
 housewire ls "$SITE" "Garage"
-housewire show "$SITE" housewire.yaml
-housewire add element "$SITE" housewire.yaml MT_New --type MCB --subtype C10
+housewire show "$SITE" my-site.yaml
+housewire add element "$SITE" my-site.yaml MT_New --type MCB --subtype C10
 housewire add location "$SITE" Junction_9 --type JunctionBox --under Garage
-housewire rm element "$SITE" housewire.yaml MT_New
+housewire rm element "$SITE" my-site.yaml MT_New
 ```
 
 ```bash

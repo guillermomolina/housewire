@@ -26,7 +26,7 @@ tabs. The last location/depth per open file is remembered while switching tabs.
 
 ```text
 Workspace
-  ├── Tab: housewire.yaml   ← active
+  ├── Tab: my-site.yaml   ← active
   └── Tab: other-site.yml
         └── canvas location via Outline (e.g. Parking)
 ```

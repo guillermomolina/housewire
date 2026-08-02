@@ -1,4 +1,4 @@
-"""Interactive project session: nested place navigation in one housewire.yaml."""
+"""Interactive project session: nested place navigation in one site YAML."""
 from __future__ import annotations
 
 import copy
@@ -21,7 +21,7 @@ EDIT_HISTORY_MAX = 50
 
 @dataclass
 class DocBuffer:
-    """In-memory housewire.yaml for the interactive shell."""
+    """In-memory site YAML buffer for the interactive shell."""
 
     path: Path
     doc: dict[str, Any]
@@ -540,11 +540,12 @@ class ProjectSession:
         self._sync_from_logical()
         return self.active_yaml
 
-    def housewire_yaml_in_cwd(self) -> Path | None:
+    def site_yaml_for_cwd(self) -> Path | None:
+        """Return the site document path (same for every logical place)."""
         return self.cursor().yaml_path
 
     def try_auto_use_yaml(self) -> Path | None:
-        found = self.housewire_yaml_in_cwd()
+        found = self.site_yaml_for_cwd()
         self.active_yaml = found
         return found
 
@@ -555,7 +556,7 @@ class ProjectSession:
             return path
         raise ValueError(
             f"No .yaml/.yml at site root. "
-            f"Create {HOUSEWIRE_YAML} (or any site *.yaml) "
+            f"Create a site YAML (default name {HOUSEWIRE_YAML}) "
             f"or use add location under an existing site."
         )
 

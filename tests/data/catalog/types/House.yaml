@@ -5,5 +5,5 @@ title: House / dwelling
 description_es: >
   Casa o vivienda. Es un tipo de lugar como Room o Floor; no implica ser la raiz
   del arbol. La jerarquia la marca el path de carpetas (puedes montar otra
-  location por encima). Metadatos de housewire.yaml. Tipo de lugar: sin bornes electricos.
+  location por encima). Metadatos del documento de sitio. Tipo de lugar: sin bornes electricos.
 terminals: {}

@@ -7,6 +7,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.29.3] — 2026-08-02
+
+### Changed
+
+- Docs, shell help, and messages talk about a generic site YAML; ``housewire.yaml``
+  remains only the default filename when creating a new site.
+- Dev dependency ``httpx`` → ``httpx2`` (silences Starlette TestClient warning).
+
+### Fixed
+
+- Removed obsolete shell ``cd`` warning that assumed per-folder ``housewire.yaml``.
+
 ## [0.29.2] — 2026-08-02
 
 ### Fixed

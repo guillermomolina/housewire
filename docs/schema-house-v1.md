@@ -65,7 +65,7 @@ connections:
 
 ## Document header
 
-Every editable `housewire.yaml` must declare:
+Every editable site YAML must declare:
 
 ```yaml
 schema: house/v1
@@ -74,7 +74,8 @@ schema: house/v1
 The site root document **is** the top place (`type: House` / `Floor` / …): the same
 fields as a nested place (`type`, `label`, `mount`, `openings`, …), plus
 `schema: house/v1`. Hierarchy is **only** nested places under `elements:` (map key = place id).
-There is one `housewire.yaml` per site; no per-place subdirectories.
+There is one site YAML per site directory (any ``.yaml`` / ``.yml`` name; new sites
+default to ``housewire.yaml``); no per-place subdirectories.
 
 ### Place id, name, and label
 
@@ -99,7 +100,7 @@ conduits. Canvas and outline prefer ``name`` → id; inspector shows all three.
 - **`label`**: e.g. `Caja derivacion 4`. `add location "Caja derivacion 6"` → key
   `Caja_derivacion_6` with `label: Caja derivacion 6` (no automatic `name`).
 
-Nested place example (under the site `housewire.yaml`):
+Nested place example (under the site YAML):
 
 ```yaml
 schema: house/v1
@@ -157,11 +158,11 @@ connects: [Parking, Planta_baja]
 - Optional; used by docs/UI to show what the stair joins.
 - Children (junction boxes, switches, light points) nest under the stair’s `elements:`.
 
-The **site root** is the directory you pass to `housewire` (`project_path`), containing
-one `housewire.yaml`. Logical paths (`Garage/Junction_1`) are keys under nested
+The **site root** is the directory (or site YAML file) you pass to `housewire`
+(`project_path`). Logical paths (`Garage/Junction_1`) are keys under nested
 `elements:`, not filesystem folders.
 
-- One site directory → one `housewire.yaml` (nested places under `elements:`).
+- One site directory → one site YAML (nested places under `elements:`).
 - `cd` / `ls` navigate place keys; `show` / `add element` act on the current place.
 - `add location NAME --type T` nests under the current place (memory → `save`).
 - Dirty YAML stay in memory across `cd`; `save` writes dirty buffers; `exit`

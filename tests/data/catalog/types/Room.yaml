@@ -3,6 +3,6 @@ id: Room
 icon: fa-door-open
 title: Room
 description_es: >
-  Habitacion o estancia. Metadatos de la carpeta (housewire.yaml root (type/label/…)).
+  Habitacion o estancia. Metadatos del lugar (type/label/… en el nodo YAML).
   Tipo de lugar: sin bornes electricos.
 terminals: {}

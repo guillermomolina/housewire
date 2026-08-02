@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from housewire.project import abm
-from housewire.project.io import HOUSEWIRE_YAML, create_inline_location
+from housewire.project.io import create_inline_location
 from housewire.project.session import ProjectSession
 
 if TYPE_CHECKING:
@@ -19,7 +19,7 @@ HELP_TEXT = """housewire shell commands:
   cd [path]                    navigate nested places under elements:;
                                dirty YAML stay in memory (no save prompt on cd)
   ls                           child places and elements (non-place)
-  use housewire.yaml           activate the site housewire.yaml
+  use <site.yaml>              activate a site YAML at the project root
   show                         current place: electrical layer + physical layer
   show --element NAME | --cable NAME
   pend [<enter> <exit>] [section] [--colors C1,C2] [--notes ...]
@@ -62,10 +62,10 @@ HELP_TEXT = """housewire shell commands:
   add pend …
   add connection --from F --via V --to T
                                (memory → save; electrical layer)
-  add dir <path>                 mkdir -p (no housewire.yaml; prefer add location)
+  add dir <path>                 mkdir -p (prefer add location for places)
   rm element|cable NAME
   rm connection <index>
-  rm file housewire.yaml
+  rm file <site.yaml>
   rm dir <path>                  only if empty
   save [--force]                 write all dirty YAML to disk (validate)
   reload                         discard current buffer and re-read from disk
@@ -801,12 +801,6 @@ def cmd_cd(session: ProjectSession, argv: list[str]) -> int:
     # Dirty buffers stay in memory across YAML boundaries; save/discard on exit
     # or explicit ``save`` / ``reload``.
     session.cd(raw)
-    if session.housewire_yaml_in_cwd() is None and str(session.cwd) != ".":
-        print(
-            f"Warning: no {HOUSEWIRE_YAML} here (not a location). "
-            f"cd to a location or: add location …",
-            file=sys.stderr,
-        )
     return 0
 
 

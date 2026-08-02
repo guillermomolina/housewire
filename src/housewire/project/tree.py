@@ -13,7 +13,7 @@ def site_yaml_path(site_root: Path, *, name: str | None = None) -> Path:
     """Path of the site document YAML (any ``.yaml`` / ``.yml`` name).
 
     When the file already exists it is discovered via :func:`find_site_yaml`.
-    Otherwise returns ``site_root / name`` or the default ``housewire.yaml``.
+    Otherwise returns ``site_root / name`` or the default site filename.
     """
     found = find_site_yaml(site_root, preferred=name)
     if found is not None:

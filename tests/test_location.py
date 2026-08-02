@@ -15,7 +15,7 @@ from housewire.project.tree import get_place_node
 
 
 class TestDirectoryLocation(unittest.TestCase):
-    """Root place fields in housewire.yaml supply metadata for nested places."""
+    """Root place fields in the site YAML supply metadata for nested places."""
 
     def test_location_place_validates_with_element(self) -> None:
         doc = _yaml.safe_load(

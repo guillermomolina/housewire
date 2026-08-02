@@ -220,23 +220,9 @@ def _site_catalog_ref(site_root: Path | None) -> str | Path | None:
     """Read optional ``catalog:`` from the site document YAML."""
     if site_root is None:
         return None
-    root = Path(site_root)
-    path: Path | None = None
-    for name in ("housewire.yaml", "housewire.yml"):
-        candidate = root / name
-        if candidate.is_file():
-            path = candidate
-            break
-    if path is None and root.is_dir():
-        found = [
-            child
-            for child in sorted(root.iterdir(), key=lambda p: p.name.lower())
-            if child.is_file()
-            and child.suffix.lower() in {".yaml", ".yml"}
-            and not child.name.endswith(".bak")
-        ]
-        if len(found) == 1:
-            path = found[0]
+    from housewire.project.paths import find_site_yaml
+
+    path = find_site_yaml(Path(site_root))
     if path is None:
         return None
     try:

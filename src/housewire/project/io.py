@@ -143,7 +143,7 @@ def create_site_document(
     label: str | None = None,
     working_name: str | None = None,
 ) -> Path:
-    """Create the single site ``housewire.yaml`` at ``site_root`` (no nested dirs)."""
+    """Create the default site YAML (``housewire.yaml``) at ``site_root``."""
     site_root.mkdir(parents=True, exist_ok=True)
     yaml_path = site_root / HOUSEWIRE_YAML
     if yaml_path.exists():
