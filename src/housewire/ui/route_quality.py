@@ -889,6 +889,209 @@ def parallel_highway_bundle(centerline: Poly, strand_count: int) -> list[list[Po
     ]
 
 
+
+def force_through_mouth(pts: Poly, mouth: Point, *, radius: float = 40.0) -> list[Point]:
+    """Rewrite ``pts`` so the path passes through ``mouth`` (no early side exit).
+
+    Parallel offset of an L at the opening peels lanes through the tube wall
+    before the boca. Drop the peel neighborhood, keep offset until mouth depth,
+    take a short lateral into the boca, then leave from the mouth toward the
+    far side (Manhattan), stripping out-and-back residue.
+    """
+    if len(pts) < 2:
+        return [(float(p[0]), float(p[1])) for p in pts]
+    mx, my = float(mouth[0]), float(mouth[1])
+    mouth_p = (mx, my)
+    src = [(float(p[0]), float(p[1])) for p in pts]
+    best_i = min(range(len(src)), key=lambda i: _dist(src[i], mouth_p))
+    lo = best_i
+    hi = best_i
+    while lo > 0 and _dist(src[lo - 1], mouth_p) <= radius:
+        lo -= 1
+    while hi < len(src) - 1 and _dist(src[hi + 1], mouth_p) <= radius:
+        hi += 1
+    before = src[:lo]
+    after = src[hi + 1 :]
+
+    def converge_end(side: list[Point]) -> list[Point]:
+        if not side:
+            return [mouth_p]
+        out = list(side)
+        while len(out) > 1 and _dist(out[-1], mouth_p) <= radius:
+            out.pop()
+        last = out[-1]
+        if _dist(last, mouth_p) < 1e-6:
+            return out
+        if abs(last[0] - mx) < 1e-6 or abs(last[1] - my) < 1e-6:
+            out.append(mouth_p)
+            return out
+        if abs(last[1] - my) >= abs(last[0] - mx):
+            out.append((last[0], my))
+            out.append(mouth_p)
+        else:
+            out.append((mx, last[1]))
+            out.append(mouth_p)
+        return out
+
+    left = converge_end(before)
+    # Leave from the mouth toward far after-points (skip peel-depth stubs).
+    far_after = [p for p in after if _dist(p, mouth_p) > radius]
+    if not far_after and after:
+        far_after = [after[-1]]
+    right: list[Point] = []
+    if far_after:
+        right = manhattan_join_end([mouth_p], far_after[0])
+        for p in far_after[1:]:
+            right = manhattan_join_end(right, p)
+    if right and _dist(right[0], mouth_p) < 1e-6:
+        right = right[1:]
+    merged = left + right
+    clean: list[Point] = []
+    for p in merged:
+        if clean and _dist(clean[-1], p) < 1e-6:
+            continue
+        clean.append(p)
+    guard = 0
+    while guard < 32 and len(clean) >= 3:
+        guard += 1
+        changed = False
+        for i in range(2, len(clean)):
+            # Never collapse a reverse that pivots on the mouth — that is the
+            # intentional converge-then-leave (lane offset → boca → exit).
+            if _dist(clean[i - 1], mouth_p) < 1.5:
+                continue
+            ax = clean[i - 1][0] - clean[i - 2][0]
+            ay = clean[i - 1][1] - clean[i - 2][1]
+            bx = clean[i][0] - clean[i - 1][0]
+            by = clean[i][1] - clean[i - 1][1]
+            if abs(ax * by - ay * bx) > 1e-6:
+                continue
+            if ax * bx + ay * by >= -1e-6:
+                continue
+            len_a = (ax * ax + ay * ay) ** 0.5
+            len_b = (bx * bx + by * by) ** 0.5
+            if len_b < len_a - 1e-6:
+                ux, uy = ax / len_a, ay / len_a
+                clean[i - 1] = (
+                    clean[i - 2][0] + ux * (len_a - len_b),
+                    clean[i - 2][1] + uy * (len_a - len_b),
+                )
+                clean.pop(i)
+            elif len_a < len_b - 1e-6:
+                ux, uy = bx / len_b, by / len_b
+                keep = len_b - len_a
+                clean[i] = (
+                    clean[i - 2][0] + ux * keep,
+                    clean[i - 2][1] + uy * keep,
+                )
+                clean.pop(i - 1)
+            else:
+                del clean[i - 2 : i]
+            changed = True
+            break
+        if not changed:
+            break
+    return clean
+
+
+def strand_exits_before_mouth(
+    pts: Poly,
+    mouth: Point,
+    *,
+    ahead: float = 2.5,
+    lateral_min: float = 3.0,
+) -> bool:
+    """True when a path turns laterally before reaching the opening mouth.
+
+    Foto 1: offset lanes take a horizontal jog above the boca and pierce the
+    tube wall instead of exiting through the rounded opening.
+    """
+    if len(pts) < 2:
+        return False
+    mx, my = float(mouth[0]), float(mouth[1])
+    mouth_p = (mx, my)
+    seq = [(float(p[0]), float(p[1])) for p in pts]
+    best_i = min(range(len(seq)), key=lambda i: _dist(seq[i], mouth_p))
+    pre = seq[: max(1, best_i + 1)]
+    xs = [p[0] for p in pre]
+    ys = [p[1] for p in pre]
+    vert_tube = (max(xs) - min(xs)) <= (max(ys) - min(ys) + 1e-9)
+    from_neg = (sum(ys) / len(ys) < my) if vert_tube else (sum(xs) / len(xs) < mx)
+
+    for i in range(len(seq) - 1):
+        a, b = seq[i], seq[i + 1]
+        horiz = abs(a[1] - b[1]) < 1e-6 and abs(a[0] - b[0]) >= lateral_min
+        vert = abs(a[0] - b[0]) < 1e-6 and abs(a[1] - b[1]) >= lateral_min
+        mid = ((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0)
+        if vert_tube and horiz:
+            depth = (my - mid[1]) if from_neg else (mid[1] - my)
+            if depth > ahead:
+                return True
+        if (not vert_tube) and vert:
+            depth = (mx - mid[0]) if from_neg else (mid[0] - mx)
+            if depth > ahead:
+                return True
+    if min(_dist(p, mouth_p) for p in seq) > ahead + 4.0:
+        return True
+    return False
+
+
+def strand_outside_tube(
+    pts: Poly,
+    centerline: Poly,
+    *,
+    half_width: float,
+    slack: float = 1.25,
+) -> bool:
+    """True when any vertex sits farther than the tube half-width from centerline."""
+    if len(pts) < 1 or len(centerline) < 2:
+        return False
+    limit = half_width + slack
+
+    def point_seg_dist(p: Point, a: Point, b: Point) -> float:
+        abx, aby = b[0] - a[0], b[1] - a[1]
+        lab2 = abx * abx + aby * aby
+        if lab2 < 1e-12:
+            return _dist(p, a)
+        t = max(
+            0.0,
+            min(1.0, ((p[0] - a[0]) * abx + (p[1] - a[1]) * aby) / lab2),
+        )
+        return _dist(p, (a[0] + t * abx, a[1] + t * aby))
+
+    for p in pts:
+        pt = (float(p[0]), float(p[1]))
+        best = min(
+            point_seg_dist(pt, centerline[i], centerline[i + 1])
+            for i in range(len(centerline) - 1)
+        )
+        if best > limit:
+            return True
+    return False
+
+
+def highway_road_width(strand_count: int) -> float:
+    """Match ``highwayRoadWidth`` in app.js."""
+    n = max(1, int(strand_count))
+    return n * STRAND_WIDTH + (n + 1) * LANE_GAP
+
+
+def hop_lanes_through_mouths(
+    centerline: Poly,
+    mouths: Sequence[Point],
+    strand_count: int,
+) -> list[list[Point]]:
+    """Offset a shared centerline then force every lane through each mouth."""
+    lanes = parallel_highway_bundle(centerline, strand_count)
+    out: list[list[Point]] = []
+    for lane in lanes:
+        fixed = [(p[0], p[1]) for p in lane]
+        for mouth in mouths:
+            fixed = force_through_mouth(fixed, mouth)
+        out.append(fixed)
+    return out
+
+
 def compose_hop_centerline(
     start_tail: Poly,
     exterior: Poly,

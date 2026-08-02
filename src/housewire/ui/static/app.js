@@ -1480,10 +1480,17 @@
    * Cancel out-and-back runs on the same axis (ida y vuelta) so a reversed
    * exterior + tail does not paint the same segment twice.
    */
-  function stripOutAndBack(pts) {
+  function stripOutAndBack(pts, protectPts) {
     if (!pts || pts.length < 3) {
       return pts ? pts.map((p) => [p[0], p[1]]) : [];
     }
+    const protect = (protectPts || [])
+      .map((q) =>
+        Array.isArray(q) ? { x: q[0], y: q[1] } : { x: q.x, y: q.y }
+      )
+      .filter((q) => q && Number.isFinite(q.x));
+    const isProtected = (p) =>
+      protect.some((q) => Math.hypot(p[0] - q.x, p[1] - q.y) < 1.5);
     /** @type {number[][]} */
     let out = pts.map((p) => [p[0], p[1]]);
     let guard = 0;
@@ -1491,6 +1498,8 @@
       out = cleanOrthoPoly(out);
       let changed = false;
       for (let i = 2; i < out.length; i++) {
+        // Keep converge→leave pivots on opening mouths.
+        if (isProtected(out[i - 1])) continue;
         const ax = out[i - 1][0] - out[i - 2][0];
         const ay = out[i - 1][1] - out[i - 2][1];
         const bx = out[i][0] - out[i - 1][0];
@@ -1529,7 +1538,94 @@
   /**
    * Ensure exterior pieces run start-opening → end-opening (not reversed).
    */
-  function orientExteriorSubs(subs, startOp, endOp) {
+  /**
+   * Force a lane path through an opening mouth so offset L-corners do not
+   * pierce the tube wall before the boca (Foto 1 early exit).
+   */
+  function forceThroughMouth(pts, mouth, radius = 40) {
+    if (!pts || pts.length < 2 || mouth == null) {
+      return pts ? pts.map((p) => [p[0], p[1]]) : [];
+    }
+    const mx = Array.isArray(mouth) ? mouth[0] : mouth.x;
+    const my = Array.isArray(mouth) ? mouth[1] : mouth.y;
+    const mouthP = [mx, my];
+    const src = pts.map((p) => [p[0], p[1]]);
+    let bestI = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < src.length; i++) {
+      const d = Math.hypot(src[i][0] - mx, src[i][1] - my);
+      if (d < bestD) {
+        bestD = d;
+        bestI = i;
+      }
+    }
+    let lo = bestI;
+    let hi = bestI;
+    while (lo > 0 && Math.hypot(src[lo - 1][0] - mx, src[lo - 1][1] - my) <= radius) {
+      lo -= 1;
+    }
+    while (
+      hi < src.length - 1 &&
+      Math.hypot(src[hi + 1][0] - mx, src[hi + 1][1] - my) <= radius
+    ) {
+      hi += 1;
+    }
+    let before = src.slice(0, lo);
+    const after = src.slice(hi + 1);
+    while (
+      before.length > 1 &&
+      Math.hypot(before[before.length - 1][0] - mx, before[before.length - 1][1] - my) <=
+        radius
+    ) {
+      before.pop();
+    }
+    /** @type {number[][]} */
+    let left;
+    if (!before.length) {
+      left = [mouthP];
+    } else {
+      left = before.map((p) => [p[0], p[1]]);
+      const last = left[left.length - 1];
+      if (Math.hypot(last[0] - mx, last[1] - my) > 1e-6) {
+        if (Math.abs(last[0] - mx) < 1e-6 || Math.abs(last[1] - my) < 1e-6) {
+          left.push([mx, my]);
+        } else if (Math.abs(last[1] - my) >= Math.abs(last[0] - mx)) {
+          left.push([last[0], my]);
+          left.push([mx, my]);
+        } else {
+          left.push([mx, last[1]]);
+          left.push([mx, my]);
+        }
+      }
+    }
+    const farAfter = after.filter(
+      (p) => Math.hypot(p[0] - mx, p[1] - my) > radius
+    );
+    const dest = farAfter.length
+      ? farAfter
+      : after.length
+        ? [after[after.length - 1]]
+        : [];
+    /** @type {number[][]} */
+    let right = [];
+    if (dest.length) {
+      right = orthoJoinEnd([mouthP], dest[0], null);
+      for (let i = 1; i < dest.length; i++) {
+        right = orthoJoinEnd(right, dest[i], null);
+      }
+      if (
+        right.length &&
+        Math.hypot(right[0][0] - mx, right[0][1] - my) < 1e-6
+      ) {
+        right = right.slice(1);
+      }
+    }
+    let merged = (left || []).concat(right || []);
+    merged = stripOutAndBack(merged, [mouthP]);
+    return cleanOrthoPoly(merged);
+  }
+
+    function orientExteriorSubs(subs, startOp, endOp) {
     if (!subs || !subs.length || !startOp || !endOp) return subs || [];
     const first = subs[0][0];
     const lastSub = subs[subs.length - 1];
@@ -3786,6 +3882,10 @@
       }
 
       let chain = parallel(center);
+      // Offset L at the boca peels through the tube wall — force every lane
+      // through both openings before attaching terminal leads.
+      chain = forceThroughMouth(chain, startOp);
+      chain = forceThroughMouth(chain, endOp);
       chain = liftOffsetSpineFromPin(
         chain,
         [startAtt.x, startAtt.y],
@@ -3819,12 +3919,16 @@
       ).reverse();
 
       if (!chain || chain.length < 2) return [];
-      let cleaned = stripShortZJogs(stripOutAndBack(chain));
+      const mouths = [startOp, endOp];
+      let cleaned = stripShortZJogs(stripOutAndBack(chain, mouths));
       // Openings must stay Manhattan; never rewrite terminal V diagonals.
       const pins = [startAtt, endAtt];
       cleaned = ensureManhattanNearPoint(cleaned, startOp, 48, pins);
       cleaned = ensureManhattanNearPoint(cleaned, endOp, 48, pins);
-      cleaned = stripShortZJogs(stripOutAndBack(cleaned));
+      cleaned = stripShortZJogs(stripOutAndBack(cleaned, mouths));
+      // Re-assert after strip/manhattan so peels cannot return.
+      cleaned = forceThroughMouth(cleaned, startOp);
+      cleaned = forceThroughMouth(cleaned, endOp);
       return [cleaned];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);

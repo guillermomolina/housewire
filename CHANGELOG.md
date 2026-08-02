@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.20] — 2026-08-02
+
+### Fixed
+
+- Opening exits: after parallel offset, lanes are forced through each mouth so
+  an L at the boca no longer peels through the tube wall (Foto 1 early exit).
+- ``stripOutAndBack`` keeps mouth pivots (converge→leave) so the boca snap is
+  not collapsed back into a side exit.
+
+### Added
+
+- Detectors/tests for early mouth exit, strands outside the tube envelope, and
+  stacked BN/GNYE overlap on a shared run.
+
 ## [0.34.19] — 2026-08-02
 
 ### Fixed

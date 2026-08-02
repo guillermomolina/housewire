@@ -854,5 +854,89 @@ class TestSymmetricVAndNoPrematureMerge(unittest.TestCase):
         self.assertFalse(terminal_entry_is_perpendicular(stripped, pin))
 
 
+class TestMouthExitAndTubeEnvelope(unittest.TestCase):
+    """Foto 1 early mouth exit; Foto 2 strand outside tube / BN+GNYE overlap."""
+
+    MOUTH = (100.0, 200.0)
+    CENTER = [
+        (100.0, 40.0),
+        (100.0, 200.0),
+        (180.0, 200.0),
+        (180.0, 220.0),
+    ]
+
+    def test_raw_offset_exits_before_mouth(self) -> None:
+        from housewire.ui.route_quality import (
+            parallel_highway_bundle,
+            strand_exits_before_mouth,
+        )
+
+        raw = parallel_highway_bundle(self.CENTER, 3)
+        self.assertTrue(strand_exits_before_mouth(raw[0], self.MOUTH))
+        self.assertTrue(strand_exits_before_mouth(raw[2], self.MOUTH))
+
+    def test_force_through_mouth_fixes_early_exit(self) -> None:
+        from housewire.ui.route_quality import (
+            hop_lanes_through_mouths,
+            strand_exits_before_mouth,
+        )
+
+        fixed = hop_lanes_through_mouths(self.CENTER, [self.MOUTH], 3)
+        for lane in fixed:
+            self.assertFalse(
+                strand_exits_before_mouth(lane, self.MOUTH), msg=lane
+            )
+            self.assertLessEqual(
+                min(
+                    ((p[0] - 100.0) ** 2 + (p[1] - 200.0) ** 2) ** 0.5
+                    for p in lane
+                ),
+                1.5,
+                msg=lane,
+            )
+
+    def test_strand_outside_tube_detected(self) -> None:
+        from housewire.ui.route_quality import (
+            highway_road_width,
+            strand_outside_tube,
+        )
+
+        tube = [(0.0, 0.0), (100.0, 0.0), (100.0, 80.0)]
+        half = highway_road_width(3) / 2.0
+        # Brown running parallel well below the conduit (Foto 2).
+        brown = [(0.0, 40.0), (100.0, 40.0), (100.0, 80.0)]
+        self.assertTrue(strand_outside_tube(brown, tube, half_width=half))
+        inside = [(0.0, 2.0), (100.0, 2.0), (100.0, 80.0)]
+        self.assertFalse(strand_outside_tube(inside, tube, half_width=half))
+
+    def test_brown_and_gnye_overlap_detected(self) -> None:
+        # Foto 2: BN and GNYE stacked on the same horizontal.
+        bn = [(120.0, 100.0), (200.0, 100.0), (200.0, 140.0)]
+        gnye = [(120.0, 100.0), (200.0, 100.0), (200.0, 160.0)]
+        self.assertTrue(strands_overlap([bn, gnye]))
+        issues = assess_bundle([bn, gnye], min_separation=MIN_LANE_SEPARATION)
+        self.assertTrue(any("overlap" in x for x in issues), msg=issues)
+
+    def test_forced_lanes_stay_inside_tube_half_width(self) -> None:
+        from housewire.ui.route_quality import (
+            highway_road_width,
+            hop_lanes_through_mouths,
+            strand_outside_tube,
+        )
+
+        fixed = hop_lanes_through_mouths(self.CENTER, [self.MOUTH], 3)
+        half = highway_road_width(3) / 2.0
+        tube_center = self.CENTER[:2]
+        for lane in fixed:
+            # Only the vertical approach inside the tube (not the leave jog).
+            tube_part = [p for p in lane if abs(p[0] - self.MOUTH[0]) <= 6.0]
+            if len(tube_part) < 2:
+                continue
+            self.assertFalse(
+                strand_outside_tube(tube_part, tube_center, half_width=half),
+                msg=tube_part,
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
