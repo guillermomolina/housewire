@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.1] — 2026-08-02
+
+### Fixed
+
+- Orthogonal routing picks clear paths by fewest bends before soft conflict
+  weights (avoids needless Z jogs).
+- Parallel cable offset keeps Manhattan corners (intersect offset segments
+  instead of averaging normals into a diagonal chamfer).
+
 ## [0.32.0] — 2026-08-02
 
 ### Changed

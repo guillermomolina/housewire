@@ -1387,8 +1387,9 @@
     }
 
     let best = raw[0];
-    let bestBendEquiv = Infinity;
-    let bestHard = Infinity;
+    let bestObstacle = Infinity;
+    let bestBends = Infinity;
+    let bestConflict = Infinity;
     let bestLen = Infinity;
     const eps = overlapEps ?? 6;
     for (const pts of raw) {
@@ -1397,20 +1398,24 @@
       const conflict = pathConflictCost(full, occupied, eps);
       const obstacle = pathObstacleCost(full, obstacles);
       const len = polyLength(full);
-      // Obstacle hits dominate: ~50 cost ≈ one bend → crossing a box (~180)
-      // costs more than a 3-bend C. Conflict ~150 ≈ one bend for stacked tubes.
-      const bendEquiv = bends + conflict / 150 + obstacle / 50;
-      const hard = obstacle + conflict;
+      // Lexicographic: stay clear of boxes, then fewest bends (vertices),
+      // then less stacking conflict, then shorter. Soft weights used to let a
+      // 2-bend Z beat a clear 1-bend L when conflict was mixed into bends.
       if (
-        bendEquiv < bestBendEquiv - 1e-9 ||
-        (Math.abs(bendEquiv - bestBendEquiv) < 1e-9 && hard < bestHard) ||
-        (Math.abs(bendEquiv - bestBendEquiv) < 1e-9 &&
-          hard === bestHard &&
+        obstacle < bestObstacle - 1e-9 ||
+        (Math.abs(obstacle - bestObstacle) < 1e-9 && bends < bestBends) ||
+        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+          bends === bestBends &&
+          conflict < bestConflict - 1e-9) ||
+        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+          bends === bestBends &&
+          Math.abs(conflict - bestConflict) < 1e-9 &&
           len < bestLen)
       ) {
         best = pts;
-        bestBendEquiv = bendEquiv;
-        bestHard = hard;
+        bestObstacle = obstacle;
+        bestBends = bends;
+        bestConflict = conflict;
         bestLen = len;
       }
     }
@@ -1947,42 +1952,55 @@
     };
   }
 
-  /** Offset an orthogonal polyline by ``dist`` along the left normal. */
+  /**
+   * Offset an orthogonal polyline by ``dist`` along the segment normal
+   * ``(-dy, dx)``. Corners are re-joined by intersecting offset segment
+   * lines so the result stays Manhattan (no diagonal chamfer / fake jog).
+   */
   function offsetOrthoPts(pts, dist) {
     if (!pts || pts.length < 2) return pts ? pts.map((p) => [p[0], p[1]]) : [];
     if (Math.abs(dist) < 1e-9) return pts.map((p) => [p[0], p[1]]);
-    /** @type {number[][]} */
-    const out = [];
-    for (let i = 0; i < pts.length; i++) {
-      let nx = 0;
-      let ny = 0;
-      let w = 0;
-      if (i > 0) {
-        const dx = pts[i][0] - pts[i - 1][0];
-        const dy = pts[i][1] - pts[i - 1][1];
-        const len = Math.hypot(dx, dy) || 1;
-        nx += -dy / len;
-        ny += dx / len;
-        w += 1;
-      }
-      if (i < pts.length - 1) {
-        const dx = pts[i + 1][0] - pts[i][0];
-        const dy = pts[i + 1][1] - pts[i][1];
-        const len = Math.hypot(dx, dy) || 1;
-        nx += -dy / len;
-        ny += dx / len;
-        w += 1;
-      }
-      if (w > 1) {
-        nx /= w;
-        ny /= w;
-        const nlen = Math.hypot(nx, ny) || 1;
-        nx /= nlen;
-        ny /= nlen;
-      }
-      out.push([pts[i][0] + nx * dist, pts[i][1] + ny * dist]);
+    const src = cleanOrthoPoly(pts.map((p) => [p[0], p[1]]));
+    if (src.length < 2) return src;
+    /** @type {{ax:number,ay:number,bx:number,by:number,horiz:boolean}[]} */
+    const segs = [];
+    for (let i = 0; i < src.length - 1; i++) {
+      const dx = src[i + 1][0] - src[i][0];
+      const dy = src[i + 1][1] - src[i][1];
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = (-dy / len) * dist;
+      const ny = (dx / len) * dist;
+      const horiz = Math.abs(dy) < 1e-6;
+      segs.push({
+        ax: src[i][0] + nx,
+        ay: src[i][1] + ny,
+        bx: src[i + 1][0] + nx,
+        by: src[i + 1][1] + ny,
+        horiz,
+      });
     }
-    return out;
+    /** @type {number[][]} */
+    const out = [[segs[0].ax, segs[0].ay]];
+    for (let i = 0; i < segs.length - 1; i++) {
+      const s0 = segs[i];
+      const s1 = segs[i + 1];
+      let cx;
+      let cy;
+      if (s0.horiz && !s1.horiz) {
+        cx = s1.ax;
+        cy = s0.ay;
+      } else if (!s0.horiz && s1.horiz) {
+        cx = s0.ax;
+        cy = s1.ay;
+      } else {
+        cx = s0.bx;
+        cy = s0.by;
+      }
+      out.push([cx, cy]);
+    }
+    const last = segs[segs.length - 1];
+    out.push([last.bx, last.by]);
+    return cleanOrthoPoly(out);
   }
 
   function pathDToSubpaths(d) {
