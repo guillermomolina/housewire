@@ -1068,13 +1068,18 @@
     return cost;
   }
 
+  /** Preferred gap from a place outer wall (same order as exit stubs). */
+  const WALL_CLEARANCE = 24;
+
   /**
    * Soft cost for segments that run flush along a place outer wall.
    * Pushes the scorer toward a clearance C instead of wall-sliding.
+   * Clearance matches the face stub so the open side of a C is not much
+   * wider than the exit jog at the mouth.
    */
   function pathBorderHugCost(pts, rects, clearance) {
     if (!pts || pts.length < 2 || !rects || !rects.length) return 0;
-    const clear = clearance == null ? 96 : clearance;
+    const clear = clearance == null ? WALL_CLEARANCE : clearance;
     let cost = 0;
     for (const s of segsFromPoints(pts)) {
       for (const r of rects) {
@@ -1094,6 +1099,30 @@
       }
     }
     return cost;
+  }
+
+  /**
+   * Penalize a long final approach into the destination face so the open
+   * side of a C stays near WALL_CLEARANCE (like the mouth exit stub).
+   */
+  function pathEntryExcessCost(pts, toFace) {
+    if (!pts || pts.length < 2 || !toFace) return 0;
+    const a = pts[pts.length - 2];
+    const b = pts[pts.length - 1];
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const f = String(toFace).toUpperCase();
+    let span = 0;
+    if (f === "W" || f === "E") {
+      if (Math.abs(dy) > 1e-6) return 0;
+      span = Math.abs(dx);
+    } else if (f === "N" || f === "S") {
+      if (Math.abs(dx) > 1e-6) return 0;
+      span = Math.abs(dy);
+    } else {
+      return 0;
+    }
+    return Math.max(0, span - WALL_CLEARANCE) * 3;
   }
 
   function placeBorderRects(byId) {
@@ -1461,6 +1490,17 @@
       }
     }
 
+    // Tight clearance rails along place walls (same scale as mouth stubs).
+    if (hugRects && hugRects.length) {
+      const c = WALL_CLEARANCE;
+      for (const r of hugRects) {
+        push([[r.x - c, ay], [r.x - c, by]]);
+        push([[r.x + r.w + c, ay], [r.x + r.w + c, by]]);
+        push([[ax, r.y - c], [bx, r.y - c]]);
+        push([[ax, r.y + r.h + c], [bx, r.y + r.h + c]]);
+      }
+    }
+
     // Always emit outer rails on all four sides when dodging boxes (true C).
     if (obstacles && obstacles.length) {
       for (const off of laneOffs) {
@@ -1474,9 +1514,10 @@
         push([[xLo, ay], [xLo, by]]);
       }
       // Rails that clear each obstacle rect (endpoint boxes included).
-      // Stub-relative detours alone cannot clear a large from/to box.
+      // Use stub-scale pad (not a wide detour) so the open side of a C
+      // matches the mouth exit jog.
       const obsOffs = needLanes ? [0, lane, -lane, 2 * lane, -2 * lane] : [0];
-      const pad = Math.max(stub, 12);
+      const pad = Math.max(stub, WALL_CLEARANCE);
       for (const r of obstacles) {
         const xR = r.x + r.w + pad;
         const xL = r.x - pad;
@@ -1552,6 +1593,7 @@
     let bestObstacle = Infinity;
     let bestOutside = Infinity;
     let bestHug = Infinity;
+    let bestEntry = Infinity;
     let bestBends = Infinity;
     let bestConflict = Infinity;
     let bestLen = Infinity;
@@ -1565,8 +1607,10 @@
       const obstacle = pathObstacleCost(full, obstacles);
       const outside = pathOutsideBoundsCost(full, stayBounds);
       const hug = pathBorderHugCost(full, hugRects);
+      const entry = pathEntryExcessCost(full, toFace);
       const len = polyLength(full);
-      // Lexicographic: clear boxes, stay in parent, leave walls, fewest bends…
+      // Lexicographic: clear boxes, stay in parent, leave walls, short
+      // entry arm, fewest bends…
       if (
         obstacle < bestObstacle - 1e-9 ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
@@ -1577,15 +1621,22 @@
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
           Math.abs(hug - bestHug) < 1e-9 &&
+          entry < bestEntry - 1e-9) ||
+        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+          Math.abs(outside - bestOutside) < 1e-9 &&
+          Math.abs(hug - bestHug) < 1e-9 &&
+          Math.abs(entry - bestEntry) < 1e-9 &&
           bends < bestBends) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
           Math.abs(hug - bestHug) < 1e-9 &&
+          Math.abs(entry - bestEntry) < 1e-9 &&
           bends === bestBends &&
           conflict < bestConflict - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
           Math.abs(hug - bestHug) < 1e-9 &&
+          Math.abs(entry - bestEntry) < 1e-9 &&
           bends === bestBends &&
           Math.abs(conflict - bestConflict) < 1e-9 &&
           len < bestLen)
@@ -1594,6 +1645,7 @@
         bestObstacle = obstacle;
         bestOutside = outside;
         bestHug = hug;
+        bestEntry = entry;
         bestBends = bends;
         bestConflict = conflict;
         bestLen = len;

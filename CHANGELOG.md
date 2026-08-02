@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.7] — 2026-08-02
+
+### Fixed
+
+- Keep C-route wall clearance near the mouth stub (~24px) instead of a
+  wide detour; prefer short final approach arms into the destination face.
+
 ## [0.32.6] — 2026-08-02
 
 ### Fixed
