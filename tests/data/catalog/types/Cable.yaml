@@ -2,9 +2,9 @@ kind: cable_type
 id: Cable
 icon: fa-minus
 label: Cable sheath / multicore jacket
-description_es: >
-  Funda o mazo que agrupa conductores (contains). No conecta terminales;
-  vive bajo cables:, no en elements.
+description: >
+  Sheath or bundle that groups conductors (contains). Does not connect
+  terminals; lives under cables:, not in elements.
 defaults:
   color: BK
 subtypes:

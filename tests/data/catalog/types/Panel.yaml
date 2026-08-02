@@ -2,8 +2,8 @@ kind: place_type
 id: Panel
 icon: fa-server
 label: Electrical panel
-description_es: >
-  Cuadro electrico / cuadro general. Metadatos del lugar (type/label/… en el nodo YAML).
-  Declarar bocas en location.openings como lista de ids locales (N1, B1-1, …),
-  igual que JunctionBox. Tipo de lugar: sin bornes electricos.
+description: >
+  Electrical panel / consumer unit. Place metadata (type/label/… on the YAML
+  node). Declare mouths in location.openings as local ids (N1, B1-1, …), same
+  as JunctionBox. Place type: no electrical terminals.
 terminals: {}

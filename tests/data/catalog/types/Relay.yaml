@@ -2,9 +2,9 @@ kind: element_type
 id: Relay
 icon: fa-diagram-project
 label: Relay / smart switch
-description_es: >
-  Relé o interruptor inteligente (p.ej. Sonoff ZBMini). Alimentación LIn+N,
-  salida conmutada LOut, entradas de interruptor externo.
+description: >
+  Relay or smart switch (e.g. Sonoff ZBMini). Supply LIn+N, switched LOut,
+  external switch inputs.
 qet_hint: relay
 terminal_grid:
   N: 4

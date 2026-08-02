@@ -2,8 +2,8 @@ kind: place_type
 id: JunctionBox
 icon: fa-cube
 label: Junction box
-description_es: >
-  Caja de derivacion. Metadatos del lugar (type/label/… en el nodo YAML).
-  Declarar bocas en location.openings como lista de ids locales (N1, B1-1, …)
-  y opcionalmente location.opening_grid. Tipo de lugar: sin bornes electricos.
+description: >
+  Junction / derivation box. Place metadata (type/label/… on the YAML node).
+  Declare mouths in location.openings as a list of local ids (N1, B1-1, …)
+  and optionally location.opening_grid. Place type: no electrical terminals.
 terminals: {}

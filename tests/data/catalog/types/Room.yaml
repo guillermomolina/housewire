@@ -2,7 +2,7 @@ kind: place_type
 id: Room
 icon: fa-door-open
 label: Room
-description_es: >
-  Habitacion o estancia. Metadatos del lugar (type/label/… en el nodo YAML).
-  Tipo de lugar: sin bornes electricos.
+description: >
+  Room or living space. Place metadata (type/label/… on the YAML node).
+  Place type: no electrical terminals.
 terminals: {}

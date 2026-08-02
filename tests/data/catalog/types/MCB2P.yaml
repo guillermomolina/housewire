@@ -2,11 +2,11 @@ kind: element_type
 id: MCB2P
 icon: fa-bolt
 label: Double-pole miniature circuit breaker
-description_es: >
-  Magnetotermico bipolar (2P). Aqui el Moeller C50/2 hace de IGA.
-  No es un IGP (interruptor de corte sin proteccion magnetotermica).
+description: >
+  Double-pole miniature circuit breaker (2P). Here a Moeller C50/2 acts as the
+  main breaker (IGA). Not a non-protective isolator (IGP).
 qet_hint: mcb_2P
-# Face-cell ids: N1/S1 neutro, N2/S2 fase.
+# Face-cell ids: N1/S1 neutral, N2/S2 phase.
 terminal_grid:
   NS: 2
 terminals:

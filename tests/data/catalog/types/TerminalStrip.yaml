@@ -2,11 +2,11 @@ kind: element_type
 id: TerminalStrip
 icon: fa-grip-lines
 label: Terminal strip / connector block
-description_es: >
-  Regleta o bornes de empalme en caja de derivacion.
-  Ids face-cell solo en N (N1..Nn); terminal_grid NS dibuja ambos lados del
-  mismo potencial. Ampliar en la instancia p.ej. terminal_grid: { NS: 6 }
-  y terminals N1..N6.
+description: >
+  Terminal strip / splice block in a junction box.
+  Face-cell ids only on N (N1..Nn); terminal_grid NS draws both sides of the
+  same potential. Widen on the instance e.g. terminal_grid: { NS: 6 } and
+  terminals N1..N6.
 qet_hint: terminal_strip
 terminal_grid:
   NS: 3

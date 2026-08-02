@@ -2,9 +2,10 @@ kind: element_type
 id: Luminaire
 icon: fa-lightbulb
 label: Luminaire / lamp
-description_es: >
-  Luminaria o portalámparas. Bornes tipicos N1/N2/N3 cuando llegan fase conmutada,
-  fase permanente y neutro (o solo L+N si la instancia reduce terminals).
+description: >
+  Luminaire or lampholder. Typical terminals N1/N2/N3 when switched phase,
+  permanent phase, and neutral arrive (or only L+N if the instance shrinks
+  terminals).
 qet_hint: luminaire
 terminal_grid:
   N: 3

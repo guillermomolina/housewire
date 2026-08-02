@@ -2,7 +2,7 @@ kind: element_type
 id: Socket
 icon: fa-plug
 label: Socket outlet
-description_es: Toma de corriente (Schuko / 2P+T).
+description: Socket outlet (Schuko / 2P+E).
 qet_hint: socket_schuko
 terminal_grid:
   N: 3

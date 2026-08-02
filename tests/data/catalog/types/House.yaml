@@ -2,8 +2,8 @@ kind: place_type
 id: House
 icon: fa-house
 label: House / dwelling
-description_es: >
-  Casa o vivienda. Es un tipo de lugar como Room o Floor; no implica ser la raiz
-  del arbol. La jerarquia la marca el path de carpetas (puedes montar otra
-  location por encima). Metadatos del documento de sitio. Tipo de lugar: sin bornes electricos.
+description: >
+  House or dwelling. A place type like Room or Floor; does not imply being the
+  tree root. Hierarchy comes from the folder path (another location may sit
+  above). Site document metadata. Place type: no electrical terminals.
 terminals: {}

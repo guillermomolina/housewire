@@ -2,10 +2,10 @@ kind: conduit_type
 id: Conduit
 icon: fa-grip-lines-vertical
 label: Conduit / hose
-description_es: >
-  Tubo o manguera entre locations (capa fisica). Une aberturas con from/to
-  (LocationRef.OpeningId); contains lista cables/conductores que viajan dentro.
-  Vive bajo cables: con type Conduit, no en elements.
+description: >
+  Tube or hose between locations (physical layer). Joins openings with from/to
+  (LocationRef.OpeningId); contains lists cables/conductors that travel inside.
+  Lives under cables: with type Conduit, not in elements.
 defaults: {}
 subtypes:
   tube:

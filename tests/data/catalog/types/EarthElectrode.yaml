@@ -2,7 +2,7 @@ kind: element_type
 id: EarthElectrode
 icon: fa-arrow-down-long
 label: Earth electrode
-description_es: Toma de tierra / jabalina.
+description: Earth electrode / ground rod.
 qet_hint: earth_electrode
 terminal_grid:
   S: 1

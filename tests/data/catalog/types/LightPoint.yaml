@@ -2,11 +2,11 @@ kind: place_type
 id: LightPoint
 icon: fa-lightbulb
 label: Light point / luminaire outlet
-description_es: >
-  Punto de luz (agujero de techo/pared, portalámparas, salida a luminaria).
-  No es DeviceBox: no hay mecanismo de enchufe/interruptor. Sirve de extremo
-  fisico de conductos (una boca tipica B1-1 o N1). El element Luminaire (capa
-  electrica) puede anadirse despues bajo elements.
+description: >
+  Light point (ceiling/wall hole, lampholder, luminaire outlet).
+  Not a DeviceBox: no socket/switch mechanism. Physical end of conduits
+  (typical mouth B1-1 or N1). A Luminaire element (electrical layer) may be
+  added later under elements.
 terminals: {}
 defaults:
   subtype: ceiling-hole

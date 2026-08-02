@@ -2,9 +2,9 @@ kind: conductor_type
 id: Conductor
 icon: fa-minus
 label: Conductor / single wire
-description_es: >
-  Hilo conductor entre dos terminales (from/to). Vive bajo cables: con type
-  Conductor; no en elements.
+description: >
+  Single wire between two terminals (from/to). Lives under cables: with type
+  Conductor; not in elements.
 defaults:
   section: "1.5 mm2"
   color: BN

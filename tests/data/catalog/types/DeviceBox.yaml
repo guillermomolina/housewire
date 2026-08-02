@@ -2,11 +2,11 @@ kind: place_type
 id: DeviceBox
 icon: fa-box
 label: Device / mechanism box
-description_es: >
-  Caja de mecanismo (enchufe, interruptor, …). Suele ser 1-gang; 2-gang / 3-gang
-  agrupan varios artefactos en la misma caja. Declarar bocas en openings (ids
-  locales N1, B1-1, …). Los Socket/Switch van en elements.
-  Tipo de lugar: sin bornes electricos.
+description: >
+  Mechanism box (socket, switch, …). Usually 1-gang; 2-gang / 3-gang group
+  several devices in the same box. Declare mouths in openings (local ids N1,
+  B1-1, …). Socket/Switch instances go under elements.
+  Place type: no electrical terminals.
 terminals: {}
 defaults:
   subtype: 1-gang
