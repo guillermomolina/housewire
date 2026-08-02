@@ -434,6 +434,14 @@ class TestServeApi(unittest.TestCase):
             save_site(root, doc)
 
             client = TestClient(create_app(root))
+            root_detail = client.get(
+                "/api/place",
+                params={"location": ".", "id": "."},
+            )
+            self.assertEqual(root_detail.status_code, 200, root_detail.text)
+            self.assertEqual(root_detail.json()["type"], "House")
+            self.assertEqual(root_detail.json()["id"], ".")
+
             detail = client.get(
                 "/api/place",
                 params={"location": "Parking", "id": "Caja_4"},

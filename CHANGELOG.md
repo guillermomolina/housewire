@@ -7,6 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.27] — 2026-08-02
+
+### Fixed
+
+- ``GET /api/place?location=.&id=.`` returns the site root (House) instead of 400.
+
 ## [0.28.26] — 2026-08-02
 
 ### Changed

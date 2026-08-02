@@ -536,10 +536,8 @@ def _resolve_place_parts(
         if canvas_location_id in {".", ""}
         else tuple(p for p in str(canvas_location_id).split("/") if p)
     )
-    # ``.`` / ``@`` = the canvas location itself (elements drawn on a leaf view).
+    # ``.`` / ``@`` = the canvas location itself (site root when canvas is ``.``).
     if str(place_id).strip() in {".", "", "@"}:
-        if not canvas_parts:
-            raise ValueError("place id is required")
         return canvas_parts
     parts = tuple(p for p in str(place_id).split("/") if p)
     if not parts:
@@ -608,7 +606,7 @@ def place_detail(
         place_yaml=path,
     )
     rel_id = _relative_place_id(canvas_location_id, place_parts)
-    leaf = place_parts[-1] if place_parts else rel_id
+    leaf = place_parts[-1] if place_parts else ""
     return {
         "id": rel_id,
         "path": f"{path.relative_to(session.root)}#{'/'.join(place_parts)}",
