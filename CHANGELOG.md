@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.26] — 2026-08-02
+
+### Fixed
+
+- Hop paths re-splice the canonical offset tube between both mouths after
+  strip/merge (``spliceTubeSegment``), so lanes cannot skip a boca or paint
+  a parallel outside the conduit. Removed full-path ``ensureVertexNear``
+  which created pin↔mouth out-and-back loops.
+
 ## [0.34.25] — 2026-08-02
 
 ### Fixed

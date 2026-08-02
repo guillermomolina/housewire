@@ -1594,16 +1594,11 @@
     /** @type {number[][]} */
     const src = pts.map((p) => [p[0], p[1]]);
     let bestD = Infinity;
-    let bestI = 0;
     for (let i = 0; i < src.length; i++) {
       const d = Math.hypot(src[i][0] - tx, src[i][1] - ty);
-      if (d < bestD) {
-        bestD = d;
-        bestI = i;
-      }
+      if (d < bestD) bestD = d;
     }
     if (bestD <= tol) return src;
-    // Insert on the segment that passes closest to the target.
     let segBest = 0;
     let segDist = Infinity;
     for (let i = 0; i < src.length - 1; i++) {
@@ -1642,6 +1637,75 @@
       ...mid,
       ...src.slice(segBest + 1),
     ]);
+  }
+
+  /**
+   * Replace the path between two mouths with the canonical offset tube
+   * (already converged onto both bocas). Keeps inbox heads/tails intact.
+   */
+  function spliceTubeSegment(pts, tube, startOp, endOp) {
+    if (!pts || pts.length < 2 || !tube || tube.length < 2) {
+      return pts ? pts.map((p) => [p[0], p[1]]) : [];
+    }
+    const sx = Array.isArray(startOp) ? startOp[0] : startOp.x;
+    const sy = Array.isArray(startOp) ? startOp[1] : startOp.y;
+    const ex = Array.isArray(endOp) ? endOp[0] : endOp.x;
+    const ey = Array.isArray(endOp) ? endOp[1] : endOp.y;
+    /** @type {number[][]} */
+    const src = pts.map((p) => [p[0], p[1]]);
+    let i0 = 0;
+    let i1 = 0;
+    let d0 = Infinity;
+    let d1 = Infinity;
+    for (let i = 0; i < src.length; i++) {
+      const ds = Math.hypot(src[i][0] - sx, src[i][1] - sy);
+      const de = Math.hypot(src[i][0] - ex, src[i][1] - ey);
+      if (ds < d0) {
+        d0 = ds;
+        i0 = i;
+      }
+      if (de < d1) {
+        d1 = de;
+        i1 = i;
+      }
+    }
+    // Need a clear start-mouth then end-mouth order along the path.
+    if (i0 > i1) {
+      const tmp = i0;
+      i0 = i1;
+      i1 = tmp;
+      // tube may need reverse
+      const t0 = Math.hypot(tube[0][0] - sx, tube[0][1] - sy);
+      const t1 = Math.hypot(
+        tube[tube.length - 1][0] - sx,
+        tube[tube.length - 1][1] - sy
+      );
+      if (t1 + 1 < t0) {
+        tube = tube.slice().reverse();
+      }
+    }
+    // If mouths are missing entirely, fall back to prepend/append tube.
+    if (d0 > 24 && d1 > 24) {
+      return mergeOrthoPolys(
+        mergeOrthoPolys(src, tube),
+        src
+      ) || src;
+    }
+    const head = src.slice(0, i0 + 1);
+    const tail = src.slice(i1);
+    let mid = tube.map((p) => [p[0], p[1]]);
+    // Orient tube to match head→tail direction.
+    const midStart = mid[0];
+    const midEnd = mid[mid.length - 1];
+    const headEnd = head[head.length - 1] || midStart;
+    const alignFwd =
+      Math.hypot(midStart[0] - headEnd[0], midStart[1] - headEnd[1]) <=
+      Math.hypot(midEnd[0] - headEnd[0], midEnd[1] - headEnd[1]) + 1e-6;
+    if (!alignFwd) mid = mid.slice().reverse();
+    return (
+      mergeOrthoPolys(mergeOrthoPolys(head, mid), tail) ||
+      cleanOrthoPoly([...head, ...mid, ...tail])
+    );
   }
 
   /**
@@ -4034,6 +4098,10 @@
       chain = mergeOrthoPolys(chain, tail);
       if (!chain || chain.length < 2) return [];
 
+      // Re-assert the tube segment: strip/merge must not replace mouth→mouth
+      // with a parallel that skips the bocas.
+      chain = spliceTubeSegment(chain, tube, startOp, endOp);
+
       chain = liftOffsetSpineFromPin(
         chain,
         [startAtt.x, startAtt.y],
@@ -4051,9 +4119,7 @@
       cleaned = ensureManhattanNearPoint(cleaned, startOp, 48, pins);
       cleaned = ensureManhattanNearPoint(cleaned, endOp, 48, pins);
       cleaned = stripShortZJogs(stripOutAndBack(cleaned, mouths));
-      // Offset lanes must still transit each boca after strip/merge.
-      cleaned = ensureVertexNear(cleaned, startOp, 1.5);
-      cleaned = ensureVertexNear(cleaned, endOp, 1.5);
+      cleaned = spliceTubeSegment(cleaned, tube, startOp, endOp);
       if (fromSlot.count > 1) {
         cleaned = preserveTerminalVLead(startLead, cleaned);
       }
@@ -4063,8 +4129,6 @@
           cleaned.slice().reverse()
         ).reverse();
       }
-      cleaned = ensureVertexNear(cleaned, startOp, 1.5);
-      cleaned = ensureVertexNear(cleaned, endOp, 1.5);
       return [cleaned];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
