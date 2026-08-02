@@ -1,0 +1,24 @@
+---
+description: Restart housewire serve on Test_01.yaml after each completed change
+alwaysApply: true
+---
+
+# Restart UI serve after changes
+
+After finishing a user-requested change that affects the program UI, routing, API, or the Test_01 site fixture:
+
+1. Restart `housewire serve` with **Test_01.yaml** so the user can verify immediately.
+2. Preferred command (from the program repo, using the project venv):
+
+```bash
+.venv/bin/python -m housewire serve /home/guille/Red/Fuentes/housewire/sites/Tests/Test_01.yaml
+```
+
+   Equivalent if already in `sites/Tests` / `projects/Tests`: `make serve` or
+   `python -m housewire serve Test_01.yaml`.
+
+3. If something is already listening on **8765**, stop it first (SIGINT to that
+   serve process, or kill the listener on that port), then start again.
+4. Run serve in the background; tell the user the URL (`http://127.0.0.1:8765/`).
+5. Skip only if the change cannot affect the running UI (e.g. docs-only with no
+   static/Python package change) **and** serve is already up on Test_01.
