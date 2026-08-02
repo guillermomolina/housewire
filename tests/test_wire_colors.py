@@ -1,4 +1,4 @@
-"""Canonical housewire conductor color table."""
+"""Canonical HouseWire conductor color table."""
 from __future__ import annotations
 
 import unittest
@@ -22,7 +22,7 @@ class TestWireColors(unittest.TestCase):
 
     def test_payload_for_ui(self) -> None:
         payload = wire_colors_payload()
-        self.assertEqual(payload["standard"], "housewire")
+        self.assertEqual(payload["standard"], "HouseWire")
         self.assertEqual(payload["letter_standard"], "IEC 60757")
         self.assertIn("BN", payload["colors"])
         self.assertEqual(

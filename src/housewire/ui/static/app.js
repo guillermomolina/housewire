@@ -1713,7 +1713,7 @@
   }
 
   /**
-   * housewire conductor palette (IEC 60757 letter codes → CSS).
+   * HouseWire conductor palette (IEC 60757 letter codes → CSS).
    * Canonical source: housewire.house.wire_colors; loaded from /api/wire-colors.
    */
   let CONDUCTOR_COLORS = {

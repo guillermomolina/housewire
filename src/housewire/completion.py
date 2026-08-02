@@ -1,4 +1,4 @@
-"""Tab completion for the housewire interactive shell (readline)."""
+"""Tab completion for the HouseWire interactive shell (readline)."""
 from __future__ import annotations
 
 import shlex

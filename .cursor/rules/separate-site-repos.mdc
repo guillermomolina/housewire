@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Program repo vs site repos
 
-- **This repository is the public program** (`housewire` package, docs, tests).
+- **This repository is the public program** (HouseWire / `housewire` package, docs, tests).
 - **Installation / site YAML belongs in a separate private repository** (or any external directory). Never commit real site trees into this repo.
 - Do **not** reference private site names, addresses, or repo URLs from README, CHANGELOG, docs, comments, or examples.
 - In docs and examples, use generic placeholders only (`$SITE`, `/path/to/site`, `my-site`, `Garage`, `Main panel`).

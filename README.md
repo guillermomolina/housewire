@@ -1,4 +1,4 @@
-# housewire
+# HouseWire
 
 Document electrical installations in YAML (`schema: house/v1`) and edit them
 with the interactive UI and shell (physical canvas + electrical wiring).
@@ -12,7 +12,7 @@ This repository is the **program only**. Site/installation YAML lives in a **sep
 ## Install
 
 ```bash
-python -m venv .venv --prompt housewire
+python -m venv .venv --prompt HouseWire
 source .venv/bin/activate
 python -m pip install -e '.[dev,ui]'
 # or: make prepare

@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from housewire import __version__
+from housewire import __title__, __version__
 from housewire.site.view_layout import get_physical_page, set_physical_page
 from housewire.ui import physical_graph as pg
 from housewire.ui.workspace import Workspace, create_workspace
@@ -30,7 +30,7 @@ def create_app(site_root: Path | None = None) -> Any:
         )
 
     workspace: Workspace = create_workspace(site_root)
-    app = FastAPI(title="housewire UI", version=__version__)
+    app = FastAPI(title=f"{__title__} UI", version=__version__)
 
     def _session():
         try:
@@ -115,7 +115,7 @@ def create_app(site_root: Path | None = None) -> Any:
 
     @app.get("/api/wire-colors")
     def api_wire_colors() -> dict[str, Any]:
-        """Canonical housewire conductor color palette (IEC 60757 letter codes)."""
+        """Canonical HouseWire conductor color palette (IEC 60757 letter codes)."""
         from housewire.house.wire_colors import wire_colors_payload
 
         return wire_colors_payload()
@@ -644,7 +644,7 @@ def run_serve(
         ) from exc
     app = create_app(site_root)
     print(
-        f"housewire UI → http://{host}:{port}/  "
+        f"{__title__} UI → http://{host}:{port}/  "
         f"(site: {site_root.expanduser().resolve()})"
     )
     uvicorn.run(app, host=host, port=port, log_level="info")

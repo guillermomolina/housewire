@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from housewire import __title__
 from housewire.commands import request_leave, run_shell_line
 from housewire.completion import enable_readline_completion
 from housewire.site.session import SiteSession
@@ -42,7 +43,7 @@ def read_logical_line(
 
 def run_repl(site_path: Path) -> int:
     session = SiteSession.open(site_path)
-    print(f"housewire shell — {session.site_yaml()}")
+    print(f"{__title__} shell — {session.site_yaml()}")
     print(
         "Type help. Tab completes. Changes stay in memory until save. "
         "Multi-line: end with \\"
@@ -52,7 +53,7 @@ def run_repl(site_path: Path) -> int:
     while True:
         try:
             line = read_logical_line(
-                prompt=f"housewire:{session.prompt_label()}$ ",
+                prompt=f"{__title__}:{session.prompt_label()}$ ",
                 input_fn=session.input_fn,
             )
         except (EOFError, KeyboardInterrupt):

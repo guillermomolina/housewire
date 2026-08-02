@@ -13,7 +13,7 @@ from housewire.site.session import SiteSession
 if TYPE_CHECKING:
     pass
 
-HELP_TEXT = """housewire shell commands:
+HELP_TEXT = """HouseWire shell commands:
   (Tab completes commands, add/rm subcommands, and cd/use/… paths)
   pwd                          logical location path and host YAML (* = any dirty buffer)
   cd [path]                    navigate nested places under elements:;
@@ -918,9 +918,9 @@ def run_shell_line(session: SiteSession, line: str) -> int | None:
             print(HELP_TEXT.rstrip())
             return 0
         if cmd == "version":
-            from housewire import __version__
+            from housewire import __title__, __version__
 
-            print(f"housewire {__version__}")
+            print(f"{__title__} {__version__}")
             return 0
         if cmd == "pwd":
             return cmd_pwd(session)

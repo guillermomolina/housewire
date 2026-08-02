@@ -1,6 +1,6 @@
 # Schema house/v1
 
-Canonical format for **housewire**: document a home electrical installation in YAML
+Canonical format for **HouseWire**: document a home electrical installation in YAML
 and edit it with the interactive UI / shell (physical canvas + electrical wiring).
 
 Editing: `housewire shell <site>` or non-interactive `add` / `rm` / `show` (see README).
@@ -460,8 +460,8 @@ Catalog: `catalog/Cable.yaml` (`kind: cable_type`) with per-subtype defaults for
 
 ### Color codes (`colors:`)
 
-housewire owns the conductor color table (`housewire.house.wire_colors`). Letter
-codes follow **IEC 60757**; CSS hex values are the housewire UI palette. Use
+HouseWire owns the conductor color table (`housewire.house.wire_colors`). Letter
+codes follow **IEC 60757**; CSS hex values are the HouseWire UI palette. Use
 uppercase in YAML (`BN`, not `bn`). The UI loads the same table from
 `GET /api/wire-colors`.
 

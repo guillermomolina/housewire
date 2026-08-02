@@ -23,4 +23,4 @@ class TestVersion(unittest.TestCase):
         with patch("sys.stdout", buf):
             code = main(["version"])
         self.assertEqual(code, 0)
-        self.assertEqual(buf.getvalue().strip(), f"housewire {__version__}")
+        self.assertEqual(buf.getvalue().strip(), f"HouseWire {__version__}")

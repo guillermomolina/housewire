@@ -11,7 +11,7 @@ install:
 	$(PYTHON) -m pip install -e "$(EXTRAS)"
 
 prepare:
-	python -m venv .venv --prompt housewire
+	python -m venv .venv --prompt HouseWire
 	$(MAKE) install
 
 all:

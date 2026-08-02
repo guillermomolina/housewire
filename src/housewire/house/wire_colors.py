@@ -1,7 +1,7 @@
-"""Canonical conductor color codes for housewire (IEC 60757 letter abbreviations).
+"""Canonical conductor color codes for HouseWire (IEC 60757 letter abbreviations).
 
-This table is owned by housewire. Codes follow IEC 60757 letter symbols; CSS
-hex values are the housewire UI palette for the canvas.
+This table is owned by HouseWire. Codes follow IEC 60757 letter symbols; CSS
+hex values are the HouseWire UI palette for the canvas.
 """
 from __future__ import annotations
 
@@ -117,7 +117,7 @@ def css_for_color(code: object) -> str:
 def wire_colors_payload() -> dict[str, Any]:
     """JSON-friendly palette for the UI and tooling."""
     return {
-        "standard": "housewire",
+        "standard": "HouseWire",
         "letter_standard": "IEC 60757",
         "unknown_css": UNKNOWN_WIRE_CSS,
         "colors": {

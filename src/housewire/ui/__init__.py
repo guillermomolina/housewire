@@ -1,4 +1,4 @@
-"""Interactive web UI for housewire (optional ``housewire[ui]`` extras)."""
+"""Interactive web UI for HouseWire (optional ``housewire[ui]`` extras)."""
 
 from housewire.ui.app import create_app, run_serve
 

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from housewire.commands import cmd_ls, show_file
-from housewire import __version__
+from housewire import __title__, __version__
 from housewire.site import abm
 from housewire.site.paths import split_site_arg
 from housewire.site.session import SiteSession
@@ -37,13 +37,13 @@ def _apply_catalog_option(catalog: str | None) -> None:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="housewire",
-        description="housewire: UI, shell, and ABM for house/v1 installations.",
+        description=f"{__title__}: UI, shell, and ABM for house/v1 installations.",
     )
     parser.add_argument(
         "-V",
         "--version",
         action="version",
-        version=f"housewire {__version__}",
+        version=f"{__title__} {__version__}",
     )
     sub = parser.add_subparsers(dest="command")
 
@@ -55,7 +55,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     sh.add_argument("site_path", help="Site YAML file or site directory")
 
-    sub.add_parser("version", help="Show housewire version")
+    sub.add_parser("version", help=f"Show {__title__} version")
 
     serve_p = sub.add_parser(
         "serve",
@@ -228,7 +228,7 @@ def _colors_list(raw: str) -> list[str]:
 def _dispatch_subcommand(args: argparse.Namespace) -> int:
     cmd = args.command
     if cmd == "version":
-        print(f"housewire {__version__}")
+        print(f"{__title__} {__version__}")
         return 0
     if cmd == "serve":
         from housewire.ui.app import run_serve

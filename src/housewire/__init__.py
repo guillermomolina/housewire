@@ -1,3 +1,4 @@
-"""housewire — document home electrical installations (UI + shell)."""
+"""HouseWire — document home electrical installations (UI + shell)."""
 
-__version__ = "0.30.0"
+__title__ = "HouseWire"
+__version__ = "0.30.1"

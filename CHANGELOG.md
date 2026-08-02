@@ -1,11 +1,18 @@
 # Changelog
 
-All notable changes to **housewire** are documented in this file.
+All notable changes to **HouseWire** are documented in this file.
 
 Format inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [0.30.1] — 2026-08-02
+
+### Changed
+
+- Program display name is **HouseWire** (CLI/UI banners, version string, docs).
+  Package import path and CLI command remain ``housewire``.
 
 ## [0.30.0] — 2026-08-02
 

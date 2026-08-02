@@ -169,7 +169,7 @@ def is_house_document(data: object) -> bool:
 
 
 def package_dir() -> Path:
-    """Directory of the installed housewire package."""
+    """Directory of the installed HouseWire package."""
     return Path(__file__).resolve().parent.parent
 
 
@@ -306,7 +306,7 @@ def resolve_catalog_types_dir(
 
     searched = catalogs_search_root() / DEFAULT_CATALOG_NAME
     raise FileNotFoundError(
-        f"No housewire type catalog found (looked for {searched}). {CATALOG_HINT}"
+        f"No HouseWire type catalog found (looked for {searched}). {CATALOG_HINT}"
     )
 
 
