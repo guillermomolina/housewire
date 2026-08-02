@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.4] — 2026-08-02
+
+### Fixed
+
+- Clamp face stubs so they do not overshoot the lane join (pin near an
+  exit opening no longer draws down-then-up on the same run).
+
 ## [0.32.3] — 2026-08-02
 
 ### Fixed

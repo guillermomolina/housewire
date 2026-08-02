@@ -1738,6 +1738,19 @@
   }
 
   /**
+   * Outward stub length that does not overshoot ``toward`` along the face
+   * normal (avoids down-then-up when the pin sits near the exit opening).
+   */
+  function stubDistToToward(fromPt, faceDelta, toward, maxDist) {
+    const max = maxDist == null ? INBOX_STUB : maxDist;
+    const along =
+      (toward.x - fromPt.x) * faceDelta.x +
+      (toward.y - fromPt.y) * faceDelta.y;
+    if (along > 1e-6) return Math.min(max, Math.max(0, along - 0.5));
+    return max;
+  }
+
+  /**
    * Orthogonal path between two points preferring the bend nearer ``prefer``.
    * Avoids always hugging a wall when a vertical-first L stays interior.
    */
@@ -1768,14 +1781,29 @@
    */
   function inboxRoutePts(fromPt, fromFace, toPt, toFace, preferCenter, toKind) {
     const fo = faceOutwardDelta(fromFace);
-    const aStub = stubPoint(fromPt, fo.x, fo.y, INBOX_STUB);
+    const aStub = stubPoint(
+      fromPt,
+      fo.x,
+      fo.y,
+      stubDistToToward(fromPt, fo, toPt)
+    );
     let bStub;
     if (toKind === "opening") {
       const oi = openingInwardDelta(toFace);
-      bStub = stubPoint(toPt, oi.x, oi.y, INBOX_STUB);
+      bStub = stubPoint(
+        toPt,
+        oi.x,
+        oi.y,
+        stubDistToToward(toPt, oi, fromPt)
+      );
     } else {
       const eo = faceOutwardDelta(toFace);
-      bStub = stubPoint(toPt, eo.x, eo.y, INBOX_STUB);
+      bStub = stubPoint(
+        toPt,
+        eo.x,
+        eo.y,
+        stubDistToToward(toPt, eo, fromPt)
+      );
     }
     const mid = orthoPtsPrefer(aStub, bStub, preferCenter);
     /** @type {number[][]} */
@@ -1898,8 +1926,13 @@
   function routeAttachToJoin(attach, join, preferCenter) {
     const face = attach.face || "N";
     const fo = faceOutwardDelta(face);
-    const aStub = stubPoint(attach, fo.x, fo.y, INBOX_STUB);
     const j = xyOf(join);
+    const aStub = stubPoint(
+      attach,
+      fo.x,
+      fo.y,
+      stubDistToToward(attach, fo, j)
+    );
     // Prefer fewest bends (stub included); break ties with preferCenter.
     const candidates = [];
     if (
