@@ -4,7 +4,7 @@
 
 # HouseWire
 
-Document electrical installations in YAML (`schema: house/v1`) and edit them
+Document electrical installations in YAML (`schema: house/v2`) and edit them
 with the interactive UI and shell (physical canvas + electrical wiring).
 
 This repository is the **program only**. Site/installation YAML lives in a **separate** (often private) repository or directory. Do not commit private site data into this repo.
@@ -108,7 +108,7 @@ cd "Ground floor/Hall/Main panel"
 open S2 1.5 --colors BN,BU          # OPEN_Linea_01
 cd ../Junction_1
 claim OPEN_Linea_01 --enter N1 --exit E2
-land OPEN_Linea_01 --from Main_panel/MT.2 --to Junction_1/Regleta.1 \
+land OPEN_Linea_01 --from 'Main_panel/MT.[2, 3]' --to 'Junction_1/Regleta.[1, 2]' \
   --as Linea_panel_a_J1
 opens                               # list still-open runs
 ```
@@ -144,43 +144,49 @@ make test
 ```
 src/housewire/          # package
   cli.py
-  house/                # house/v1 schema + validation
+  house/                # house/v2 schema + validation
   ui/                   # interactive canvas
-docs/                   # schema-house-v1.md
+docs/                   # schema-house-v2.md
 tests/
 ```
 
 Site trees (private) are **not** part of this repository. A local `sites/` path is gitignored if present for convenience; prefer a separate clone/checkout for real work.
 
-## house/v1
+## house/v2
 
-See [docs/schema-house-v1.md](docs/schema-house-v1.md) (IEC **cable color codes**, openings, conduits, connections).
+See [docs/schema-house-v2.md](docs/schema-house-v2.md) (unified `cables` map, IEC color codes, openings).
+Documents with `schema: house/v1` are rejected; there is no dual-read.
 
 ```yaml
-schema: house/v1
-# Electrical
+schema: house/v2
 elements:
   MT_Lights:
     type: MCB
     subtype: C10
 cables:
-  Line_X:
-    type: Cable
-    subtype: power
-    section: "1.5 mm2"
-    colors: [BN, BU]
-connections:
-  - from: A.[1, 3]
-    via: Line_X.[1, 2]
-    to: B.[1, 3]
-# Physical
-conduits:
   Tube_A_to_B:
     type: Conduit
     subtype: tube
     from: Box_A.N1
     to: Box_B.S1
     contains: [Line_X]
+  Line_X:
+    type: Cable
+    subtype: power
+    color: BK
+    contains: [Line_X_1, Line_X_2]
+  Line_X_1:
+    type: Conductor
+    color: BN
+    section: "1.5 mm2"
+    from: A.1
+    to: B.1
+  Line_X_2:
+    type: Conductor
+    color: BU
+    section: "1.5 mm2"
+    from: A.3
+    to: B.3
 ```
 
 ## Version

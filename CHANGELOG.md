@@ -7,6 +7,23 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.0] — 2026-08-02
+
+### Changed
+
+- Schema **`house/v2`**: unified ``cables`` map with typed ``Conduit`` /
+  ``Cable`` (sheath) / ``Conductor`` links. Nodes stay under ``elements``.
+- ``schema: house/v1`` (and unknown schemas) fail fast; no dual-read or
+  in-app upgrade.
+- Docs retargeted to ``docs/schema-house-v2.md``.
+
+### Removed
+
+- Top-level / place-level ``connections:`` and separate ``conduits:`` maps.
+- Multi-color cable bags (``colors: […]``) and ``via`` wire-index pairing;
+  one Conductor is one terminal pair with singular ``color``.
+- Shell ``add connection`` / ``rm connection``.
+
 ## [0.30.1] — 2026-08-02
 
 ### Changed

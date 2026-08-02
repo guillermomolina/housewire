@@ -19,7 +19,7 @@ class TestDirectoryLocation(unittest.TestCase):
 
     def test_location_place_validates_with_element(self) -> None:
         doc = _yaml.safe_load(
-            "schema: house/v1\n"
+            "schema: house/v2\n"
             "type: JunctionBox\n"
             "subtype: '100x100 IP40'\n"
             "notes: 'mount: ceiling'\n"
@@ -101,7 +101,7 @@ class TestDirectoryLocation(unittest.TestCase):
 
     def test_self_block_rejected(self) -> None:
         doc = _yaml.safe_load(
-            "schema: house/v1\n"
+            "schema: house/v2\n"
             "self:\n"
             "  type: Location\n"
             "elements:\n"
@@ -163,7 +163,7 @@ class TestLocationElementLegacyInline(unittest.TestCase):
     def test_nested_element_validates(self) -> None:
         doc = _yaml.safe_load(
             """
-schema: house/v1
+schema: house/v2
 elements:
   Caja_1:
     type: JunctionBox
@@ -179,7 +179,7 @@ elements:
     def test_location_metadata_preserved_in_sublevel(self) -> None:
         doc = _yaml.safe_load(
             """
-schema: house/v1
+schema: house/v2
 elements:
   Caja_1:
     type: JunctionBox

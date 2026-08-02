@@ -12,11 +12,11 @@ from housewire.site.tree import get_place_node
 
 
 class TestRecipeHelpers(unittest.TestCase):
-    def test_format_terminal_ref_single_and_array(self) -> None:
-        self.assertEqual(recipes.format_terminal_ref("Regleta", ["1"]), "Regleta.1")
+    def test_format_terminal_ref(self) -> None:
+        self.assertEqual(recipes.format_terminal_ref("Regleta", "1"), "Regleta.1")
         self.assertEqual(
-            recipes.format_terminal_ref("Caja/Regleta", ["3", "2", "1"]),
-            "Caja/Regleta.[3, 2, 1]",
+            recipes.format_terminal_ref("Caja/Regleta", "3"),
+            "Caja/Regleta.3",
         )
 
     def test_qualify_element_path(self) -> None:
@@ -62,17 +62,29 @@ class TestSocketRecipeABM(unittest.TestCase):
         self.assertEqual(result.cable_name, "Linea_a_Enchufe_5")
         self.assertEqual(result.conduit_name, "Conducto_a_Enchufe_5")
         self.assertEqual(
-            result.from_terminals, "Caja_derivacion_2/Regleta.[3, 2, 1]"
+            result.from_terminals,
+            (
+                "Caja_derivacion_2/Regleta.3",
+                "Caja_derivacion_2/Regleta.2",
+                "Caja_derivacion_2/Regleta.1",
+            ),
         )
-        self.assertEqual(result.via_ref, "Linea_a_Enchufe_5.[1, 2, 3]")
-        self.assertEqual(result.to_terminals, "Enchufe_5/Socket.[L, PE, N]")
+        self.assertEqual(
+            result.to_terminals,
+            ("Enchufe_5/Socket.L", "Enchufe_5/Socket.PE", "Enchufe_5/Socket.N"),
+        )
+        self.assertEqual(
+            result.conductor_names,
+            ("Linea_a_Enchufe_5_1", "Linea_a_Enchufe_5_2", "Linea_a_Enchufe_5_3"),
+        )
         cable = place["cables"]["Linea_a_Enchufe_5"]
-        self.assertEqual(cable["colors"], ["GY", "GNYE", "BU"])
-        self.assertEqual(cable["section"], "2.5 mm2")
-        conduit = place["conduits"]["Conducto_a_Enchufe_5"]
+        self.assertEqual(cable["type"], "Cable")
+        self.assertEqual(cable["contains"], list(result.conductor_names))
+        self.assertEqual(place["cables"]["Linea_a_Enchufe_5_1"]["color"], "GY")
+        conduit = place["cables"]["Conducto_a_Enchufe_5"]
         self.assertEqual(conduit["from"], "Caja_derivacion_2.N1")
         self.assertEqual(conduit["to"], "Enchufe_5.N1")
-        self.assertEqual(len(place["connections"]), 1)
+        self.assertNotIn("connections", place)
 
 
 class TestLampRecipeABM(unittest.TestCase):
@@ -98,12 +110,27 @@ class TestLampRecipeABM(unittest.TestCase):
             pins=["6", "5", "2"],
         )
         self.assertEqual(
-            result.from_terminals, "Caja_derivacion_3/Regleta.[6, 5, 2]"
+            result.from_terminals,
+            (
+                "Caja_derivacion_3/Regleta.6",
+                "Caja_derivacion_3/Regleta.5",
+                "Caja_derivacion_3/Regleta.2",
+            ),
         )
-        self.assertEqual(result.to_terminals, "Lampara_3/Luminaire.[1, 2, 3]")
-        self.assertEqual(place["cables"][result.cable_name]["colors"], ["BN", "GNYE", "BU"])
         self.assertEqual(
-            place["conduits"][result.conduit_name]["to"], "Lampara_3.B1-1"
+            result.to_terminals,
+            (
+                "Lampara_3/Luminaire.1",
+                "Lampara_3/Luminaire.2",
+                "Lampara_3/Luminaire.3",
+            ),
+        )
+        self.assertEqual(
+            [place["cables"][c]["color"] for c in result.conductor_names],
+            ["BN", "GNYE", "BU"],
+        )
+        self.assertEqual(
+            place["cables"][result.conduit_name]["to"], "Lampara_3.B1-1"
         )
 
 
@@ -135,11 +162,13 @@ class TestFeedRecipeABM(unittest.TestCase):
         self.assertEqual(result.cable_name, "Linea_CD4_a_CD3_fase")
         self.assertEqual(result.conduit_name, "Conducto_Linea_CD4_a_CD3_fase")
         self.assertEqual(
-            result.from_terminals, "Caja_derivacion_4/Regleta_2.1"
+            result.from_terminals, ("Caja_derivacion_4/Regleta_2.1",)
         )
-        self.assertEqual(result.to_terminals, "Caja_derivacion_3/Regleta.1")
-        self.assertEqual(result.via_ref, "Linea_CD4_a_CD3_fase.1")
-        self.assertEqual(place["cables"][result.cable_name]["colors"], ["BK"])
+        self.assertEqual(result.to_terminals, ("Caja_derivacion_3/Regleta.1",))
+        self.assertEqual(result.conductor_names, ("Linea_CD4_a_CD3_fase_1",))
+        self.assertEqual(
+            place["cables"]["Linea_CD4_a_CD3_fase_1"]["color"], "BK"
+        )
 
 
 class TestShellRecipes(unittest.TestCase):
@@ -175,7 +204,7 @@ class TestShellRecipes(unittest.TestCase):
         _path, doc = s.ensure_doc()
         parking = get_place_node(doc, ("Parking",))
         self.assertIn("Linea_a_Enchufe_5", parking["cables"])
-        self.assertIn("Conducto_a_Enchufe_5", parking["conduits"])
+        self.assertIn("Conducto_a_Enchufe_5", parking["cables"])
         child = get_place_node(doc, ("Parking", "Enchufe_5"))
         self.assertEqual(child["type"], "DeviceBox")
         self.assertIn("Socket", child["elements"])
@@ -208,5 +237,9 @@ class TestShellRecipes(unittest.TestCase):
         _path, doc = s.ensure_doc()
         parking = get_place_node(doc, ("Parking",))
         self.assertIn("Linea_A_a_B", parking["cables"])
-        self.assertEqual(parking["connections"][0]["from"], "Caja_A/Regleta.1")
-        self.assertEqual(parking["connections"][0]["to"], "Caja_B/Regleta.2")
+        self.assertEqual(
+            parking["cables"]["Linea_A_a_B_1"]["from"], "Caja_A/Regleta.1"
+        )
+        self.assertEqual(
+            parking["cables"]["Linea_A_a_B_1"]["to"], "Caja_B/Regleta.2"
+        )

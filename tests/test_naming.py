@@ -43,7 +43,7 @@ class TestNamingConvention(unittest.TestCase):
 
     def test_location_path_list_rejected(self) -> None:
         doc = _yaml.safe_load(
-            "schema: house/v1\n"
+            "schema: house/v2\n"
             "location: [Caja derivacion 1]\n"
             "elements:\n"
             "  Regleta:\n"
@@ -56,15 +56,20 @@ class TestNamingConvention(unittest.TestCase):
 
     def test_validate_accepts_prefixed_tree(self) -> None:
         doc = _yaml.safe_load(
-            "schema: house/v1\n"
+            "schema: house/v2\n"
             "elements:\n"
             "  Regleta:\n"
             "    type: TerminalStrip\n"
             "cables:\n"
-            "  Linea_test:\n"
-            "    kind: power\n"
+            "  Linea_test_1:\n"
+            "    type: Conductor\n"
+            "    subtype: power\n"
             "    section: '1.5 mm2'\n"
-            "    colors: [BN, BU]\n"
+            "    color: BN\n"
+            "  Linea_test:\n"
+            "    type: Cable\n"
+            "    subtype: power\n"
+            "    contains: [Linea_test_1]\n"
         )
         validate_house_tree(
             doc, catalog=load_catalog(), file_location_parts=["Parking"]

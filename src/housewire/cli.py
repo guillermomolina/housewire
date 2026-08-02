@@ -37,7 +37,7 @@ def _apply_catalog_option(catalog: str | None) -> None:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="housewire",
-        description=f"{__title__}: UI, shell, and ABM for house/v1 installations.",
+        description=f"{__title__}: UI, shell, and ABM for house/v2 installations.",
     )
     parser.add_argument(
         "-V",
@@ -79,7 +79,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ls_p.add_argument("site_path")
     ls_p.add_argument("path", nargs="?", default=".", help="Relative path")
 
-    show_p = sub.add_parser("show", help="Show contents of a house/v1 YAML")
+    show_p = sub.add_parser("show", help="Show contents of a house/v2 YAML")
     show_p.add_argument("site_path")
     show_p.add_argument("yaml_path")
     show_p.add_argument("--element")
@@ -130,12 +130,19 @@ def _build_parser() -> argparse.ArgumentParser:
     add_pend.add_argument("--label")
     add_pend.add_argument("--notes")
 
-    add_cn = add_sub.add_parser("connection")
+    add_cn = add_sub.add_parser(
+        "conductor", help="Single wire between element terminals"
+    )
     add_cn.add_argument("site_path")
     add_cn.add_argument("yaml_path")
+    add_cn.add_argument("name")
     add_cn.add_argument("--from", dest="from_ref", required=True)
-    add_cn.add_argument("--via", dest="via_ref", required=True)
     add_cn.add_argument("--to", dest="to_ref", required=True)
+    add_cn.add_argument("--color", required=True)
+    add_cn.add_argument("--section", default=None)
+    add_cn.add_argument("--subtype", default=None)
+    add_cn.add_argument("--label")
+    add_cn.add_argument("--notes")
 
     add_cd = add_sub.add_parser("conduit", help="Tube between openings (physical layer)")
     add_cd.add_argument("site_path")
@@ -204,11 +211,6 @@ def _build_parser() -> argparse.ArgumentParser:
     rm_cb.add_argument("site_path")
     rm_cb.add_argument("yaml_path")
     rm_cb.add_argument("name")
-
-    rm_cn = rm_sub.add_parser("connection")
-    rm_cn.add_argument("site_path")
-    rm_cn.add_argument("yaml_path")
-    rm_cn.add_argument("index", type=int)
 
     rm_f = rm_sub.add_parser("file")
     rm_f.add_argument("site_path")
@@ -337,12 +339,17 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
             abm.persist(doc, yaml_path, site_path)
             print(f"OK {cable_name} + {conduit_name}")
             return 0
-        elif args.add_kind == "connection":
-            abm.add_connection(
+        elif args.add_kind == "conductor":
+            abm.add_conductor(
                 doc,
+                args.name,
                 from_ref=args.from_ref,
-                via_ref=args.via_ref,
                 to_ref=args.to_ref,
+                color=args.color,
+                section=args.section,
+                subtype=args.subtype or abm.DEFAULT_CABLE_SUBTYPE,
+                label=args.label,
+                notes=args.notes,
             )
         elif args.add_kind == "conduit":
             contains = _colors_list(args.contains)
@@ -384,8 +391,6 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
             abm.rm_element(doc, args.name)
         elif args.rm_kind == "cable":
             abm.rm_cable(doc, args.name)
-        elif args.rm_kind == "connection":
-            abm.rm_connection(doc, args.index)
         abm.persist(doc, yaml_path, site_path)
         print("OK")
         return 0

@@ -1,4 +1,4 @@
-"""Connection refs must stay within the declaring location and its sublocations."""
+"""Conductor terminal refs must stay within the declaring location tree."""
 from __future__ import annotations
 
 import unittest
@@ -18,7 +18,7 @@ class TestConnectionScope(unittest.TestCase):
     def test_local_and_child_relative_ok(self) -> None:
         self._validate(
             """
-schema: house/v1
+schema: house/v2
 elements:
   Enchufe:
     type: Socket
@@ -28,13 +28,11 @@ elements:
       Regleta:
         type: TerminalStrip
 cables:
-  L1:
-    kind: power
+  L1_1:
+    type: Conductor
     section: 1.5 mm2
-    colors: [BN, BU]
-connections:
-  - from: Caja 1/Regleta.1
-    via: L1.1
+    color: BN
+    from: Caja 1/Regleta.1
     to: Enchufe.L
 """,
             ["Parking"],
@@ -44,18 +42,16 @@ connections:
         with self.assertRaises(ValueError) as ctx:
             self._validate(
                 """
-schema: house/v1
+schema: house/v2
 elements:
   Regleta:
     type: TerminalStrip
 cables:
-  L1:
-    kind: power
+  L1_1:
+    type: Conductor
     section: 1.5 mm2
-    colors: [BN]
-connections:
-  - from: ../Enchufe.L
-    via: L1.1
+    color: BN
+    from: ../Enchufe.L
     to: Regleta.1
 """,
                 ["Parking", "Caja 1"],
@@ -66,18 +62,16 @@ connections:
         with self.assertRaises(ValueError) as ctx:
             self._validate(
                 """
-schema: house/v1
+schema: house/v2
 elements:
   Regleta:
     type: TerminalStrip
 cables:
-  L1:
-    kind: power
+  L1_1:
+    type: Conductor
     section: 1.5 mm2
-    colors: [BN]
-connections:
-  - from: Regleta.1
-    via: L1.1
+    color: BN
+    from: Regleta.1
     to: /Parking/Caja 2/Regleta.1
 """,
                 ["Parking", "Caja 1"],
@@ -91,7 +85,7 @@ connections:
     def test_absolute_into_child_ok(self) -> None:
         self._validate(
             """
-schema: house/v1
+schema: house/v2
 elements:
   Enchufe:
     type: Socket
@@ -101,13 +95,11 @@ elements:
       Regleta:
         type: TerminalStrip
 cables:
-  L1:
-    kind: power
+  L1_1:
+    type: Conductor
     section: 1.5 mm2
-    colors: [BN, BU]
-connections:
-  - from: /Parking/Caja 1/Regleta.1
-    via: L1.1
+    color: BN
+    from: /Parking/Caja 1/Regleta.1
     to: Enchufe.L
 """,
             ["Parking"],

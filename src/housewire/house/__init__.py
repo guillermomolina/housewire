@@ -1,4 +1,4 @@
-"""house/v1 schema: load catalog, expand locations, validate installations."""
+"""house/v2 schema: load catalog, expand locations, validate installations."""
 from __future__ import annotations
 
 import copy
@@ -10,7 +10,24 @@ from typing import Any
 
 import yaml
 
-HOUSE_SCHEMA = "house/v1"
+from housewire.house.links import (
+    CABLE_CATALOG_KIND,
+    CONDUCTOR_CATALOG_KIND,
+    CONDUIT_CATALOG_KIND,
+    DEFAULT_CABLE_TYPE,
+    DEFAULT_CONDUCTOR_TYPE,
+    DEFAULT_CONDUIT_TYPE,
+    expand_cable,
+    expand_conductor,
+    expand_conduit,
+    expand_link,
+    reject_legacy_keys,
+    resolve_link_kind,
+    validate_link_entry,
+)
+
+HOUSE_SCHEMA = "house/v2"
+LEGACY_HOUSE_SCHEMA = "house/v1"
 
 # Directory / inline place types.
 PLACE_TYPES = frozenset(
@@ -27,15 +44,22 @@ PLACE_TYPES = frozenset(
     }
 )
 
-# Catalog kinds for cables: / conduits: (not usable as elements).
-CABLE_CATALOG_KIND = "cable_type"
-CONDUIT_CATALOG_KIND = "conduit_type"
-DEFAULT_CABLE_TYPE = "Cable"
-DEFAULT_CONDUIT_TYPE = "Conduit"
-
 # Keys that are document/tree structure, not place metadata fields.
-PLACE_CHILD_KEYS = frozenset({"elements", "cables", "connections", "conduits", "locations"})
+PLACE_CHILD_KEYS = frozenset({"elements", "cables", "locations"})
 DOCUMENT_ONLY_KEYS = frozenset({"schema", "location", "self"})
+
+
+def assert_supported_schema(data: dict[str, Any]) -> None:
+    """Raise if ``schema`` is missing, legacy, or otherwise unsupported."""
+    schema = data.get("schema")
+    if schema == LEGACY_HOUSE_SCHEMA:
+        raise ValueError(
+            "Unsupported schema house/v1; this HouseWire build requires house/v2"
+        )
+    if schema != HOUSE_SCHEMA:
+        raise ValueError(
+            f"Unsupported schema {schema!r}; this HouseWire build requires {HOUSE_SCHEMA}"
+        )
 
 
 def is_place_type(type_id: object) -> bool:
@@ -54,7 +78,7 @@ def place_meta_from_mapping(node: dict[str, Any]) -> dict[str, Any] | None:
         raise ValueError(
             "The 'self:' block is no longer used. Put type/label/openings/… at the root "
             "of the YAML (the file is the place object). "
-            "Example:\n  schema: house/v1\n  type: JunctionBox\n  openings: [N1]"
+            "Example:\n  schema: house/v2\n  type: JunctionBox\n  openings: [N1]"
         )
     loc = node.get("location")
     if loc is not None:
@@ -414,109 +438,6 @@ def _catalog_defaults_for_subtype(
     return defaults
 
 
-def expand_cable(
-    cable: dict[str, Any], catalog: dict[str, dict[str, Any]] | None = None
-) -> dict[str, Any]:
-    """Normalize a cables: entry: type/subtype/label + catalog defaults.
-
-    Legacy ``kind: power`` becomes ``subtype: power`` with ``type: Cable``.
-    """
-    cat = catalog if catalog is not None else load_catalog()
-    raw = copy.deepcopy(cable)
-    if not isinstance(raw, dict):
-        raise ValueError("Invalid cable (not a map)")
-
-    subtype = raw.get("subtype")
-    if subtype is None and raw.get("kind") is not None:
-        subtype = raw.get("kind")
-    type_id = raw.get("type")
-    if type_id is None:
-        type_id = DEFAULT_CABLE_TYPE
-    type_id = str(type_id)
-    type_def = cat.get(type_id)
-    if type_def is not None and type_def.get("kind") not in (None, CABLE_CATALOG_KIND):
-        raise ValueError(
-            f"type: {type_id} is not a cable type (catalog kind={type_def.get('kind')!r})"
-        )
-    if type_def is None and type_id != DEFAULT_CABLE_TYPE:
-        raise ValueError(f"Unknown cable type in catalog: {type_id}")
-
-    defaults = _catalog_defaults_for_subtype(type_def, str(subtype) if subtype is not None else None)
-    out: dict[str, Any] = {"type": type_id}
-    if subtype is not None:
-        out["subtype"] = str(subtype)
-    for key in ("section", "gauge", "colors", "name", "label", "notes", "manufacturer", "model"):
-        if key in raw and raw[key] is not None:
-            out[key] = copy.deepcopy(raw[key])
-        elif key in defaults and key not in ("gauge",):
-            # Prefer section over gauge from catalog defaults.
-            if key == "section" or key not in out:
-                out[key] = copy.deepcopy(defaults[key])
-    if "section" not in out and "gauge" not in out and defaults.get("section"):
-        out["section"] = copy.deepcopy(defaults["section"])
-    if "colors" not in out and defaults.get("colors"):
-        out["colors"] = copy.deepcopy(defaults["colors"])
-    return out
-
-
-def expand_conduit(
-    conduit: dict[str, Any], catalog: dict[str, dict[str, Any]] | None = None
-) -> dict[str, Any]:
-    """Normalize a conduits: entry: type/subtype/label + catalog defaults.
-
-    Legacy forms:
-    - ``kind: conduit`` → ``type: Conduit``
-    - ``kind: conduit`` + ``type: M20`` → ``type: Conduit``, ``subtype: M20``
-    """
-    cat = catalog if catalog is not None else load_catalog()
-    raw = copy.deepcopy(conduit)
-    if not isinstance(raw, dict):
-        raise ValueError("Invalid conduit (not a map)")
-
-    type_id = raw.get("type")
-    subtype = raw.get("subtype")
-    kind = raw.get("kind")
-
-    type_def = cat.get(str(type_id)) if type_id is not None else None
-    if type_def is not None and type_def.get("kind") == CONDUIT_CATALOG_KIND:
-        resolved_type = str(type_id)
-    elif type_id is not None and subtype is None:
-        # Legacy: type held the physical size / hose class (M20, hose, …).
-        resolved_type = DEFAULT_CONDUIT_TYPE
-        subtype = type_id
-    elif type_id is None:
-        resolved_type = DEFAULT_CONDUIT_TYPE
-        if subtype is None and kind is not None and str(kind) != "conduit":
-            subtype = kind
-    else:
-        raise ValueError(
-            f"type: {type_id} is not a known conduit type; "
-            f"use type: {DEFAULT_CONDUIT_TYPE} and subtype: …"
-        )
-
-    type_def = cat.get(resolved_type)
-    if type_def is None:
-        raise ValueError(f"Unknown conduit type in catalog: {resolved_type}")
-    if type_def.get("kind") not in (None, CONDUIT_CATALOG_KIND):
-        raise ValueError(
-            f"type: {resolved_type} is not a conduit type "
-            f"(catalog kind={type_def.get('kind')!r})"
-        )
-
-    defaults = _catalog_defaults_for_subtype(
-        type_def, str(subtype) if subtype is not None else None
-    )
-    out: dict[str, Any] = {"type": resolved_type}
-    if subtype is not None:
-        out["subtype"] = str(subtype)
-    for key in ("contains", "from", "to", "name", "label", "notes"):
-        if key in raw and raw[key] is not None:
-            out[key] = copy.deepcopy(raw[key])
-        elif key in defaults:
-            out[key] = copy.deepcopy(defaults[key])
-    return out
-
-
 def path_location_parts(site_path: Path, yaml_file: Path) -> list[str]:
     """Location prefix for a YAML file.
 
@@ -601,9 +522,9 @@ def _validate_element(
     if type_def is None:
         raise ValueError(f"Unknown catalog type: {type_id}")
     cat_kind = type_def.get("kind") if isinstance(type_def, dict) else None
-    if cat_kind in (CABLE_CATALOG_KIND, CONDUIT_CATALOG_KIND):
+    if cat_kind in (CABLE_CATALOG_KIND, CONDUIT_CATALOG_KIND, CONDUCTOR_CATALOG_KIND):
         raise ValueError(
-            f"type: {type_id} belongs to cables:/conduits:, not to elements:"
+            f"type: {type_id} belongs under cables:, not under elements:"
         )
     if is_place_type(type_id):
         return
@@ -632,83 +553,6 @@ def _validate_element(
     _validate_terminal_pairs(terminals, pairs_raw if isinstance(pairs_raw, list) else None)
 
 
-def _validate_cable(
-    name: str,
-    cable: dict[str, Any],
-    catalog: dict[str, dict[str, Any]] | None,
-) -> None:
-    expanded = expand_cable(cable, catalog)
-    colors = expanded.get("colors") or []
-    if not isinstance(colors, list) or not colors:
-        raise ValueError(f"Cable missing 'colors': {name}")
-    section = expanded.get("section") or expanded.get("gauge")
-    if not section:
-        raise ValueError(f"Cable missing 'section': {name}")
-
-
-def _validate_connection(
-    conn: dict[str, Any],
-    *,
-    current_location: list[str],
-    local_prefix: str,
-    element_map: dict[str, str],
-    cable_map: dict[str, str],
-) -> None:
-    if "from" not in conn or "to" not in conn or "via" not in conn:
-        raise ValueError("house/v1 connection requires from, via, and to")
-
-    from_tokens = _expand_endpoint_token(str(conn["from"]))
-    to_tokens = _expand_endpoint_token(str(conn["to"]))
-    via_token = str(conn["via"])
-
-    from_pairs = [_split_element_terminal(token) for token in from_tokens]
-    to_pairs = [_split_element_terminal(token) for token in to_tokens]
-    cable_name, wire_ids = _parse_via_wires(
-        via_token,
-        cable_map,
-        local_prefix,
-        current_location=current_location,
-    )
-    del cable_name  # validated by parse
-
-    if not (len(from_pairs) == len(to_pairs) == len(wire_ids)):
-        raise ValueError(
-            "from/via/to must have the same length after expanding lists: "
-            f"{conn}"
-        )
-
-    from_element = _normalize_local_element_ref(
-        from_pairs[0][0],
-        current_location=current_location,
-        local_prefix=local_prefix,
-        local_map=element_map,
-    )
-    to_element = _normalize_local_element_ref(
-        to_pairs[0][0],
-        current_location=current_location,
-        local_prefix=local_prefix,
-        local_map=element_map,
-    )
-    for element, _terminal in from_pairs:
-        resolved = _normalize_local_element_ref(
-            element,
-            current_location=current_location,
-            local_prefix=local_prefix,
-            local_map=element_map,
-        )
-        if resolved != from_element:
-            raise ValueError(f"from mixes different elements: {conn}")
-    for element, _terminal in to_pairs:
-        resolved = _normalize_local_element_ref(
-            element,
-            current_location=current_location,
-            local_prefix=local_prefix,
-            local_map=element_map,
-        )
-        if resolved != to_element:
-            raise ValueError(f"to mixes different elements: {conn}")
-
-
 def _validate_flat_fragment(
     fragment: dict[str, Any],
     *,
@@ -717,58 +561,47 @@ def _validate_flat_fragment(
     seen_elements: set[str],
     seen_cables: set[str],
 ) -> None:
+    reject_legacy_keys(fragment)
     prefix = location_prefix(location_parts)
     element_map: dict[str, str] = {}
     cable_map: dict[str, str] = {}
+    local_cable_ids: set[str] = set()
 
     for name, definition in (fragment.get("elements") or {}).items():
         if not isinstance(definition, dict):
             raise ValueError(f"Invalid element: {name}")
         new_name = prefixed_name(prefix, str(name))
         if new_name in seen_elements:
-            raise ValueError(f"house/v1 element collision: {new_name}")
+            raise ValueError(f"house/v2 element collision: {new_name}")
         seen_elements.add(new_name)
         element_map[str(name)] = new_name
         _validate_element(str(name), definition, catalog)
 
-    for name, definition in (fragment.get("cables") or {}).items():
+    cables = fragment.get("cables") or {}
+    if cables and not isinstance(cables, dict):
+        raise ValueError("cables must be a map")
+    for name, definition in (cables or {}).items():
         if not isinstance(definition, dict):
-            raise ValueError(f"Invalid cable: {name}")
+            raise ValueError(f"Invalid cables entry: {name}")
         new_name = prefixed_name(prefix, str(name))
         if new_name in seen_cables:
-            raise ValueError(f"house/v1 cable collision: {new_name}")
+            raise ValueError(f"house/v2 cables collision: {new_name}")
         seen_cables.add(new_name)
         cable_map[str(name)] = new_name
-        _validate_cable(str(name), definition, catalog)
+        local_cable_ids.add(str(name))
 
-    for conduit_name, conduit in (fragment.get("conduits") or {}).items():
-        if not isinstance(conduit, dict):
-            continue
-        expanded = expand_conduit(conduit, catalog)
-        for cable_ref in expanded.get("contains") or []:
-            cable_ref_s = str(cable_ref)
-            qualified = cable_map.get(
-                cable_ref_s, prefixed_name(prefix, cable_ref_s)
-            )
-            if qualified not in seen_cables:
-                raise ValueError(
-                    f"Conduit {conduit_name} references missing cable: {cable_ref_s}"
-                )
-
-    for conn in fragment.get("connections") or []:
-        if isinstance(conn, dict):
-            _validate_connection(
-                conn,
-                current_location=location_parts,
-                local_prefix=prefix,
-                element_map=element_map,
-                cable_map=cable_map,
-            )
-        elif isinstance(conn, list):
-            # Legacy triple-list connection form — accept without rewrite.
-            continue
-        else:
-            raise ValueError(f"Invalid connection: {conn!r}")
+    for name, definition in (cables or {}).items():
+        validate_link_entry(
+            str(name),
+            definition,
+            catalog=catalog,
+            cable_ids=local_cable_ids,
+            current_location=location_parts,
+            local_prefix=prefix,
+            element_map=element_map,
+            normalize_element_ref=_normalize_local_element_ref,
+            split_element_terminal=_split_element_terminal,
+        )
 
 
 def validate_house_tree(
@@ -777,20 +610,22 @@ def validate_house_tree(
     catalog: dict[str, dict[str, Any]],
     file_location_parts: list[str],
 ) -> None:
-    """Walk a house/v1 document and raise ``ValueError`` on structural errors."""
+    """Walk a house/v2 document and raise ``ValueError`` on structural errors."""
+    assert_supported_schema(data)
     base_location = list(file_location_parts)
 
     # Touch place meta early so legacy ``self:`` / ``location:`` lists fail fast.
     place_meta_from_mapping(data)
+    reject_legacy_keys(data)
 
     fragments = _walk_locations(data, base_location)
     if not fragments and (
-        any(key in data for key in ("elements", "cables", "connections", "conduits"))
+        any(key in data for key in ("elements", "cables"))
         or place_meta_from_mapping(data) is not None
     ):
         frag: dict[str, Any] = {
             key: copy.deepcopy(data[key])
-            for key in ("elements", "cables", "connections", "conduits")
+            for key in ("elements", "cables")
             if key in data
         }
         meta = place_meta_from_mapping(data)
@@ -1017,7 +852,7 @@ def _walk_locations(
     """
     fragments: list[tuple[list[str], dict[str, Any]]] = []
 
-    direct_keys = {"elements", "cables", "connections", "conduits"}
+    direct_keys = {"elements", "cables"}
     location_child_keys = PLACE_CHILD_KEYS
 
     raw_elements = dict(node.get("elements") or {})
@@ -1036,9 +871,8 @@ def _walk_locations(
     flat_node: dict[str, Any] = {}
     if plain_elements:
         flat_node["elements"] = plain_elements
-    for k in ("cables", "connections", "conduits"):
-        if k in node:
-            flat_node[k] = node[k]
+    if "cables" in node:
+        flat_node["cables"] = node["cables"]
 
     place_meta = place_meta_from_mapping(node)
     if place_meta is not None:
@@ -1047,7 +881,7 @@ def _walk_locations(
 
     for name, defn in location_elements.items():
         meta_only = {k: v for k, v in defn.items() if k not in location_child_keys}
-        if meta_only or not any(k in defn for k in {"elements", "cables", "connections"}):
+        if meta_only or not any(k in defn for k in {"elements", "cables"}):
             flat_node.setdefault("elements", {})[name] = {
                 k: v for k, v in defn.items() if k not in location_child_keys
             } or defn
@@ -1068,10 +902,9 @@ def _walk_locations(
         fragments.append((list(base), fragment))
 
     for name, defn in location_elements.items():
-        if any(k in defn for k in {"elements", "cables", "connections"}):
+        if any(k in defn for k in {"elements", "cables"}):
             child = copy.deepcopy(defn)
             fragments.extend(_walk_locations(child, base + [str(name)]))
-
     nested = node.get("locations")
     if nested is not None:
         if not isinstance(nested, dict):

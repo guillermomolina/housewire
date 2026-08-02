@@ -1,10 +1,11 @@
-"""Tests for Cable/Conduit catalog expansion (type/subtype/label)."""
+"""Tests for Cable/Conduit/Conductor catalog expansion (type/subtype)."""
 from __future__ import annotations
 
 import unittest
 
 from housewire.house import (
     expand_cable,
+    expand_conductor,
     expand_conduit,
     load_catalog,
     validate_house_tree,
@@ -15,35 +16,29 @@ class TestCableCatalog(unittest.TestCase):
     def setUp(self) -> None:
         self.catalog = load_catalog()
 
-    def test_catalog_has_cable_and_conduit(self) -> None:
+    def test_catalog_has_link_types(self) -> None:
         self.assertEqual(self.catalog["Cable"]["kind"], "cable_type")
         self.assertEqual(self.catalog["Conduit"]["kind"], "conduit_type")
+        self.assertEqual(self.catalog["Conductor"]["kind"], "conductor_type")
 
-    def test_expand_cable_defaults_from_subtype(self) -> None:
+    def test_expand_cable_sheath_defaults(self) -> None:
         out = expand_cable({"type": "Cable", "subtype": "earth"}, self.catalog)
         self.assertEqual(out["type"], "Cable")
         self.assertEqual(out["subtype"], "earth")
-        self.assertEqual(out["colors"], ["GNYE"])
-        self.assertEqual(out["section"], "1.5 mm2")
+        self.assertEqual(out["color"], "GNYE")
 
     def test_expand_cable_legacy_kind(self) -> None:
         out = expand_cable({"kind": "dc"}, self.catalog)
         self.assertEqual(out["type"], "Cable")
         self.assertEqual(out["subtype"], "dc")
-        self.assertEqual(out["colors"], ["RD", "BK"])
+        self.assertEqual(out["color"], "BK")
 
-    def test_expand_cable_instance_overrides_defaults(self) -> None:
-        out = expand_cable(
-            {
-                "type": "Cable",
-                "subtype": "power",
-                "colors": ["GY", "BU"],
-                "section": "2.5 mm2",
-            },
-            self.catalog,
+    def test_expand_conductor_defaults(self) -> None:
+        out = expand_conductor(
+            {"type": "Conductor", "subtype": "earth"}, self.catalog
         )
-        self.assertEqual(out["colors"], ["GY", "BU"])
-        self.assertEqual(out["section"], "2.5 mm2")
+        self.assertEqual(out["color"], "GNYE")
+        self.assertEqual(out["section"], "1.5 mm2")
 
     def test_expand_conduit_legacy_type_as_size(self) -> None:
         out = expand_conduit(
@@ -54,19 +49,26 @@ class TestCableCatalog(unittest.TestCase):
         self.assertEqual(out["subtype"], "M20")
         self.assertEqual(out["contains"], ["L1"])
 
-    def test_validate_accepts_cable_with_subtype(self) -> None:
+    def test_validate_accepts_sheath_and_conductors(self) -> None:
         doc = {
-            "schema": "house/v1",
+            "schema": "house/v2",
             "type": "Floor",
             "elements": {"A": {"type": "Socket"}},
             "cables": {
+                "L1_1": {
+                    "type": "Conductor",
+                    "subtype": "power",
+                    "section": "1.5 mm2",
+                    "color": "BN",
+                    "from": "A.L",
+                    "to": "A.N",
+                },
                 "L1": {
                     "type": "Cable",
                     "subtype": "power",
-                    "section": "1.5 mm2",
-                    "colors": ["BN", "BU"],
+                    "contains": ["L1_1"],
                     "label": "Feed",
-                }
+                },
             },
         }
         validate_house_tree(
@@ -75,7 +77,7 @@ class TestCableCatalog(unittest.TestCase):
 
     def test_cable_type_rejected_as_element(self) -> None:
         doc = {
-            "schema": "house/v1",
+            "schema": "house/v2",
             "elements": {"Bad": {"type": "Cable", "subtype": "power"}},
         }
         with self.assertRaises(ValueError) as ctx:
@@ -83,6 +85,15 @@ class TestCableCatalog(unittest.TestCase):
                 doc, catalog=self.catalog, file_location_parts=[]
             )
         self.assertIn("cables:", str(ctx.exception).lower())
+
+    def test_v1_schema_rejected(self) -> None:
+        doc = {"schema": "house/v1", "elements": {}}
+        with self.assertRaises(ValueError) as ctx:
+            validate_house_tree(
+                doc, catalog=self.catalog, file_location_parts=[]
+            )
+        self.assertIn("house/v1", str(ctx.exception))
+        self.assertIn("house/v2", str(ctx.exception))
 
 
 if __name__ == "__main__":

@@ -1,8 +1,6 @@
 """High-level capture recipes: socket, lamp, feed.
 
-Each recipe creates cable + conduit + connection (and, for socket/lamp, the
-caller creates the destination place + element). Defaults match common Spanish
-domestic patterns (Schuko from terminal strip; LightPoint + Luminaire).
+Each recipe creates Conductor leaves + optional Cable sheath + Conduit.
 """
 from __future__ import annotations
 
@@ -46,9 +44,9 @@ FEED_DEFAULT_SECTION = "1.5 mm2"
 class WiredRunResult:
     cable_name: str
     conduit_name: str
-    from_terminals: str
-    via_ref: str
-    to_terminals: str
+    conductor_names: tuple[str, ...]
+    from_terminals: tuple[str, ...]
+    to_terminals: tuple[str, ...]
 
 
 def parse_pins(raw: str | Sequence[str] | None) -> list[str]:
@@ -65,34 +63,17 @@ def parse_pins(raw: str | Sequence[str] | None) -> list[str]:
     return [part.strip() for part in text.split(",") if part.strip()]
 
 
-def format_terminal_ref(element_path: str, pins: Sequence[str]) -> str:
-    """Build ``Box/Regleta.[3, 2, 1]`` or ``Box/Regleta.1``."""
+def format_terminal_ref(element_path: str, pin: str) -> str:
+    """Build ``Box/Regleta.1``."""
     path = str(element_path).strip().rstrip(".")
-    if not path:
-        raise ValueError("element path cannot be empty")
-    cleaned = [str(p).strip() for p in pins if str(p).strip()]
-    if not cleaned:
-        raise ValueError("pins cannot be empty")
-    if len(cleaned) == 1:
-        return f"{path}.{cleaned[0]}"
-    return f"{path}.[{', '.join(cleaned)}]"
-
-
-def format_via_ref(cable_name: str, wire_count: int) -> str:
-    if wire_count < 1:
-        raise ValueError("wire_count must be >= 1")
-    if wire_count == 1:
-        return f"{cable_name}.1"
-    indices = ", ".join(str(i) for i in range(1, wire_count + 1))
-    return f"{cable_name}.[{indices}]"
+    pin_s = str(pin).strip()
+    if not path or not pin_s:
+        raise ValueError("element path and pin are required")
+    return f"{path}.{pin_s}"
 
 
 def qualify_element_path(box_location: str, strip: str) -> str:
-    """Join ``Caja_derivacion_2`` + ``Regleta`` → ``Caja_derivacion_2/Regleta``.
-
-    If ``strip`` already contains ``/``, it is returned unchanged.
-    Local box (``.``) leaves the strip bare (``Regleta``).
-    """
+    """Join ``Caja_derivacion_2`` + ``Regleta`` → ``Caja_derivacion_2/Regleta``."""
     strip_s = str(strip).strip()
     if not strip_s:
         raise ValueError("strip / element path cannot be empty")
@@ -105,7 +86,7 @@ def qualify_element_path(box_location: str, strip: str) -> str:
 
 
 def qualify_pin_ref(box_location: str, pin_spec: str) -> str:
-    """Qualify ``Regleta.1`` or ``Regleta.[1, 2]`` under ``box_location``."""
+    """Qualify ``Regleta.1`` under ``box_location``."""
     spec = str(pin_spec).strip()
     if not spec:
         raise ValueError("pin ref cannot be empty")
@@ -132,24 +113,48 @@ def add_wired_run(
     conduit_name: str,
     from_opening: str,
     to_opening: str,
-    from_terminals: str,
-    to_terminals: str,
+    from_pins: Sequence[str],
+    to_pins: Sequence[str],
     colors: list[str],
     section: str | None = None,
     notes: str | None = None,
     label: str | None = None,
     subtype: str | None = abm.DEFAULT_CABLE_SUBTYPE,
 ) -> WiredRunResult:
-    """Add cable + conduit + one connection joining terminal arrays."""
+    """Add conductors + sheath + conduit joining terminal pairs one-to-one."""
     if not colors:
         raise ValueError("colors cannot be empty")
-    via_ref = format_via_ref(cable_name, len(colors))
-    abm.add_cable(
+    if not (len(from_pins) == len(to_pins) == len(colors)):
+        raise ValueError(
+            "from_pins, to_pins, and colors must have the same length"
+        )
+    conductor_names: list[str] = []
+    from_refs: list[str] = []
+    to_refs: list[str] = []
+    for index, (fp, tp, col) in enumerate(
+        zip(from_pins, to_pins, colors, strict=True), start=1
+    ):
+        cid = f"{cable_name}_{index}"
+        abm.add_conductor(
+            doc,
+            cid,
+            section=section,
+            color=col,
+            from_ref=str(fp),
+            to_ref=str(tp),
+            subtype=subtype,
+            label=label,
+            notes=notes,
+        )
+        conductor_names.append(cid)
+        from_refs.append(str(fp))
+        to_refs.append(str(tp))
+    abm.add_sheath(
         doc,
         cable_name,
-        section=section,
-        colors=list(colors),
+        contains=conductor_names,
         subtype=subtype,
+        section=section,
         label=label,
         notes=notes,
     )
@@ -160,18 +165,12 @@ def add_wired_run(
         from_ref=from_opening,
         to_ref=to_opening,
     )
-    abm.add_connection(
-        doc,
-        from_ref=from_terminals,
-        via_ref=via_ref,
-        to_ref=to_terminals,
-    )
     return WiredRunResult(
         cable_name=cable_name,
         conduit_name=conduit_name,
-        from_terminals=from_terminals,
-        via_ref=via_ref,
-        to_terminals=to_terminals,
+        conductor_names=tuple(conductor_names),
+        from_terminals=tuple(from_refs),
+        to_terminals=tuple(to_refs),
     )
 
 
@@ -203,16 +202,18 @@ def socket_wired_run(
             f"socket recipe expects 3 colors (phase, PE, N); got {resolved_colors!r}"
         )
     element_path = qualify_element_path(box_loc, strip)
-    from_terminals = format_terminal_ref(element_path, strip_pins)
-    to_terminals = format_terminal_ref(f"{place_id}/{element_name}", SOCKET_TERMINALS)
+    from_pins = [format_terminal_ref(element_path, p) for p in strip_pins]
+    to_pins = [
+        format_terminal_ref(f"{place_id}/{element_name}", p) for p in SOCKET_TERMINALS
+    ]
     return add_wired_run(
         doc,
         cable_name=cable_name or default_cable_name(place_id),
         conduit_name=conduit_name or default_conduit_name(place_id),
         from_opening=from_ref,
         to_opening=f"{place_id}.{to_opening}",
-        from_terminals=from_terminals,
-        to_terminals=to_terminals,
+        from_pins=from_pins,
+        to_pins=to_pins,
         colors=resolved_colors,
         section=section if section is not None else SOCKET_DEFAULT_SECTION,
         notes=notes,
@@ -268,16 +269,18 @@ def lamp_wired_run(
         )
     box_loc, _opening = split_conduit_endpoint(from_ref)
     element_path = qualify_element_path(box_loc, strip)
-    from_terminals = format_terminal_ref(element_path, strip_pins)
-    to_terminals = format_terminal_ref(f"{place_id}/{element_name}", dest_pins)
+    from_pin_refs = [format_terminal_ref(element_path, p) for p in strip_pins]
+    to_pin_refs = [
+        format_terminal_ref(f"{place_id}/{element_name}", p) for p in dest_pins
+    ]
     return add_wired_run(
         doc,
         cable_name=cable_name or default_cable_name(place_id),
         conduit_name=conduit_name or default_conduit_name(place_id),
         from_opening=from_ref,
         to_opening=f"{place_id}.{to_opening}",
-        from_terminals=from_terminals,
-        to_terminals=to_terminals,
+        from_pins=from_pin_refs,
+        to_pins=to_pin_refs,
         colors=resolved_colors,
         section=section if section is not None else LAMP_DEFAULT_SECTION,
         notes=notes,
@@ -301,21 +304,48 @@ def feed_wired_run(
     """Wire a run between two existing places (no new location)."""
     from_box, _ = split_conduit_endpoint(from_opening)
     to_box, _ = split_conduit_endpoint(to_opening)
-    from_terminals = qualify_pin_ref(from_box, from_pin)
-    to_terminals = qualify_pin_ref(to_box, to_pin)
-    # If pin specs are bare ``Regleta.1``, qualify_pin_ref already prefixed.
-    # If they look like ``Regleta`` + need array form, caller should pass
-    # ``Regleta.[1, 2]`` or ``Regleta.1``.
     resolved_colors = list(colors) if colors is not None else list(FEED_DEFAULT_COLORS)
+    # Expand bare Regleta.1 or multi ``Regleta.[1, 2]`` via parse helpers.
+    from_specs = _expand_pin_spec(qualify_pin_ref(from_box, from_pin))
+    to_specs = _expand_pin_spec(qualify_pin_ref(to_box, to_pin))
+    if len(from_specs) == 1 and len(to_specs) == 1 and len(resolved_colors) > 1:
+        # Multi-color feed with single pin pair is invalid; require matching lengths.
+        raise ValueError(
+            "feed with multiple colors needs matching from/to pin lists "
+            "(e.g. Regleta.[1, 2])"
+        )
+    if len(from_specs) != len(to_specs):
+        raise ValueError("from_pin and to_pin must expand to the same length")
+    if len(from_specs) != len(resolved_colors):
+        if len(from_specs) == 1 and len(resolved_colors) == 1:
+            pass
+        else:
+            raise ValueError(
+                "colors length must match the number of from/to pins"
+            )
+    if len(from_specs) == 1 and len(resolved_colors) == 1:
+        pass
     return add_wired_run(
         doc,
         cable_name=cable_name or name,
         conduit_name=conduit_name or f"Conducto_{name}",
         from_opening=from_opening,
         to_opening=to_opening,
-        from_terminals=from_terminals,
-        to_terminals=to_terminals,
-        colors=resolved_colors,
+        from_pins=from_specs,
+        to_pins=to_specs,
+        colors=resolved_colors
+        if len(resolved_colors) == len(from_specs)
+        else resolved_colors[: len(from_specs)],
         section=section if section is not None else FEED_DEFAULT_SECTION,
         notes=notes,
     )
+
+
+def _expand_pin_spec(spec: str) -> list[str]:
+    """``Path.1`` → [Path.1]; ``Path.[1, 2]`` → [Path.1, Path.2]."""
+    text = str(spec).strip()
+    if ".[" in text and text.endswith("]"):
+        head, _, body = text.partition(".[")
+        pins = [p.strip() for p in body[:-1].split(",") if p.strip()]
+        return [f"{head}.{p}" for p in pins]
+    return [text]

@@ -1,0 +1,27 @@
+kind: conductor_type
+id: Conductor
+icon: fa-minus
+title: Conductor / single wire
+description_es: >
+  Hilo conductor entre dos terminales (from/to). Vive bajo cables: con type
+  Conductor; no en elements.
+defaults:
+  section: "1.5 mm2"
+  color: BN
+subtypes:
+  power:
+    title: Power (AC)
+    defaults:
+      color: BN
+  earth:
+    title: Protective earth
+    defaults:
+      color: GNYE
+  dc:
+    title: DC
+    defaults:
+      color: RD
+  signal:
+    title: Signal / data
+    defaults:
+      color: WH

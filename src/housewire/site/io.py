@@ -5,7 +5,13 @@ from typing import Any
 
 import yaml
 
-from housewire.house import HOUSE_SCHEMA, PLACE_TYPES, is_house_document, is_place_type
+from housewire.house import (
+    HOUSE_SCHEMA,
+    PLACE_TYPES,
+    assert_supported_schema,
+    is_house_document,
+    is_place_type,
+)
 
 HOUSEWIRE_YAML = "housewire.yaml"
 
@@ -13,7 +19,6 @@ EMPTY_HOUSE_TEMPLATE: dict[str, Any] = {
     "schema": HOUSE_SCHEMA,
     "elements": {},
     "cables": {},
-    "connections": [],
 }
 
 
@@ -35,11 +40,14 @@ def save_yaml(path: Path, data: dict[str, Any], *, backup: bool = True) -> None:
 
 
 def require_house_document(data: dict[str, Any], path: Path | None = None) -> None:
+    hint = f": {path}" if path else ""
+    try:
+        assert_supported_schema(data)
+    except ValueError as exc:
+        raise ValueError(f"{exc}{hint}") from exc
     if not is_house_document(data):
-        hint = f": {path}" if path else ""
         raise ValueError(
-            f"Only YAML with schema house/v1 can be edited{hint}. "
-            "Use another file or migrate the document."
+            f"Only YAML with schema {HOUSE_SCHEMA} can be edited{hint}."
         )
 
 
@@ -50,7 +58,6 @@ def create_empty_house_file(path: Path) -> dict[str, Any]:
         "schema": HOUSE_SCHEMA,
         "elements": {},
         "cables": {},
-        "connections": [],
     }
     save_yaml(path, doc, backup=False)
     return doc
@@ -87,7 +94,6 @@ def create_inline_location(
         "type": str(type_id),
         "elements": {},
         "cables": {},
-        "connections": [],
     }
     if working_name:
         entry["name"] = working_name
@@ -109,7 +115,7 @@ def build_location_document(
     label: str | None = None,
     working_name: str | None = None,
 ) -> dict[str, Any]:
-    """Build a place-root house/v1 document (no I/O)."""
+    """Build a place-root house/v2 document (no I/O)."""
     if not is_place_type(type_id):
         raise ValueError(
             "type must be one of: "
@@ -130,7 +136,6 @@ def build_location_document(
         doc["notes"] = notes
     doc["elements"] = {}
     doc["cables"] = {}
-    doc["connections"] = []
     return doc
 
 

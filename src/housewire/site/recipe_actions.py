@@ -71,10 +71,12 @@ def _entry_label(defn: dict[str, Any]) -> str | None:
 
 
 def _cable_row(name: str, defn: dict[str, Any], *, defined_in: str | None = None) -> dict[str, Any]:
-    colors_raw = defn.get("colors") or []
-    colors = (
-        [str(c) for c in colors_raw] if isinstance(colors_raw, list) else []
+    contains_raw = defn.get("contains") or []
+    contains = (
+        [str(c) for c in contains_raw] if isinstance(contains_raw, list) else []
     )
+    color = defn.get("color")
+    colors = [str(color)] if color is not None and str(color).strip() else []
     row: dict[str, Any] = {
         "id": str(name),
         "name": _entry_name(defn, str(name)),
@@ -82,7 +84,11 @@ def _cable_row(name: str, defn: dict[str, Any], *, defined_in: str | None = None
         "type": defn.get("type"),
         "subtype": defn.get("subtype"),
         "section": defn.get("section"),
+        "color": str(color) if color is not None else None,
         "colors": colors,
+        "contains": contains or None,
+        "from": defn.get("from"),
+        "to": defn.get("to"),
         "notes": defn.get("notes"),
     }
     if defined_in:
@@ -128,46 +134,47 @@ def _place_wiring(
     place_doc: dict[str, Any],
     place_yaml: Path,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Cables/conduits for a place: local defs + ancestor conduits that attach here.
-
-    Ancestors are parent place nodes inside the single site YAML (not legacy
-    separate per-folder site YAML files).
-    """
+    """Cables/conduits for a place from the unified ``cables`` map."""
+    from housewire.house import load_catalog
+    from housewire.house.links import resolve_link_kind
     from housewire.site.tree import get_place_node
 
+    catalog = load_catalog()
     root = session.root.resolve()
     place_rel = str(place_yaml.relative_to(root))
     cables_by_id: dict[str, dict[str, Any]] = {}
     conduits_by_id: dict[str, dict[str, Any]] = {}
 
-    local_cables = place_doc.get("cables") or {}
-    if isinstance(local_cables, dict):
-        for name, defn in sorted(local_cables.items(), key=lambda kv: str(kv[0]).lower()):
-            if isinstance(defn, dict):
-                cables_by_id[str(name)] = _cable_row(
-                    str(name), defn, defined_in=place_rel
-                )
-
-    local_conduits = place_doc.get("conduits") or {}
-    if isinstance(local_conduits, dict):
-        for name, defn in sorted(
-            local_conduits.items(), key=lambda kv: str(kv[0]).lower()
-        ):
+    def _ingest_cables_map(cables: dict[str, Any], *, defined_in: str) -> None:
+        for name, defn in sorted(cables.items(), key=lambda kv: str(kv[0]).lower()):
             if not isinstance(defn, dict):
                 continue
             try:
-                from_ref, to_ref = conduit_endpoints(defn)
-                _from_loc, from_op = split_conduit_endpoint(from_ref)
-                _to_loc, to_op = split_conduit_endpoint(to_ref)
+                kind = resolve_link_kind(defn, catalog)
             except ValueError:
-                from_op = to_op = None
-            conduits_by_id[str(name)] = _conduit_row(
-                str(name),
-                defn,
-                defined_in=place_rel,
-                from_opening=from_op,
-                to_opening=to_op,
-            )
+                continue
+            if kind == "conduit":
+                try:
+                    from_ref, to_ref = conduit_endpoints(defn)
+                    _from_loc, from_op = split_conduit_endpoint(from_ref)
+                    _to_loc, to_op = split_conduit_endpoint(to_ref)
+                except ValueError:
+                    from_op = to_op = None
+                conduits_by_id[str(name)] = _conduit_row(
+                    str(name),
+                    defn,
+                    defined_in=defined_in,
+                    from_opening=from_op,
+                    to_opening=to_op,
+                )
+            else:
+                cables_by_id[str(name)] = _cable_row(
+                    str(name), defn, defined_in=defined_in
+                )
+
+    local_cables = place_doc.get("cables") or {}
+    if isinstance(local_cables, dict):
+        _ingest_cables_map(local_cables, defined_in=place_rel)
 
     known = _known_location_parts(root)
     try:
@@ -175,7 +182,6 @@ def _place_wiring(
     except FileNotFoundError:
         site_doc = None
 
-    # Parent places inside the site document (Parking for Parking/Caja_4, …).
     if isinstance(site_doc, dict):
         for cut in range(len(place_parts) - 1, -1, -1):
             ancestor = place_parts[:cut]
@@ -185,12 +191,14 @@ def _place_wiring(
                 continue
             cables = adoc.get("cables") or {}
             if not isinstance(cables, dict):
-                cables = {}
-            conduits = adoc.get("conduits") or {}
-            if not isinstance(conduits, dict):
                 continue
-            for name, defn in conduits.items():
+            for name, defn in cables.items():
                 if not isinstance(defn, dict):
+                    continue
+                try:
+                    if resolve_link_kind(defn, catalog) != "conduit":
+                        continue
+                except ValueError:
                     continue
                 cid = str(name)
                 if cid in conduits_by_id:

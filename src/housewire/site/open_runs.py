@@ -13,8 +13,10 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from housewire.house.conduit_ref import format_conduit_endpoint, split_conduit_endpoint
+from housewire.house.links import resolve_link_kind
+from housewire.house import load_catalog
 from housewire.site import abm
-from housewire.site.recipes import format_via_ref
+from housewire.site.recipes import _expand_pin_spec
 
 _OPEN_CABLE_RE = re.compile(r"^OPEN_Linea_(\d+)$")
 _STATUS_RE = re.compile(r"status:\s*(open|claimed|landed|pending)\b", re.I)
@@ -128,24 +130,38 @@ def add_open_cable(
     notes: str | None = None,
     cable_name: str | None = None,
 ) -> str:
-    """Create ``OPEN_*`` cable with no conduit and no connections."""
+    """Create ``OPEN_*`` sheath + conductors (no conduit, no terminal ends yet)."""
     leaves_ref = str(leaves).strip()
     split_conduit_endpoint(leaves_ref)
-    # Validate opening against current place only when leaves is local (.Op)
     loc, opening = split_conduit_endpoint(leaves_ref)
     if loc in (".", "", "self"):
         abm.require_opening_ids(doc, opening)
     name = cable_name or next_open_cable_name(doc)
     if name in (doc.get("cables") or {}):
         raise ValueError(f"Cable already exists: {name}")
-    abm.add_cable(
+    note = format_open_notes(status="open", leaves=leaves_ref, extra=notes)
+    resolved_colors = list(colors) if colors else ["BN", "BU"]
+    conductor_ids: list[str] = []
+    for index, col in enumerate(resolved_colors, start=1):
+        cid = f"{name}_{index}"
+        abm.add_conductor(
+            doc,
+            cid,
+            section=section,
+            color=col,
+            subtype=subtype,
+            label=label,
+            notes=note,
+        )
+        conductor_ids.append(cid)
+    abm.add_sheath(
         doc,
         name,
-        section=section,
-        colors=colors,
+        contains=conductor_ids,
         subtype=subtype,
+        section=section,
         label=label,
-        notes=format_open_notes(status="open", leaves=leaves_ref, extra=notes),
+        notes=note,
     )
     return name
 
@@ -160,23 +176,27 @@ def find_cable_in_doc(doc: dict[str, Any], cable_name: str) -> dict[str, Any] | 
 
 def conduits_containing(doc: dict[str, Any], cable_name: str) -> list[str]:
     hits: list[str] = []
-    conduits = doc.get("conduits") or {}
-    if not isinstance(conduits, dict):
+    cables = doc.get("cables") or {}
+    if not isinstance(cables, dict):
         return hits
-    for name, conduit in conduits.items():
-        if not isinstance(conduit, dict):
+    catalog = load_catalog()
+    for name, entry in cables.items():
+        if not isinstance(entry, dict):
             continue
-        contains = [str(c) for c in (conduit.get("contains") or [])]
+        try:
+            if resolve_link_kind(entry, catalog) != "conduit":
+                continue
+        except ValueError:
+            continue
+        contains = [str(c) for c in (entry.get("contains") or [])]
         if cable_name in contains:
             hits.append(str(name))
     return hits
 
 
 def rename_cable(doc: dict[str, Any], old_name: str, new_name: str) -> None:
-    """Rename a cable and update conduit ``contains`` + connection ``via`` refs."""
+    """Rename a cables entry and rewrite ``contains`` references."""
     cables = doc.setdefault("cables", {})
-    doc.setdefault("connections", [])
-    doc.setdefault("conduits", {})
     if not isinstance(cables, dict) or old_name not in cables:
         raise ValueError(f"Cable does not exist: {old_name}")
     if new_name in cables:
@@ -184,28 +204,33 @@ def rename_cable(doc: dict[str, Any], old_name: str, new_name: str) -> None:
     if old_name == new_name:
         return
     cables[new_name] = cables.pop(old_name)
-    conduits = doc.get("conduits") or {}
-    if isinstance(conduits, dict):
-        for conduit in conduits.values():
-            if not isinstance(conduit, dict):
-                continue
-            contains = conduit.get("contains")
-            if not isinstance(contains, list):
-                continue
-            conduit["contains"] = [
-                new_name if str(c) == old_name else c for c in contains
-            ]
-    connections = doc.get("connections") or []
-    if isinstance(connections, list):
-        for conn in connections:
-            if not isinstance(conn, dict):
-                continue
-            via = conn.get("via")
-            if via is None:
-                continue
-            via_s = str(via)
-            if via_s == old_name or via_s.startswith(old_name + "."):
-                conn["via"] = new_name + via_s[len(old_name) :]
+    # Rename child conductors OPEN_x_1 → Final_1 when renaming sheath.
+    child_renames: list[tuple[str, str]] = []
+    for name in list(cables):
+        if name == new_name:
+            continue
+        if str(name).startswith(old_name + "_"):
+            child_renames.append((str(name), new_name + str(name)[len(old_name) :]))
+    for old_c, new_c in child_renames:
+        if new_c in cables:
+            raise ValueError(f"Cable already exists: {new_c}")
+        cables[new_c] = cables.pop(old_c)
+    for entry in cables.values():
+        if not isinstance(entry, dict):
+            continue
+        contains = entry.get("contains")
+        if not isinstance(contains, list):
+            continue
+        entry["contains"] = [
+            (
+                new_name
+                if str(c) == old_name
+                else new_name + str(c)[len(old_name) :]
+                if str(c).startswith(old_name + "_")
+                else c
+            )
+            for c in contains
+        ]
 
 
 def claim_open_cable(
@@ -287,16 +312,13 @@ def land_open_cable(
     as_name: str | None = None,
     notes: str | None = None,
 ) -> str:
-    """Add electrical connection, rename off ``OPEN_``, clear open status."""
+    """Set conductor from/to, rename off ``OPEN_``, clear open status."""
     cable = find_cable_in_doc(doc, cable_name)
     if cable is None:
         raise ValueError(f"Cable does not exist: {cable_name}")
     meta = parse_open_notes(cable.get("notes"))
     if meta.status == "landed":
         raise ValueError(f"{cable_name} is already landed")
-    colors = cable.get("colors") or []
-    if not isinstance(colors, list) or not colors:
-        raise ValueError(f"{cable_name} has no colors; cannot build via indices")
     if as_name is None:
         if _OPEN_CABLE_RE.match(cable_name):
             raise ValueError(
@@ -314,13 +336,23 @@ def land_open_cable(
         rename_cable(doc, cable_name, final_name)
         cable = find_cable_in_doc(doc, final_name)
         assert cable is not None
-    via_ref = format_via_ref(final_name, len(colors))
-    abm.add_connection(
-        doc,
-        from_ref=str(from_ref).strip(),
-        via_ref=via_ref,
-        to_ref=str(to_ref).strip(),
-    )
+    contains = [str(c) for c in (cable.get("contains") or [])]
+    from_specs = _expand_pin_spec(str(from_ref).strip())
+    to_specs = _expand_pin_spec(str(to_ref).strip())
+    if len(from_specs) != len(to_specs):
+        raise ValueError("from and to must expand to the same number of terminals")
+    if len(contains) != len(from_specs):
+        raise ValueError(
+            f"{final_name} has {len(contains)} conductors but "
+            f"from/to expand to {len(from_specs)} terminals"
+        )
+    for cid, fr, tr in zip(contains, from_specs, to_specs, strict=True):
+        child = find_cable_in_doc(doc, cid)
+        if child is None:
+            raise ValueError(f"Missing conductor {cid} under {final_name}")
+        child["from"] = fr
+        child["to"] = tr
+        child.pop("notes", None)
     extra = notes if notes is not None else meta.extra
     if extra:
         cable["notes"] = str(extra).strip()
@@ -338,13 +370,20 @@ def land_open_cable(
 
 
 def list_open_cables(doc: dict[str, Any]) -> list[tuple[str, OpenMeta]]:
-    """Return open/claimed (not landed) cables in ``doc``."""
+    """Return open/claimed (not landed) sheath cables in ``doc``."""
     rows: list[tuple[str, OpenMeta]] = []
     cables = doc.get("cables") or {}
     if not isinstance(cables, dict):
         return rows
+    catalog = load_catalog()
     for name, entry in cables.items():
         if not isinstance(entry, dict):
+            continue
+        try:
+            kind = resolve_link_kind(entry, catalog)
+        except ValueError:
+            continue
+        if kind != "cable":
             continue
         meta = parse_open_notes(entry.get("notes"))
         is_open_id = bool(_OPEN_CABLE_RE.match(str(name)))
@@ -353,7 +392,6 @@ def list_open_cables(doc: dict[str, Any]) -> list[tuple[str, OpenMeta]]:
                 continue
             rows.append((str(name), meta))
     return sorted(rows, key=lambda r: r[0])
-
 
 def current_location_ref(logical_parts: list[str]) -> str:
     """Conduit location ref for the current place (``A/B`` or ``.`` at root)."""

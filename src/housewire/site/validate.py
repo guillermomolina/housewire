@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Any
 
 from housewire.house import (
-    is_house_document,
+    HOUSE_SCHEMA,
+    assert_supported_schema,
     load_catalog,
     path_location_parts,
     place_meta_from_mapping,
@@ -19,8 +20,12 @@ def validate_house_document(
     site_path: Path,
     yaml_path: Path,
 ) -> None:
-    if not is_house_document(doc):
-        raise ValueError("schema must be house/v1")
+    try:
+        assert_supported_schema(doc)
+    except ValueError:
+        raise
+    if doc.get("schema") != HOUSE_SCHEMA:
+        raise ValueError(f"schema must be {HOUSE_SCHEMA}")
     meta = place_meta_from_mapping(doc)
     if meta is not None:
         validate_location_openings(meta)

@@ -23,6 +23,7 @@ from housewire.house.conduit_ref import (
     resolve_location_ref,
     split_conduit_endpoint,
 )
+from housewire.house.links import contained_ids, resolve_link_kind
 from housewire.site.io import load_yaml
 from housewire.site.openings import declared_opening_ids, expand_opening_grid
 from housewire.site.terminals import element_terminal_layout, grid_to_api
@@ -309,6 +310,13 @@ def _build_element_nodes(
     return nodes
 
 
+def _conduit_carries(cedge: dict[str, Any], cable_name: str) -> bool:
+    """True if conduit ``contains`` the id or lists it in ``contains_all``."""
+    if cable_name in [str(c) for c in (cedge.get("contains") or [])]:
+        return True
+    return cable_name in [str(c) for c in (cedge.get("contains_all") or [])]
+
+
 def _conduit_hops_for_cable(
     cable_name: str,
     from_place: str | None,
@@ -327,8 +335,7 @@ def _conduit_hops_for_cable(
 
     adj: dict[str, list[tuple[str, dict[str, Any]]]] = {}
     for cedge in conduit_edges:
-        contains = [str(c) for c in (cedge.get("contains") or [])]
-        if cable_name not in contains:
+        if not _conduit_carries(cedge, cable_name):
             continue
         a = str(cedge.get("from") or "")
         b = str(cedge.get("to") or "")
@@ -394,32 +401,50 @@ def _build_cable_edges(
     elements: list[dict[str, Any]],
     conduit_edges: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Connection edges whose endpoints are both in ``element_ids``.
+    """Conductor edges whose endpoints are both in ``element_ids``.
 
-    When the via cable appears in one or more conduit ``contains`` lists,
-    attach the shortest conduit hop chain between the element host places
-    so the UI can route the cable along those tubes.
+    Group sibling conductors under the same sheath that share the same host
+    elements into one multi-color ``cable_edge`` for jacket drawing.
     """
+    catalog = load_catalog()
     elem_parent = {e["id"]: e.get("parent") for e in elements}
 
     sources: list[tuple[tuple[str, ...], dict[str, Any]]] = [
         (tuple(), loc_doc),
         *places,
     ]
-    edges: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str, str]] = set()
+    # Collect conductors: (sheath_or_self, from_id, to_id, from_pin, to_pin, color, name, label)
+    raw_rows: list[dict[str, Any]] = []
     for current_parts, doc in sources:
-        connections = doc.get("connections") or []
-        if not isinstance(connections, list):
-            continue
         cables = doc.get("cables") or {}
         if not isinstance(cables, dict):
-            cables = {}
-        for index, conn in enumerate(connections):
-            if not isinstance(conn, dict):
+            continue
+        # sheath -> children
+        parent_of: dict[str, str] = {}
+        for name, entry in cables.items():
+            if not isinstance(entry, dict):
                 continue
-            from_raw = str(conn.get("from") or "")
-            to_raw = str(conn.get("to") or "")
+            try:
+                kind = resolve_link_kind(entry, catalog)
+            except ValueError:
+                continue
+            if kind != "cable":
+                continue
+            for child in entry.get("contains") or []:
+                parent_of[str(child)] = str(name)
+        for name, entry in cables.items():
+            if not isinstance(entry, dict):
+                continue
+            try:
+                kind = resolve_link_kind(entry, catalog)
+            except ValueError:
+                continue
+            if kind != "conductor":
+                continue
+            from_raw = str(entry.get("from") or "")
+            to_raw = str(entry.get("to") or "")
+            if not from_raw or not to_raw:
+                continue
             from_id = _connection_end_element_id(
                 from_raw, current_parts=current_parts
             )
@@ -432,60 +457,100 @@ def _build_cable_edges(
                 continue
             if from_id == to_id:
                 continue
-            from_pin = _connection_end_pin(from_raw) or ""
-            to_pin = _connection_end_pin(to_raw) or ""
-            via = str(conn.get("via") or "")
-            cable_name = _via_cable_name(via)
-            key = (
-                cable_name or f"conn-{index}",
-                from_id,
-                to_id,
-                from_pin,
-                to_pin,
+            sheath = parent_of.get(str(name), str(name))
+            raw_n = entry.get("name")
+            raw_l = entry.get("label")
+            raw_rows.append(
+                {
+                    "sheath": sheath,
+                    "conductor": str(name),
+                    "from": from_id,
+                    "to": to_id,
+                    "from_pin": _connection_end_pin(from_raw) or "",
+                    "to_pin": _connection_end_pin(to_raw) or "",
+                    "color": str(entry.get("color") or "BK"),
+                    "name": (
+                        str(raw_n).strip()
+                        if raw_n is not None and str(raw_n).strip()
+                        else None
+                    ),
+                    "label": (
+                        str(raw_l).strip()
+                        if raw_l is not None and str(raw_l).strip()
+                        else None
+                    ),
+                }
             )
-            if key in seen:
-                continue
-            seen.add(key)
-            colors: list[str] = []
-            cable_name_disp = None
-            cable_label = None
-            cable = cables.get(cable_name)
-            if isinstance(cable, dict):
-                raw_colors = cable.get("colors") or []
-                if isinstance(raw_colors, list):
-                    colors = [str(c) for c in raw_colors]
-                raw_n = cable.get("name")
-                if raw_n is not None and str(raw_n).strip():
-                    cable_name_disp = str(raw_n).strip()
-                raw_l = cable.get("label")
-                if raw_l is not None and str(raw_l).strip():
-                    cable_label = str(raw_l).strip()
-            row: dict[str, Any] = {
-                "id": cable_name or f"connection_{index}",
-                "name": cable_name_disp,
-                "label": cable_label,
-                "from": from_id,
-                "to": to_id,
-                "from_pin": from_pin or None,
-                "to_pin": to_pin or None,
-                "via": via,
-                "colors": colors,
-                "via_indices": _via_wire_indices(via),
-            }
-            hops = _conduit_hops_for_cable(
-                cable_name,
-                elem_parent.get(from_id),
-                elem_parent.get(to_id),
-                conduit_edges,
-            )
-            if hops:
-                row["conduit_hops"] = hops
-                row["conduit"] = hops[0]["conduit"] if len(hops) == 1 else None
-                row["conduit_from"] = hops[0]["from"]
-                row["conduit_to"] = hops[-1]["to"]
-                row["from_opening"] = hops[0]["from_opening"]
-                row["to_opening"] = hops[-1]["to_opening"]
-            edges.append(row)
+
+    # Group by sheath + unordered element pair for multi-strand jacket.
+    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for row in raw_rows:
+        a, b = row["from"], row["to"]
+        key = (row["sheath"], a, b)
+        groups.setdefault(key, []).append(row)
+
+    edges: list[dict[str, Any]] = []
+    for (sheath, from_id, to_id), members in groups.items():
+        members_sorted = sorted(members, key=lambda m: m["conductor"])
+        colors = [m["color"] for m in members_sorted]
+        # Prefer sheath display name when grouping multiple strands.
+        sheath_entry = None
+        for _parts, doc in sources:
+            cables = doc.get("cables") or {}
+            if isinstance(cables, dict) and sheath in cables:
+                sheath_entry = cables[sheath]
+                break
+        name_disp = members_sorted[0]["name"]
+        label_disp = members_sorted[0]["label"]
+        if isinstance(sheath_entry, dict):
+            sn = sheath_entry.get("name")
+            sl = sheath_entry.get("label")
+            if sn is not None and str(sn).strip():
+                name_disp = str(sn).strip()
+            if sl is not None and str(sl).strip():
+                label_disp = str(sl).strip()
+        # One edge per conductor when pins differ; one multi-color when same hosts.
+        # Emit one edge with all colors; pin lists use first/last for layout.
+        from_pin = members_sorted[0]["from_pin"]
+        to_pin = members_sorted[0]["to_pin"]
+        row: dict[str, Any] = {
+            "id": sheath,
+            "name": name_disp,
+            "label": label_disp,
+            "from": from_id,
+            "to": to_id,
+            "from_pin": from_pin or None,
+            "to_pin": to_pin or None,
+            "via": sheath,
+            "colors": colors,
+            "via_indices": list(range(1, len(colors) + 1)),
+            "conductors": [m["conductor"] for m in members_sorted],
+        }
+        hops = _conduit_hops_for_cable(
+            sheath,
+            elem_parent.get(from_id),
+            elem_parent.get(to_id),
+            conduit_edges,
+        )
+        if hops is None:
+            # Also try matching via each conductor id.
+            for m in members_sorted:
+                hops = _conduit_hops_for_cable(
+                    m["conductor"],
+                    elem_parent.get(from_id),
+                    elem_parent.get(to_id),
+                    conduit_edges,
+                )
+                if hops:
+                    break
+        if hops:
+            row["conduit_hops"] = hops
+            row["conduit"] = hops[0]["conduit"] if len(hops) == 1 else None
+            row["conduit_from"] = hops[0]["from"]
+            row["conduit_to"] = hops[-1]["to"]
+            row["from_opening"] = hops[0]["from_opening"]
+            row["to_opening"] = hops[-1]["to_opening"]
+        edges.append(row)
     return edges
 
 
@@ -939,12 +1004,18 @@ def build_physical_graph(
         *[(parts, doc) for parts, doc in places],
     ]
     seen_edges: set[tuple[str, str, str, str, str]] = set()
+    catalog = load_catalog()
     for current_parts, doc in edge_sources:
-        conduits = doc.get("conduits") or {}
-        if not isinstance(conduits, dict):
+        cables = doc.get("cables") or {}
+        if not isinstance(cables, dict):
             continue
-        for conduit_name, conduit in conduits.items():
+        for conduit_name, conduit in cables.items():
             if not isinstance(conduit, dict):
+                continue
+            try:
+                if resolve_link_kind(conduit, catalog) != "conduit":
+                    continue
+            except ValueError:
                 continue
             try:
                 from_ref, to_ref = conduit_endpoints(conduit)
@@ -969,6 +1040,7 @@ def build_physical_graph(
                 continue
             seen_edges.add(key)
             contains = [str(c) for c in (conduit.get("contains") or [])]
+            all_ids = sorted(contained_ids(cables, str(conduit_name)))
             cname = conduit.get("name")
             clabel = conduit.get("label")
             edges.append(
@@ -989,6 +1061,7 @@ def build_physical_graph(
                     "from_opening": from_op,
                     "to_opening": to_op,
                     "contains": contains,
+                    "contains_all": all_ids,
                     "subtype": conduit.get("subtype"),
                 }
             )

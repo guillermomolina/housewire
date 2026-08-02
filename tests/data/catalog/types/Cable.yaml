@@ -1,27 +1,26 @@
 kind: cable_type
 id: Cable
 icon: fa-minus
-title: Cable / logical line
+title: Cable sheath / multicore jacket
 description_es: >
-  Línea lógica (uno o varios conductores) entre extremos. No es un conector;
+  Funda o mazo que agrupa conductores (contains). No conecta terminales;
   vive bajo cables:, no en elements.
 defaults:
-  section: "1.5 mm2"
-  colors: [BN, BU]
+  color: BK
 subtypes:
   power:
     title: Power (AC)
     defaults:
-      colors: [BN, BU]
+      color: BK
   earth:
-    title: Protective earth
+    title: Protective earth bundle
     defaults:
-      colors: [GNYE]
+      color: GNYE
   dc:
     title: DC
     defaults:
-      colors: [RD, BK]
+      color: BK
   signal:
     title: Signal / data
     defaults:
-      colors: [WH, BU]
+      color: GY

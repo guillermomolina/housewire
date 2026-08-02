@@ -160,7 +160,7 @@ class TestShellDispatcher(unittest.TestCase):
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
         place = get_place_node(doc, ("zona_a",))
-        cd = place["conduits"]["Conducto_Z"]
+        cd = place["cables"]["Conducto_Z"]
         self.assertEqual(cd["from"], ".N1")
         self.assertEqual(cd["to"], "Caja_derivacion_2.S1")
         self.assertEqual(cd["contains"], ["Linea_Z"])
@@ -175,7 +175,7 @@ class TestShellDispatcher(unittest.TestCase):
         _path, doc = s.ensure_doc()
         place = get_place_node(doc, ("zona_a",))
         self.assertIn("PEND_Linea_01", place["cables"])
-        self.assertIn("Conducto_paso_01", place["conduits"])
+        self.assertIn("Conducto_paso_01", place["cables"])
 
     def test_pend_with_section_via_shell(self) -> None:
         s = self._session()

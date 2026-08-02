@@ -45,26 +45,25 @@ HELP_TEXT = """HouseWire shell commands:
   add socket NAME --from BOX.Op --strip ELEMENT [--pins 3,2,1]
                                [--to-opening N1] [--colors GY,GNYE,BU] [--section 2.5]
                                [--label ...] [--notes …]
-                               DeviceBox+Socket + cable+conduit+connection (run from parent)
+                               DeviceBox+Socket + Cable/Conductor+Conduit (run from parent)
   add lamp NAME --from BOX.Op --strip ELEMENT --pins P1,P2[,P3]
                                [--to-pins 1,2,3] [--to-opening B1-1]
                                [--colors BN,GNYE,BU] [--section 1.5]
                                [--label ...] [--notes …]
-                               LightPoint+Luminaire + cable+conduit+connection
+                               LightPoint+Luminaire + Cable/Conductor+Conduit
   add feed NAME --from BOX.Op --to BOX2.Op --from-pin PATH --to-pin PATH
                                [--colors BN,BU] [--section 1.5] [--notes …]
-                               cable+conduit+connection between existing places
+                               Cable/Conductor+Conduit between existing places
   add element NAME --type T … [--set KEY=VALUE | --set KEY VALUE …]  (memory → save)
-  add cable NAME …             (memory → save)
+  add cable NAME …             sheath or conductor into cables: (memory → save)
+  add conductor NAME --from A --to B [--color BN] …
+                               leaf Conductor in cables: (memory → save)
   add conduit NAME --from A.Op --to B.Op --contains C1[,C2…]
                                [--subtype tube] [--label ...] [--notes …]
-                               (memory → save; physical layer)
+                               Conduit entry in cables: (memory → save)
   add pend …
-  add connection --from F --via V --to T
-                               (memory → save; electrical layer)
   add dir <path>                 mkdir -p (prefer add location for places)
   rm element|cable NAME
-  rm connection <index>
   rm file <site.yaml>
   rm dir <path>                  only if empty
   save [--force]                 write all dirty YAML to disk (validate)
@@ -79,8 +78,8 @@ HELP_TEXT = """HouseWire shell commands:
 def _parse_add_args(argv: list[str]) -> tuple[str, list[str]]:
     if not argv:
         raise ValueError(
-            "add requires a subcommand: location, element, cable, conduit, pend, "
-            "connection, socket, lamp, feed, dir"
+            "add requires a subcommand: location, element, cable, conductor, "
+            "conduit, pend, socket, lamp, feed, dir"
         )
     return argv[0], argv[1:]
 
@@ -238,7 +237,7 @@ def cmd_add_feed(session: SiteSession, rest: list[str]) -> int:
 
 def _parse_rm_args(argv: list[str]) -> tuple[str, list[str]]:
     if not argv:
-        raise ValueError("rm requires a subcommand: element, cable, connection, file, dir")
+        raise ValueError("rm requires a subcommand: element, cable, file, dir")
     return argv[0], argv[1:]
 
 
@@ -685,21 +684,53 @@ def cmd_add(session: SiteSession, argv: list[str]) -> int:
         p = argparse.ArgumentParser(prog="add cable", add_help=False)
         p.add_argument("name")
         p.add_argument("--section", default=None)
-        p.add_argument("--colors", default=None)
+        p.add_argument("--colors", default=None, help="One or more colors → sheath+conductors")
+        p.add_argument("--color", default=None, help="Single conductor color")
+        p.add_argument("--from", dest="from_ref", default=None)
+        p.add_argument("--to", dest="to_ref", default=None)
         p.add_argument("--subtype", default=None)
         p.add_argument("--kind", default=None, help="legacy alias of --subtype")
         p.add_argument("--label")
         p.add_argument("--notes")
         args = p.parse_args(rest)
-        abm.add_cable(
-            place,
-            args.name,
-            subtype=args.subtype or args.kind or abm.DEFAULT_CABLE_SUBTYPE,
-            section=args.section,
-            colors=_colors_list(args.colors) if args.colors else None,
-            label=args.label,
-            notes=args.notes,
-        )
+        subtype = args.subtype or args.kind or abm.DEFAULT_CABLE_SUBTYPE
+        colors = _colors_list(args.colors) if args.colors else None
+        if colors and len(colors) > 1:
+            conductor_ids: list[str] = []
+            for index, col in enumerate(colors, start=1):
+                cid = f"{args.name}_{index}"
+                abm.add_conductor(
+                    place,
+                    cid,
+                    subtype=subtype,
+                    section=args.section,
+                    color=col,
+                    label=args.label,
+                    notes=args.notes,
+                )
+                conductor_ids.append(cid)
+            abm.add_sheath(
+                place,
+                args.name,
+                contains=conductor_ids,
+                subtype=subtype,
+                section=args.section,
+                label=args.label,
+                notes=args.notes,
+            )
+        else:
+            color = args.color or (colors[0] if colors else None)
+            abm.add_conductor(
+                place,
+                args.name,
+                subtype=subtype,
+                section=args.section,
+                color=color,
+                from_ref=args.from_ref,
+                to_ref=args.to_ref,
+                label=args.label,
+                notes=args.notes,
+            )
         session.mark_dirty(path)
         print(f"Cable {args.name} added.")
         return 0
@@ -733,18 +764,36 @@ def cmd_add(session: SiteSession, argv: list[str]) -> int:
         session.mark_dirty(path)
         print(f"Conduit {args.name} added.")
         return 0
-    if kind == "connection":
-        p = argparse.ArgumentParser(prog="add connection", add_help=False)
+    if kind == "conductor":
+        p = argparse.ArgumentParser(prog="add conductor", add_help=False)
+        p.add_argument("name")
         p.add_argument("--from", dest="from_ref", required=True)
-        p.add_argument("--via", dest="via_ref", required=True)
         p.add_argument("--to", dest="to_ref", required=True)
+        p.add_argument("--color", required=True)
+        p.add_argument("--section", default=None)
+        p.add_argument("--subtype", default=None)
+        p.add_argument("--label")
+        p.add_argument("--notes")
         args = p.parse_args(rest)
-        abm.add_connection(
-            place, from_ref=args.from_ref, via_ref=args.via_ref, to_ref=args.to_ref
+        abm.add_conductor(
+            place,
+            args.name,
+            from_ref=args.from_ref,
+            to_ref=args.to_ref,
+            color=args.color,
+            section=args.section,
+            subtype=args.subtype or abm.DEFAULT_CABLE_SUBTYPE,
+            label=args.label,
+            notes=args.notes,
         )
         session.mark_dirty(path)
-        print("Connection added.")
+        print(f"Conductor {args.name} added.")
         return 0
+    if kind == "connection":
+        raise ValueError(
+            "add connection is removed in house/v2; "
+            "use add conductor --from … --to … --color …"
+        )
     raise ValueError(f"Unknown add kind: {kind}")
 
 
@@ -787,12 +836,10 @@ def cmd_rm(session: SiteSession, argv: list[str]) -> int:
         print(f"Cable {rest[0]} deleted.")
         return 0
     if kind == "connection":
-        if not rest:
-            raise ValueError("rm connection requires an index")
-        abm.rm_connection(place, int(rest[0]))
-        session.mark_dirty(path)
-        print(f"Connection [{rest[0]}] deleted.")
-        return 0
+        raise ValueError(
+            "rm connection is removed in house/v2; "
+            "use rm cable <ConductorOrSheathId>"
+        )
     raise ValueError(f"Unknown rm kind: {kind}")
 
 

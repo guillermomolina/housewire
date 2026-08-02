@@ -25,10 +25,10 @@ class TestIO(unittest.TestCase):
 
     def test_create_empty_file_has_schema(self) -> None:
         doc = load_yaml(self.yaml)
-        self.assertEqual(doc.get("schema"), "house/v1")
+        self.assertEqual(doc.get("schema"), "house/v2")
         self.assertIsInstance(doc.get("elements"), dict)
         self.assertIsInstance(doc.get("cables"), dict)
-        self.assertIsInstance(doc.get("connections"), list)
+        self.assertIsInstance(doc.get("cables"), dict)
 
     def test_create_empty_file_already_exists_raises(self) -> None:
         with self.assertRaises(FileExistsError):

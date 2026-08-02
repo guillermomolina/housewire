@@ -4,8 +4,8 @@ icon: fa-grip-lines-vertical
 title: Conduit / hose
 description_es: >
   Tubo o manguera entre locations (capa fisica). Une aberturas con from/to
-  (LocationRef.OpeningId); contains lista los cables que viajan dentro.
-  No es un conductor electrico; vive bajo conduits:, no en elements.
+  (LocationRef.OpeningId); contains lista cables/conductores que viajan dentro.
+  Vive bajo cables: con type Conduit, no en elements.
 defaults: {}
 subtypes:
   tube:

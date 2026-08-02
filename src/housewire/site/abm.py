@@ -8,12 +8,16 @@ import yaml
 
 from housewire.house import (
     DEFAULT_CABLE_TYPE,
+    DEFAULT_CONDUCTOR_TYPE,
     DEFAULT_CONDUIT_TYPE,
     expand_cable,
+    expand_conductor,
+    expand_conduit,
     is_place_type,
     load_catalog,
     place_meta_from_mapping,
 )
+from housewire.house.links import contained_ids, resolve_link_kind
 from housewire.site.io import load_yaml, require_house_document, save_yaml
 from housewire.site.openings import (
     declared_opening_ids,
@@ -26,14 +30,13 @@ _ELEMENT_REF_RE = re.compile(r"(?:^|[./\[])([A-Za-z_][A-Za-z0-9_]*)")
 _PEND_CABLE_RE = re.compile(r"^PEND_Linea_(\d+)$")
 
 DEFAULT_CABLE_SECTION = "1.5 mm2"
-DEFAULT_CABLE_COLORS = ["BN", "BU"]
+DEFAULT_CONDUCTOR_COLOR = "BN"
 DEFAULT_CABLE_SUBTYPE = "power"
 DEFAULT_CONDUIT_SUBTYPE = "tube"
+DEFAULT_SHEATH_COLOR = "BK"
 
 # Structural keys — use add/rm instead of set.
-RESERVED_SET_KEYS = frozenset(
-    {"schema", "elements", "cables", "connections", "conduits"}
-)
+RESERVED_SET_KEYS = frozenset({"schema", "elements", "cables"})
 
 SetTarget = Literal["place", "element"]
 
@@ -69,8 +72,6 @@ def require_opening_ids(doc: dict[str, Any], *opening_ids: str) -> None:
 def _ensure_maps(doc: dict[str, Any]) -> None:
     doc.setdefault("elements", {})
     doc.setdefault("cables", {})
-    doc.setdefault("connections", [])
-    doc.setdefault("conduits", {})
 
 
 def parse_set_value(raw: str) -> Any:
@@ -223,40 +224,43 @@ def normalize_section(raw: str | None, *, default: str | None = None) -> str:
     return f"{text} mm2"
 
 
-def _cable_catalog_defaults(
+def _conductor_catalog_defaults(
     *,
-    type_id: str = DEFAULT_CABLE_TYPE,
+    type_id: str = DEFAULT_CONDUCTOR_TYPE,
     subtype: str | None = DEFAULT_CABLE_SUBTYPE,
 ) -> dict[str, Any]:
-    """Resolve section/colors defaults from catalog for ABM writers."""
-    expanded = expand_cable(
+    """Resolve section/color defaults from catalog for conductors."""
+    expanded = expand_conductor(
         {"type": type_id, **({"subtype": subtype} if subtype else {})},
         load_catalog(),
     )
     return {
         "section": expanded.get("section") or DEFAULT_CABLE_SECTION,
-        "colors": list(expanded.get("colors") or DEFAULT_CABLE_COLORS),
+        "color": str(expanded.get("color") or DEFAULT_CONDUCTOR_COLOR),
     }
 
 
-def _connection_text(conn: object) -> str:
-    if isinstance(conn, dict):
-        return " ".join(str(conn.get(k, "")) for k in ("from", "via", "to"))
-    if isinstance(conn, list):
-        parts: list[str] = []
-        for endpoint in conn:
-            if isinstance(endpoint, dict):
-                parts.extend(str(k) for k in endpoint)
-        return " ".join(parts)
-    return str(conn)
-
-
-def connections_referencing_element(doc: dict[str, Any], element_name: str) -> list[int]:
-    hits: list[int] = []
-    for index, conn in enumerate(doc.get("connections") or []):
-        text = _connection_text(conn)
-        if re.search(rf"(?<![A-Za-z0-9_]){re.escape(element_name)}(?=\.|\[|$)", text):
-            hits.append(index)
+def conductors_referencing_element(doc: dict[str, Any], element_name: str) -> list[str]:
+    """Return conductor ids whose from/to mention ``element_name``."""
+    hits: list[str] = []
+    cables = doc.get("cables") or {}
+    if not isinstance(cables, dict):
+        return hits
+    catalog = load_catalog()
+    for name, entry in cables.items():
+        if not isinstance(entry, dict):
+            continue
+        try:
+            kind = resolve_link_kind(entry, catalog)
+        except ValueError:
+            continue
+        if kind != "conductor":
+            continue
+        text = f"{entry.get('from', '')} {entry.get('to', '')}"
+        if re.search(
+            rf"(?<![A-Za-z0-9_]){re.escape(element_name)}(?=\.|\[|/|$)", text
+        ):
+            hits.append(str(name))
     return hits
 
 
@@ -314,52 +318,176 @@ def rm_element(doc: dict[str, Any], name: str) -> None:
     elements = doc["elements"]
     if not isinstance(elements, dict) or name not in elements:
         raise ValueError(f"Element does not exist: {name}")
-    refs = connections_referencing_element(doc, name)
+    refs = conductors_referencing_element(doc, name)
     if refs:
         raise ValueError(
-            f"Cannot delete {name}: referenced in connections {refs}. "
-            "Delete those connections first."
+            f"Cannot delete {name}: referenced by conductors {refs}. "
+            "Delete those conductors first."
         )
     del elements[name]
 
 
-def add_cable(
+def add_sheath(
     doc: dict[str, Any],
     name: str,
     *,
+    contains: list[str],
     type_id: str = DEFAULT_CABLE_TYPE,
     subtype: str | None = DEFAULT_CABLE_SUBTYPE,
-    kind: str | None = None,
+    color: str | None = None,
     section: str | None = None,
-    colors: list[str] | None = None,
     label: str | None = None,
     notes: str | None = None,
 ) -> None:
+    """Add a Cable sheath entry (groups conductors / nested sheaths)."""
     _ensure_maps(doc)
     cables = doc["cables"]
     if not isinstance(cables, dict):
         raise ValueError("cables must be a map")
     if name in cables:
         raise ValueError(f"Cable already exists: {name}")
-    resolved_subtype = subtype if kind is None else kind
-    defaults = _cable_catalog_defaults(type_id=type_id, subtype=resolved_subtype)
-    resolved_colors = list(colors) if colors is not None else list(defaults["colors"])
-    if not resolved_colors:
-        raise ValueError("colors cannot be empty")
+    if not contains:
+        raise ValueError("contains cannot be empty")
+    for ref in contains:
+        if str(ref) not in cables:
+            raise ValueError(f"Cable sheath references missing cables entry: {ref}")
     entry: dict[str, Any] = {
         "type": type_id,
-        "section": normalize_section(section, default=str(defaults["section"])),
-        "colors": resolved_colors,
+        "contains": [str(c) for c in contains],
+        "color": str(color or DEFAULT_SHEATH_COLOR),
     }
-    if resolved_subtype is not None:
-        entry["subtype"] = resolved_subtype
+    if subtype is not None:
+        entry["subtype"] = subtype
+    if section is not None:
+        entry["section"] = normalize_section(section)
     if label:
         entry["label"] = label
     if notes:
         entry["notes"] = notes
-    # Validate against catalog (raises on bad type).
     expand_cable(entry, load_catalog())
     cables[name] = entry
+
+
+def add_conductor(
+    doc: dict[str, Any],
+    name: str,
+    *,
+    color: str | None = None,
+    section: str | None = None,
+    from_ref: str | None = None,
+    to_ref: str | None = None,
+    type_id: str = DEFAULT_CONDUCTOR_TYPE,
+    subtype: str | None = DEFAULT_CABLE_SUBTYPE,
+    label: str | None = None,
+    notes: str | None = None,
+) -> None:
+    """Add a Conductor leaf (optional from/to for pending/open runs)."""
+    _ensure_maps(doc)
+    cables = doc["cables"]
+    if not isinstance(cables, dict):
+        raise ValueError("cables must be a map")
+    if name in cables:
+        raise ValueError(f"Cable already exists: {name}")
+    defaults = _conductor_catalog_defaults(type_id=type_id, subtype=subtype)
+    entry: dict[str, Any] = {
+        "type": type_id,
+        "section": normalize_section(section, default=str(defaults["section"])),
+        "color": str(color or defaults["color"]),
+    }
+    if subtype is not None:
+        entry["subtype"] = subtype
+    if from_ref is not None:
+        entry["from"] = str(from_ref).strip()
+    if to_ref is not None:
+        entry["to"] = str(to_ref).strip()
+    if label:
+        entry["label"] = label
+    if notes:
+        entry["notes"] = notes
+    expand_conductor(entry, load_catalog())
+    cables[name] = entry
+
+
+def add_cable(
+    doc: dict[str, Any],
+    name: str,
+    *,
+    type_id: str = DEFAULT_CONDUCTOR_TYPE,
+    subtype: str | None = DEFAULT_CABLE_SUBTYPE,
+    kind: str | None = None,
+    section: str | None = None,
+    color: str | None = None,
+    colors: list[str] | None = None,
+    from_ref: str | None = None,
+    to_ref: str | None = None,
+    contains: list[str] | None = None,
+    label: str | None = None,
+    notes: str | None = None,
+) -> None:
+    """Add a ``cables`` entry.
+
+    - ``type: Conductor`` (default): leaf wire; optional ``colors[0]`` as color.
+    - ``type: Cable``: sheath; requires ``contains``.
+    - ``type: Conduit``: use :func:`add_conduit`.
+    """
+    resolved_subtype = subtype if kind is None else kind
+    resolved_type = str(type_id)
+    if resolved_type == DEFAULT_CONDUIT_TYPE:
+        raise ValueError("Use add_conduit for type: Conduit")
+    if resolved_type == DEFAULT_CABLE_TYPE or contains is not None:
+        if not contains:
+            raise ValueError("Cable sheath requires contains")
+        add_sheath(
+            doc,
+            name,
+            contains=contains,
+            type_id=DEFAULT_CABLE_TYPE,
+            subtype=resolved_subtype,
+            color=color or (colors[0] if colors else None),
+            section=section,
+            label=label,
+            notes=notes,
+        )
+        return
+    if colors and len(colors) > 1:
+        conductor_ids: list[str] = []
+        for index, col in enumerate(colors, start=1):
+            cid = f"{name}_{index}"
+            add_conductor(
+                doc,
+                cid,
+                type_id=DEFAULT_CONDUCTOR_TYPE,
+                subtype=resolved_subtype,
+                section=section,
+                color=col,
+                label=label,
+                notes=notes,
+            )
+            conductor_ids.append(cid)
+        add_sheath(
+            doc,
+            name,
+            contains=conductor_ids,
+            subtype=resolved_subtype,
+            section=section,
+            label=label,
+            notes=notes,
+        )
+        return
+    if colors and color is None:
+        color = colors[0]
+    add_conductor(
+        doc,
+        name,
+        type_id=DEFAULT_CONDUCTOR_TYPE,
+        subtype=resolved_subtype,
+        section=section,
+        color=color,
+        from_ref=from_ref,
+        to_ref=to_ref,
+        label=label,
+        notes=notes,
+    )
 
 
 def rm_cable(doc: dict[str, Any], name: str) -> None:
@@ -367,24 +495,14 @@ def rm_cable(doc: dict[str, Any], name: str) -> None:
     cables = doc["cables"]
     if not isinstance(cables, dict) or name not in cables:
         raise ValueError(f"Cable does not exist: {name}")
-    refs: list[int] = []
-    for index, conn in enumerate(doc.get("connections") or []):
-        if name in _connection_text(conn):
-            refs.append(index)
-    if refs:
-        raise ValueError(
-            f"Cannot delete cable {name}: referenced in connections {refs}."
-        )
-    conduits = doc.get("conduits") or {}
-    if isinstance(conduits, dict):
-        for conduit_name, conduit in conduits.items():
-            if not isinstance(conduit, dict):
-                continue
-            contains = [str(c) for c in (conduit.get("contains") or [])]
-            if name in contains:
-                raise ValueError(
-                    f"Cannot delete cable {name}: referenced in conduit {conduit_name}."
-                )
+    for other_name, entry in cables.items():
+        if other_name == name or not isinstance(entry, dict):
+            continue
+        contains = [str(c) for c in (entry.get("contains") or [])]
+        if name in contains:
+            raise ValueError(
+                f"Cannot delete {name}: referenced in contains of {other_name}."
+            )
     del cables[name]
 
 
@@ -412,23 +530,22 @@ def add_conduit(
     notes: str | None = None,
     kind: str | None = None,
 ) -> None:
+    """Add a Conduit entry into the unified ``cables`` map."""
     _ensure_maps(doc)
-    conduits = doc["conduits"]
-    if not isinstance(conduits, dict):
-        raise ValueError("conduits must be a map")
-    if name in conduits:
-        raise ValueError(f"Conduit already exists: {name}")
+    cables = doc["cables"]
+    if not isinstance(cables, dict):
+        raise ValueError("cables must be a map")
+    if name in cables:
+        raise ValueError(f"Cable already exists: {name}")
     if not contains:
         raise ValueError("contains cannot be empty")
-    cables = doc.get("cables") or {}
     for cable_ref in contains:
         if str(cable_ref) not in cables:
-            raise ValueError(f"Conduit references missing cable: {cable_ref}")
+            raise ValueError(f"Conduit references missing cables entry: {cable_ref}")
     from housewire.house.conduit_ref import split_conduit_endpoint
 
     split_conduit_endpoint(from_ref)
     split_conduit_endpoint(to_ref)
-    # Legacy: kind was always "conduit"; type_id used to mean physical size.
     resolved_type = type_id
     resolved_subtype = subtype
     if kind is not None and kind != "conduit" and resolved_subtype is None:
@@ -445,10 +562,8 @@ def add_conduit(
         entry["label"] = label
     if notes:
         entry["notes"] = notes
-    from housewire.house import expand_conduit
-
     expand_conduit(entry, load_catalog())
-    conduits[name] = entry
+    cables[name] = entry
 
 
 def add_pending_cable(
@@ -463,63 +578,53 @@ def add_pending_cable(
     label: str | None = None,
     notes: str | None = None,
 ) -> tuple[str, str]:
-    """Create PEND_* cable + pass-through conduit without connections.
+    """Create PEND_* sheath + conductors + pass-through conduit.
 
-    Returns (cable_name, conduit_name).
+    Returns (sheath_name, conduit_name).
     """
     enter_s = str(enter).strip()
     exit_s = str(exit).strip()
     if not enter_s or not exit_s:
         raise ValueError("enter and exit (openings) are required")
     require_opening_ids(doc, enter_s, exit_s)
-    cable_name = next_pend_cable_name(doc)
-    suffix = cable_name.rsplit("_", 1)[-1]
+    sheath_name = next_pend_cable_name(doc)
+    suffix = sheath_name.rsplit("_", 1)[-1]
     conduit_name = f"Conducto_paso_{suffix}"
     note_bits = [f"status: pending; enters via {enter_s} and exits via {exit_s}"]
     if notes:
         note_bits.append(str(notes))
-    add_cable(
+    note = "; ".join(note_bits)
+    resolved_colors = list(colors) if colors else ["BN", "BU"]
+    conductor_ids: list[str] = []
+    for index, col in enumerate(resolved_colors, start=1):
+        cid = f"{sheath_name}_{index}"
+        add_conductor(
+            doc,
+            cid,
+            subtype=subtype if kind is None else kind,
+            section=section,
+            color=col,
+            notes=note,
+            label=label,
+        )
+        conductor_ids.append(cid)
+    add_sheath(
         doc,
-        cable_name,
-        subtype=subtype,
-        kind=kind,
-        section=section,
-        colors=colors,
+        sheath_name,
+        contains=conductor_ids,
+        subtype=subtype if kind is None else kind,
+        notes=note,
         label=label,
-        notes="; ".join(note_bits),
+        section=section,
     )
     add_conduit(
         doc,
         conduit_name,
-        contains=[cable_name],
+        contains=[sheath_name],
         from_ref=f".{enter_s}",
         to_ref=f".{exit_s}",
     )
-    return cable_name, conduit_name
-
-
-def add_connection(
-    doc: dict[str, Any],
-    *,
-    from_ref: str,
-    via_ref: str,
-    to_ref: str,
-) -> None:
-    _ensure_maps(doc)
-    connections = doc["connections"]
-    if not isinstance(connections, list):
-        raise ValueError("connections must be a list")
-    connections.append({"from": from_ref, "via": via_ref, "to": to_ref})
-
-
-def rm_connection(doc: dict[str, Any], index: int) -> None:
-    _ensure_maps(doc)
-    connections = doc["connections"]
-    if not isinstance(connections, list):
-        raise ValueError("connections must be a list")
-    if index < 0 or index >= len(connections):
-        raise ValueError(f"Invalid connection index: {index}")
-    del connections[index]
+    return sheath_name, conduit_name
 
 
 def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str | None = None) -> str:
@@ -567,9 +672,8 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
 
     elements = doc.get("elements") or {}
     cables = doc.get("cables") or {}
-    connections = doc.get("connections") or []
-    conduits = doc.get("conduits") or {}
-    lines.append("# Electrical layer: elements ↔ cables/connections")
+    catalog = load_catalog()
+    lines.append("# elements + unified cables (Conduit / Cable / Conductor)")
     lines.append(f"elements ({len(elements)}):")
     for name in sorted(elements):
         t = elements[name].get("type", "?") if isinstance(elements[name], dict) else "?"
@@ -577,30 +681,26 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
     lines.append(f"cables ({len(cables)}):")
     for name in sorted(cables):
         cb = cables[name] if isinstance(cables[name], dict) else {}
-        t = cb.get("type", "Cable")
-        st = cb.get("subtype") or cb.get("kind")
+        t = cb.get("type", "?")
+        st = cb.get("subtype")
         suffix = f"{t}/{st}" if st else str(t)
-        lines.append(f"  {name} ({suffix})")
-    lines.append(f"connections ({len(connections)}):")
-    for i, conn in enumerate(connections):
-        lines.append(f"  [{i}] {conn}")
-    lines.append("")
-    lines.append("# Physical layer: locations ↔ conduits (openings)")
-    lines.append(f"conduits ({len(conduits)}):")
-    for name in sorted(conduits):
-        cd = conduits[name] if isinstance(conduits[name], dict) else {}
-        t = cd.get("type", "Conduit")
-        st = cd.get("subtype")
-        if st is None and cd.get("kind") and cd.get("kind") != "conduit":
-            st = cd.get("kind")
-        elif st is None and cd.get("type") and cd.get("type") != "Conduit" and cd.get("kind") == "conduit":
-            # legacy type-as-size
-            t, st = "Conduit", cd.get("type")
-        suffix = f"{t}/{st}" if st else str(t)
-        ends = ""
-        if cd.get("from") is not None and cd.get("to") is not None:
-            ends = f": {cd['from']} → {cd['to']}"
-        contains = cd.get("contains") or []
-        contains_s = f" [{', '.join(str(c) for c in contains)}]" if contains else ""
-        lines.append(f"  {name} ({suffix}){ends}{contains_s}")
+        extra = ""
+        try:
+            kind = resolve_link_kind(cb, catalog) if isinstance(cb, dict) else ""
+        except ValueError:
+            kind = ""
+        if kind == "conductor":
+            ends = ""
+            if cb.get("from") and cb.get("to"):
+                ends = f": {cb['from']} → {cb['to']}"
+            col = cb.get("color")
+            extra = f" [{col}]{ends}" if col else ends
+        elif kind in ("cable", "conduit"):
+            contains = cb.get("contains") or []
+            contains_s = f" [{', '.join(str(c) for c in contains)}]" if contains else ""
+            ends = ""
+            if kind == "conduit" and cb.get("from") and cb.get("to"):
+                ends = f": {cb['from']} → {cb['to']}"
+            extra = f"{ends}{contains_s}"
+        lines.append(f"  {name} ({suffix}){extra}")
     return "\n".join(lines)

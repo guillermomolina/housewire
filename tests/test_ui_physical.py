@@ -51,25 +51,23 @@ def _build_parking_wiring_site(root: Path) -> None:
         from_ref="Caja_4.W2",
         to_ref="Enchufe_1.N1",
     )
-    abm.add_connection(
-        parking,
-        from_ref="Caja_4/Regleta.1",
-        via_ref="Linea_1.1",
-        to_ref="Enchufe_1/Socket.L",
-    )
+    parking["cables"]["Linea_1_1"]["from"] = "Caja_4/Regleta.1"
+    parking["cables"]["Linea_1_1"]["to"] = "Enchufe_1/Socket.L"
+    parking["cables"]["Linea_1_2"]["from"] = "Caja_4/Regleta.3"
+    parking["cables"]["Linea_1_2"]["to"] = "Enchufe_1/Socket.N"
     save_site(root, doc)
 
 
 class TestViewLayout(unittest.TestCase):
     def test_set_get_physical_position(self) -> None:
-        place: dict = {"schema": "house/v1", "type": "JunctionBox"}
+        place: dict = {"schema": "house/v2", "type": "JunctionBox"}
         self.assertIsNone(get_physical_position(place))
         set_physical_position(place, 10, 20, rotation=90)
         self.assertEqual(get_physical_position(place), (10.0, 20.0))
         self.assertEqual(place["view"]["physical"]["rotation"], 90)
 
     def test_physical_position_rejects_negatives(self) -> None:
-        place: dict = {"schema": "house/v1", "type": "JunctionBox"}
+        place: dict = {"schema": "house/v2", "type": "JunctionBox"}
         with self.assertRaises(ValueError):
             set_physical_position(place, -1, 10)
         with self.assertRaises(ValueError):
@@ -78,7 +76,7 @@ class TestViewLayout(unittest.TestCase):
         self.assertIsNone(get_physical_position(place))
 
     def test_page_defaults_and_set(self) -> None:
-        place: dict = {"schema": "house/v1", "type": "Room"}
+        place: dict = {"schema": "house/v2", "type": "Room"}
         page = get_physical_page(place)
         self.assertEqual(page["representation"], "tube")
         self.assertEqual(page["width"], 2000.0)
@@ -275,12 +273,8 @@ class TestPhysicalGraph(unittest.TestCase):
                 from_ref="B.S1",
                 to_ref="C.N1",
             )
-            abm.add_connection(
-                parking,
-                from_ref="A/Regleta.1",
-                via_ref="Linea_AC.1",
-                to_ref="C/Regleta.1",
-            )
+            parking["cables"]["Linea_AC"]["from"] = "A/Regleta.1"
+            parking["cables"]["Linea_AC"]["to"] = "C/Regleta.1"
             save_site(root, doc)
 
             graph = build_physical_graph(root, "Parking")

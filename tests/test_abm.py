@@ -59,12 +59,13 @@ class TestABMElements(unittest.TestCase):
         with self.assertRaises(ValueError):
             abm.rm_element(doc, "NO_EXISTE")
 
-    def test_rm_element_with_connection_raises(self) -> None:
+    def test_rm_element_with_conductor_raises(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
         abm.add_element(doc, "A", type_id="MCB", subtype="C10")
         abm.add_element(doc, "B", type_id="MCB", subtype="C10")
-        abm.add_cable(doc, "L", section="1.5 mm2", colors=["BN"])
-        abm.add_connection(doc, from_ref="A.1", via_ref="L.1", to_ref="B.1")
+        abm.add_conductor(
+            doc, "L", section="1.5 mm2", color="BN", from_ref="A.1", to_ref="B.1"
+        )
         with self.assertRaises(ValueError):
             abm.rm_element(doc, "A")
 
@@ -123,15 +124,18 @@ class TestABMCables(unittest.TestCase):
         doc = abm.load_editable(self.yaml, self.root)
         abm.add_cable(doc, "L1", section="1.5 mm2", colors=["BN", "BU"])
         self.assertIn("L1", doc["cables"])
-        self.assertEqual(doc["cables"]["L1"]["colors"], ["BN", "BU"])
+        self.assertEqual(doc["cables"]["L1"]["type"], "Cable")
+        self.assertEqual(doc["cables"]["L1"]["contains"], ["L1_1", "L1_2"])
+        self.assertEqual(doc["cables"]["L1_1"]["color"], "BN")
+        self.assertEqual(doc["cables"]["L1_2"]["color"], "BU")
 
     def test_add_cable_defaults(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
         abm.add_cable(doc, "L_def")
-        self.assertEqual(doc["cables"]["L_def"]["type"], "Cable")
+        self.assertEqual(doc["cables"]["L_def"]["type"], "Conductor")
         self.assertEqual(doc["cables"]["L_def"]["subtype"], "power")
         self.assertEqual(doc["cables"]["L_def"]["section"], "1.5 mm2")
-        self.assertEqual(doc["cables"]["L_def"]["colors"], ["BN", "BU"])
+        self.assertEqual(doc["cables"]["L_def"]["color"], "BN")
 
     def test_normalize_section_bare_number(self) -> None:
         self.assertEqual(abm.normalize_section("2.5"), "2.5 mm2")
@@ -142,10 +146,11 @@ class TestABMCables(unittest.TestCase):
         abm.add_cable(doc, "L2", section="2.5 mm2", colors=["BN"], notes="hilos sueltos")
         self.assertEqual(doc["cables"]["L2"]["notes"], "hilos sueltos")
 
-    def test_add_cable_empty_colors_raises(self) -> None:
+    def test_add_cable_empty_colors_uses_catalog_default(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
-        with self.assertRaises(ValueError):
-            abm.add_cable(doc, "L3", section="1.5 mm2", colors=[])
+        abm.add_cable(doc, "L3", section="1.5 mm2", colors=[])
+        self.assertEqual(doc["cables"]["L3"]["type"], "Conductor")
+        self.assertEqual(doc["cables"]["L3"]["color"], "BN")
 
     def test_add_cable_duplicate_raises(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
@@ -164,14 +169,11 @@ class TestABMCables(unittest.TestCase):
         with self.assertRaises(ValueError):
             abm.rm_cable(doc, "NO_EXISTE")
 
-    def test_rm_cable_referenced_in_connection_raises(self) -> None:
+    def test_rm_cable_referenced_in_contains_raises(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
-        abm.add_element(doc, "A", type_id="MCB", subtype="C10")
-        abm.add_element(doc, "B", type_id="MCB", subtype="C10")
-        abm.add_cable(doc, "L1", section="1.5 mm2", colors=["BN"])
-        abm.add_connection(doc, from_ref="A.1", via_ref="L1.1", to_ref="B.1")
+        abm.add_cable(doc, "L1", section="1.5 mm2", colors=["BN", "BU"])
         with self.assertRaises(ValueError):
-            abm.rm_cable(doc, "L1")
+            abm.rm_cable(doc, "L1_1")
 
 # ---------------------------------------------------------------------------
 # abm – pending cables / conduits
@@ -190,16 +192,15 @@ class TestABMPendingAndConduits(unittest.TestCase):
         self.assertEqual(cable, "PEND_Linea_01")
         self.assertEqual(conduit, "Conducto_paso_01")
         self.assertIn(cable, doc["cables"])
-        self.assertIn(conduit, doc["conduits"])
+        self.assertIn(conduit, doc["cables"])
         self.assertIn("status: pending", doc["cables"][cable]["notes"])
         self.assertIn("B1", doc["cables"][cable]["notes"])
         self.assertEqual(doc["cables"][cable]["type"], "Cable")
-        self.assertEqual(doc["conduits"][conduit]["type"], "Conduit")
-        self.assertEqual(doc["conduits"][conduit]["contains"], [cable])
-        self.assertEqual(doc["conduits"][conduit]["from"], ".B1")
-        self.assertEqual(doc["conduits"][conduit]["to"], ".B2")
-        self.assertNotIn("route", doc["conduits"][conduit])
-        self.assertEqual(doc.get("connections") or [], [])
+        self.assertEqual(doc["cables"][conduit]["type"], "Conduit")
+        self.assertEqual(doc["cables"][conduit]["contains"], [cable])
+        self.assertEqual(doc["cables"][conduit]["from"], ".B1")
+        self.assertEqual(doc["cables"][conduit]["to"], ".B2")
+        self.assertNotIn("connections", doc)
 
     def test_pending_cable_numbering_increments(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
@@ -255,39 +256,34 @@ class TestABMPendingAndConduits(unittest.TestCase):
 # abm – connections
 # ---------------------------------------------------------------------------
 
-class TestABMConnections(unittest.TestCase):
+class TestABMConductors(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp, self.root, self.yaml = make_site()
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def test_add_and_rm_connection(self) -> None:
+    def test_add_and_rm_conductor(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
-        abm.add_connection(doc, from_ref="A.1", via_ref="L.1", to_ref="B.1")
-        self.assertEqual(len(doc["connections"]), 1)
-        abm.rm_connection(doc, 0)
-        self.assertEqual(len(doc["connections"]), 0)
+        abm.add_conductor(
+            doc, "L", color="BN", from_ref="A.1", to_ref="B.1"
+        )
+        self.assertEqual(doc["cables"]["L"]["type"], "Conductor")
+        abm.rm_cable(doc, "L")
+        self.assertNotIn("L", doc["cables"])
 
-    def test_rm_connection_invalid_index_raises(self) -> None:
+    def test_conductors_referencing_element(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
-        with self.assertRaises(ValueError):
-            abm.rm_connection(doc, 0)
-
-    def test_rm_connection_negative_index_raises(self) -> None:
-        doc = abm.load_editable(self.yaml, self.root)
-        abm.add_connection(doc, from_ref="A.1", via_ref="L.1", to_ref="B.1")
-        with self.assertRaises(ValueError):
-            abm.rm_connection(doc, -1)
-
-    def test_connections_referencing_element(self) -> None:
-        doc = abm.load_editable(self.yaml, self.root)
-        abm.add_connection(doc, from_ref="MT_A.1", via_ref="L.1", to_ref="MT_B.1")
-        abm.add_connection(doc, from_ref="MT_C.1", via_ref="L.1", to_ref="MT_D.1")
-        hits = abm.connections_referencing_element(doc, "MT_A")
-        self.assertEqual(hits, [0])
-        hits_b = abm.connections_referencing_element(doc, "MT_D")
-        self.assertEqual(hits_b, [1])
+        abm.add_conductor(
+            doc, "L1", color="BN", from_ref="MT_A.1", to_ref="MT_B.1"
+        )
+        abm.add_conductor(
+            doc, "L2", color="BU", from_ref="MT_C.1", to_ref="MT_D.1"
+        )
+        hits = abm.conductors_referencing_element(doc, "MT_A")
+        self.assertEqual(hits, ["L1"])
+        hits_b = abm.conductors_referencing_element(doc, "MT_D")
+        self.assertEqual(hits_b, ["L2"])
 
 # ---------------------------------------------------------------------------
 # abm – format_show

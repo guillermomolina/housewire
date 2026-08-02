@@ -1,4 +1,4 @@
-"""Physical topology diagram from house/v1 (locations + conduits).
+"""Physical topology diagram from house/v2 (locations + conduit cables).
 
 Physical layer only: nested location clusters linked by conduits (openings).
 Electrical connections (elements + cables) belong to the interactive UI, not here.
@@ -94,10 +94,7 @@ def _load_house_files(
         except ValueError as exc:
             raise ValueError(f"{yaml_file}: {exc}") from exc
         if not fragments and (
-            any(
-                key in data
-                for key in ("elements", "cables", "connections", "conduits")
-            )
+            any(key in data for key in ("elements", "cables"))
             or data.get("type")
             or isinstance(data.get("location"), dict)
         ):
@@ -105,7 +102,7 @@ def _load_house_files(
 
             frag = {
                 key: data[key]
-                for key in ("elements", "cables", "connections", "conduits")
+                for key in ("elements", "cables")
                 if key in data
             }
             meta = place_meta_from_mapping(data)
@@ -223,10 +220,22 @@ def build_physical_model(
             root_name=root_name,
         )
 
-    # Pass 2: conduits → edges between locations.
+    # Pass 2: Conduit entries in cables: → edges between locations.
+    from housewire.house.links import resolve_link_kind
+    from housewire.house import load_catalog
+
+    catalog = load_catalog()
     for location_parts, fragment in pieces:
-        for conduit_name, conduit in (fragment.get("conduits") or {}).items():
+        cables = fragment.get("cables") or {}
+        if not isinstance(cables, dict):
+            continue
+        for conduit_name, conduit in cables.items():
             if not isinstance(conduit, dict):
+                continue
+            try:
+                if resolve_link_kind(conduit, catalog) != "conduit":
+                    continue
+            except ValueError:
                 continue
             try:
                 ends = conduit_endpoints(conduit)

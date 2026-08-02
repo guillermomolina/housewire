@@ -53,7 +53,12 @@ class TestOpenClaimLandABM(unittest.TestCase):
             floor, leaves="Cuadro_General.S2", colors=["BN", "BU"], section="1.5"
         )
         self.assertEqual(name, "OPEN_Linea_01")
-        self.assertEqual(floor.get("conduits") or {}, {})
+        self.assertFalse(
+            any(
+                isinstance(e, dict) and e.get("type") == "Conduit"
+                for e in floor["cables"].values()
+            )
+        )
         meta = open_runs.parse_open_notes(floor["cables"][name]["notes"])
         self.assertEqual(meta.status, "open")
         self.assertEqual(meta.leaves, "Cuadro_General.S2")
@@ -69,29 +74,33 @@ class TestOpenClaimLandABM(unittest.TestCase):
         self.assertEqual(meta2.enters, "Caja_derivacion_1.N1")
         self.assertEqual(meta2.exits, "Caja_derivacion_1.E2")
         self.assertEqual(
-            floor["conduits"][cd]["from"], "Cuadro_General.S2"
+            floor["cables"][cd]["from"], "Cuadro_General.S2"
         )
         self.assertEqual(
-            floor["conduits"][cd]["to"], "Caja_derivacion_1.N1"
+            floor["cables"][cd]["to"], "Caja_derivacion_1.N1"
         )
 
         final = open_runs.land_open_cable(
             floor,
             name,
-            from_ref="Cuadro_General/MT.2",
-            to_ref="Caja_derivacion_1/Regleta.1",
+            from_ref="Cuadro_General/MT.[2, 3]",
+            to_ref="Caja_derivacion_1/Regleta.[1, 3]",
             as_name="Linea_CG_a_CD1",
         )
         self.assertEqual(final, "Linea_CG_a_CD1")
         self.assertNotIn(name, floor["cables"])
         self.assertIn("Linea_CG_a_CD1", floor["cables"])
         self.assertEqual(
-            floor["conduits"][cd]["contains"], ["Linea_CG_a_CD1"]
+            floor["cables"][cd]["contains"], ["Linea_CG_a_CD1"]
         )
-        conn = floor["connections"][-1]
-        self.assertEqual(conn["via"], "Linea_CG_a_CD1.[1, 2]")
-        self.assertEqual(conn["from"], "Cuadro_General/MT.2")
-        self.assertEqual(conn["to"], "Caja_derivacion_1/Regleta.1")
+        self.assertEqual(
+            floor["cables"]["Linea_CG_a_CD1_1"]["from"],
+            "Cuadro_General/MT.2",
+        )
+        self.assertEqual(
+            floor["cables"]["Linea_CG_a_CD1_1"]["to"],
+            "Caja_derivacion_1/Regleta.1",
+        )
 
     def test_second_claim_uses_exits(self) -> None:
         doc = abm.load_editable(self.site_yaml, self.root)
@@ -103,8 +112,8 @@ class TestOpenClaimLandABM(unittest.TestCase):
         cd2, meta = open_runs.claim_open_cable(
             floor, name, enter="CD2.W1"
         )
-        self.assertEqual(floor["conduits"][cd2]["from"], "CD1.E2")
-        self.assertEqual(floor["conduits"][cd2]["to"], "CD2.W1")
+        self.assertEqual(floor["cables"][cd2]["from"], "CD1.E2")
+        self.assertEqual(floor["cables"][cd2]["to"], "CD2.W1")
         self.assertEqual(meta.enters, "CD2.W1")
         self.assertIsNone(meta.exits)
 
@@ -160,14 +169,19 @@ class TestShellOpenClaimLand(unittest.TestCase):
 
         _path, doc = s.ensure_doc()
         cg = get_place_node(doc, ("CG",))
-        self.assertTrue(cg["conduits"])
+        self.assertTrue(
+            any(
+                isinstance(e, dict) and e.get("type") == "Conduit"
+                for e in cg["cables"].values()
+            )
+        )
         meta = open_runs.parse_open_notes(cg["cables"]["OPEN_Linea_01"]["notes"])
         self.assertEqual(meta.status, "claimed")
         self.assertTrue(str(meta.enters).endswith("N1"))
 
         code = self._run(
             s,
-            "land OPEN_Linea_01 --from CG/MT.1 --to CD1/Regleta.1 "
+            "land OPEN_Linea_01 --from 'CG/MT.[1, 2]' --to 'CD1/Regleta.[1, 2]' "
             "--as Linea_CG_a_CD1",
         )
         self.assertEqual(code, 0)

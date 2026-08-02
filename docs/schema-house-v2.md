@@ -1,4 +1,4 @@
-# Schema house/v1
+# Schema house/v2
 
 Canonical format for **HouseWire**: document a home electrical installation in YAML
 and edit it with the interactive UI / shell (physical canvas + electrical wiring).
@@ -37,43 +37,57 @@ icon: fa-outlet
 
 Values are Font Awesome class tokens (``fa-plug`` or full ``fa-solid fa-plug``).
 
-## Two layers (do not mix)
+## Nodes vs links
 
-| Layer | Nodes | Edges | UI |
-|-------|-------|-------|-----|
-| **Physical** | locations (`JunctionBox`, `DeviceBox`, `Panel`, `Floor`, …) | **conduits** between openings (`from` / `to`) | location canvas |
-| **Electrical** | elements (`Socket`, `TerminalStrip`, `MCB`, …) | **connections** with a cable as `via` | electrical overlay |
-
-Bridge: `conduit.contains: [cable_ids]`. The cable rides in the conduit; the connection joins terminals.
+| Kind | Where | Role |
+|------|-------|------|
+| **Places / devices** | `elements:` tree | Locations and equipment (unchanged) |
+| **Links** | top-level / place-level `cables:` map | Typed `Conduit` / `Cable` / `Conductor` — **not** elements |
 
 ```yaml
-# Physical: locations ↔ conduit
-conduits:
+cables:
   Conducto_a_Enchufe_1:
     type: Conduit
     subtype: tube
     from: Caja_derivacion_4.W2
     to: Enchufe_1.N1
-    contains: [Linea_a_Enchufe_1]
-
-# Electrical: elements ↔ cable
-connections:
-  - from: Caja_derivacion_4/Regleta_1.[1, 2, 3]
-    via: Linea_a_Enchufe_1.[1, 2, 3]
-    to: Enchufe_1/Socket.[L, PE, N]
+    contains: [Funda_a_Enchufe_1]
+  Funda_a_Enchufe_1:
+    type: Cable
+    color: BK
+    contains: [L, PE, N]
+  L:
+    type: Conductor
+    color: GY
+    section: "2.5 mm2"
+    from: Caja_derivacion_4/Regleta_1.3
+    to: Enchufe_1/Socket.L
+  PE:
+    type: Conductor
+    color: GNYE
+    from: Caja_derivacion_4/Regleta_1.2
+    to: Enchufe_1/Socket.PE
+  N:
+    type: Conductor
+    color: BU
+    from: Caja_derivacion_4/Regleta_1.1
+    to: Enchufe_1/Socket.N
 ```
+
+`house/v1` documents (`connections:`, separate `conduits:`, multi-color cable bags)
+are **rejected** with a clear error. There is no dual-read or auto-upgrade.
 
 ## Document header
 
 Every editable site YAML must declare:
 
 ```yaml
-schema: house/v1
+schema: house/v2
 ```
 
 The site root document **is** the top place (`type: House` / `Floor` / …): the same
 fields as a nested place (`type`, `label`, `mount`, `openings`, …), plus
-`schema: house/v1`. Hierarchy is **only** nested places under `elements:` (map key = place id).
+`schema: house/v2`. Hierarchy is **only** nested places under `elements:` (map key = place id).
 There is one site YAML per site directory (any ``.yaml`` / ``.yml`` name; new sites
 default to ``housewire.yaml``); no per-place subdirectories.
 
@@ -103,7 +117,7 @@ conduits. Canvas and outline prefer ``name`` → id; inspector shows all three.
 Nested place example (under the site YAML):
 
 ```yaml
-schema: house/v1
+schema: house/v2
 type: House
 elements:
   Garage:
@@ -216,8 +230,7 @@ add location Interruptor_1 --type DeviceBox --subtype 1-gang \
 set --element Switch notes "…"
 ```
 
-Values parse as YAML. Structural keys (`elements`, `cables`, `connections`,
-`conduits`, `schema`) cannot be `set`; use `add` / `rm`.
+Values parse as YAML. Structural keys (`elements`, `cables`, `schema`) cannot be `set`; use `add` / `rm`.
 
 ### Light points
 
@@ -426,7 +439,7 @@ pend N1 S1
 ```
 
 ```yaml
-conduits:
+cables:
   Conducto_a_Caja_2:
     type: Conduit
     subtype: tube
@@ -441,24 +454,59 @@ conduits:
 - **Conduit**: tube between locations (`from: A.N1` → `to: B.S1`).
 - **Terminal** (`Regleta.1`): electrical connection inside the box.
 
-## Cables
+## Cables map (`cables:`)
+
+One dictionary. Kind is distinguished by `type`:
+
+| `type` | Endpoints | `contains` | Role |
+|--------|-----------|------------|------|
+| `Conduit` | `from`/`to` = `PlaceRef.Opening` | ids of Cable and/or Conductor | Physical tube/hose between openings |
+| `Cable` | none (sheath / bundle) | ids of Cable and/or Conductor | Jacket grouping; drawn inside conduits |
+| `Conductor` | `from`/`to` = `ElementRef.Terminal` (one each) | forbidden | Leaf wire = the electrical connection |
+
+Shared fields: `name`, `label`, `notes`, optional `section`, `color` (singular).
+Catalog subtypes remain (`tube`, `power`, …).
 
 ```yaml
 cables:
-  Linea_X:
+  Conducto_1:
+    type: Conduit
+    subtype: tube
+    from: Caja_A.E1
+    to: Caja_B.N1
+    contains: [Funda_BK, PE]
+  Funda_BK:
     type: Cable
-    subtype: power            # power | earth | dc | signal | …
+    color: BK
+    contains: [L, N]
+  L:
+    type: Conductor
+    color: BN
     section: "1.5 mm2"
-    colors: [BN, BU, GNYE]
-    name: Linea X             # optional short display (UI lists)
-    label: "…"                # optional longer human text
-    notes: "..."
+    from: Caja_A/Regleta.1
+    to: Caja_B/Socket.L
+  N:
+    type: Conductor
+    color: BU
+    section: "1.5 mm2"
+    from: Caja_A/Regleta.2
+    to: Caja_B/Socket.N
+  PE:
+    type: Conductor
+    color: GNYE
+    from: Caja_A/Regleta.3
+    to: Caja_B/Socket.PE
 ```
 
-Catalog: `catalog/Cable.yaml` (`kind: cable_type`) with per-subtype defaults for
-`section` / `colors`. ABM `add cable` / `pend` fill omitted fields from that catalog.
+**Ownership:** a place node owns the `cables` entries it declares. Conductor
+`from`/`to` must resolve under that place’s subtree (connection-scope rules).
 
-### Color codes (`colors:`)
+ABM shortcuts: `add cable NAME --colors BN,BU` creates a `Cable` sheath plus
+child `Conductor`s; `add conductor` / `add conduit` write typed entries directly.
+There is no separate `connections:` list and no multi-terminal `via:` sugar —
+one Conductor = one terminal pair.
+
+### Color codes (`color:`)
 
 HouseWire owns the conductor color table (`housewire.house.wire_colors`). Letter
 codes follow **IEC 60757**; CSS hex values are the HouseWire UI palette. Use
@@ -485,139 +533,79 @@ uppercase in YAML (`BN`, not `bn`). The UI loads the same table from
 - **PE** → `GNYE` (not bare `GN` / `YE`).
 - **Neutral** → `BU` (IEC / EU practice).
 - **Phase** may be `BK`, `BN`, or `GY`; note mixed phases in the same box.
-- Order in `colors: […]` is the wire index for `via: Cable.[1, 2, …]` (1-based).
 
-```yaml
-colors: [BN, BU, GNYE]   # wire 1 brown, 2 blue, 3 PE
-```
+### Sheath vs loose conductors
 
-### Logical line ≠ one physical sheath
-
-A `cables` entry with several colors (e.g. `[BN, BU]`) is a **logical line**: the
-set of conductors from A to B (circuit clarity), not a claim that it is one
-jacketed multicore.
-
-In panels these are often **loose singles**. Record construction in:
-
-- `notes` (e.g. loose wires / multicore type / estimated section)
-- `conduits` when several cables share a tube
-
-Do not split every bipolar into two `cables` only to look “physical”: diagrams get
-noisy without helping L/N tracing.
+A multiwire run is a `Cable` sheath (`contains: […]`) plus leaf `Conductor`s —
+not a single bag with `colors: […]`. Loose singles can be Conductors listed
+directly in a Conduit’s `contains` without a sheath.
 
 ### Capture recipes
 
-Run from the **parent** place (floor/room) that owns `cables` / `conduits` /
-`connections`. Recipes create the destination place (nested under the current
-place) plus wiring in the current place node.
+Run from the **parent** place (floor/room) that owns `cables:`. Recipes create
+the destination place plus typed links in the current place node.
 
 ```text
 cd Garage
 add socket Outlet_5 --from Junction_2.N1 --strip Regleta
-# → DeviceBox Outlet_5 + Socket; Linea_a_Outlet_5 (GY,GNYE,BU);
-#   Conducto_a_Outlet_5; Junction_2/Regleta.[3,2,1] → Outlet_5/Socket.[L,PE,N]
+# → DeviceBox Outlet_5 + Socket; Cable/Conductors; Conduit; terminals set on Conductors
 
 add lamp Lamp_3 --from Junction_3.S1 --strip Regleta --pins 6,5,2
-# → LightPoint + Luminaire; BN,GNYE,BU → Luminaire.[1,2,3]
-
 add feed Linea_A_a_B --from Junction_4.E1 --to Junction_3.N1 \
   --from-pin Regleta_2.1 --to-pin Regleta.1 --colors BK
 ```
-
-Overrides: `--pins`, `--colors`, `--section`, `--to-opening`, `--label`,
-`--notes`. Socket strip default pins are `3,2,1` (L, PE, N).
 
 ### Pending runs (incremental capture)
 
 When a cable enters/leaves a box but the far end is unknown:
 
-- Create the `cable` and its `conduit`, but **omit** `connections` for now.
-- Prefix the cable id with `PEND_` while open.
-- Put status in cable `notes` (e.g. `status: pending`).
-- Set `conduits.from` / `to` with openings (`N1`, `B1-1`, …).
+- Create Cable/Conductor(+Conduit) entries; leave Conductor `from`/`to` unset.
+- Prefix ids with `PEND_` while open; status in `notes` (e.g. `status: pending`).
 
 ```text
 cd Parking/Caja_derivacion_2
 pend N1 S1            # defaults 1.5 mm2 / BN,BU
-pend N1 S1 2.5
-pend                  # prompts for openings
 ```
 
-```yaml
-cables:
-  PEND_Linea_01:
-    type: Cable
-    subtype: power
-    section: "1.5 mm2"
-    colors: [BN, BU]
-    notes: "status: pending; enters N1, leaves S1"
-
-conduits:
-  Conducto_paso_01:
-    type: Conduit
-    subtype: tube
-    from: .N1
-    to: .S1
-    contains: [PEND_Linea_01]
-```
-
-When closing:
-
-1. Rename `PEND_*` to the final id (`Linea_<A>_a_<B>`).
-2. Replace pending notes with a final note (or remove them).
-3. Add definitive `connections` `from` / `via` / `to`.
-4. Do not leave `PEND_` ids on closed circuits.
+When closing: rename off `PEND_`, set Conductor terminals, clear pending notes.
 
 ### Open → claim → land (unknown far end)
-
-For a cable that **leaves** a known opening toward a destination you have not
-opened yet (distinct from local `pend` pass-through):
 
 ```text
 cd Planta_baja/Recibidor/Cuadro_General
 open S2 1.5 --colors BN,BU
-# → OPEN_Linea_01  notes: status: open; leaves …/Cuadro_General.S2
-#   (no conduit yet)
-
-cd ../Caja_derivacion_1
 claim OPEN_Linea_01 --enter N1 --exit E2
-# → conduit leaves → CD1.N1; notes: status: claimed; enters …; exits …
-
-# later, when terminals are known (still finds the cable in the origin YAML):
-land OPEN_Linea_01 --from Cuadro_General/MT.2 --to Caja_derivacion_1/Regleta.1 \
-  --as Linea_CG_a_CD1
+land OPEN_Linea_01 --from 'Cuadro_General/MT.[2, 3]' \
+  --to 'Caja_derivacion_1/Regleta.[1, 2]' --as Linea_CG_a_CD1
 ```
 
-- `opens` lists open/claimed runs across the site tree.
-- A second `claim` on the same `OPEN_*` continues from the previous `--exit`.
-- Prefer opening from the box (or parent) that should own the cable YAML.
+Status lives on the open Cable/Conductor notes (`OPEN_` ids). No separate
+`connections` row.
 
-## Connections
+## Drawing (UI)
 
-Canonical form (what the shell writes):
+- In conduit segments: show the Conduit path; nest Cable sheaths and Conductors
+  from `contains`.
+- Inside a place canvas: draw Conductors that terminate on an element in that
+  place; hide pure sheaths unless pass-through (enters and leaves with no
+  terminal landing in that place).
 
-```yaml
-connections:
-  - from: ID_Fila_Superior.[2, 4]
-    via: Linea_ID_Fila_Superior_a_MT_Luces.[1, 2]
-    to: MT_Luces.[1, 3]
-```
+## Cross-location references
 
-### Cross-location references
-
-Connections declared on a place may only refer to elements in **that place and
-its nested sublocations** (paths relative to the current place).
+Conductor endpoints declared on a place may only refer to elements in **that
+place and its nested sublocations** (paths relative to the current place).
 
 - Local: `MT_Luces.1`
 - Sublocation: `Cuadro_General/Fuente_portero.+`
-- Absolute **within the same tree**: `/Parking/Caja_derivacion_1/Regleta.1` (from under `Parking`)
+- Absolute **within the same tree**: `/Parking/Caja_derivacion_1/Regleta.1`
 
-Not allowed (lift the connection to the common ancestor):
+Not allowed (lift the link to the common ancestor):
 
 - `../Salon/Caja_Luces.L` (walks upward)
-- `/Parking/Caja_2/Regleta.1` declared inside `Parking/Caja_1` (sibling)
+- sibling paths declared inside the wrong place
 
-The `via` cable must be defined in the **same** place node as the connection.
+Contained Cable/Conductor ids referenced by a Conduit must be defined in the
+**same** place node’s `cables:` map.
 
 ## Qualified name prefixes
 
@@ -626,26 +614,9 @@ Internal qualified names join location segments with `__`:
 - Place `Parking/Caja_derivacion_1` → element `Regleta` →
   `Parking__Caja_derivacion_1__Regleta`
 
-## Conduits
-
-Physical grouping between locations (not an electrical conductor):
-
-```yaml
-conduits:
-  Conducto_Cuadro_a_Caja:
-    type: Conduit
-    subtype: tube             # tube | hose | free | M16 | M20 | M25 | M32 | …
-    from: Cuadro_General.S1
-    to: Caja_Luces_1.N1
-    contains: [Cable_Luces_Salon, Cable_Enchufes_Salon]
-    name: Conducto Cuadro a Caja
-    label: "…"
-    notes: "..."
-```
+## Conduit endpoints
 
 - `from` / `to` = `LocationRef.OpeningId` (e.g. `Caja_derivacion_4.W2`,
-  `Parking/Caja_derivacion_4.B2-1`, or `.N1` = current place). Required.
-- Catalog: `catalog/Conduit.yaml`.
-
-Electrical `connections` still target cables. The interactive UI draws conduits
-between locations and cables on the electrical overlay.
+  `Parking/Caja_derivacion_4.B2-1`, or `.N1` = current place). Required on
+  `type: Conduit`.
+- Catalog: `catalog/Conduit.yaml` (`kind: conduit_type`).
