@@ -1,9 +1,0 @@
-kind: place_type
-id: House
-icon: fa-house
-label: House / dwelling
-description: >
-  House or dwelling. A place type like Room or Floor; does not imply being the
-  tree root. Hierarchy comes from the folder path (another location may sit
-  above). Site document metadata. Place type: no electrical terminals.
-terminals: {}

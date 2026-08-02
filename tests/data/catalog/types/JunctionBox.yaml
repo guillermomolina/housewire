@@ -1,9 +1,0 @@
-kind: place_type
-id: JunctionBox
-icon: fa-cube
-label: Junction box
-description: >
-  Junction / derivation box. Place metadata (type/label/… on the YAML node).
-  Declare mouths in location.openings as a list of local ids (N1, B1-1, …)
-  and optionally location.opening_grid. Place type: no electrical terminals.
-terminals: {}

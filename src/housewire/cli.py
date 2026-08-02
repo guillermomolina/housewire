@@ -24,7 +24,8 @@ def _catalog_parent() -> argparse.ArgumentParser:
     parent.add_argument(
         "--catalog",
         default=None,
-        help="Type catalog name or path (default: catalogs/default or HOUSEWIRE_CATALOG)",
+        help="Type catalog name or path (default: housewire-catalog package, "
+        "catalogs/default, or HOUSEWIRE_CATALOG)",
     )
     return parent
 

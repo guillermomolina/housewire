@@ -5,8 +5,10 @@ and edit it with the interactive UI / shell (physical canvas + electrical wiring
 
 Editing: `housewire shell <site>` or non-interactive `add` / `rm` / `show` (see README).
 
-Element and place types live in an **external catalog** (YAML library), typically
-cloned as `catalogs/default` from `housewire-catalog`. Installation YAML lives in a
+Element and place types live in an **external catalog** (YAML library),
+installable as [`housewire-catalog`](https://github.com/guillermomolina/housewire-catalog)
+(`pip install 'housewire[catalog]'`). A git clone under `catalogs/default` or
+`HOUSEWIRE_CATALOG` still works as an override. Installation YAML lives in a
 **separate site directory/repo** (not in the program repo).
 
 ### Catalog icons (UI)
@@ -14,7 +16,7 @@ cloned as `catalogs/default` from `housewire-catalog`. Installation YAML lives i
 Each catalog type may declare a Font Awesome glyph:
 
 ```yaml
-# catalogs/default/types/Socket.yaml
+# types/Socket.yaml (in housewire-catalog)
 kind: element_type
 id: Socket
 icon: fa-plug
@@ -24,7 +26,8 @@ Resolution order for the outline / UI:
 
 1. Instance field ``icon:`` on the place or element YAML (optional override).
 2. Site overlay ``$SITE/catalog/<Type>.yaml`` (shallow merge over the base type).
-3. Base catalog ``icon:`` (from ``HOUSEWIRE_CATALOG`` / ``catalogs/default``).
+3. Base catalog ``icon:`` (from ``housewire-catalog``, ``HOUSEWIRE_CATALOG``, or
+   ``catalogs/default``).
 4. Fallback ``fa-circle``.
 
 Site overlay example (only customize the icon):

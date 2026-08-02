@@ -1,9 +1,0 @@
-kind: place_type
-id: Floor
-icon: fa-layer-group
-label: Floor / level
-description: >
-  Building floor or level (ground floor, -1/parking, floor 1, …).
-  Use label for the human name (Ground floor, Parking).
-  Place type: no electrical terminals.
-terminals: {}

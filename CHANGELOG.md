@@ -7,6 +7,24 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.4] — 2026-08-02
+
+### Added
+
+- Optional ``housewire-catalog`` integration: ``resolve_catalog_types_dir`` falls
+  back to the installed package; extras ``[catalog]`` / ``[dev]`` / ``[examples]``
+  pull it from git. ``make install`` editable-installs ``catalogs/default`` when
+  present.
+
+### Removed
+
+- Committed ``tests/data/catalog`` mirror (use ``housewire-catalog`` instead).
+
+### Changed
+
+- Docs/README: package install is the normal catalog path; clone remains an
+  override.
+
 ## [0.35.3] — 2026-08-02
 
 ### Fixed

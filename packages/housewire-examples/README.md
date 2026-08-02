@@ -12,7 +12,7 @@ From the HouseWire monorepo (editable):
 ```bash
 pip install -e packages/housewire-examples
 # or with the program extras:
-pip install -e '.[dev,ui,examples]'
+pip install -e '.[dev,ui,examples,catalog]'
 ```
 
 When published to PyPI:
@@ -21,7 +21,8 @@ When published to PyPI:
 pip install housewire-examples
 ```
 
-You still need a type catalog (`HOUSEWIRE_CATALOG` / `catalogs/default`).
+Type catalog: install `housewire-catalog` (pulled by `.[catalog]` / `.[examples]`),
+or set `HOUSEWIRE_CATALOG` / clone `catalogs/default`.
 
 ## Use
 

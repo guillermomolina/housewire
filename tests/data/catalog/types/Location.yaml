@@ -1,9 +1,0 @@
-kind: place_type
-id: Location
-icon: fa-location-dot
-label: Generic place (inline / catch-all)
-description: >
-  Generic location container. Prefer Room, Stair, JunctionBox, DeviceBox,
-  LightPoint, Panel, Floor, or House in the site document (fields at the YAML
-  root). Kept for occasional inline nesting. Place type: no electrical terminals.
-terminals: {}

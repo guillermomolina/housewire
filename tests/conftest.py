@@ -1,4 +1,4 @@
-"""Pytest: path helpers and default external catalog for tests."""
+"""Pytest: path helpers and Playwright browser cache for tests."""
 from __future__ import annotations
 
 import os
@@ -10,15 +10,12 @@ _REPO_ROOT = _TESTS_DIR.parent
 if str(_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(_TESTS_DIR))
 
-# Prefer a local clone; fall back to the committed test mirror.
-_CATALOG_CANDIDATES = (
-    _REPO_ROOT / "catalogs" / "default",
-    _TESTS_DIR / "data" / "catalog",
-)
-for _candidate in _CATALOG_CANDIDATES:
-    if (_candidate / "types").is_dir() or any(_candidate.glob("*.yaml")):
-        os.environ.setdefault("HOUSEWIRE_CATALOG", str(_candidate))
-        break
+# Default catalog: installed ``housewire-catalog`` package (see resolve order).
+# Optional override via env or local ``catalogs/default`` clone.
+if "HOUSEWIRE_CATALOG" not in os.environ:
+    _local = _REPO_ROOT / "catalogs" / "default"
+    if (_local / "types").is_dir() or (_local / "src" / "housewire_catalog" / "types").is_dir():
+        os.environ["HOUSEWIRE_CATALOG"] = str(_local)
 
 # Keep Playwright browsers inside the repo (``make install`` populates this).
 # Unittest discovery does not load pytest conftest; set the same default here.

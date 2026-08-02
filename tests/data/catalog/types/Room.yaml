@@ -1,8 +1,0 @@
-kind: place_type
-id: Room
-icon: fa-door-open
-label: Room
-description: >
-  Room or living space. Place metadata (type/label/… on the YAML node).
-  Place type: no electrical terminals.
-terminals: {}

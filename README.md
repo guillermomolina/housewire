@@ -22,27 +22,32 @@ MIT — see [LICENSE](LICENSE). Copyright (c) 2026 Guillermo Adrián Molina.
 ```bash
 python -m venv .venv --prompt HouseWire
 source .venv/bin/activate
-python -m pip install -e '.[dev,ui,examples]'
+python -m pip install -e '.[dev,ui,examples,catalog]'
 # or: make prepare
 ```
 
-`examples` installs the sibling package [`packages/housewire-examples`](packages/housewire-examples)
-(public demo sites such as `Test_01`). Private installation YAML still lives
-outside this repo.
+`examples` installs [`packages/housewire-examples`](packages/housewire-examples)
+(public demo sites). `catalog` / `dev` / `examples` pull
+[`housewire-catalog`](https://github.com/guillermomolina/housewire-catalog)
+so type YAML is available without a manual clone. Private installation YAML
+still lives outside this repo.
 
-### Type catalog (required)
+### Type catalog
 
-Element / place / cable types live in a **separate** data repo
-([housewire-catalog](https://github.com/guillermomolina/housewire-catalog)), not in this package:
+Element / place / cable types live in the **`housewire-catalog`** package
+(separate repo and SemVer). Normal path:
+
+```bash
+pip install 'housewire[catalog]'
+# or with a local clone for overrides:
+pip install -e catalogs/default
+```
+
+Optional path overrides (still supported):
 
 ```bash
 mkdir -p catalogs
 git clone https://github.com/guillermomolina/housewire-catalog.git catalogs/default
-```
-
-Or:
-
-```bash
 export HOUSEWIRE_CATALOG=/path/to/housewire-catalog
 # or: housewire serve --catalog /path/to/housewire-catalog "$SITE"
 ```
@@ -149,7 +154,7 @@ housewire rm element "$SITE" my-site.yaml MT_New
 ```
 
 ```bash
-make prepare          # venv + examples + pip install -e '.[dev,ui,examples]'
+make prepare          # venv + catalog + examples + pip install -e '.[dev,ui,examples,catalog]'
 make test
 ```
 

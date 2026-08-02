@@ -206,8 +206,9 @@ DEFAULT_CATALOG_NAME = "default"
 ENV_CATALOG = "HOUSEWIRE_CATALOG"
 ENV_CATALOGS_DIR = "HOUSEWIRE_CATALOGS_DIR"
 CATALOG_HINT = (
-    "Clone the catalog into catalogs/default, set HOUSEWIRE_CATALOG to a catalog "
-    "root (or types/ dir), or set HOUSEWIRE_CATALOGS_DIR. "
+    "Install the default catalog (pip install housewire-catalog / "
+    "pip install 'housewire[catalog]'), clone it into catalogs/default, "
+    "or set HOUSEWIRE_CATALOG / HOUSEWIRE_CATALOGS_DIR. "
     "See https://github.com/guillermomolina/housewire-catalog"
 )
 
@@ -269,6 +270,23 @@ def _site_catalog_ref(site_root: Path | None) -> str | Path | None:
     return None
 
 
+def _package_catalog_types_dir() -> Path | None:
+    """Types dir from the installed ``housewire-catalog`` package, if present."""
+    try:
+        from housewire_catalog import types_dir
+    except ImportError:
+        return None
+    try:
+        path = types_dir()
+    except (FileNotFoundError, OSError, ValueError):
+        return None
+    if path.is_dir() and (
+        any(path.glob("*.yaml")) or any(path.glob("*.yml"))
+    ):
+        return path.resolve()
+    return None
+
+
 def resolve_catalog_types_dir(
     catalog: str | Path | None = None,
     *,
@@ -281,6 +299,7 @@ def resolve_catalog_types_dir(
     2. ``HOUSEWIRE_CATALOG`` env
     3. Site ``catalog:`` field (name or path relative to site root)
     4. Named catalog ``default`` under ``HOUSEWIRE_CATALOGS_DIR`` / ``./catalogs``
+    5. Installed ``housewire-catalog`` package (``types_dir()``)
     """
     candidates: list[Path] = []
 
@@ -323,6 +342,10 @@ def resolve_catalog_types_dir(
                 add_named(ref_text)
 
     add_named(DEFAULT_CATALOG_NAME)
+
+    packaged = _package_catalog_types_dir()
+    if packaged is not None:
+        candidates.append(packaged)
 
     for path in candidates:
         if any(path.glob("*.yaml")) or any(path.glob("*.yml")):
@@ -367,8 +390,9 @@ def load_catalog(
     """Load external type catalog, optionally merged with ``$SITE/catalog/*.yaml``.
 
     Base catalog comes from ``HOUSEWIRE_CATALOG``, a named tree under
-    ``catalogs/<name>``, or the site document ``catalog:`` field. Site files
-    overlay base entries by ``id`` (shallow key merge).
+    ``catalogs/<name>``, the site document ``catalog:`` field, or the installed
+    ``housewire-catalog`` package. Site files overlay base entries by ``id``
+    (shallow key merge).
     """
     types_dir = resolve_catalog_types_dir(catalog, site_root=site_root)
     result = _load_catalog_dir(types_dir)

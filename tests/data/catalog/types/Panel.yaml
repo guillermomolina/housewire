@@ -1,9 +1,0 @@
-kind: place_type
-id: Panel
-icon: fa-server
-label: Electrical panel
-description: >
-  Electrical panel / consumer unit. Place metadata (type/label/… on the YAML
-  node). Declare mouths in location.openings as local ids (N1, B1-1, …), same
-  as JunctionBox. Place type: no electrical terminals.
-terminals: {}

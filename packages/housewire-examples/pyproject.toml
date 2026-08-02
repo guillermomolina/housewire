@@ -11,7 +11,9 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Guillermo Adrián Molina" }]
 keywords = ["housewire", "electrical", "examples"]
-dependencies = []
+dependencies = [
+    "housewire-catalog @ git+https://github.com/guillermomolina/housewire-catalog.git",
+]
 
 [project.urls]
 Homepage = "https://github.com/guillermomolina/housewire"
