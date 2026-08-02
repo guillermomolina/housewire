@@ -1086,6 +1086,12 @@ def build_physical_graph(
             all_ids = sorted(contained_ids(cables, str(conduit_name)))
             cname = conduit.get("name")
             clabel = conduit.get("label")
+            raw_color = conduit.get("color")
+            tube_color = (
+                str(raw_color).strip().upper()
+                if raw_color is not None and str(raw_color).strip()
+                else None
+            )
             edges.append(
                 {
                     "id": str(conduit_name),
@@ -1106,6 +1112,7 @@ def build_physical_graph(
                     "contains": contains,
                     "contains_all": all_ids,
                     "subtype": conduit.get("subtype"),
+                    "color": tube_color,
                 }
             )
 

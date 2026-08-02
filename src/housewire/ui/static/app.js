@@ -2400,6 +2400,19 @@
     return CONDUCTOR_COLORS[key] || UNKNOWN_WIRE_CSS;
   }
 
+  /** High-contrast rim for a fill color (light on dark, dark on light). */
+  function contrastOutlineCss(fillCss) {
+    const h = String(fillCss || "").replace("#", "");
+    if (h.length !== 6) return "#ffffff";
+    const r = parseInt(h.slice(0, 2), 16) / 255;
+    const g = parseInt(h.slice(2, 4), 16) / 255;
+    const b = parseInt(h.slice(4, 6), 16) / 255;
+    const chan = (c) =>
+      c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    const lum = 0.2126 * chan(r) + 0.7152 * chan(g) + 0.0722 * chan(b);
+    return lum < 0.45 ? "#ffffff" : "#0d1117";
+  }
+
   function cableWireIndices(edge) {
     const colors = edge.colors || [];
     const raw = edge.via_indices || [];
@@ -2765,8 +2778,8 @@
 
   /**
    * Lead from a terminal pin into a nearby lane point.
-   * Short stub + diagonal only when the remaining gap is small; longer gaps
-   * use a single Manhattan L (never a multi-bend Z, never a long diagonal).
+   * Stub only when the lane continues outward; short diagonal when close;
+   * otherwise a single Manhattan L (never stub-then-back C/Z).
    */
   function pinToLanePts(pin, face, lanePt) {
     const p = {
@@ -2783,12 +2796,17 @@
     const pts = [[p.x, p.y]];
     let from = p;
     if (fo.x || fo.y) {
-      const want = Math.min(6, stubDistToToward(p, fo, t));
-      if (want > 1e-6) {
-        const stub = stubPoint(p, fo.x, fo.y, want);
-        if (Math.hypot(stub.x - p.x, stub.y - p.y) > 1e-6) {
-          pts.push([stub.x, stub.y]);
-          from = stub;
+      const along =
+        (t.x - p.x) * fo.x + (t.y - p.y) * fo.y;
+      // Only stub when the join is further outward — otherwise stub+return = C.
+      if (along > 2) {
+        const want = Math.min(6, along - 0.5);
+        if (want > 1e-6) {
+          const stub = stubPoint(p, fo.x, fo.y, want);
+          if (Math.hypot(stub.x - p.x, stub.y - p.y) > 1e-6) {
+            pts.push([stub.x, stub.y]);
+            from = stub;
+          }
         }
       }
     }
@@ -2800,19 +2818,69 @@
       return pts;
     }
     const rem = Math.hypot(from.x - t.x, from.y - t.y);
-    // Small terminal diagonal only — never boca→element diagonals.
     if (rem <= TERMINAL_DIAG_MAX) {
       pts.push([t.x, t.y]);
       return pts;
     }
-    const rest = orthoPtsPrefer(from, t, null);
-    for (let i = 1; i < rest.length; i++) {
-      const q = rest[i];
+    // One-bend L only (HV or VH) — never a 2-bend Z.
+    const hv = [
+      [from.x, from.y],
+      [t.x, from.y],
+      [t.x, t.y],
+    ];
+    const vh = [
+      [from.x, from.y],
+      [from.x, t.y],
+      [t.x, t.y],
+    ];
+    const pick =
+      Math.hypot(t.x - from.x, 0) <= Math.hypot(0, t.y - from.y) ? hv : vh;
+    for (let i = 1; i < pick.length; i++) {
+      const q = pick[i];
       const prev = pts[pts.length - 1];
       if (Math.hypot(prev[0] - q[0], prev[1] - q[1]) < 1e-6) continue;
       pts.push([q[0], q[1]]);
     }
     return cleanOrthoPoly(pts);
+  }
+
+  /** Remove short Z jogs (two bends with a short middle leg). */
+  function stripShortZJogs(pts, maxLeg = 28) {
+    if (!pts || pts.length < 4) {
+      return pts ? pts.map((p) => [p[0], p[1]]) : [];
+    }
+    /** @type {number[][]} */
+    let out = pts.map((p) => [p[0], p[1]]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = 1; i < out.length - 2; i++) {
+        const a = out[i - 1];
+        const b = out[i];
+        const c = out[i + 1];
+        const d = out[i + 2];
+        const abx = b[0] - a[0];
+        const aby = b[1] - a[1];
+        const bcx = c[0] - b[0];
+        const bcy = c[1] - b[1];
+        const cdx = d[0] - c[0];
+        const cdy = d[1] - c[1];
+        if (Math.abs(abx * bcy - aby * bcx) < 1e-6) continue;
+        if (Math.abs(bcx * cdy - bcy * cdx) < 1e-6) continue;
+        const mid = Math.hypot(bcx, bcy);
+        if (mid <= 1e-6 || mid > maxLeg) continue;
+        const abH = Math.abs(aby) < 1e-6;
+        const cdH = Math.abs(cdy) < 1e-6;
+        const bcH = Math.abs(bcy) < 1e-6;
+        if (abH !== cdH || abH === bcH) continue;
+        // Collapse b-c: connect a→d via one L through a corner that skips the Z.
+        const corner = abH ? [d[0], a[1]] : [a[0], d[1]];
+        out = [...out.slice(0, i), corner, ...out.slice(i + 2)];
+        changed = true;
+        break;
+      }
+    }
+    return cleanOrthoPoly(out);
   }
 
   /**
@@ -2829,7 +2897,7 @@
     const tailRev = tail.slice().reverse();
     let chain = mergeOrthoPolys(head, offPts);
     chain = mergeOrthoPolys(chain, tailRev);
-    return stripOutAndBack(chain || []);
+    return stripShortZJogs(stripOutAndBack(chain || []));
   }
 
   function pathDToSubpaths(d) {
@@ -3358,7 +3426,12 @@
           fromPin
         );
         if (startTailCtr && startTailCtr.length >= 2) {
-          const startOff = parallel(startTailCtr);
+          // Tail runs pin→mouth (opposite the exterior's leave direction),
+          // so flip the offset sign or lanes cross at the boca.
+          const startOff =
+            Math.abs(laneDist) < 1e-9
+              ? startTailCtr.map((p) => [p[0], p[1]])
+              : offsetOrthoPts(startTailCtr, -laneDist);
           if (startOff.length >= 2) {
             startOff[startOff.length - 1] = [startJoin[0], startJoin[1]];
             const head = pinToLanePts(
@@ -3389,7 +3462,10 @@
           toPin
         );
         if (endTailCtr && endTailCtr.length >= 2) {
-          const endOff = parallel(endTailCtr);
+          const endOff =
+            Math.abs(laneDist) < 1e-9
+              ? endTailCtr.map((p) => [p[0], p[1]])
+              : offsetOrthoPts(endTailCtr, -laneDist);
           if (endOff.length >= 2) {
             endOff[endOff.length - 1] = [endJoin[0], endJoin[1]];
             const head = pinToLanePts(
@@ -3419,7 +3495,10 @@
           fromPin
         );
         if (startTail) {
-          const startOff = parallel(startTail);
+          const startOff =
+            Math.abs(laneDist) < 1e-9
+              ? startTail.map((p) => [p[0], p[1]])
+              : offsetOrthoPts(startTail, -laneDist);
           const head = pinToLanePts(
             [startAtt.x, startAtt.y],
             startFace,
@@ -3437,7 +3516,10 @@
           toPin
         );
         if (endTail) {
-          const endOff = parallel(endTail);
+          const endOff =
+            Math.abs(laneDist) < 1e-9
+              ? endTail.map((p) => [p[0], p[1]])
+              : offsetOrthoPts(endTail, -laneDist);
           const head = pinToLanePts(
             [endAtt.x, endAtt.y],
             endFace,
@@ -3453,7 +3535,7 @@
         }
       }
       if (!chain || chain.length < 2) return [];
-      return [stripOutAndBack(chain)];
+      return [stripShortZJogs(stripOutAndBack(chain))];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
     return d
@@ -3505,84 +3587,60 @@
     /** @type {SVGElement[]} */
     const paths = [];
 
-    // Jacket: exterior highway only (+ short B/F boca stubs). Never paint the
-    // sheath through a leaf to the terminal strip (that looked like a conduit
-    // reaching the Regleta).
+    // Jacket: follow the continuous conduit display path (no clip gaps),
+    // slightly narrower than the tube so the conduit color + contrast rim show.
     if (layout && wireIdx.length) {
       const laneInfos = wireIdx.map((wi) => layout.lane(edge, wi));
       const count = laneInfos[0]?.count || wireIdx.length;
       const indices = laneInfos.map((l) => l.index);
       const i0 = Math.min(...indices);
       const i1 = Math.max(...indices);
-      const midOff =
-        i0 === i1
-          ? highwayLaneOffset(i0, count)
-          : (highwayLaneOffset(i0, count) + highwayLaneOffset(i1, count)) / 2;
-      const jacketSubs = cableBaseSubpaths(edge, placeById, elemById, occupied, {
-        laneDist: midOff,
-      });
       const jw = highwaySpanWidth(i1 - i0 + 1);
-      // Strict: clip through every leaf (no keep). B/F boca drawn separately.
-      const leafObs = placeObstacles(placeById, [], 0);
       const jacketCss = wireColorCss(edge.jacket_color || "WH");
-      const paintJacketPiece = (piece) => {
-        if (!piece || piece.length < 2) return;
-        const jacket = el("path", {
-          class: "cable-jacket",
-          d: pointsToPathD(piece),
-        });
-        jacket.style.stroke = jacketCss;
-        jacket.style.strokeWidth = String(jw);
-        jacket.appendChild(
-          el(
-            "title",
-            null,
-            `${edgeName}${colors.length ? ` [${colors.join(",")}]` : ""}${
-              edge.jacket_color ? ` jacket ${edge.jacket_color}` : ""
-            }`
-          )
-        );
-        cablesG.appendChild(jacket);
-        paths.push(jacket);
-      };
-      for (const sub of jacketSubs) {
-        if (sub.length < 2) continue;
-        const clipped = exteriorPathD(pointsToPathD(sub), leafObs);
-        if (!clipped) continue;
-        for (const piece of pathDToSubpaths(clipped)) paintJacketPiece(piece);
-      }
-      // Short sheath into B/F plane boca (entry → plane), lane-mid offset.
-      const bocaStub = (place, openingId) => {
-        if (!place || !isPlaneOpeningId(openingId)) return;
-        const entry = planeContourEntryAbs(
-          place,
-          openingId,
-          openingId?.[0],
-          placeById
-        );
-        const plane = openingAnchorAbs(
-          place,
-          openingId,
-          openingId?.[0],
-          placeById
-        );
-        const spine = [
-          [entry.x, entry.y],
-          [plane.x, plane.y],
-        ];
-        const off =
-          Math.abs(midOff) < 1e-9 ? spine : offsetOrthoPts(spine, midOff);
-        paintJacketPiece(off);
+      const paintJacketD = (d) => {
+        if (!d) return;
+        for (const piece of pathDToSubpaths(d)) {
+          if (piece.length < 2) continue;
+          const jacket = el("path", {
+            class: "cable-jacket",
+            d: pointsToPathD(piece),
+          });
+          jacket.style.stroke = jacketCss;
+          jacket.style.strokeWidth = String(Math.max(2, jw - 1.5));
+          jacket.style.strokeOpacity = "0.55";
+          jacket.appendChild(
+            el(
+              "title",
+              null,
+              `${edgeName}${colors.length ? ` [${colors.join(",")}]` : ""}${
+                edge.jacket_color ? ` jacket ${edge.jacket_color}` : ""
+              }`
+            )
+          );
+          cablesG.appendChild(jacket);
+          paths.push(jacket);
+        }
       };
       const hops = edge.conduit_hops || [];
       if (hops.length) {
-        const first = hops[0];
-        const last = hops[hops.length - 1];
-        bocaStub(placeById[first.from], first.from_opening);
-        bocaStub(placeById[last.to], last.to_opening);
-      } else if (edge.from_opening && edge.to_opening) {
-        bocaStub(placeById[edge.conduit_from], edge.from_opening);
-        bocaStub(placeById[edge.conduit_to], edge.to_opening);
+        for (const hop of hops) {
+          const tubeD = hopTubePathD(hop);
+          if (!tubeD) continue;
+          const fakeEdge = {
+            from: hop.from,
+            to: hop.to,
+            from_opening: hop.from_opening,
+            to_opening: hop.to_opening,
+          };
+          paintJacketD(conduitDisplayD(tubeD, placeById, fakeEdge));
+        }
+      } else if (edge.conduit) {
+        const item = edgePaths.find(
+          (e) => e.edge && e.edge.id === edge.conduit
+        );
+        if (item && item.d) {
+          paintJacketD(conduitDisplayD(item.d, placeById, item.edge));
+        }
       }
     }
 
@@ -3650,10 +3708,17 @@
         const roadW = conduitRoadWidth(n, lanes);
         const outline = item.paths[0];
         const tube = item.paths[1] || item.paths[0];
+        const tubeCss = wireColorCss(item.edge.color || "GY");
+        const outlineCss = contrastOutlineCss(tubeCss);
         if (outline && item.paths.length > 1) {
           outline.style.strokeWidth = String(roadW + 2.5);
+          outline.style.stroke = outlineCss;
         }
-        if (tube) tube.style.strokeWidth = String(roadW);
+        if (tube) {
+          tube.style.strokeWidth = String(roadW);
+          tube.style.stroke = tubeCss;
+          tube.style.strokeOpacity = item.edge.color ? "0.85" : "0.25";
+        }
       }
     }
     // Rebuild cable layers (jacket + strands) from scratch.
@@ -4045,14 +4110,20 @@
       const lanes = conduitLaneHint(edge, graph.cable_edges || []);
       const roadW = conduitRoadWidth(n, lanes);
       const displayD = conduitDisplayD(d, byId, edge);
-      // High-contrast rim on the outermost tube (not on strand colors).
+      const tubeCss = wireColorCss(edge.color || "GY");
+      const outlineCss = contrastOutlineCss(tubeCss);
+      // High-contrast rim around the conduit (esp. black tubes on dark UI).
       const tubeOutline = el("path", {
         class: "edge-tube-outline",
         d: displayD,
       });
+      tubeOutline.style.stroke = outlineCss;
       tubeOutline.style.strokeWidth = String(roadW + 2.5);
+      tubeOutline.style.strokeOpacity = "0.95";
       const tube = el("path", { class: "edge-tube", d: displayD });
+      tube.style.stroke = tubeCss;
       tube.style.strokeWidth = String(roadW);
+      tube.style.strokeOpacity = edge.color ? "0.85" : "0.25";
       tube.appendChild(el("title", null, title));
       edgesG.appendChild(tubeOutline);
       edgesG.appendChild(tube);

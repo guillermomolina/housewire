@@ -516,11 +516,11 @@ uppercase in YAML (`BN`, not `bn`). The UI loads the same table from
 `GET /api/wire-colors`.
 
 A Cable sheath’s own `color:` (e.g. `WH`) is the **jacket** tint on the canvas
-(`jacket_color` on the physical cable edge). Conductor `color:` values are the
-individual strand strokes. `BK` / `WH` keep true black / white CSS; contrast on
-the dark UI comes from a thin light rim around the **conduit tube**, not from
-recoloring the conductors. The sheath jacket is drawn on the exterior run and
-as a short stub into B/F bocas — not through the leaf to terminal strips.
+(`jacket_color` on the physical cable edge). A Conduit’s own `color:` (e.g.
+`BK`) is painted on the **tube**. Conductor `color:` values are the individual
+strand strokes. Dark tubes get a thin light high-contrast rim (and light tubes
+a dark rim). The sheath jacket follows the continuous tube path, slightly
+narrower, so the conduit color remains visible.
 
 | Code | Color | Typical use |
 |------|-------|-------------|

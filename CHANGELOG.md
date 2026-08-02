@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.10] — 2026-08-02
+
+### Fixed
+
+- Conduit `color:` from YAML is painted on the tube; dark tubes get a white
+  high-contrast rim (light tubes get a dark rim).
+- Cable jacket follows the continuous conduit display path (no cut-and-reappear
+  gaps near mouths) and stays slightly narrower so the tube color shows.
+- Inbox lane offset sign matches the exterior highway (no lane crossings at
+  the boca). Terminal stubs skip when they would reverse into a C/Z; short Z
+  jogs are stripped from the final polyline.
+- Route-quality tests cover crossings, jacket gaps, contrast outlines, and
+  conduit colors on the physical graph.
+
 ## [0.34.9] — 2026-08-02
 
 ### Fixed

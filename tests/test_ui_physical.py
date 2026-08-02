@@ -361,7 +361,16 @@ class TestPhysicalGraph(unittest.TestCase):
         lamp = edges.get("Linea_lampara")
         self.assertIsNotNone(lamp)
         self.assertEqual(lamp.get("jacket_color"), "WH")
-        self.assertEqual(lamp.get("colors"), ["BK", "GNYE", "BU"])
+        self.assertEqual(lamp.get("colors"), ["BK", "BU"])
+
+    def test_conduit_color_on_graph_edge(self) -> None:
+        root = Path(__file__).resolve().parents[1] / "sites" / "Tests"
+        if not root.is_dir() or not any(root.glob("*.yaml")):
+            self.skipTest("sites/Tests fixture not present")
+        graph = build_physical_graph(root, "Habitacion")
+        by_id = {e["id"]: e for e in graph.get("edges") or []}
+        self.assertEqual(by_id["Conducto_lampara"].get("color"), "BK")
+        self.assertEqual(by_id["Conducto_interruptor"].get("color"), "BK")
 
 
 class TestServeApi(unittest.TestCase):

@@ -33,6 +33,94 @@ def _dist(a: Point, b: Point) -> float:
     return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
 
 
+def _orient(ax: float, ay: float, bx: float, by: float, cx: float, cy: float) -> int:
+    v = (by - ay) * (cx - bx) - (bx - ax) * (cy - by)
+    if abs(v) < 1e-9:
+        return 0
+    return 1 if v > 0 else 2
+
+
+def _on_segment(
+    ax: float, ay: float, bx: float, by: float, cx: float, cy: float
+) -> bool:
+    return (
+        min(ax, bx) - 1e-9 <= cx <= max(ax, bx) + 1e-9
+        and min(ay, by) - 1e-9 <= cy <= max(ay, by) + 1e-9
+    )
+
+
+def segments_cross(
+    a0: Point, a1: Point, b0: Point, b1: Point, *, endpoint_ok: bool = True
+) -> bool:
+    """True when open segments properly intersect (optionally ignore shared ends)."""
+    o1 = _orient(a0[0], a0[1], a1[0], a1[1], b0[0], b0[1])
+    o2 = _orient(a0[0], a0[1], a1[0], a1[1], b1[0], b1[1])
+    o3 = _orient(b0[0], b0[1], b1[0], b1[1], a0[0], a0[1])
+    o4 = _orient(b0[0], b0[1], b1[0], b1[1], a1[0], a1[1])
+    if o1 != o2 and o3 != o4:
+        if endpoint_ok:
+            for p in (a0, a1):
+                for q in (b0, b1):
+                    if _dist(p, q) < 1e-6:
+                        return False
+        return True
+    return False
+
+
+def count_strand_crossings(strands: Sequence[Poly]) -> int:
+    """Count proper crossings between strand polylines (inside a shared run)."""
+    n = 0
+    for i in range(len(strands)):
+        for j in range(i + 1, len(strands)):
+            a, b = strands[i], strands[j]
+            if len(a) < 2 or len(b) < 2:
+                continue
+            for ia in range(len(a) - 1):
+                for ib in range(len(b) - 1):
+                    if segments_cross(a[ia], a[ia + 1], b[ib], b[ib + 1]):
+                        n += 1
+    return n
+
+
+def relative_luminance(css_hex: str) -> float:
+    """sRGB relative luminance for a ``#rrggbb`` color."""
+    h = css_hex.strip().lstrip("#")
+    if len(h) != 6:
+        return 0.5
+    r, g, b = (int(h[i : i + 2], 16) / 255.0 for i in (0, 2, 4))
+
+    def chan(c: float) -> float:
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * chan(r) + 0.7152 * chan(g) + 0.0722 * chan(b)
+
+
+def contrast_outline_css(fill_css: str) -> str:
+    """High-contrast rim: light on dark fills, dark on light fills."""
+    return "#ffffff" if relative_luminance(fill_css) < 0.45 else "#0d1117"
+
+
+def jacket_path_is_gapped(pieces: Sequence[Poly], *, max_gap: float = 24.0) -> bool:
+    """True when consecutive exterior jacket pieces leave a visible gap."""
+    if len(pieces) < 2:
+        return False
+    for i in range(len(pieces) - 1):
+        a = pieces[i]
+        b = pieces[i + 1]
+        if len(a) < 1 or len(b) < 1:
+            continue
+        # Gap between end of one piece and start of the next (or reverse).
+        d = min(
+            _dist(a[-1], b[0]),
+            _dist(a[-1], b[-1]),
+            _dist(a[0], b[0]),
+            _dist(a[0], b[-1]),
+        )
+        if d > max_gap:
+            return True
+    return False
+
+
 def is_diagonal_segment(a: Point, b: Point) -> bool:
     return abs(a[0] - b[0]) > 1e-6 and abs(a[1] - b[1]) > 1e-6
 
@@ -185,18 +273,24 @@ def assess_bundle(
     allow_z: bool = False,
     allow_c: bool = False,
     allow_long_diagonal: bool = False,
+    allow_crossings: bool = False,
 ) -> list[str]:
     """Return human-readable problems for a parallel strand bundle.
 
     ``allow_z`` / ``allow_c``: set True only when several strands share one
     terminal and an intentional fan is expected.
     ``allow_long_diagonal``: set True only in tests of the detector itself.
+    ``allow_crossings``: set True only when intentional crossing is expected.
     """
     issues: list[str] = []
     if len(strands) >= 2 and strands_overlap(
         strands, min_separation=min_separation
     ):
         issues.append("strands overlap (lane separation too small)")
+    if not allow_crossings:
+        n = count_strand_crossings(strands)
+        if n:
+            issues.append(f"strands cross inside the run ({n} crossing(s))")
     if not allow_z:
         for i, poly in enumerate(strands):
             n = count_z_jogs(poly)

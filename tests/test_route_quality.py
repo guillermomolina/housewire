@@ -194,6 +194,71 @@ class TestConductorPaletteContrast(unittest.TestCase):
         self.assertEqual(css_for_color("BK"), "#1a1a1a")
         self.assertEqual(CONDUCTOR_COLORS["BK"]["css"], "#1a1a1a")
 
+    def test_black_conduit_gets_white_outline(self) -> None:
+        from housewire.ui.route_quality import contrast_outline_css
+
+        self.assertEqual(contrast_outline_css("#1a1a1a"), "#ffffff")
+        self.assertEqual(contrast_outline_css(css_for_color("BK")), "#ffffff")
+
+    def test_white_fill_gets_dark_outline(self) -> None:
+        from housewire.ui.route_quality import contrast_outline_css
+
+        self.assertEqual(contrast_outline_css("#ffffff"), "#0d1117")
+
+
+class TestCrossingsAndJacketGaps(unittest.TestCase):
+    def test_crossing_lanes_at_corner_detected(self) -> None:
+        # Proper X crossing of two ortho polylines.
+        a = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0)]
+        b = [(50.0, -10.0), (50.0, 50.0), (150.0, 50.0)]
+        parallel_ok = [(0.0, 0.0), (0.0, 50.0), (80.0, 50.0)]
+        parallel_ok2 = [(5.0, 0.0), (5.0, 45.0), (80.0, 45.0)]
+        from housewire.ui.route_quality import count_strand_crossings
+
+        self.assertEqual(count_strand_crossings([parallel_ok, parallel_ok2]), 0)
+        self.assertGreaterEqual(count_strand_crossings([a, b]), 1)
+        issues = assess_bundle([a, b])
+        self.assertTrue(any("cross" in x for x in issues), msg=issues)
+
+    def test_parallel_bundle_has_no_crossings(self) -> None:
+        from housewire.ui.route_quality import count_strand_crossings
+
+        center = [(0.0, 0.0), (0.0, 80.0), (120.0, 80.0)]
+        bundle = parallel_highway_bundle(center, 3)
+        self.assertEqual(count_strand_crossings(bundle), 0)
+        self.assertEqual(assess_bundle(bundle), [])
+
+    def test_gapped_jacket_pieces_detected(self) -> None:
+        from housewire.ui.route_quality import jacket_path_is_gapped
+
+        continuous = [
+            [(0.0, 0.0), (50.0, 0.0)],
+            [(50.0, 0.0), (100.0, 0.0)],
+        ]
+        gapped = [
+            [(0.0, 0.0), (40.0, 0.0)],
+            [(80.0, 0.0), (120.0, 0.0)],
+        ]
+        self.assertFalse(jacket_path_is_gapped(continuous))
+        self.assertTrue(jacket_path_is_gapped(gapped))
+
+
+class TestConduitColorFromYaml(unittest.TestCase):
+    def test_test01_conduit_colors_reach_graph(self) -> None:
+        from pathlib import Path
+
+        from housewire.ui.physical_graph import build_physical_graph
+
+        root = Path(__file__).resolve().parents[1] / "sites" / "Tests"
+        if not root.is_dir() or not any(root.glob("*.yaml")):
+            self.skipTest("sites/Tests fixture not present")
+        graph = build_physical_graph(root, "Habitacion")
+        by_id = {e["id"]: e for e in graph.get("edges") or []}
+        self.assertIn("Conducto_lampara", by_id)
+        self.assertEqual(by_id["Conducto_lampara"].get("color"), "BK")
+        self.assertIn("Conducto_interruptor", by_id)
+        self.assertEqual(by_id["Conducto_interruptor"].get("color"), "BK")
+
 
 if __name__ == "__main__":
     unittest.main()
