@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.1] — 2026-08-02
+
+### Fixed
+
+- Conduits to B/F openings continue to the plane boca (not stop at the box
+  border). Contour entry is nudged along the face so it does not sit on a
+  side opening such as N1.
+
 ## [0.34.0] — 2026-08-02
 
 ### Added

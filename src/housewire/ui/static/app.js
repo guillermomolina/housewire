@@ -746,20 +746,76 @@
   }
 
   /**
-   * Contour mouth for a conduit end. Side openings sit on the border; B/F
-   * plane cells are projected onto the nearest N/S/E/W edge so tubes do not
-   * aim at an interior point (which obstacles would clip away).
+   * Contour mouth / true boca for a conduit end.
+   * Side openings sit on the border. B/F plane cells are the interior boca
+   * (tube continues into the place); contour crossing uses
+   * ``planeContourEntryAbs`` so the entry can be nudged off N1/S1/….
    */
   function openingMouthAbs(node, openingId, face, byId) {
+    return openingAnchorAbs(node, openingId, face, byId);
+  }
+
+  function isPlaneOpeningId(openingId) {
+    const plane = parsePlaneOpening(openingId);
+    return Boolean(plane && (plane.face === "B" || plane.face === "F"));
+  }
+
+  /** Absolute positions of side openings on one contour face. */
+  function sideOpeningAbsOnFace(node, face, byId) {
+    const f = String(face || "").toUpperCase();
+    /** @type {{x:number,y:number}[]} */
+    const out = [];
+    for (const o of node.openings || []) {
+      const id = o && (o.id != null ? o.id : o);
+      const side = parseSideOpening(id);
+      if (!side || side.face !== f) continue;
+      out.push(openingAnchorAbs(node, id, f, byId));
+    }
+    return out;
+  }
+
+  /**
+   * Nudge a contour point along its face so it does not sit on a side
+   * opening (e.g. B-approach vs N1). Prefer left on N/S, down on E/W.
+   */
+  function nudgeOffSideOpenings(node, face, pt, byId) {
+    const f = String(face || "").toUpperCase();
+    const others = sideOpeningAbsOnFace(node, f, byId);
+    if (!others.length) return { x: pt.x, y: pt.y };
+    const CLEAR = 16;
+    const NUDGE = 14;
+    const a = absXY(node, byId);
+    const w = nodeW(node);
+    const h = nodeH(node);
+    const alongH = f === "N" || f === "S";
+    const clampX = (x) => Math.min(a.x + w - 8, Math.max(a.x + 8, x));
+    const clampY = (y) => Math.min(a.y + h - 8, Math.max(a.y + 8, y));
+    const clearOf = (cx, cy) =>
+      others.every((o) => Math.hypot(o.x - cx, o.y - cy) >= CLEAR);
+    // Prefer 0, then left/down, then right/up.
+    const deltas = [0, -NUDGE, NUDGE, -2 * NUDGE, 2 * NUDGE, -3 * NUDGE, 3 * NUDGE];
+    for (const d of deltas) {
+      const cx = alongH ? clampX(pt.x + d) : pt.x;
+      const cy = alongH ? pt.y : clampY(pt.y + d);
+      if (clearOf(cx, cy)) return { x: cx, y: cy };
+    }
+    if (alongH) return { x: clampX(pt.x - NUDGE), y: pt.y };
+    return { x: pt.x, y: clampY(pt.y + NUDGE) };
+  }
+
+  /**
+   * Where a B/F tube crosses the place contour (nearest side), nudged away
+   * from any side opening on that face.
+   */
+  function planeContourEntryAbs(node, openingId, face, byId) {
     const plane = parsePlaneOpening(openingId);
     const f = (
-      parseSideOpening(openingId)?.face ||
       plane?.face ||
       face ||
       String(openingId || "?")[0] ||
       "?"
     ).toUpperCase();
-    if (f !== "B" && f !== "F") {
+    if (!plane || (f !== "B" && f !== "F")) {
       return openingAnchorAbs(node, openingId, face, byId);
     }
     const approach = planeApproachFace(node, openingId, f, byId);
@@ -767,11 +823,14 @@
     const a = absXY(node, byId);
     const w = nodeW(node);
     const h = nodeH(node);
-    if (approach === "N") return { x: a.x + local.x, y: a.y };
-    if (approach === "S") return { x: a.x + local.x, y: a.y + h };
-    if (approach === "W") return { x: a.x, y: a.y + local.y };
-    if (approach === "E") return { x: a.x + w, y: a.y + local.y };
-    return { x: a.x + local.x, y: a.y + local.y };
+    /** @type {{x:number,y:number}} */
+    let mouth;
+    if (approach === "N") mouth = { x: a.x + local.x, y: a.y };
+    else if (approach === "S") mouth = { x: a.x + local.x, y: a.y + h };
+    else if (approach === "W") mouth = { x: a.x, y: a.y + local.y };
+    else if (approach === "E") mouth = { x: a.x + w, y: a.y + local.y };
+    else mouth = { x: a.x + local.x, y: a.y + local.y };
+    return nudgeOffSideOpenings(node, approach, mouth, byId);
   }
 
   /** Local (0,0) anchor for labels drawn inside the node group. */
@@ -1689,13 +1748,16 @@
     if (!a || !b) return null;
     const fromFace = routeFace(a, edge.from_opening, edge.from_opening?.[0], byId);
     const toFace = routeFace(b, edge.to_opening, edge.to_opening?.[0], byId);
-    // Mouths sit on the contour (B/F projected); interior plane cells are for
-    // markers / inbox tails only.
+    // Side mouths on the border; B/F mouths are the interior plane cell.
     const p1 = openingMouthAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
     const p2 = openingMouthAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
-    // Include endpoints: stubs leave the faces, so mid-routes must go around
-    // the boxes themselves (otherwise L/Z cuts back through the interior).
-    const obstacles = placeObstacles(byId, []);
+    const fromPlane = isPlaneOpeningId(edge.from_opening);
+    const toPlane = isPlaneOpeningId(edge.to_opening);
+    // Allow the route to enter leaves whose end is a B/F boca.
+    const exclude = [];
+    if (fromPlane) exclude.push(a.id);
+    if (toPlane) exclude.push(b.id);
+    const obstacles = placeObstacles(byId, exclude);
     const hugRects = placeBorderRects(byId);
     /** @type {{x:number,y:number,w:number,h:number}|null} */
     let stayBounds = null;
@@ -1711,16 +1773,57 @@
         };
       }
     }
-    const pts = orthoRoute(
-      p1,
-      p2,
-      fromFace,
-      toFace,
-      occupied,
-      obstacles,
-      stayBounds,
-      hugRects
-    );
+    /** @type {number[][]|null} */
+    let chain = null;
+    const append = (fromPt, toPt, ff, tf) => {
+      const part = orthoRoute(
+        fromPt,
+        toPt,
+        ff,
+        tf,
+        occupied,
+        obstacles,
+        stayBounds,
+        hugRects
+      );
+      chain = chain
+        ? mergeOrthoPolys(chain, part)
+        : part.map((p) => [p[0], p[1]]);
+    };
+    if (fromPlane || toPlane) {
+      // Cross the contour at a nudged entry so B-approach does not sit on N1.
+      let cur = p1;
+      let curFace = fromFace;
+      if (fromPlane) {
+        const entry = planeContourEntryAbs(
+          a,
+          edge.from_opening,
+          edge.from_opening?.[0],
+          byId
+        );
+        append(p1, entry, fromFace, fromFace);
+        cur = entry;
+        curFace = fromFace;
+      }
+      if (toPlane) {
+        const entry = planeContourEntryAbs(
+          b,
+          edge.to_opening,
+          edge.to_opening?.[0],
+          byId
+        );
+        append(cur, entry, curFace, toFace);
+        append(entry, p2, toFace, toFace);
+      } else {
+        append(cur, p2, curFace, toFace);
+      }
+    } else {
+      append(p1, p2, fromFace, toFace);
+    }
+    const pts = chain || [
+      [p1.x, p1.y],
+      [p2.x, p2.y],
+    ];
     return { d: pointsToPathD(pts), segs: segsFromPoints(pts) };
   }
 
@@ -2617,7 +2720,7 @@
   }
 
   /**
-   * In-box hop tail points: element → (plane cell) → contour mouth.
+   * In-box hop tail points: element → contour opening (or B/F plane cell).
    * @returns {number[][]|null}
    */
   function hopEndpointTailPts(
@@ -2631,16 +2734,12 @@
   ) {
     if (!elem || !place || !openingId) return null;
     if (elem.parent && place.id && elem.parent !== place.id) return null;
-    const plane = parsePlaneOpening(openingId);
     const mouth = openingMouthAbs(place, openingId, openingId?.[0], placeById);
-    const planePt = plane
-      ? openingAnchorAbs(place, openingId, openingId?.[0], placeById)
-      : mouth;
     const opFace = routeFace(place, openingId, openingId?.[0], placeById);
     const attach = resolveElementAttach(
       elem,
       pin,
-      planePt,
+      mouth,
       placeById,
       slot,
       slotCount
@@ -2651,33 +2750,16 @@
       y: placeAbs.y + nodeH(place) / 2,
     };
     const attachFace =
-      attach.face || elementAttachFace(elem, planePt, placeById);
-    // For B/F, route to the plane cell as an interior attach, then out to the
-    // contour mouth so the tail joins the exterior tube.
-    if (plane) {
-      const viaPlane = inboxRoutePts(
-        attach,
-        attachFace,
-        planePt,
-        opFace,
-        prefer,
-        "element"
-      );
-      if (Math.hypot(planePt.x - mouth.x, planePt.y - mouth.y) < 1.5) {
-        return viaPlane;
-      }
-      return mergeOrthoPolys(viaPlane, [
-        [planePt.x, planePt.y],
-        [mouth.x, mouth.y],
-      ]);
-    }
+      attach.face || elementAttachFace(elem, mouth, placeById);
+    // B/F: treat the plane cell like an interior attach (stub toward approach).
+    const toKind = isPlaneOpeningId(openingId) ? "element" : "opening";
     return inboxRoutePts(
       attach,
       attachFace,
       mouth,
       opFace,
       prefer,
-      "opening"
+      toKind
     );
   }
 
@@ -2982,7 +3064,14 @@
         const tubeD = hopTubePathD(hop);
         let ext = null;
         if (tubeD) {
-          ext = exteriorPathD(tubeD, leafObstacles);
+          /** @type {string[]} */
+          const keep = [];
+          if (isPlaneOpeningId(hop.from_opening)) keep.push(hop.from);
+          if (isPlaneOpeningId(hop.to_opening)) keep.push(hop.to);
+          const hopObs = keep.length
+            ? placeObstacles(placeById, keep, 2)
+            : leafObstacles;
+          ext = exteriorPathD(tubeD, hopObs);
         } else {
           const opA = openingMouthAbs(
             pf,
@@ -3138,10 +3227,17 @@
       : [];
   }
 
-  /** Tube geometry drawn only outside leaf places (stops at the mouth). */
-  function conduitDisplayD(fullD, byId) {
+  /**
+   * Tube geometry: clip through leaf interiors, but keep B/F endpoint places
+   * so the tube reaches the plane boca.
+   */
+  function conduitDisplayD(fullD, byId, edge) {
     if (!fullD) return "";
-    const leafObs = placeObstacles(byId, [], 2);
+    /** @type {string[]} */
+    const keep = [];
+    if (edge && isPlaneOpeningId(edge.from_opening)) keep.push(edge.from);
+    if (edge && isPlaneOpeningId(edge.to_opening)) keep.push(edge.to);
+    const leafObs = placeObstacles(byId, keep, 2);
     return exteriorPathD(fullD, leafObs) || "";
   }
 
@@ -3184,9 +3280,18 @@
         laneDist: midOff,
       });
       const jw = highwaySpanWidth(i1 - i0 + 1);
-      const leafObs = placeObstacles(placeById, [], 2);
+      /** @type {string[]} */
+      const jacketKeep = [];
+      const hops = edge.conduit_hops || [];
+      if (hops.length) {
+        const first = hops[0];
+        const last = hops[hops.length - 1];
+        if (isPlaneOpeningId(first.from_opening)) jacketKeep.push(first.from);
+        if (isPlaneOpeningId(last.to_opening)) jacketKeep.push(last.to);
+      }
+      const leafObs = placeObstacles(placeById, jacketKeep, 2);
       for (const sub of jacketSubs) {
-        // Jacket only on exterior conduit runs (not inside junction boxes).
+        // Jacket follows the tube; keep B/F endpoint places so it reaches the boca.
         if (sub.length < 2) continue;
         const clipped = exteriorPathD(pointsToPathD(sub), leafObs);
         if (!clipped) continue;
@@ -3266,7 +3371,7 @@
       const routed = edgePathD(item.edge, byId, occupied);
       if (routed) {
         item.d = routed.d;
-        const displayD = conduitDisplayD(routed.d, byId);
+        const displayD = conduitDisplayD(routed.d, byId, item.edge);
         for (const path of item.paths) path.setAttribute("d", displayD);
         for (const s of routed.segs) occupied.push(s);
         const n = (item.edge.contains || []).length;
@@ -3664,7 +3769,7 @@
       const n = (edge.contains || []).length;
       const lanes = conduitLaneHint(edge, graph.cable_edges || []);
       const roadW = conduitRoadWidth(n, lanes);
-      const displayD = conduitDisplayD(d, byId);
+      const displayD = conduitDisplayD(d, byId, edge);
       const tube = el("path", { class: "edge-tube", d: displayD });
       tube.style.strokeWidth = String(roadW);
       tube.appendChild(el("title", null, title));
