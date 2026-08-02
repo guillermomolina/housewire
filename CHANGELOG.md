@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.6] — 2026-08-02
+
+### Fixed
+
+- Orthogonal routes penalize wall-hugging so a clearance C wins over an
+  L that slides along a place edge.
+- Cable overlays orient exterior pieces start→end, merge tails into one
+  polyline, and strip out-and-back segments on the same run.
+
 ## [0.32.5] — 2026-08-02
 
 ### Fixed
