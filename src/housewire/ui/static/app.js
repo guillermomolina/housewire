@@ -767,6 +767,13 @@
     return margin + ((index - 1) / (count - 1)) * span;
   }
 
+  /**
+   * B/F bocas are never drawn on the geometric center of the place (even a
+   * lone B1-1), so the tube/marker stay clear of the middle and of typical
+   * side openings. Bias toward local NW (smaller x/y).
+   */
+  const PLANE_CENTER_BIAS = 18;
+
   /** Local coords for B/F openings on a face grid, almost touching the border. */
   function planeAnchorLocal(node, openingId, face) {
     const w = nodeW(node);
@@ -777,10 +784,17 @@
       return { x: w / 2, y: h / 2 };
     }
     const { cols, rows } = planeGridDims(node, f, plane);
-    return {
-      x: planeCellCenter(w, cols, plane.col, PLANE_R),
-      y: planeCellCenter(h, rows, plane.row, PLANE_R),
-    };
+    let x = planeCellCenter(w, cols, plane.col, PLANE_R);
+    let y = planeCellCenter(h, rows, plane.row, PLANE_R);
+    const margin = PLANE_R + 5;
+    // Always offset a cell that would sit on the place center.
+    if (Math.abs(x - w / 2) < 1e-6) {
+      x = Math.max(margin, w / 2 - PLANE_CENTER_BIAS);
+    }
+    if (Math.abs(y - h / 2) < 1e-6) {
+      y = Math.max(margin, h / 2 - PLANE_CENTER_BIAS);
+    }
+    return { x, y };
   }
 
   function openingAnchorAbs(node, openingId, face, byId) {
@@ -1818,16 +1832,15 @@
     const toFace = routeFace(b, edge.to_opening, edge.to_opening?.[0], byId);
     const fromPlane = isPlaneOpeningId(edge.from_opening);
     const toPlane = isPlaneOpeningId(edge.to_opening);
-    // B/F tubes stop on the contour entry (nudged off N1/…). The plane cell
-    // is the electrical boca for cables/markers — painting the tube into the
-    // leaf center left a dead vertical past where strands peel off.
-    const p1 = fromPlane
-      ? planeContourEntryAbs(a, edge.from_opening, edge.from_opening?.[0], byId)
-      : openingMouthAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
-    const p2 = toPlane
-      ? planeContourEntryAbs(b, edge.to_opening, edge.to_opening?.[0], byId)
-      : openingMouthAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
-    const obstacles = placeObstacles(byId, []);
+    // Side mouths on the border; B/F mouths are the interior plane cell (boca).
+    const p1 = openingMouthAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
+    const p2 = openingMouthAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
+    // Allow the route to enter leaves whose end is a B/F boca.
+    /** @type {string[]} */
+    const exclude = [];
+    if (fromPlane) exclude.push(a.id);
+    if (toPlane) exclude.push(b.id);
+    const obstacles = placeObstacles(byId, exclude);
     const hugRects = placeBorderRects(byId);
     /** @type {{x:number,y:number,w:number,h:number}|null} */
     let stayBounds = null;
@@ -1843,17 +1856,75 @@
         };
       }
     }
-    const pts = stripOutAndBack(
-      orthoRoute(
-        p1,
-        p2,
-        fromFace,
-        toFace,
+    /** @type {number[][]|null} */
+    let chain = null;
+    const append = (fromPt, toPt, ff, tf) => {
+      const part = orthoRoute(
+        fromPt,
+        toPt,
+        ff,
+        tf,
         occupied,
         obstacles,
         stayBounds,
         hugRects
-      )
+      );
+      chain = chain
+        ? mergeOrthoPolys(chain, part)
+        : part.map((p) => [p[0], p[1]]);
+    };
+    // Interior legs (plane ↔ contour) must NOT use face stubs: orthoRoute
+    // stubs go outward and paint a dead-end spur (ghost tube).
+    const appendInside = (fromPt, toPt) => {
+      const part = orthoRoute(
+        fromPt,
+        toPt,
+        null,
+        null,
+        occupied,
+        obstacles,
+        stayBounds,
+        hugRects
+      );
+      chain = chain
+        ? mergeOrthoPolys(chain, part)
+        : part.map((p) => [p[0], p[1]]);
+    };
+    if (fromPlane || toPlane) {
+      // Cross the contour at a nudged entry so B-approach does not sit on N1.
+      let cur = p1;
+      let curFace = fromFace;
+      if (fromPlane) {
+        const entry = planeContourEntryAbs(
+          a,
+          edge.from_opening,
+          edge.from_opening?.[0],
+          byId
+        );
+        appendInside(p1, entry);
+        cur = entry;
+        curFace = fromFace;
+      }
+      if (toPlane) {
+        const entry = planeContourEntryAbs(
+          b,
+          edge.to_opening,
+          edge.to_opening?.[0],
+          byId
+        );
+        append(cur, entry, curFace, toFace);
+        appendInside(entry, p2);
+      } else {
+        append(cur, p2, curFace, toFace);
+      }
+    } else {
+      append(p1, p2, fromFace, toFace);
+    }
+    const pts = stripOutAndBack(
+      chain || [
+        [p1.x, p1.y],
+        [p2.x, p2.y],
+      ]
     );
     return { d: pointsToPathD(pts), segs: segsFromPoints(pts) };
   }
@@ -2464,12 +2535,12 @@
   }
 
   /**
-   * Global terminal slots (per element face) and lane indices (per route)
-   * so strands from different cables do not stack on one midpoint.
+   * Global terminal slots (per pin cell, or face when no pin) and lane indices
+   * (per route). Fan along a face only when several strands share one terminal.
    */
   function buildCableLayout(cableEdges, elemById, placeById) {
     /** @type {Map<string, {key:string, wi:number, end:string}[]>} */
-    const byFace = new Map();
+    const byTerminal = new Map();
     /** @type {Map<string, {key:string, wi:number}[]>} */
     const byRoute = new Map();
     /** @type {Map<string, string[]>} */
@@ -2511,10 +2582,14 @@
         for (const end of /** @type {const} */ (["from", "to"])) {
           const elem = end === "from" ? a : b;
           const toward = end === "from" ? towardFrom : towardTo;
-          const face = elementAttachFace(elem, toward, placeById);
-          const fk = `${elem.id}|${face}`;
-          if (!byFace.has(fk)) byFace.set(fk, []);
-          byFace.get(fk).push({ key, wi, end });
+          const pin = end === "from" ? fromPin : toPin;
+          const cell = pickPinCell(elem, pin, toward, placeById);
+          // Slot-fan only within the same terminal cell (or mid-face when no pin).
+          const tk = cell
+            ? `${elem.id}|cell:${cell}`
+            : `${elem.id}|face:${elementAttachFace(elem, toward, placeById)}`;
+          if (!byTerminal.has(tk)) byTerminal.set(tk, []);
+          byTerminal.get(tk).push({ key, wi, end });
         }
         const rk = cableRouteKey(edge, elemById);
         if (!byRoute.has(rk)) byRoute.set(rk, []);
@@ -2536,13 +2611,17 @@
 
     /** @type {Map<string, {slot:number, count:number}>} */
     const terminalMap = new Map();
-    for (const [, list] of byFace) {
+    for (const [, list] of byTerminal) {
       list.sort((u, v) =>
         u.key === v.key ? u.wi - v.wi : u.key < v.key ? -1 : 1
       );
       const count = list.length;
+      // One strand on this terminal → no Z fan (slotCount 1).
       list.forEach((item, slot) => {
-        terminalMap.set(`${item.key}|${item.wi}|${item.end}`, { slot, count });
+        terminalMap.set(`${item.key}|${item.wi}|${item.end}`, {
+          slot: count > 1 ? slot : 0,
+          count: count > 1 ? count : 1,
+        });
       });
     }
 
@@ -2720,6 +2799,19 @@
       return pts;
     }
     const rest = orthoPtsPrefer(from, t, null);
+    // Prefer a longer terminal diagonal over a Manhattan Z (two bends).
+    let bends = 0;
+    for (let i = 2; i < rest.length; i++) {
+      const ax = rest[i - 1][0] - rest[i - 2][0];
+      const ay = rest[i - 1][1] - rest[i - 2][1];
+      const bx = rest[i][0] - rest[i - 1][0];
+      const by = rest[i][1] - rest[i - 1][1];
+      if (Math.abs(ax * by - ay * bx) > 1e-6) bends += 1;
+    }
+    if (!axisAligned && rem > 1e-6 && bends >= 2 && rem <= TERMINAL_DIAG_MAX * 2.5) {
+      pts.push([t.x, t.y]);
+      return pts;
+    }
     for (let i = 1; i < rest.length; i++) {
       const q = rest[i];
       const prev = pts[pts.length - 1];
@@ -3219,70 +3311,15 @@
           );
       const oriented = orientExteriorSubs(exteriors, startOp, endOp);
 
+      // Parallel offset only on the exterior highway. Inbox tails join the
+      // offset mouth so unique terminals do not get a Z from re-offset+rejoin.
       /** @type {number[][][]} */
-      const pieces = [];
-      if (oriented.length) {
-        // Inbox to the mouth (centerline); whole chain is lane-offset later so
-        // strands keep spacing through the opening instead of funneling in.
-        const startTail = hopEndpointTailPts(
-          a,
-          startPlace,
-          first.from_opening,
-          placeById,
-          fromSlot.slot,
-          fromSlot.count,
-          fromPin
-        );
-        if (startTail && startTail.length >= 2) pieces.push(startTail);
-        for (const ext of oriented) pieces.push(ext);
-        const endTail = hopEndpointTailPts(
-          b,
-          endPlace,
-          last.to_opening,
-          placeById,
-          toSlot.slot,
-          toSlot.count,
-          toPin
-        );
-        if (endTail && endTail.length >= 2) {
-          pieces.push(endTail.slice().reverse());
-        }
-      } else {
-        const startTail = hopEndpointTailPts(
-          a,
-          startPlace,
-          first.from_opening,
-          placeById,
-          fromSlot.slot,
-          fromSlot.count,
-          fromPin
-        );
-        if (startTail) pieces.push(startTail);
-        const endTail = hopEndpointTailPts(
-          b,
-          endPlace,
-          last.to_opening,
-          placeById,
-          toSlot.slot,
-          toSlot.count,
-          toPin
-        );
-        if (endTail) pieces.push(endTail);
+      const exOff = [];
+      for (const ext of oriented) {
+        const o = parallel(ext);
+        if (o && o.length >= 2) exOff.push(o);
       }
-      // One continuous centerline, then parallel offset for this strand lane.
-      /** @type {number[][]|null} */
-      let chain = null;
-      for (const piece of pieces) {
-        if (!piece || piece.length < 2) continue;
-        chain = chain
-          ? mergeOrthoPolys(chain, piece)
-          : piece.map((p) => [p[0], p[1]]);
-      }
-      if (!chain || chain.length < 2) return [];
-      const base = stripOutAndBack(chain);
-      if (base.length < 2) return [];
-      const off = parallel(base);
-      if (!off.length) return [ensureOrthoPoly(base)];
+
       const startAtt = resolveElementAttach(
         a,
         fromPin,
@@ -3299,15 +3336,93 @@
         toSlot.slot,
         toSlot.count
       );
-      return [
-        rejoinLaneEndsOrtho(
-          base[0],
-          startAtt.face || elementAttachFace(a, startOp, placeById),
-          off,
-          base[base.length - 1],
-          endAtt.face || elementAttachFace(b, endOp, placeById)
-        ),
-      ];
+
+      /** @type {number[][]|null} */
+      let chain = null;
+      if (exOff.length) {
+        const startJoin = exOff[0][0];
+        const startTail = hopEndpointTailPts(
+          a,
+          startPlace,
+          first.from_opening,
+          placeById,
+          fromSlot.slot,
+          fromSlot.count,
+          fromPin
+        );
+        if (startTail && startTail.length >= 2) {
+          const head = startTail.map((p) => [p[0], p[1]]);
+          const last = head[head.length - 1];
+          // Lane sits on the same mouth face — one along-face step, no stub/Z.
+          if (Math.hypot(last[0] - startJoin[0], last[1] - startJoin[1]) > 1e-6) {
+            head.push([startJoin[0], startJoin[1]]);
+          } else {
+            head[head.length - 1] = [startJoin[0], startJoin[1]];
+          }
+          chain = head;
+        } else {
+          const face =
+            startAtt.face || elementAttachFace(a, startOp, placeById);
+          chain = pinToLanePts([startAtt.x, startAtt.y], face, startJoin);
+        }
+        for (const ext of exOff) {
+          chain = mergeOrthoPolys(chain, ext);
+        }
+        const endJoin = exOff[exOff.length - 1][exOff[exOff.length - 1].length - 1];
+        const endTail = hopEndpointTailPts(
+          b,
+          endPlace,
+          last.to_opening,
+          placeById,
+          toSlot.slot,
+          toSlot.count,
+          toPin
+        );
+        if (endTail && endTail.length >= 2) {
+          const tail = endTail.map((p) => [p[0], p[1]]);
+          const lastPt = tail[tail.length - 1];
+          if (Math.hypot(lastPt[0] - endJoin[0], lastPt[1] - endJoin[1]) > 1e-6) {
+            tail.push([endJoin[0], endJoin[1]]);
+          } else {
+            tail[tail.length - 1] = [endJoin[0], endJoin[1]];
+          }
+          chain = mergeOrthoPolys(chain, tail.slice().reverse());
+        } else {
+          const face = endAtt.face || elementAttachFace(b, endOp, placeById);
+          const lead = pinToLanePts([endAtt.x, endAtt.y], face, endJoin);
+          chain = mergeOrthoPolys(chain, lead.slice().reverse());
+        }
+      } else {
+        const startTail = hopEndpointTailPts(
+          a,
+          startPlace,
+          first.from_opening,
+          placeById,
+          fromSlot.slot,
+          fromSlot.count,
+          fromPin
+        );
+        if (startTail) chain = startTail.map((p) => [p[0], p[1]]);
+        const endTail = hopEndpointTailPts(
+          b,
+          endPlace,
+          last.to_opening,
+          placeById,
+          toSlot.slot,
+          toSlot.count,
+          toPin
+        );
+        if (endTail) {
+          chain = chain
+            ? mergeOrthoPolys(chain, endTail)
+            : endTail.map((p) => [p[0], p[1]]);
+        }
+      }
+      if (!chain || chain.length < 2) return [];
+      const base = stripOutAndBack(chain);
+      if (base.length < 2) return [];
+      // Keep terminal diagonals from pinToLanePts (do not force Manhattan).
+      return [base];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
     return d
@@ -3315,10 +3430,21 @@
       : [];
   }
 
-  /** Tube geometry drawn outside leaf places (stops at contour mouths). */
-  function conduitDisplayD(fullD, byId, _edge) {
+  /**
+   * Tube geometry: clip through leaf interiors, but keep B/F endpoint places
+   * so the tube reaches the plane boca.
+   */
+  function conduitDisplayD(fullD, byId, edge) {
     if (!fullD) return "";
-    const leafObs = placeObstacles(byId, [], 2);
+    /** @type {string[]} */
+    const keep = [];
+    if (edge && isPlaneOpeningId(edge.from_opening) && edge.from) {
+      keep.push(edge.from);
+    }
+    if (edge && isPlaneOpeningId(edge.to_opening) && edge.to) {
+      keep.push(edge.to);
+    }
+    const leafObs = placeObstacles(byId, keep, 2);
     return exteriorPathD(fullD, leafObs) || "";
   }
 

@@ -7,6 +7,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.6] — 2026-08-02
+
+### Fixed
+
+- B/F conduits again reach the plane boca (tube into the leaf, no ghost spur
+  past the cell). Contour entry stays nudged off side openings.
+- B/F markers are always biased off the place center (even a lone B1-1), not
+  only when a side opening overlaps.
+- Terminal Z-fans only when more than one strand shares the same pin cell.
+  Highway lane offset applies on the exterior only so unique terminals do not
+  pick up a rejoin Z; short terminal diagonals still allowed.
+
 ## [0.34.5] — 2026-08-02
 
 ### Fixed
