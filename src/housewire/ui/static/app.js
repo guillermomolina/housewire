@@ -1653,54 +1653,43 @@
     const ey = Array.isArray(endOp) ? endOp[1] : endOp.y;
     /** @type {number[][]} */
     const src = pts.map((p) => [p[0], p[1]]);
-    let i0 = 0;
-    let i1 = 0;
+    // First visit to start mouth, then first visit to end mouth after that.
+    let i0 = -1;
     let d0 = Infinity;
-    let d1 = Infinity;
     for (let i = 0; i < src.length; i++) {
       const ds = Math.hypot(src[i][0] - sx, src[i][1] - sy);
-      const de = Math.hypot(src[i][0] - ex, src[i][1] - ey);
       if (ds < d0) {
         d0 = ds;
         i0 = i;
       }
+    }
+    let i1 = -1;
+    let d1 = Infinity;
+    const from = Math.max(0, i0);
+    for (let i = from; i < src.length; i++) {
+      const de = Math.hypot(src[i][0] - ex, src[i][1] - ey);
       if (de < d1) {
         d1 = de;
         i1 = i;
       }
     }
-    // Need a clear start-mouth then end-mouth order along the path.
-    if (i0 > i1) {
-      const tmp = i0;
-      i0 = i1;
-      i1 = tmp;
-      // tube may need reverse
-      const t0 = Math.hypot(tube[0][0] - sx, tube[0][1] - sy);
-      const t1 = Math.hypot(
-        tube[tube.length - 1][0] - sx,
-        tube[tube.length - 1][1] - sy
-      );
-      if (t1 + 1 < t0) {
-        tube = tube.slice().reverse();
-      }
+    if (i0 < 0 || i1 < 0 || i1 <= i0) {
+      return src;
     }
-    // If mouths are missing entirely, fall back to prepend/append tube.
-    if (d0 > 24 && d1 > 24) {
-      return mergeOrthoPolys(
-        mergeOrthoPolys(src, tube),
-        src
-      ) || src;
+    if (d0 > 24 || d1 > 24) {
+      return src;
     }
     const head = src.slice(0, i0 + 1);
     const tail = src.slice(i1);
     let mid = tube.map((p) => [p[0], p[1]]);
-    // Orient tube to match head→tail direction.
-    const midStart = mid[0];
-    const midEnd = mid[mid.length - 1];
-    const headEnd = head[head.length - 1] || midStart;
+    const headEnd = head[head.length - 1];
     const alignFwd =
-      Math.hypot(midStart[0] - headEnd[0], midStart[1] - headEnd[1]) <=
-      Math.hypot(midEnd[0] - headEnd[0], midEnd[1] - headEnd[1]) + 1e-6;
+      Math.hypot(mid[0][0] - headEnd[0], mid[0][1] - headEnd[1]) <=
+      Math.hypot(
+        mid[mid.length - 1][0] - headEnd[0],
+        mid[mid.length - 1][1] - headEnd[1]
+      ) +
+        1e-6;
     if (!alignFwd) mid = mid.slice().reverse();
     return (
       mergeOrthoPolys(mergeOrthoPolys(head, mid), tail) ||
@@ -4098,28 +4087,11 @@
       chain = mergeOrthoPolys(chain, tail);
       if (!chain || chain.length < 2) return [];
 
-      // Re-assert the tube segment: strip/merge must not replace mouth→mouth
-      // with a parallel that skips the bocas.
-      chain = spliceTubeSegment(chain, tube, startOp, endOp);
-
-      chain = liftOffsetSpineFromPin(
-        chain,
-        [startAtt.x, startAtt.y],
-        startFace
-      );
-      chain = liftOffsetSpineFromPin(
-        chain.slice().reverse(),
-        [endAtt.x, endAtt.y],
-        endFace
-      ).reverse();
-
       const mouths = [startOp, endOp];
+      // Only strip out-and-back / short Z while protecting mouths. Do not run
+      // full-path ensureManhattan / lift / tube-splice — those reintroduced
+      // shared inbox trunks and pin↔mouth loops (0.34.25–26).
       let cleaned = stripShortZJogs(stripOutAndBack(chain, mouths));
-      const pins = [startAtt, endAtt];
-      cleaned = ensureManhattanNearPoint(cleaned, startOp, 48, pins);
-      cleaned = ensureManhattanNearPoint(cleaned, endOp, 48, pins);
-      cleaned = stripShortZJogs(stripOutAndBack(cleaned, mouths));
-      cleaned = spliceTubeSegment(cleaned, tube, startOp, endOp);
       if (fromSlot.count > 1) {
         cleaned = preserveTerminalVLead(startLead, cleaned);
       }

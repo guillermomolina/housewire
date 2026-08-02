@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.27] — 2026-08-02
+
+### Fixed
+
+- Hop cleanup: keep ``head + tube + tail`` from fan-tip joins; only strip
+  out-and-back with mouths protected. Dropped full-path lift / Manhattan /
+  tube-splice passes that created shared trunks and pin↔mouth loops.
+
 ## [0.34.26] — 2026-08-02
 
 ### Fixed
