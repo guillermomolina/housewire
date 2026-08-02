@@ -7,6 +7,23 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.7] — 2026-08-02
+
+### Added
+
+- Route-quality checks (`housewire.ui.route_quality` + tests): fail when
+  parallel strands overlap **or** when a run has unnecessary short C/Z jogs
+  (so fixing one problem cannot silently reintroduce the other).
+
+### Fixed
+
+- Cable sheath `color:` (e.g. `Linea_lampara` `WH`) is passed as
+  `jacket_color` and painted on the translucent jacket stroke.
+- `BK` canvas CSS lightened so black strands stay visible on the dark UI.
+- Multi-strand hops again keep a full parallel offset along the shared
+  centerline, then rejoin pins with stub+diagonal (lanes separated without
+  stacking, unique terminals without forced Manhattan Z).
+
 ## [0.34.6] — 2026-08-02
 
 ### Fixed

@@ -532,6 +532,10 @@ def _build_cable_edges(
                 name_disp = str(sn).strip()
             if sl is not None and str(sl).strip():
                 label_disp = str(sl).strip()
+            jc = sheath_entry.get("color")
+            jacket_color = str(jc).strip().upper() if jc else None
+        else:
+            jacket_color = None
         # Multi-color jacket edge: per-strand pins stay aligned with colors/
         # conductors so each wire can land on its own terminal cell.
         from_pins = [m["from_pin"] or None for m in members_sorted]
@@ -548,6 +552,7 @@ def _build_cable_edges(
             "to_pins": to_pins,
             "via": sheath,
             "colors": colors,
+            "jacket_color": jacket_color,
             "via_indices": list(range(1, len(colors) + 1)),
             "conductors": [m["conductor"] for m in members_sorted],
         }

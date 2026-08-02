@@ -515,9 +515,13 @@ codes follow **IEC 60757**; CSS hex values are the HouseWire UI palette. Use
 uppercase in YAML (`BN`, not `bn`). The UI loads the same table from
 `GET /api/wire-colors`.
 
+A Cable sheath’s own `color:` (e.g. `WH`) is the **jacket** tint on the canvas
+(`jacket_color` on the physical cable edge). Conductor `color:` values are the
+individual strand strokes.
+
 | Code | Color | Typical use |
 |------|-------|-------------|
-| `BK` | black | Phase from panel / permanent lights phase |
+| `BK` | black (canvas charcoal) | Phase from panel / permanent lights phase |
 | `BN` | brown | Switched phase, lamp feeds, some socket L |
 | `RD` | red | Catalog `dc` default (with `BK`) |
 | `OG` | orange | Available; uncommon in domestic work |
@@ -526,7 +530,7 @@ uppercase in YAML (`BN`, not `bn`). The UI loads the same table from
 | `BU` | blue | Neutral (N) |
 | `VT` | violet | Available |
 | `GY` | grey | Phase (light grey), travellers, some feeds |
-| `WH` | white | Catalog `signal` default (with `BU`) |
+| `WH` | white | Sheath jacket / catalog `signal` default |
 | `PK` | pink | Available |
 | `TQ` | turquoise | Available |
 | `GNYE` | green-yellow | Protective earth (PE) |

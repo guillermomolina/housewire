@@ -349,6 +349,20 @@ class TestPhysicalGraph(unittest.TestCase):
             self.assertEqual(edge.get("from"), "Caja/Regleta")
             self.assertEqual(edge.get("to"), "Caja2/Regleta")
 
+    def test_sheath_jacket_color_on_cable_edge(self) -> None:
+        """Cable sheath ``color:`` becomes ``jacket_color`` for the UI jacket."""
+        root = Path(__file__).resolve().parents[1] / "sites" / "Tests"
+        if not root.is_dir() or not any(root.glob("*.yaml")):
+            self.skipTest("sites/Tests fixture not present")
+        graph = build_physical_graph(root, "Habitacion")
+        edges = {
+            e["id"]: e for e in graph.get("cable_edges") or [] if e.get("id")
+        }
+        lamp = edges.get("Linea_lampara")
+        self.assertIsNotNone(lamp)
+        self.assertEqual(lamp.get("jacket_color"), "WH")
+        self.assertEqual(lamp.get("colors"), ["BK", "GNYE", "BU"])
+
 
 class TestServeApi(unittest.TestCase):
     def test_create_app_endpoints(self) -> None:
