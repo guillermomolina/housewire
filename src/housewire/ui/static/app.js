@@ -2177,6 +2177,10 @@
   }
 
   const INBOX_STUB = 14;
+  /** Keep offset spine / inbox mids this far outside the element face (px). */
+  const ELEMENT_FACE_CLEARANCE = 8;
+  /** Extra stroke beyond the tube fill for the high-contrast rim. */
+  const OUTLINE_EXTRA = 0.8;
 
   function faceOutwardDelta(face) {
     const f = String(face || "").toUpperCase();
@@ -2304,12 +2308,23 @@
         }
         pref /= mid.length;
       }
+      // Strongly penalize mid legs that stay on the element face (regleta border).
+      let faceHug = 0;
+      if (fo.x || fo.y) {
+        for (const q of mid) {
+          const along =
+            (q[0] - fromPt.x) * fo.x + (q[1] - fromPt.y) * fo.y;
+          if (along < ELEMENT_FACE_CLEARANCE) {
+            faceHug += ELEMENT_FACE_CLEARANCE - along;
+          }
+        }
+      }
       const bends = orthoBendCount([
         [fromPt.x, fromPt.y],
         ...mid,
         [toPt.x, toPt.y],
       ]);
-      const score = pref * 10 + bends;
+      const score = pref * 10 + bends + faceHug * 80;
       if (score < bestScore) {
         bestScore = score;
         bestMid = mid;
@@ -2777,21 +2792,53 @@
   const TERMINAL_DIAG_MAX = 36;
 
   /**
-   * Lead from a terminal pin into a nearby lane point.
-   * Stub only when the lane continues outward; short diagonal when close;
-   * otherwise a single Manhattan L (never stub-then-back C/Z).
+   * Push the first offset-spine vertex off the element face.
+   * Offsetting a pin-on-face start yields (pin±lane, faceY) — a segment that
+   * paints along the regleta border. Lift that point outward first.
    */
-  function pinToLanePts(pin, face, lanePt) {
+  function liftOffsetSpineFromPin(offPts, pin, face, minOut) {
+    if (!offPts || offPts.length < 1) {
+      return offPts ? offPts.map((p) => [p[0], p[1]]) : [];
+    }
+    const want = minOut == null ? ELEMENT_FACE_CLEARANCE : minOut;
     const p = {
       x: Array.isArray(pin) ? pin[0] : pin.x,
       y: Array.isArray(pin) ? pin[1] : pin.y,
     };
-    const t = {
+    const fo = faceOutwardDelta(face);
+    /** @type {number[][]} */
+    const out = offPts.map((q) => [q[0], q[1]]);
+    if (!fo.x && !fo.y) return out;
+    const along =
+      (out[0][0] - p.x) * fo.x + (out[0][1] - p.y) * fo.y;
+    if (along < want) {
+      const need = want - along;
+      out[0][0] += fo.x * need;
+      out[0][1] += fo.y * need;
+    }
+    return out;
+  }
+
+  /**
+   * Lead from a terminal pin into a nearby lane point.
+   * Stub only when the lane continues outward; short diagonal when close;
+   * otherwise a single Manhattan L (never stub-then-back C/Z).
+   * When ``slotCount > 1`` (several strands on the same terminal), fan a V
+   * with lateral offsets instead of stacking perpendicular stubs.
+   */
+  function pinToLanePts(pin, face, lanePt, slot = 0, slotCount = 1) {
+    const p = {
+      x: Array.isArray(pin) ? pin[0] : pin.x,
+      y: Array.isArray(pin) ? pin[1] : pin.y,
+    };
+    let t = {
       x: Array.isArray(lanePt) ? lanePt[0] : lanePt.x,
       y: Array.isArray(lanePt) ? lanePt[1] : lanePt.y,
     };
     if (Math.hypot(p.x - t.x, p.y - t.y) < 1e-6) return [[p.x, p.y]];
     const fo = faceOutwardDelta(face);
+    const nSlots = Math.max(1, slotCount | 0);
+    const s = Math.max(0, Math.min(nSlots - 1, slot | 0));
     /** @type {number[][]} */
     const pts = [[p.x, p.y]];
     let from = p;
@@ -2808,6 +2855,27 @@
             from = stub;
           }
         }
+      } else if (nSlots > 1) {
+        // Shared terminal: always leave the face before fanning.
+        const stub = stubPoint(p, fo.x, fo.y, 5);
+        pts.push([stub.x, stub.y]);
+        from = stub;
+      }
+    }
+    // Multi-strand same pin → V fan (lateral) before rejoining the lane.
+    if (nSlots > 1 && (fo.x || fo.y)) {
+      const nx = -fo.y;
+      const ny = fo.x;
+      const mid = (nSlots - 1) / 2;
+      const fanLat = (s - mid) * (STRAND_WIDTH + LANE_GAP);
+      const fanDepth = 10;
+      const fan = {
+        x: from.x + fo.x * fanDepth + nx * fanLat,
+        y: from.y + fo.y * fanDepth + ny * fanLat,
+      };
+      if (Math.hypot(from.x - fan.x, from.y - fan.y) > 1e-6) {
+        pts.push([fan.x, fan.y]);
+        from = fan;
       }
     }
     if (Math.hypot(from.x - t.x, from.y - t.y) < 1e-6) return pts;
@@ -2888,14 +2956,32 @@
    * Trims nothing from the highway — callers must pass offset points that
    * already end at the mouth (not at the pin).
    */
-  function rejoinLaneEndsOrtho(pin0, face0, offPts, pin1, face1) {
+  function rejoinLaneEndsOrtho(pin0, face0, offPts, pin1, face1, slot0, count0, slot1, count1) {
     if (!offPts || offPts.length < 2) {
       return offPts ? offPts.map((p) => [p[0], p[1]]) : [];
     }
-    const head = pinToLanePts(pin0, face0, offPts[0]);
-    const tail = pinToLanePts(pin1, face1, offPts[offPts.length - 1]);
+    let spine = liftOffsetSpineFromPin(offPts, pin0, face0);
+    spine = liftOffsetSpineFromPin(
+      spine.slice().reverse(),
+      pin1,
+      face1
+    ).reverse();
+    const head = pinToLanePts(
+      pin0,
+      face0,
+      spine[0],
+      slot0 || 0,
+      count0 || 1
+    );
+    const tail = pinToLanePts(
+      pin1,
+      face1,
+      spine[spine.length - 1],
+      slot1 || 0,
+      count1 || 1
+    );
     const tailRev = tail.slice().reverse();
-    let chain = mergeOrthoPolys(head, offPts);
+    let chain = mergeOrthoPolys(head, spine);
     chain = mergeOrthoPolys(chain, tailRev);
     return stripShortZJogs(stripOutAndBack(chain || []));
   }
@@ -3239,7 +3325,11 @@
           f1,
           corridorOff,
           [p2.x, p2.y],
-          f2
+          f2,
+          fromSlot.slot,
+          fromSlot.count,
+          toSlot.slot,
+          toSlot.count
         ),
       ];
     }
@@ -3428,16 +3518,23 @@
         if (startTailCtr && startTailCtr.length >= 2) {
           // Tail runs pin→mouth (opposite the exterior's leave direction),
           // so flip the offset sign or lanes cross at the boca.
-          const startOff =
+          let startOff =
             Math.abs(laneDist) < 1e-9
               ? startTailCtr.map((p) => [p[0], p[1]])
               : offsetOrthoPts(startTailCtr, -laneDist);
           if (startOff.length >= 2) {
+            startOff = liftOffsetSpineFromPin(
+              startOff,
+              [startAtt.x, startAtt.y],
+              startFace
+            );
             startOff[startOff.length - 1] = [startJoin[0], startJoin[1]];
             const head = pinToLanePts(
               [startAtt.x, startAtt.y],
               startFace,
-              startOff[0]
+              startOff[0],
+              fromSlot.slot,
+              fromSlot.count
             );
             chain = mergeOrthoPolys(head, startOff);
           }
@@ -3446,7 +3543,9 @@
           chain = pinToLanePts(
             [startAtt.x, startAtt.y],
             startFace,
-            startJoin
+            startJoin,
+            fromSlot.slot,
+            fromSlot.count
           );
         }
         for (const ext of exOff) {
@@ -3462,16 +3561,23 @@
           toPin
         );
         if (endTailCtr && endTailCtr.length >= 2) {
-          const endOff =
+          let endOff =
             Math.abs(laneDist) < 1e-9
               ? endTailCtr.map((p) => [p[0], p[1]])
               : offsetOrthoPts(endTailCtr, -laneDist);
           if (endOff.length >= 2) {
+            endOff = liftOffsetSpineFromPin(
+              endOff,
+              [endAtt.x, endAtt.y],
+              endFace
+            );
             endOff[endOff.length - 1] = [endJoin[0], endJoin[1]];
             const head = pinToLanePts(
               [endAtt.x, endAtt.y],
               endFace,
-              endOff[0]
+              endOff[0],
+              toSlot.slot,
+              toSlot.count
             );
             const endPart = mergeOrthoPolys(head, endOff);
             chain = mergeOrthoPolys(chain, endPart.slice().reverse());
@@ -3480,7 +3586,9 @@
           const lead = pinToLanePts(
             [endAtt.x, endAtt.y],
             endFace,
-            endJoin
+            endJoin,
+            toSlot.slot,
+            toSlot.count
           );
           chain = mergeOrthoPolys(chain, lead.slice().reverse());
         }
@@ -3495,14 +3603,21 @@
           fromPin
         );
         if (startTail) {
-          const startOff =
+          let startOff =
             Math.abs(laneDist) < 1e-9
               ? startTail.map((p) => [p[0], p[1]])
               : offsetOrthoPts(startTail, -laneDist);
+          startOff = liftOffsetSpineFromPin(
+            startOff,
+            [startAtt.x, startAtt.y],
+            startFace
+          );
           const head = pinToLanePts(
             [startAtt.x, startAtt.y],
             startFace,
-            startOff[0] || startTail[0]
+            startOff[0] || startTail[0],
+            fromSlot.slot,
+            fromSlot.count
           );
           chain = mergeOrthoPolys(head, startOff.length ? startOff : startTail);
         }
@@ -3516,14 +3631,21 @@
           toPin
         );
         if (endTail) {
-          const endOff =
+          let endOff =
             Math.abs(laneDist) < 1e-9
               ? endTail.map((p) => [p[0], p[1]])
               : offsetOrthoPts(endTail, -laneDist);
+          endOff = liftOffsetSpineFromPin(
+            endOff,
+            [endAtt.x, endAtt.y],
+            endFace
+          );
           const head = pinToLanePts(
             [endAtt.x, endAtt.y],
             endFace,
-            endOff[0] || endTail[0]
+            endOff[0] || endTail[0],
+            toSlot.slot,
+            toSlot.count
           );
           const endPart = mergeOrthoPolys(
             head,
@@ -3711,7 +3833,7 @@
         const tubeCss = wireColorCss(item.edge.color || "GY");
         const outlineCss = contrastOutlineCss(tubeCss);
         if (outline && item.paths.length > 1) {
-          outline.style.strokeWidth = String(roadW + 2.5);
+          outline.style.strokeWidth = String(roadW + OUTLINE_EXTRA);
           outline.style.stroke = outlineCss;
         }
         if (tube) {
@@ -4118,7 +4240,7 @@
         d: displayD,
       });
       tubeOutline.style.stroke = outlineCss;
-      tubeOutline.style.strokeWidth = String(roadW + 2.5);
+      tubeOutline.style.strokeWidth = String(roadW + OUTLINE_EXTRA);
       tubeOutline.style.strokeOpacity = "0.95";
       const tube = el("path", { class: "edge-tube", d: displayD });
       tube.style.stroke = tubeCss;
@@ -5943,6 +6065,32 @@
     }
   }
 
+  const THEME_KEY = "housewire-theme";
+
+  function currentTheme() {
+    const t = document.documentElement.getAttribute("data-theme");
+    return t === "light" ? "light" : "dark";
+  }
+
+  function syncThemeMenu() {
+    const theme = currentTheme();
+    const dark = document.getElementById("menu-theme-dark");
+    const light = document.getElementById("menu-theme-light");
+    if (dark) dark.setAttribute("aria-checked", theme === "dark" ? "true" : "false");
+    if (light) light.setAttribute("aria-checked", theme === "light" ? "true" : "false");
+  }
+
+  function setTheme(theme) {
+    const next = theme === "light" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch (_) {
+      /* ignore quota / private mode */
+    }
+    syncThemeMenu();
+  }
+
   const menuView = document.getElementById("menu-view");
   if (menuView) {
     menuView.addEventListener("click", (ev) => {
@@ -5953,6 +6101,11 @@
       if (action === "electrical") {
         closeAllMenus();
         setElectrical(!showElectrical);
+        return;
+      }
+      if (action === "theme-dark" || action === "theme-light") {
+        closeAllMenus();
+        setTheme(action === "theme-light" ? "light" : "dark");
         return;
       }
       closeAllMenus();
@@ -5970,6 +6123,8 @@
       }
     });
   }
+
+  syncThemeMenu();
 
   function closeAboutModal() {
     const modal = document.getElementById("about-modal");

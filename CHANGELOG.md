@@ -7,6 +7,29 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.12] — 2026-08-02
+
+### Fixed
+
+- Inbox lane offset no longer paints along regleta/element faces (spine is
+  lifted off the attach face before pin rejoin).
+- Several strands on the same terminal fan in a V (slot-based) instead of
+  stacking perpendicular stubs.
+- Inbox L scoring penalizes mid legs that hug the element face (fewer
+  border slides / crossings).
+- High-contrast conduit rim is thinner (`OUTLINE_EXTRA` 0.8px).
+
+### Added
+
+- Route-quality detectors for element-border hugs and perpendicular shared
+  terminal entry (want V).
+
+## [0.34.11] — 2026-08-02
+
+### Added
+
+- View menu Dark / Light mode toggle (persisted in `localStorage`).
+
 ## [0.34.10] — 2026-08-02
 
 ### Fixed

@@ -4,9 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>HouseWire — physical</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("housewire-theme");
+        if (t !== "light" && t !== "dark") t = "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    })();
+  </script>
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <link rel="stylesheet" href="/static/app.css?v=0.34.10" />
+  <link rel="stylesheet" href="/static/app.css?v=0.34.12" />
 </head>
 <body>
   <nav class="menubar" aria-label="Application">
@@ -93,6 +104,15 @@
       <div class="menu-dropdown hidden" id="menu-view" role="menu">
         <button type="button" role="menuitemcheckbox" data-view-action="electrical" id="menu-electrical" aria-checked="false">
           <span class="menu-item-main"><i class="fa-solid fa-bolt" aria-hidden="true"></i><span>Electrical</span></span>
+          <span class="menu-check" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+        </button>
+        <hr class="menu-sep" />
+        <button type="button" role="menuitemradio" data-view-action="theme-dark" id="menu-theme-dark" aria-checked="true">
+          <span class="menu-item-main"><i class="fa-solid fa-moon" aria-hidden="true"></i><span>Dark mode</span></span>
+          <span class="menu-check" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+        </button>
+        <button type="button" role="menuitemradio" data-view-action="theme-light" id="menu-theme-light" aria-checked="false">
+          <span class="menu-item-main"><i class="fa-solid fa-sun" aria-hidden="true"></i><span>Light mode</span></span>
           <span class="menu-check" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
         </button>
         <hr class="menu-sep" />
@@ -344,6 +364,6 @@
     </div>
   </div>
   <input type="file" id="file-open-input" accept=".yaml,.yml,text/yaml,application/x-yaml" hidden />
-  <script src="/static/app.js?v=0.34.10"></script>
+  <script src="/static/app.js?v=0.34.12"></script>
 </body>
 </html>

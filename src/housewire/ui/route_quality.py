@@ -27,6 +27,14 @@ MAX_Z_LEG = 28.0
 MAX_C_LEG = 18.0
 # Terminal-only diagonals may be this long; longer = boca→element bug.
 TERMINAL_DIAG_MAX = 36.0
+# Min run (px) along an element edge before counting as a hug.
+ELEMENT_BORDER_MIN_RUN = 12.0
+# Clearance (px) from element box edges for inbox corridors.
+ELEMENT_BORDER_CLEARANCE = 6.0
+# Contrast rim beyond tube stroke (must match app.js OUTLINE_EXTRA).
+OUTLINE_EXTRA = 0.8
+# Lateral pitch used for shared-terminal V fans.
+FAN_LATERAL_PITCH = LANE_PITCH
 
 
 def _dist(a: Point, b: Point) -> float:
@@ -266,6 +274,132 @@ def count_c_jogs(pts: Poly, *, max_leg: float = MAX_C_LEG) -> int:
     return count
 
 
+def _face_axes(face: str) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Return (outward unit, lateral unit) for a cardinal face."""
+    f = (face or "?").upper()
+    if f == "N":
+        return (0.0, -1.0), (1.0, 0.0)
+    if f == "S":
+        return (0.0, 1.0), (1.0, 0.0)
+    if f == "W":
+        return (-1.0, 0.0), (0.0, 1.0)
+    if f == "E":
+        return (1.0, 0.0), (0.0, 1.0)
+    return (0.0, 0.0), (1.0, 0.0)
+
+
+def approach_point_before_pin(pts: Poly, pin: Point, *, tol: float = 1.5) -> Point | None:
+    """Vertex used to judge V-entry (skip pin + short outward stub)."""
+    if len(pts) < 2:
+        return None
+    if _dist(pts[0], pin) <= tol:
+        seq = list(pts)
+    elif _dist(pts[-1], pin) <= tol:
+        seq = list(reversed(pts))
+    else:
+        return None
+    # seq[0] ~= pin. Skip a short stub (≤8px) so V fans use the fan tip.
+    if len(seq) >= 3 and _dist(seq[0], seq[1]) <= 8.0:
+        return (seq[2][0], seq[2][1])
+    return (seq[1][0], seq[1][1])
+
+
+def shared_terminal_entry_is_v(
+    pin: Point,
+    face: str,
+    approach_pts: Sequence[Point],
+    *,
+    min_lateral_span: float = FAN_LATERAL_PITCH * 0.6,
+) -> bool:
+    """True when ≥2 approaches fan laterally (V), not stacked on the normal.
+
+    ``approach_pts`` are the vertices immediately before the pin (or after a
+    short stub) for each strand sharing the terminal.
+    """
+    if len(approach_pts) < 2:
+        return True
+    _out, lat = _face_axes(face)
+    laterals = [
+        (p[0] - pin[0]) * lat[0] + (p[1] - pin[1]) * lat[1] for p in approach_pts
+    ]
+    return (max(laterals) - min(laterals)) >= min_lateral_span
+
+
+def perpendicular_shared_terminal_entry(
+    pin: Point,
+    face: str,
+    approach_pts: Sequence[Point],
+    *,
+    lateral_tol: float = 2.0,
+) -> bool:
+    """True when several strands share a pin but all approach on the face normal.
+
+    This is the live Luminaire/Regleta bug: stub then axis-aligned rejoin with
+    no lateral fan (looks like a perpendicular stack, not a V).
+    """
+    if len(approach_pts) < 2:
+        return False
+    return not shared_terminal_entry_is_v(
+        pin, face, approach_pts, min_lateral_span=lateral_tol + 0.5
+    )
+
+
+Rect = tuple[float, float, float, float]  # x, y, w, h
+
+
+def polyline_hugs_rect_border(
+    pts: Poly,
+    rect: Rect,
+    *,
+    clearance: float = ELEMENT_BORDER_CLEARANCE,
+    min_run: float = ELEMENT_BORDER_MIN_RUN,
+    ignore_near: Sequence[Point] | None = None,
+) -> bool:
+    """True when a segment runs along a rect edge within ``clearance``.
+
+    Short terminal stubs ending at ``ignore_near`` pins are skipped so a
+    legitimate face landing is not flagged.
+    """
+    if len(pts) < 2:
+        return False
+    rx, ry, rw, rh = rect
+    left, right = rx, rx + rw
+    top, bottom = ry, ry + rh
+    ignore = list(ignore_near or [])
+
+    def near_ignored(p: Point) -> bool:
+        return any(_dist(p, q) <= clearance + 1.0 for q in ignore)
+
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        run = _dist(a, b)
+        if run < min_run:
+            continue
+        # Skip segments that terminate on an ignored pin (final lead).
+        if near_ignored(a) or near_ignored(b):
+            continue
+        ax, ay = a
+        bx, by = b
+        horiz = abs(ay - by) < 1e-6
+        vert = abs(ax - bx) < 1e-6
+        if horiz:
+            y = ay
+            x0, x1 = sorted((ax, bx))
+            # Overlap in x with the rect.
+            if x1 < left - 1e-6 or x0 > right + 1e-6:
+                continue
+            if abs(y - top) <= clearance or abs(y - bottom) <= clearance:
+                return True
+        elif vert:
+            x = ax
+            y0, y1 = sorted((ay, by))
+            if y1 < top - 1e-6 or y0 > bottom + 1e-6:
+                continue
+            if abs(x - left) <= clearance or abs(x - right) <= clearance:
+                return True
+    return False
+
+
 def assess_bundle(
     strands: Sequence[Poly],
     *,
@@ -274,6 +408,11 @@ def assess_bundle(
     allow_c: bool = False,
     allow_long_diagonal: bool = False,
     allow_crossings: bool = False,
+    element_rects: Sequence[Rect] | None = None,
+    shared_terminals: Sequence[
+        tuple[Point, str, Sequence[Poly]]
+    ]
+    | None = None,
 ) -> list[str]:
     """Return human-readable problems for a parallel strand bundle.
 
@@ -281,6 +420,8 @@ def assess_bundle(
     terminal and an intentional fan is expected.
     ``allow_long_diagonal``: set True only in tests of the detector itself.
     ``allow_crossings``: set True only when intentional crossing is expected.
+    ``element_rects``: flag inbox segments that hug element box borders.
+    ``shared_terminals``: list of (pin, face, strand_polys) that must V-enter.
     """
     issues: list[str] = []
     if len(strands) >= 2 and strands_overlap(
@@ -308,6 +449,31 @@ def assess_bundle(
                 issues.append(
                     f"strand {i}: {n} long diagonal(s) "
                     f"(>{TERMINAL_DIAG_MAX:g}px; boca→element)"
+                )
+    if element_rects:
+        pins: list[Point] = []
+        if shared_terminals:
+            pins.extend(t[0] for t in shared_terminals)
+        for ri, rect in enumerate(element_rects):
+            for i, poly in enumerate(strands):
+                if polyline_hugs_rect_border(
+                    poly, rect, ignore_near=pins
+                ):
+                    issues.append(
+                        f"strand {i}: hugs element rect {ri} border"
+                    )
+    if shared_terminals:
+        for ti, (pin, face, polys) in enumerate(shared_terminals):
+            approaches: list[Point] = []
+            for poly in polys:
+                ap = approach_point_before_pin(poly, pin)
+                if ap is not None:
+                    approaches.append(ap)
+            if len(approaches) >= 2 and perpendicular_shared_terminal_entry(
+                pin, face, approaches
+            ):
+                issues.append(
+                    f"shared terminal {ti}: perpendicular entry (want V)"
                 )
     return issues
 

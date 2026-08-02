@@ -14,6 +14,7 @@ from housewire.house.wire_colors import CONDUCTOR_COLORS, css_for_color
 from housewire.ui.route_quality import (
     LANE_PITCH,
     MIN_LANE_SEPARATION,
+    OUTLINE_EXTRA,
     TERMINAL_DIAG_MAX,
     assess_bundle,
     count_c_jogs,
@@ -22,6 +23,9 @@ from housewire.ui.route_quality import (
     max_diagonal_length,
     offset_ortho,
     parallel_highway_bundle,
+    perpendicular_shared_terminal_entry,
+    polyline_hugs_rect_border,
+    shared_terminal_entry_is_v,
     strands_overlap,
 )
 
@@ -183,6 +187,103 @@ class TestBothInvariantsTogether(unittest.TestCase):
         bad_lead = _manhattan_pin_join(pin, off[0])
         strand = bad_lead + off[1:]
         self.assertGreaterEqual(count_z_jogs(strand), 1)
+
+
+class TestElementBorderAndVEntry(unittest.TestCase):
+    def test_segment_on_regleta_top_edge_is_hug(self) -> None:
+        # Live bug: offset spine starts on the N face → horizontal on the border.
+        rect = (100.0, 100.0, 80.0, 40.0)  # Regleta-like
+        pin = (140.0, 100.0)
+        along_edge = [
+            (110.0, 100.0),
+            (170.0, 100.0),
+            (170.0, 60.0),
+        ]
+        self.assertTrue(
+            polyline_hugs_rect_border(along_edge, rect, ignore_near=[pin])
+        )
+        issues = assess_bundle(
+            [along_edge],
+            element_rects=[rect],
+        )
+        self.assertTrue(any("hugs element" in x for x in issues), msg=issues)
+
+    def test_lifted_spine_above_face_is_not_hug(self) -> None:
+        rect = (100.0, 100.0, 80.0, 40.0)
+        pin = (140.0, 100.0)
+        clear = [
+            (140.0, 100.0),
+            (140.0, 92.0),
+            (170.0, 92.0),
+            (170.0, 60.0),
+        ]
+        self.assertFalse(
+            polyline_hugs_rect_border(clear, rect, ignore_near=[pin])
+        )
+        self.assertEqual(
+            assess_bundle([clear], element_rects=[rect], shared_terminals=[(pin, "N", [clear])]),
+            [],
+        )
+
+    def test_perpendicular_stack_on_shared_terminal_detected(self) -> None:
+        # Two strands on Luminaire.N1: stub then axis-aligned (no V).
+        pin = (320.0, 160.0)
+        face = "N"
+        a = [(320.0, 160.0), (320.0, 154.0), (320.0, 130.0)]
+        b = [(320.0, 160.0), (320.0, 154.0), (320.0, 120.0)]
+        approaches = [(320.0, 154.0), (320.0, 154.0)]
+        self.assertTrue(
+            perpendicular_shared_terminal_entry(pin, face, approaches)
+        )
+        self.assertFalse(shared_terminal_entry_is_v(pin, face, approaches))
+        issues = assess_bundle(
+            [a, b],
+            allow_crossings=True,
+            shared_terminals=[(pin, face, [a, b])],
+        )
+        self.assertTrue(
+            any("perpendicular entry" in x for x in issues), msg=issues
+        )
+
+    def test_v_fan_on_shared_terminal_ok(self) -> None:
+        pin = (320.0, 160.0)
+        face = "N"
+        a = [(320.0, 160.0), (320.0, 154.0), (312.0, 140.0), (312.0, 100.0)]
+        b = [(320.0, 160.0), (320.0, 154.0), (328.0, 140.0), (328.0, 100.0)]
+        approaches = [(312.0, 140.0), (328.0, 140.0)]
+        self.assertTrue(shared_terminal_entry_is_v(pin, face, approaches))
+        self.assertFalse(
+            perpendicular_shared_terminal_entry(pin, face, approaches)
+        )
+        issues = assess_bundle(
+            [a, b],
+            allow_z=True,
+            allow_crossings=True,
+            shared_terminals=[(pin, face, [a, b])],
+        )
+        self.assertFalse(
+            any("perpendicular" in x for x in issues), msg=issues
+        )
+
+    def test_outline_extra_is_thin(self) -> None:
+        # Rim must stay a hairline beyond the tube (was roadW+2.5).
+        self.assertLessEqual(OUTLINE_EXTRA, 1.25)
+        self.assertGreater(OUTLINE_EXTRA, 0.0)
+
+    def test_screenshot_style_inbox_crossings_flagged(self) -> None:
+        # Two inbox corridors that properly cross (X) inside the box.
+        a = [(100.0, 140.0), (100.0, 80.0), (200.0, 80.0), (200.0, 40.0)]
+        b = [(160.0, 140.0), (160.0, 100.0), (80.0, 100.0), (80.0, 40.0)]
+        # Force a clear mid-run X: horizontal vs vertical.
+        c = [(50.0, 90.0), (250.0, 90.0)]
+        d = [(150.0, 40.0), (150.0, 140.0)]
+        issues = assess_bundle([c, d])
+        self.assertTrue(any("cross" in x for x in issues), msg=issues)
+        issues_ab = assess_bundle([a, b], min_separation=0.5)
+        self.assertTrue(
+            any("cross" in x for x in issues_ab) or any("overlap" in x for x in issues_ab),
+            msg=issues_ab,
+        )
 
 
 class TestConductorPaletteContrast(unittest.TestCase):

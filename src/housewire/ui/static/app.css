@@ -1,4 +1,6 @@
-:root {
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #1a1d21;
   --panel: #24292f;
   --border: #3d444d;
@@ -13,6 +15,38 @@
   --element: #388bfd;
   --opening: #d2a8ff;
   --back: #f0883e;
+  --canvas-dot: #30363d;
+  --container-fill: #1e242c;
+  --tree-row: #30363d;
+  --tree-row-active: #21262d;
+  --tube-fill: #9da5b0;
+  --tube-outline: #e6edf3;
+  --terminal-fill: #e6edf3;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f8fa;
+  --panel: #ffffff;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --muted: #656d76;
+  --accent: #1a7f37;
+  --selection: #bf8700;
+  --node: #ffffff;
+  --node-stroke: #8c959f;
+  --edge: #0969da;
+  --cable: #1a7f37;
+  --element: #0969da;
+  --opening: #8250df;
+  --back: #bc4c00;
+  --canvas-dot: #d0d7de;
+  --container-fill: #eaeef2;
+  --tree-row: #eaeef2;
+  --tree-row-active: #ddf4ff;
+  --tube-fill: #8c959f;
+  --tube-outline: #1f2328;
+  --terminal-fill: #ffffff;
 }
 
 * {
@@ -935,11 +969,11 @@ button:hover {
 }
 
 .outline-item:hover {
-  background: #30363d;
+  background: var(--tree-row);
 }
 
 .outline-item.active {
-  background: color-mix(in srgb, var(--selection) 14%, #21262d);
+  background: color-mix(in srgb, var(--selection) 14%, var(--tree-row-active));
   outline: 1px solid var(--selection);
 }
 
@@ -990,7 +1024,7 @@ button:hover {
   overflow: hidden;
   cursor: grab;
   background:
-    radial-gradient(circle at 1px 1px, #30363d 1px, transparent 0) 0 0 / 24px 24px;
+    radial-gradient(circle at 1px 1px, var(--canvas-dot) 1px, transparent 0) 0 0 / 24px 24px;
 }
 
 #viewport.panning {
@@ -1249,7 +1283,7 @@ button:hover {
 }
 
 .node-box.container {
-  fill: #1e242c;
+  fill: var(--container-fill);
   fill-opacity: 0.55;
   stroke-dasharray: 5 3;
 }
@@ -1300,7 +1334,7 @@ button:hover {
 
 .edge-tube {
   fill: none;
-  stroke: #9da5b0;
+  stroke: var(--tube-fill);
   /* Width set in JS from contained strand count (presentation attrs lose to CSS). */
   stroke-opacity: 0.25;
   stroke-linecap: round;
@@ -1308,10 +1342,10 @@ button:hover {
   pointer-events: none;
 }
 
-/* Thin high-contrast rim around the conduit (dark UI → light rim). */
+/* Thin high-contrast rim around the conduit (theme default; JS may override). */
 .edge-tube-outline {
   fill: none;
-  stroke: #e6edf3;
+  stroke: var(--tube-outline);
   stroke-opacity: 0.85;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -1367,8 +1401,8 @@ button:hover {
 }
 
 .element-terminal {
-  fill: #e6edf3;
-  stroke: #1f6feb;
+  fill: var(--terminal-fill);
+  stroke: var(--element);
   stroke-width: 1.25;
   pointer-events: none;
 }
