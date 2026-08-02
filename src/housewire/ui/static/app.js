@@ -1559,9 +1559,12 @@
     const my = Array.isArray(mouth) ? mouth[1] : mouth.y;
     /** @type {number[][]} */
     const out = pts.map((p) => [p[0], p[1]]);
+    // Only drop vertices that already sit on the mouth. A looser pop (e.g. 8)
+    // removed the offset lane's arrival at mouth latitude (~laneDist away) and
+    // rebuilt from mid-tube — later fan merges then skipped the boca.
     while (
       out.length > 1 &&
-      Math.hypot(out[out.length - 1][0] - mx, out[out.length - 1][1] - my) < 8
+      Math.hypot(out[out.length - 1][0] - mx, out[out.length - 1][1] - my) < 1.5
     ) {
       out.pop();
     }

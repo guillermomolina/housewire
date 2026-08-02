@@ -1316,7 +1316,7 @@ def converge_lane_to_mouth(
     mx, my = float(mouth[0]), float(mouth[1])
     mouth_p = (mx, my)
     out: list[Point] = [(float(p[0]), float(p[1])) for p in pts]
-    while len(out) > 1 and _dist(out[-1], mouth_p) < 8.0:
+    while len(out) > 1 and _dist(out[-1], mouth_p) < 1.5:
         out.pop()
     last = out[-1]
     if _dist(last, mouth_p) < 1e-6:

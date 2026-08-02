@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.33] — 2026-08-02
+
+### Fixed
+
+- ``convergeLaneToMouth`` only pops vertices already on the mouth (tol 1.5),
+  not the offset lane's arrival ~laneDist away (tol 8 skipped bocas).
+
 ## [0.34.32] — 2026-08-02
 
 ### Fixed

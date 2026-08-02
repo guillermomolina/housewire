@@ -1030,6 +1030,24 @@ class TestMouthExitAndTubeEnvelope(unittest.TestCase):
                     msg=(mouth, lane),
                 )
 
+    def test_converge_keeps_offset_arrival_near_mouth(self) -> None:
+        """Pop threshold must not erase the offset lane at mouth latitude."""
+        from housewire.ui.route_quality import converge_lane_to_mouth
+
+        mouth = (1147.0, 459.5)
+        # Offset lane arrives 5px beside the mouth (typical laneDist).
+        lane = [(1147.0, 308.0), (1152.0, 308.0), (1152.0, 459.5)]
+        out = converge_lane_to_mouth(lane, mouth, at_start=False)
+        self.assertTrue(
+            any(abs(p[1] - 459.5) < 0.5 and abs(p[0] - 1152.0) < 0.5 for p in out),
+            msg=out,
+        )
+        self.assertLessEqual(
+            min(((p[0] - mouth[0]) ** 2 + (p[1] - mouth[1]) ** 2) ** 0.5 for p in out),
+            1.5,
+            msg=out,
+        )
+
     def test_assess_bundle_flags_outside_tube_and_early_exit(self) -> None:
         from housewire.ui.route_quality import highway_road_width
 
