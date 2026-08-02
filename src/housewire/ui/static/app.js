@@ -2319,12 +2319,22 @@
           }
         }
       }
-      const bends = orthoBendCount([
+      const fullCand = [
         [fromPt.x, fromPt.y],
         ...mid,
         [toPt.x, toPt.y],
-      ]);
-      const score = pref * 10 + bends + faceHug * 80;
+      ];
+      const bends = orthoBendCount(fullCand);
+      let reverse = 0;
+      for (let k = 2; k < fullCand.length; k++) {
+        const ax = fullCand[k - 1][0] - fullCand[k - 2][0];
+        const ay = fullCand[k - 1][1] - fullCand[k - 2][1];
+        const bx = fullCand[k][0] - fullCand[k - 1][0];
+        const by = fullCand[k][1] - fullCand[k - 1][1];
+        if (Math.abs(ax * by - ay * bx) > 1e-6) continue;
+        if (ax * bx + ay * by < -1e-6) reverse += 1;
+      }
+      const score = pref * 10 + bends + faceHug * 80 + reverse * 500;
       if (score < bestScore) {
         bestScore = score;
         bestMid = mid;
@@ -2923,11 +2933,58 @@
       return lead.map((p) => [p[0], p[1]]);
     }
     const tip = lead[lead.length - 1];
-    let rest = trimSpineAfterLead(spine, tip);
-    const bridge = orthoJoinEnd([tip], rest[0], face);
-    let chain = mergeOrthoPolys(lead, bridge);
-    chain = mergeOrthoPolys(chain, rest);
-    return stripOutAndBack(stripShortZJogs(chain || []));
+    const pin = lead[0];
+    /** Pick spine join index that avoids ida-y-vuelta / long detours. */
+    let best = null;
+    let bestScore = Infinity;
+    const lim = Math.min(spine.length, 12);
+    for (let i = 0; i < lim; i++) {
+      const join = spine[i];
+      const bridge = orthoJoinEnd([tip], join, face);
+      /** @type {number[][]} */
+      let trial = mergeOrthoPolys(lead, bridge) || [];
+      const rest = spine.slice(i);
+      trial = mergeOrthoPolys(trial, rest) || trial;
+      trial = stripOutAndBack(stripShortZJogs(trial));
+      let back = 0;
+      for (let k = 2; k < Math.min(trial.length, 10); k++) {
+        const ax = trial[k - 1][0] - trial[k - 2][0];
+        const ay = trial[k - 1][1] - trial[k - 2][1];
+        const bx = trial[k][0] - trial[k - 1][0];
+        const by = trial[k][1] - trial[k - 1][1];
+        if (Math.abs(ax * by - ay * bx) > 1e-6) continue;
+        if (ax * bx + ay * by < -1e-6) back += 1;
+      }
+      let len = 0;
+      for (let k = 1; k < bridge.length; k++) {
+        len += Math.hypot(
+          bridge[k][0] - bridge[k - 1][0],
+          bridge[k][1] - bridge[k - 1][1]
+        );
+      }
+      // Prefer continuing away from the pin after the tip.
+      const away =
+        (join[0] - tip[0]) * (tip[0] - pin[0]) +
+        (join[1] - tip[1]) * (tip[1] - pin[1]);
+      const score = back * 1e5 + len + (away < 0 ? 500 : 0) + i * 2;
+      if (score < bestScore) {
+        bestScore = score;
+        best = trial;
+      }
+    }
+    return best && best.length >= 2
+      ? best
+      : stripOutAndBack(
+          stripShortZJogs(
+            mergeOrthoPolys(
+              lead,
+              mergeOrthoPolys(
+                orthoJoinEnd([tip], spine[0], face),
+                spine
+              )
+            ) || lead
+          )
+        );
   }
 
   /**
@@ -3607,15 +3664,9 @@
           );
       const oriented = orientExteriorSubs(exteriors, startOp, endOp);
 
-      // Parallel offset on exterior AND on Manhattan inbox spines. Pins rejoin
-      // with stub + short diagonal only (no boca→element diagonals).
-      /** @type {number[][][]} */
-      const exOff = [];
-      for (const ext of oriented) {
-        const o = parallel(ext);
-        if (o && o.length >= 2) exOff.push(o);
-      }
-
+      // ONE continuous centerline (inbox → exterior → inbox), then a single
+      // +laneDist parallel offset. Flipping the sign on pin→mouth tails made
+      // lanes peel at elbows and squash/cross at openings.
       const startAtt = resolveElementAttach(
         a,
         fromPin,
@@ -3636,208 +3687,92 @@
         startAtt.face || elementAttachFace(a, startOp, placeById);
       const endFace = endAtt.face || elementAttachFace(b, endOp, placeById);
 
+      const startTailCtr = hopEndpointTailPts(
+        a,
+        startPlace,
+        first.from_opening,
+        placeById,
+        fromSlot.slot,
+        fromSlot.count,
+        fromPin
+      );
+      const endTailCtr = hopEndpointTailPts(
+        b,
+        endPlace,
+        last.to_opening,
+        placeById,
+        toSlot.slot,
+        toSlot.count,
+        toPin
+      );
+
       /** @type {number[][]|null} */
-      let chain = null;
-      if (exOff.length) {
-        const startJoin = exOff[0][0];
-        const endJoin =
-          exOff[exOff.length - 1][exOff[exOff.length - 1].length - 1];
-        // Centerline inbox to the contour entry, then lane-offset the spine.
-        const startTailCtr = hopEndpointTailPts(
-          a,
-          startPlace,
-          first.from_opening,
-          placeById,
-          fromSlot.slot,
-          fromSlot.count,
-          fromPin
-        );
-        if (startTailCtr && startTailCtr.length >= 2) {
-          // Tail runs pin→mouth (opposite the exterior's leave direction),
-          // so flip the offset sign or lanes cross at the boca.
-          let startOff =
-            Math.abs(laneDist) < 1e-9
-              ? startTailCtr.map((p) => [p[0], p[1]])
-              : offsetOrthoPts(startTailCtr, -laneDist);
-          if (startOff.length >= 2) {
-            startOff = liftOffsetSpineFromPin(
-              startOff,
-              [startAtt.x, startAtt.y],
-              startFace
-            );
-            // Never snap last→join (that paints a diagonal funnel into the
-            // opening). Drop the offset mouth vertex and Manhattan-join.
-            const mouthFace = routeFace(
-              startPlace,
-              first.from_opening,
-              first.from_opening?.[0],
-              placeById
-            );
-            if (startOff.length >= 2) startOff = startOff.slice(0, -1);
-            startOff = orthoJoinEnd(startOff, startJoin, mouthFace);
-            startOff = ensureManhattanNearPoint(startOff, startJoin, 48, [
-              startAtt,
-            ]);
-            const head = pinToLanePts(
-              [startAtt.x, startAtt.y],
-              startFace,
-              startOff[0],
-              fromSlot.slot,
-              fromSlot.count
-            );
-            chain = mergeLeadToSpine(head, startOff, startFace);
-          }
-        }
-        if (!chain) {
-          const mouthFace = routeFace(
-            startPlace,
-            first.from_opening,
-            first.from_opening?.[0],
-            placeById
-          );
-          chain = orthoJoinEnd(
-            [
-              [startAtt.x, startAtt.y],
-            ],
-            startJoin,
-            mouthFace
-          );
-        }
-        for (const ext of exOff) {
-          chain = mergeOrthoPolys(chain, ext);
-        }
-        const endTailCtr = hopEndpointTailPts(
-          b,
-          endPlace,
-          last.to_opening,
-          placeById,
-          toSlot.slot,
-          toSlot.count,
-          toPin
-        );
-        if (endTailCtr && endTailCtr.length >= 2) {
-          let endOff =
-            Math.abs(laneDist) < 1e-9
-              ? endTailCtr.map((p) => [p[0], p[1]])
-              : offsetOrthoPts(endTailCtr, -laneDist);
-          if (endOff.length >= 2) {
-            endOff = liftOffsetSpineFromPin(
-              endOff,
-              [endAtt.x, endAtt.y],
-              endFace
-            );
-            const mouthFace = routeFace(
-              endPlace,
-              last.to_opening,
-              last.to_opening?.[0],
-              placeById
-            );
-            if (endOff.length >= 2) endOff = endOff.slice(0, -1);
-            endOff = orthoJoinEnd(endOff, endJoin, mouthFace);
-            endOff = ensureManhattanNearPoint(endOff, endJoin, 48, [endAtt]);
-            const head = pinToLanePts(
-              [endAtt.x, endAtt.y],
-              endFace,
-              endOff[0],
-              toSlot.slot,
-              toSlot.count
-            );
-            const endPart = mergeLeadToSpine(head, endOff, endFace);
-            chain = mergeOrthoPolys(chain, endPart.slice().reverse());
-          }
-        } else {
-          const mouthFace = routeFace(
-            endPlace,
-            last.to_opening,
-            last.to_opening?.[0],
-            placeById
-          );
-          const lead = orthoJoinEnd(
-            [[endAtt.x, endAtt.y]],
-            endJoin,
-            mouthFace
-          );
-          chain = mergeOrthoPolys(chain, lead.slice().reverse());
-        }
-        if (chain) {
-          chain = ensureManhattanNearPoint(chain, startJoin);
-          chain = ensureManhattanNearPoint(chain, endJoin);
-        }
-      } else {
-        const startTail = hopEndpointTailPts(
-          a,
-          startPlace,
-          first.from_opening,
-          placeById,
-          fromSlot.slot,
-          fromSlot.count,
-          fromPin
-        );
-        if (startTail) {
-          let startOff =
-            Math.abs(laneDist) < 1e-9
-              ? startTail.map((p) => [p[0], p[1]])
-              : offsetOrthoPts(startTail, -laneDist);
-          startOff = liftOffsetSpineFromPin(
-            startOff,
-            [startAtt.x, startAtt.y],
-            startFace
-          );
-          const head = pinToLanePts(
-            [startAtt.x, startAtt.y],
-            startFace,
-            startOff[0] || startTail[0],
-            fromSlot.slot,
-            fromSlot.count
-          );
-          chain = mergeLeadToSpine(
-            head,
-            startOff.length ? startOff : startTail,
-            startFace
-          );
-        }
-        const endTail = hopEndpointTailPts(
-          b,
-          endPlace,
-          last.to_opening,
-          placeById,
-          toSlot.slot,
-          toSlot.count,
-          toPin
-        );
-        if (endTail) {
-          let endOff =
-            Math.abs(laneDist) < 1e-9
-              ? endTail.map((p) => [p[0], p[1]])
-              : offsetOrthoPts(endTail, -laneDist);
-          endOff = liftOffsetSpineFromPin(
-            endOff,
-            [endAtt.x, endAtt.y],
-            endFace
-          );
-          const head = pinToLanePts(
-            [endAtt.x, endAtt.y],
-            endFace,
-            endOff[0] || endTail[0],
-            toSlot.slot,
-            toSlot.count
-          );
-          const endPart = mergeLeadToSpine(
-            head,
-            endOff.length ? endOff : endTail,
-            endFace
-          );
-          chain = chain
-            ? mergeOrthoPolys(chain, endPart)
-            : endPart.map((p) => [p[0], p[1]]);
-        }
+      let center = null;
+      if (startTailCtr && startTailCtr.length >= 2) {
+        // Drop the pin vertex; V/Manhattan lead is reattached after offset.
+        center = startTailCtr.slice(1).map((p) => [p[0], p[1]]);
       }
+      for (const ext of oriented) {
+        if (!ext || ext.length < 2) continue;
+        center = center
+          ? mergeOrthoPolys(center, ext)
+          : ext.map((p) => [p[0], p[1]]);
+      }
+      if (endTailCtr && endTailCtr.length >= 2) {
+        const endRev = endTailCtr
+          .slice(1)
+          .reverse()
+          .map((p) => [p[0], p[1]]);
+        center = center ? mergeOrthoPolys(center, endRev) : endRev;
+      }
+
+      if (!center || center.length < 2) {
+        const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
+        return d
+          ? pathDToSubpaths(d).map((sub) => ensureOrthoPoly(parallel(sub)))
+          : [];
+      }
+
+      let chain = parallel(center);
+      chain = liftOffsetSpineFromPin(
+        chain,
+        [startAtt.x, startAtt.y],
+        startFace
+      );
+      chain = liftOffsetSpineFromPin(
+        chain.slice().reverse(),
+        [endAtt.x, endAtt.y],
+        endFace
+      ).reverse();
+
+      const head = pinToLanePts(
+        [startAtt.x, startAtt.y],
+        startFace,
+        chain[0],
+        fromSlot.slot,
+        fromSlot.count
+      );
+      chain = mergeLeadToSpine(head, chain, startFace);
+      const endHead = pinToLanePts(
+        [endAtt.x, endAtt.y],
+        endFace,
+        chain[chain.length - 1],
+        toSlot.slot,
+        toSlot.count
+      );
+      chain = mergeLeadToSpine(
+        endHead,
+        chain.slice().reverse(),
+        endFace
+      ).reverse();
+
       if (!chain || chain.length < 2) return [];
       let cleaned = stripShortZJogs(stripOutAndBack(chain));
       // Openings must stay Manhattan; never rewrite terminal V diagonals.
       const pins = [startAtt, endAtt];
       cleaned = ensureManhattanNearPoint(cleaned, startOp, 48, pins);
       cleaned = ensureManhattanNearPoint(cleaned, endOp, 48, pins);
+      cleaned = stripShortZJogs(stripOutAndBack(cleaned));
       return [cleaned];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);

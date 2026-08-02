@@ -7,6 +7,23 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.18] — 2026-08-02
+
+### Fixed
+
+- Nested-conduit elbows: hop routes use one continuous centerline offset
+  (inbox → exterior → inbox) with a single ``+laneDist`` sign. The old
+  ``-laneDist`` on pin→mouth tails peeled the bundle at corners and made
+  strands overlap / cross at openings.
+- ``mergeLeadToSpine`` picks the join index that avoids ida-y-vuelta; inbox
+  L scoring penalizes reverse runs so multi-cable terminals stop painting
+  out-and-back corridors.
+
+### Added
+
+- Route-quality helpers and tests for continuous vs flipped-inbox hop lanes,
+  stacked inbox overlaps, and out-and-back above shared terminals.
+
 ## [0.34.17] — 2026-08-02
 
 ### Fixed

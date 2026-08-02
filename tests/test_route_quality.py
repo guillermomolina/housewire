@@ -615,5 +615,143 @@ class TestConduitColorFromYaml(unittest.TestCase):
         self.assertEqual(by_id["Conducto_interruptor"].get("color"), "BK")
 
 
+class TestElbowAndOpeningLaneBundle(unittest.TestCase):
+    """Cable-in-cable elbow + opening: lanes must keep shape (no peel/squash)."""
+
+    # pin → mouth (start), exterior L elbow, mouth → pin (end as pin→mouth).
+    START_TAIL = [(-60.0, -40.0), (0.0, -40.0), (0.0, 0.0)]
+    EXTERIOR = [(0.0, 0.0), (100.0, 0.0), (100.0, 80.0)]
+    END_TAIL = [(160.0, 80.0), (100.0, 80.0)]  # pin → mouth at end
+
+    def test_continuous_offset_keeps_elbow_separation(self) -> None:
+        from housewire.ui.route_quality import (
+            count_strand_crossings,
+            hop_lanes_continuous,
+            min_polyline_separation,
+        )
+
+        bundle = hop_lanes_continuous(
+            self.START_TAIL, self.EXTERIOR, self.END_TAIL, 2
+        )
+        self.assertGreaterEqual(
+            min_polyline_separation(bundle[0], bundle[1]), MIN_LANE_SEPARATION
+        )
+        self.assertFalse(strands_overlap(bundle))
+        self.assertEqual(count_strand_crossings(bundle), 0)
+        self.assertEqual(assess_bundle(bundle), [])
+
+    def test_flipped_inbox_offset_overlaps_at_opening(self) -> None:
+        """Live bug: -laneDist on pin→mouth + +laneDist on exterior."""
+        from housewire.ui.route_quality import (
+            count_strand_crossings,
+            hop_lanes_flipped_inbox,
+            min_polyline_separation,
+        )
+
+        bad = hop_lanes_flipped_inbox(
+            self.START_TAIL, self.EXTERIOR, self.END_TAIL, 2
+        )
+        self.assertLess(
+            min_polyline_separation(bad[0], bad[1]), MIN_LANE_SEPARATION
+        )
+        self.assertTrue(strands_overlap(bad))
+        self.assertGreaterEqual(count_strand_crossings(bad), 1)
+        issues = assess_bundle(bad)
+        self.assertTrue(
+            any("overlap" in x or "cross" in x for x in issues), msg=issues
+        )
+
+    def test_three_strand_elbow_bundle_stays_parallel(self) -> None:
+        from housewire.ui.route_quality import (
+            count_strand_crossings,
+            hop_lanes_continuous,
+        )
+
+        # Nested conduit look: GNYE + BK + BU through an L.
+        bundle = hop_lanes_continuous(
+            self.START_TAIL, self.EXTERIOR, self.END_TAIL, 3
+        )
+        self.assertFalse(strands_overlap(bundle))
+        self.assertEqual(count_strand_crossings(bundle), 0)
+        self.assertEqual(assess_bundle(bundle), [])
+
+
+class TestOutAndBackAndMultiCableV(unittest.TestCase):
+    def test_screenshot_ida_y_vuelta_above_regleta_detected(self) -> None:
+        """Down → right → U-turn left → down (same horizontal twice)."""
+        from housewire.ui.route_quality import count_out_and_back, terminal_lead_issues
+
+        pin = (200.0, 160.0)
+        path = [
+            pin,
+            (200.0, 140.0),
+            (240.0, 140.0),
+            (180.0, 140.0),  # reverses on same y
+            (180.0, 100.0),
+        ]
+        self.assertGreaterEqual(count_out_and_back(path), 1)
+        issues = terminal_lead_issues(path, pin, multi_cable=True)
+        self.assertTrue(any("out-and-back" in x for x in issues), msg=issues)
+
+    def test_stacked_inbox_corridors_flag_overlap(self) -> None:
+        """Two colored wires painted on the same inbox run (screenshot)."""
+        blue = [
+            (200.0, 40.0),
+            (200.0, 100.0),
+            (260.0, 100.0),
+            (260.0, 140.0),
+            (220.0, 160.0),
+        ]
+        gnye = [
+            (200.0, 40.0),
+            (200.0, 100.0),
+            (260.0, 100.0),
+            (260.0, 140.0),
+            (240.0, 160.0),
+        ]
+        self.assertTrue(strands_overlap([blue, gnye]))
+        issues = assess_bundle(
+            [blue, gnye],
+            allow_terminal_v=True,
+            allow_crossings=True,
+            min_separation=MIN_LANE_SEPARATION,
+        )
+        self.assertTrue(any("overlap" in x for x in issues), msg=issues)
+
+    def test_continuous_hop_with_v_leads_ok_for_shared_terminals(self) -> None:
+        from housewire.ui.route_quality import (
+            attach_v_leads,
+            hop_lanes_continuous,
+            terminal_lead_issues,
+        )
+
+        start_tail = [(320.0, 160.0), (320.0, 120.0), (200.0, 120.0), (200.0, 40.0)]
+        exterior = [(200.0, 40.0), (80.0, 40.0), (80.0, 0.0)]
+        end_tail = [(80.0, -80.0), (80.0, 0.0)]
+        spines = hop_lanes_continuous(start_tail, exterior, end_tail, 2)
+        self.assertFalse(strands_overlap(spines))
+        pin_s = (320.0, 160.0)
+        pin_e = (80.0, -80.0)
+        for i, spine in enumerate(spines):
+            strand = attach_v_leads(
+                spine,
+                pin_s,
+                "N",
+                i,
+                pin_e,
+                "S",
+                i,
+                slot_count=2,
+            )
+            near_s = strand[: min(6, len(strand))]
+            near_e = list(reversed(strand))[: min(6, len(strand))]
+            self.assertEqual(
+                terminal_lead_issues(near_s, pin_s, multi_cable=True), []
+            )
+            self.assertEqual(
+                terminal_lead_issues(near_e, pin_e, multi_cable=True), []
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

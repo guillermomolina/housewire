@@ -767,3 +767,109 @@ def parallel_highway_bundle(centerline: Poly, strand_count: int) -> list[list[Po
         offset_ortho(centerline, highway_lane_offset(i, strand_count))
         for i in range(strand_count)
     ]
+
+
+def compose_hop_centerline(
+    start_tail: Poly,
+    exterior: Poly,
+    end_tail: Poly | None = None,
+) -> list[Point]:
+    """Build inbox→exterior→inbox centerline (pins dropped).
+
+    ``start_tail`` / ``end_tail`` are pin→mouth polylines (as from hop tails).
+    Mirrors the continuous-centerline compose in ``cableBaseSubpaths`` (app.js).
+    """
+    center: list[Point] = []
+    if len(start_tail) >= 2:
+        center.extend((float(p[0]), float(p[1])) for p in start_tail[1:])
+    if len(exterior) >= 2:
+        first = (float(exterior[0][0]), float(exterior[0][1]))
+        if center and _dist(center[-1], first) < 1e-6:
+            center.extend((float(p[0]), float(p[1])) for p in exterior[1:])
+        else:
+            center.extend((float(p[0]), float(p[1])) for p in exterior)
+    if end_tail is not None and len(end_tail) >= 2:
+        end_rev = [
+            (float(p[0]), float(p[1])) for p in reversed(list(end_tail)[1:])
+        ]
+        if center and end_rev and _dist(center[-1], end_rev[0]) < 1e-6:
+            center.extend(end_rev[1:])
+        else:
+            center.extend(end_rev)
+    return center
+
+
+def hop_lanes_continuous(
+    start_tail: Poly,
+    exterior: Poly,
+    end_tail: Poly | None,
+    strand_count: int,
+) -> list[list[Point]]:
+    """Correct hop lanes: one centerline, single-sign parallel offset."""
+    center = compose_hop_centerline(start_tail, exterior, end_tail)
+    return parallel_highway_bundle(center, strand_count)
+
+
+def hop_lanes_flipped_inbox(
+    start_tail: Poly,
+    exterior: Poly,
+    end_tail: Poly | None,
+    strand_count: int,
+) -> list[list[Point]]:
+    """Bug pattern: ``+laneDist`` on exterior, ``-laneDist`` on pin→mouth tails.
+
+    That sign flip peels the bundle at elbows and makes strands overlap / cross
+    at openings. Kept so tests can prove the failure mode.
+    """
+    lanes: list[list[Point]] = []
+    for i in range(strand_count):
+        d = highway_lane_offset(i, strand_count)
+        start_off = offset_ortho(start_tail, -d) if len(start_tail) >= 2 else []
+        ex_off = offset_ortho(exterior, d) if len(exterior) >= 2 else []
+        chain: list[Point] = []
+        if start_off:
+            chain.extend(start_off[:-1] if ex_off else start_off)
+        if ex_off:
+            chain.extend(ex_off)
+        if end_tail is not None and len(end_tail) >= 2:
+            end_off = offset_ortho(end_tail, -d)
+            # pin→mouth offset, reverse onto chain (mouth→pin).
+            rev = list(reversed(end_off))
+            if chain and rev and _dist(chain[-1], rev[0]) < 1e-6:
+                chain.extend(rev[1:])
+            else:
+                chain.extend(rev)
+        lanes.append(chain)
+    return lanes
+
+
+def attach_v_leads(
+    spine: Poly,
+    start_pin: Point,
+    start_face: str,
+    start_slot: int,
+    end_pin: Point,
+    end_face: str,
+    end_slot: int,
+    *,
+    slot_count: int,
+) -> list[Point]:
+    """Attach multi-cable V leads at both ends of an offset spine."""
+    if len(spine) < 1:
+        return []
+    head = terminal_v_lead(
+        start_pin, start_face, spine[0], start_slot, slot_count
+    )
+    # Manhattan-join tip → spine[0] already inside terminal_v_lead.
+    mid = list(spine)
+    if head and mid and _dist(head[-1], mid[0]) < 1e-6:
+        chain = list(head) + mid[1:]
+    else:
+        chain = list(head) + mid
+    rev = list(reversed(chain))
+    tail = terminal_v_lead(end_pin, end_face, rev[0], end_slot, slot_count)
+    if tail and rev and _dist(tail[-1], rev[0]) < 1e-6:
+        merged = list(tail) + rev[1:]
+    else:
+        merged = list(tail) + rev
+    return list(reversed(merged))
