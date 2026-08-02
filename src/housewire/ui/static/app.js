@@ -5526,6 +5526,76 @@
     });
   }
 
+  function closeAboutModal() {
+    const modal = document.getElementById("about-modal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+  }
+
+  async function openAboutModal() {
+    const modal = document.getElementById("about-modal");
+    if (!modal) return;
+    try {
+      const about = await api("/api/about");
+      const titleEl = document.getElementById("about-title");
+      const versionEl = document.getElementById("about-version");
+      const descEl = document.getElementById("about-description");
+      const authorEl = document.getElementById("about-author");
+      const repoEl = document.getElementById("about-repository");
+      const licenseEl = document.getElementById("about-license");
+      const copyrightEl = document.getElementById("about-copyright");
+      if (titleEl) titleEl.textContent = about.title || "HouseWire";
+      if (versionEl) {
+        versionEl.textContent = about.version ? `Version ${about.version}` : "";
+      }
+      if (descEl) descEl.textContent = about.description || "";
+      if (authorEl) authorEl.textContent = about.author || "";
+      if (repoEl) {
+        const url = about.repository || "";
+        repoEl.href = url || "#";
+        repoEl.textContent = url;
+        if (!url) repoEl.removeAttribute("href");
+      }
+      if (licenseEl) licenseEl.textContent = about.license || "";
+      if (copyrightEl) copyrightEl.textContent = about.copyright || "";
+    } catch (err) {
+      setStatus(String(err.message || err));
+      return;
+    }
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+    modal.querySelector("[data-about-dismiss].primary, .modal-actions .primary")
+      ?.focus?.();
+  }
+
+  const menuHelp = document.getElementById("menu-help");
+  if (menuHelp) {
+    menuHelp.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const item = ev.target.closest("[data-help-action]");
+      if (!item || item.disabled) return;
+      closeAllMenus();
+      const action = item.getAttribute("data-help-action");
+      if (action === "about") {
+        openAboutModal().catch((err) => setStatus(String(err.message || err)));
+      }
+    });
+  }
+
+  document.querySelectorAll("[data-about-dismiss]").forEach((el) => {
+    el.addEventListener("click", () => closeAboutModal());
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape") return;
+    const about = document.getElementById("about-modal");
+    if (about && !about.classList.contains("hidden")) {
+      closeAboutModal();
+      ev.preventDefault();
+    }
+  });
+
   document.addEventListener("click", (ev) => {
     if (ev.target && ev.target.closest && ev.target.closest(".menu")) return;
     closeAllMenus();

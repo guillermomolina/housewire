@@ -9,6 +9,10 @@ with the interactive UI and shell (physical canvas + electrical wiring).
 
 This repository is the **program only**. Site/installation YAML lives in a **separate** (often private) repository or directory. Do not commit private site data into this repo.
 
+## License
+
+MIT — see [LICENSE](LICENSE). Copyright (c) 2026 Guillermo Adrián Molina.
+
 ## Requirements
 
 - Python 3.10+

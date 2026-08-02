@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.0] — 2026-08-02
+
+### Added
+
+- Help → About dialog (program, version, author, repository, license).
+- ``GET /api/about`` and package metadata (``LICENSE``, author, repository URLs).
+
 ## [0.33.3] — 2026-08-02
 
 ### Fixed

@@ -394,6 +394,81 @@ body {
   width: min(24rem, calc(100vw - 2rem));
 }
 
+.modal-card-about {
+  width: min(26rem, calc(100vw - 2rem));
+}
+
+.about-body {
+  gap: 0.85rem;
+}
+
+.about-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.about-logo {
+  flex: 0 0 auto;
+  border-radius: 10px;
+}
+
+.about-title {
+  font-size: 1.15rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.about-version {
+  margin-top: 0.15rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.about-description {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.about-meta {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.about-meta > div {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.about-meta dt {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.about-meta dd {
+  margin: 0;
+  font-size: 0.85rem;
+  word-break: break-word;
+}
+
+.about-meta a {
+  color: var(--accent, #6cb6ff);
+  text-decoration: none;
+}
+
+.about-meta a:hover {
+  text-decoration: underline;
+}
+
 .modal-card-body {
   display: flex;
   flex-direction: column;

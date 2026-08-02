@@ -6,7 +6,7 @@
   <title>HouseWire — physical</title>
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <link rel="stylesheet" href="/static/app.css?v=0.28.25" />
+  <link rel="stylesheet" href="/static/app.css?v=0.34.0" />
 </head>
 <body>
   <nav class="menubar" aria-label="Application">
@@ -111,6 +111,14 @@
         </button>
         <button type="button" role="menuitem" data-view-action="depth-out" id="menu-depth-out">
           <span class="menu-item-main"><i class="fa-solid fa-layer-group fa-flip-vertical" aria-hidden="true"></i><span>Depth out</span></span>
+        </button>
+      </div>
+    </div>
+    <div class="menu" data-menu="help">
+      <button type="button" class="menu-btn" id="menu-help-btn" aria-haspopup="true" aria-expanded="false">Help</button>
+      <div class="menu-dropdown hidden" id="menu-help" role="menu">
+        <button type="button" role="menuitem" data-help-action="about">
+          <span class="menu-item-main"><i class="fa-solid fa-circle-info" aria-hidden="true"></i><span>About</span></span>
         </button>
       </div>
     </div>
@@ -284,7 +292,54 @@
       </div>
     </div>
   </div>
+  <div id="about-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-about-dismiss></div>
+    <div
+      class="modal-card modal-card-about"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="about-modal-title"
+    >
+      <div class="modal-card-head">
+        <h2 id="about-modal-title">About</h2>
+        <button type="button" class="modal-close" data-about-dismiss aria-label="Close">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="modal-card-body about-body">
+        <div class="about-brand">
+          <img class="about-logo" src="/static/logo.svg" width="56" height="56" alt="" />
+          <div>
+            <div class="about-title" id="about-title">HouseWire</div>
+            <div class="about-version" id="about-version"></div>
+          </div>
+        </div>
+        <p class="about-description" id="about-description"></p>
+        <dl class="about-meta">
+          <div>
+            <dt>Author</dt>
+            <dd id="about-author"></dd>
+          </div>
+          <div>
+            <dt>Repository</dt>
+            <dd><a id="about-repository" href="#" target="_blank" rel="noopener noreferrer"></a></dd>
+          </div>
+          <div>
+            <dt>License</dt>
+            <dd id="about-license"></dd>
+          </div>
+          <div>
+            <dt>Copyright</dt>
+            <dd id="about-copyright"></dd>
+          </div>
+        </dl>
+        <div class="modal-actions">
+          <button type="button" class="primary" data-about-dismiss>Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <input type="file" id="file-open-input" accept=".yaml,.yml,text/yaml,application/x-yaml" hidden />
-  <script src="/static/app.js?v=0.28.25"></script>
+  <script src="/static/app.js?v=0.34.0"></script>
 </body>
 </html>

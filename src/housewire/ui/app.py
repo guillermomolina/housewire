@@ -3,7 +3,15 @@
 from pathlib import Path
 from typing import Any
 
-from housewire import __title__, __version__
+from housewire import (
+    __author__,
+    __copyright__,
+    __description__,
+    __license__,
+    __repository__,
+    __title__,
+    __version__,
+)
 from housewire.site.view_layout import get_physical_page, set_physical_page
 from housewire.ui import physical_graph as pg
 from housewire.ui.workspace import Workspace, create_workspace
@@ -112,6 +120,19 @@ def create_app(site_root: Path | None = None) -> Any:
                 "Pragma": "no-cache",
             },
         )
+
+    @app.get("/api/about")
+    def api_about() -> dict[str, Any]:
+        """Program identity for Help → About (and CLI/docs consumers)."""
+        return {
+            "title": __title__,
+            "version": __version__,
+            "author": __author__,
+            "description": __description__,
+            "license": __license__,
+            "copyright": __copyright__,
+            "repository": __repository__,
+        }
 
     @app.get("/api/wire-colors")
     def api_wire_colors() -> dict[str, Any]:

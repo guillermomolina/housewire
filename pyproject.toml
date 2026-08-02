@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "housewire"
-version = "0.33.3"
+version = "0.34.0"
 description = "Document home electrical installations (house/v2) with an interactive UI and shell"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Guille" }]
+authors = [{ name = "Guillermo Adrián Molina" }]
 keywords = ["electrical", "wiring", "house", "diagram"]
 dependencies = [
     "PyYAML>=6.0",
@@ -23,7 +23,10 @@ ui = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
 housewire = "housewire.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/local/housewire"
+Homepage = "https://github.com/guillermomolina/housewire"
+Repository = "https://github.com/guillermomolina/housewire"
+Issues = "https://github.com/guillermomolina/housewire/issues"
+Changelog = "https://github.com/guillermomolina/housewire/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]

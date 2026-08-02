@@ -23,4 +23,8 @@ class TestVersion(unittest.TestCase):
         with patch("sys.stdout", buf):
             code = main(["version"])
         self.assertEqual(code, 0)
-        self.assertEqual(buf.getvalue().strip(), f"HouseWire {__version__}")
+        out = buf.getvalue()
+        self.assertIn(f"HouseWire {__version__}", out)
+        self.assertIn("Guillermo Adrián Molina", out)
+        self.assertIn("MIT", out)
+        self.assertIn("github.com/guillermomolina/housewire", out)

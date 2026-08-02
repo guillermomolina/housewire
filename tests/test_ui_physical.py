@@ -382,6 +382,14 @@ class TestServeApi(unittest.TestCase):
             self.assertIn("Parking/Caja_4", oids)
             self.assertIn("Parking/Caja_4/Regleta", oids)
 
+            about = client.get("/api/about").json()
+            self.assertEqual(about["title"], "HouseWire")
+            self.assertEqual(about["author"], "Guillermo Adrián Molina")
+            self.assertEqual(about["license"], "MIT")
+            self.assertIn("github.com/guillermomolina/housewire", about["repository"])
+            self.assertTrue(about["version"])
+            self.assertTrue(about["description"])
+
             house = client.get(
                 "/api/physical", params={"location": ".", "depth": 2}
             ).json()

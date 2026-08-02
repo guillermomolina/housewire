@@ -230,7 +230,16 @@ def _colors_list(raw: str) -> list[str]:
 def _dispatch_subcommand(args: argparse.Namespace) -> int:
     cmd = args.command
     if cmd == "version":
+        from housewire import (
+            __author__,
+            __license__,
+            __repository__,
+        )
+
         print(f"{__title__} {__version__}")
+        print(f"Author: {__author__}")
+        print(f"License: {__license__}")
+        print(f"Repository: {__repository__}")
         return 0
     if cmd == "serve":
         from housewire.ui.app import run_serve
