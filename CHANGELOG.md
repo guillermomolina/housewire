@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.2] — 2026-08-02
+
+### Fixed
+
+- Count face stubs when scoring ortho bends so an exit-stub plus
+  horizontal-first L (down→right→down) loses to a vertical-first L.
+
 ## [0.32.1] — 2026-08-02
 
 ### Fixed

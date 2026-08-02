@@ -1100,7 +1100,9 @@
       LANE,
       occupied,
       OVERLAP_EPS,
-      obstacles
+      obstacles,
+      [x1, y1],
+      [x2, y2]
     );
     for (const p of mid) {
       pts.push(p);
@@ -1230,7 +1232,9 @@
     lane,
     occupied,
     overlapEps,
-    obstacles
+    obstacles,
+    prePoint,
+    postPoint
   ) {
     const start = [ax, ay];
     const end = [bx, by];
@@ -1248,6 +1252,31 @@
       const next = cleaned[1];
       if (!leavesOutward(fromFace, ax, ay, next[0], next[1])) return;
       raw.push(cleaned.slice(1)); // intermediates through end
+    };
+
+    /** Score bends on the full opening→stub→…→stub→opening path. */
+    const scorePoly = (midThroughEnd) => {
+      /** @type {number[][]} */
+      const full = [];
+      if (prePoint) full.push(prePoint);
+      full.push(start);
+      for (const p of midThroughEnd) full.push(p);
+      if (
+        postPoint &&
+        (Math.abs(postPoint[0] - end[0]) > 1e-6 ||
+          Math.abs(postPoint[1] - end[1]) > 1e-6)
+      ) {
+        // end is already last of midThroughEnd; append opening if distinct
+        const last = full[full.length - 1];
+        if (
+          !last ||
+          Math.abs(last[0] - postPoint[0]) > 1e-6 ||
+          Math.abs(last[1] - postPoint[1]) > 1e-6
+        ) {
+          full.push(postPoint);
+        }
+      }
+      return cleanOrthoPoly(full);
     };
 
     // 0 bends — only when already aligned (same x or same y)
@@ -1393,14 +1422,14 @@
     let bestLen = Infinity;
     const eps = overlapEps ?? 6;
     for (const pts of raw) {
-      const full = [[ax, ay], ...pts];
+      // Include face stubs in bend count: exit-stub + horizontal-first L is
+      // down→right→down (2 bends), while vertical-first merges into 1 bend.
+      const full = scorePoly(pts);
       const bends = polyBends(full);
       const conflict = pathConflictCost(full, occupied, eps);
       const obstacle = pathObstacleCost(full, obstacles);
       const len = polyLength(full);
-      // Lexicographic: stay clear of boxes, then fewest bends (vertices),
-      // then less stacking conflict, then shorter. Soft weights used to let a
-      // 2-bend Z beat a clear 1-bend L when conflict was mixed into bends.
+      // Lexicographic: clear of boxes, fewest bends, less conflict, shorter.
       if (
         obstacle < bestObstacle - 1e-9 ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 && bends < bestBends) ||
