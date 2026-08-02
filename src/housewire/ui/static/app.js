@@ -1785,6 +1785,7 @@
    * gap == strand width so every transparent separator matches a wire.
    */
   const STRAND_WIDTH = 2.5;
+  /** Clear gap between strand strokes (equal to stroke → one strand of air). */
   const LANE_GAP = STRAND_WIDTH;
   const JACKET_OPACITY_WIDTH_PAD = 1.2;
 
@@ -2338,6 +2339,10 @@
       const towardFrom = towardForEnd(edge, "from", a, b);
       const towardTo = towardForEnd(edge, "to", a, b);
       for (const wi of wires) {
+        const fromPin = cableWirePin(edge, wi, "from");
+        const toPin = cableWirePin(edge, wi, "to");
+        const attFrom = resolveElementAttach(a, fromPin, towardFrom, placeById);
+        const attTo = resolveElementAttach(b, toPin, towardTo, placeById);
         for (const end of /** @type {const} */ (["from", "to"])) {
           const elem = end === "from" ? a : b;
           const toward = end === "from" ? towardFrom : towardTo;
@@ -2348,7 +2353,14 @@
         }
         const rk = cableRouteKey(edge, elemById);
         if (!byRoute.has(rk)) byRoute.set(rk, []);
-        byRoute.get(rk).push({ key, wi });
+        byRoute.get(rk).push({
+          key,
+          wi,
+          ax: attFrom.x,
+          ay: attFrom.y,
+          bx: attTo.x,
+          by: attTo.y,
+        });
       }
       const rk = cableRouteKey(edge, elemById);
       if (!jacketsByRoute.has(rk)) jacketsByRoute.set(rk, []);
@@ -2372,9 +2384,25 @@
     /** @type {Map<string, {index:number, count:number}>} */
     const laneMap = new Map();
     for (const [, list] of byRoute) {
-      list.sort((u, v) =>
-        u.key === v.key ? u.wi - v.wi : u.key < v.key ? -1 : 1
-      );
+      // Order lanes by pin geometry so stubs into a terminal strip do not cross.
+      const xs = list.map((it) => (it.ax + it.bx) / 2);
+      const ys = list.map((it) => (it.ay + it.by) / 2);
+      const xSpan = Math.max(...xs) - Math.min(...xs);
+      const ySpan = Math.max(...ys) - Math.min(...ys);
+      list.sort((u, v) => {
+        const ux = (u.ax + u.bx) / 2;
+        const uy = (u.ay + u.by) / 2;
+        const vx = (v.ax + v.bx) / 2;
+        const vy = (v.ay + v.by) / 2;
+        if (xSpan >= ySpan) {
+          if (Math.abs(ux - vx) > 1e-3) return ux - vx;
+          if (Math.abs(uy - vy) > 1e-3) return uy - vy;
+        } else {
+          if (Math.abs(uy - vy) > 1e-3) return uy - vy;
+          if (Math.abs(ux - vx) > 1e-3) return ux - vx;
+        }
+        return u.key === v.key ? u.wi - v.wi : u.key < v.key ? -1 : 1;
+      });
       const count = list.length;
       list.forEach((item, index) => {
         laneMap.set(`${item.key}|${item.wi}`, { index, count });
@@ -2460,6 +2488,82 @@
     const last = segs[segs.length - 1];
     out.push([last.bx, last.by]);
     return cleanOrthoPoly(out);
+  }
+
+  /** Replace any non-Manhattan segment with an L so paths never paint diagonals. */
+  function ensureOrthoPoly(pts) {
+    if (!pts || pts.length < 2) return pts ? pts.map((p) => [p[0], p[1]]) : [];
+    /** @type {number[][]} */
+    const out = [[pts[0][0], pts[0][1]]];
+    for (let i = 1; i < pts.length; i++) {
+      const prev = out[out.length - 1];
+      const p = pts[i];
+      if (
+        Math.abs(prev[0] - p[0]) < 1e-6 ||
+        Math.abs(prev[1] - p[1]) < 1e-6
+      ) {
+        out.push([p[0], p[1]]);
+        continue;
+      }
+      const mid = simpleOrthoPts(
+        { x: prev[0], y: prev[1] },
+        { x: p[0], y: p[1] }
+      );
+      for (let j = 1; j < mid.length; j++) {
+        out.push([mid[j][0], mid[j][1]]);
+      }
+    }
+    return cleanOrthoPoly(out);
+  }
+
+  /**
+   * Orthogonal lead from a terminal pin into a lane point: stub along the
+   * attach face, then Manhattan to the lane (never a diagonal cut-in).
+   */
+  function pinToLanePts(pin, face, lanePt) {
+    const p = {
+      x: Array.isArray(pin) ? pin[0] : pin.x,
+      y: Array.isArray(pin) ? pin[1] : pin.y,
+    };
+    const t = {
+      x: Array.isArray(lanePt) ? lanePt[0] : lanePt.x,
+      y: Array.isArray(lanePt) ? lanePt[1] : lanePt.y,
+    };
+    if (Math.hypot(p.x - t.x, p.y - t.y) < 1e-6) return [[p.x, p.y]];
+    const fo = faceOutwardDelta(face);
+    /** @type {number[][]} */
+    const pts = [[p.x, p.y]];
+    if (fo.x || fo.y) {
+      const stub = stubPoint(p, fo.x, fo.y, stubDistToToward(p, fo, t));
+      if (Math.hypot(stub.x - p.x, stub.y - p.y) > 1e-6) {
+        pts.push([stub.x, stub.y]);
+      }
+      const rest = orthoPtsPrefer(stub, t, null);
+      for (let i = 1; i < rest.length; i++) {
+        const q = rest[i];
+        const prev = pts[pts.length - 1];
+        if (Math.hypot(prev[0] - q[0], prev[1] - q[1]) < 1e-6) continue;
+        pts.push([q[0], q[1]]);
+      }
+      return ensureOrthoPoly(pts);
+    }
+    return ensureOrthoPoly(simpleOrthoPts(p, t));
+  }
+
+  /**
+   * Keep lane-offset run, but join real pins with orthogonal stubs (do not
+   * smash endpoints onto the pin — that created diagonal funnels).
+   */
+  function rejoinLaneEndsOrtho(pin0, face0, offPts, pin1, face1) {
+    if (!offPts || offPts.length < 2) {
+      return offPts ? offPts.map((p) => [p[0], p[1]]) : [];
+    }
+    const head = pinToLanePts(pin0, face0, offPts[0]);
+    const tail = pinToLanePts(pin1, face1, offPts[offPts.length - 1]);
+    const tailRev = tail.slice().reverse();
+    let chain = mergeOrthoPolys(head, offPts);
+    chain = mergeOrthoPolys(chain, tailRev);
+    return ensureOrthoPoly(stripOutAndBack(chain || []));
   }
 
   function pathDToSubpaths(d) {
@@ -2770,11 +2874,13 @@
       const corridorOff = parallel(corridor);
       if (!corridorOff.length) return [];
       return [
-        [
+        rejoinLaneEndsOrtho(
           [p1.x, p1.y],
-          ...corridorOff,
+          f1,
+          corridorOff,
           [p2.x, p2.y],
-        ],
+          f2
+        ),
       ];
     }
 
@@ -2806,7 +2912,9 @@
         !last.to_opening
       ) {
         const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
-        return d ? pathDToSubpaths(d).map(parallel) : [];
+        return d
+          ? pathDToSubpaths(d).map((sub) => ensureOrthoPoly(parallel(sub)))
+          : [];
       }
 
       /** @type {number[][][]} */
@@ -2817,7 +2925,9 @@
         const pt = placeById[hop.to];
         if (!pf || !pt || !hop.from_opening || !hop.to_opening) {
           const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
-          return d ? pathDToSubpaths(d).map(parallel) : [];
+          return d
+            ? pathDToSubpaths(d).map((sub) => ensureOrthoPoly(parallel(sub)))
+            : [];
         }
         const tubeD = hopTubePathD(hop);
         let ext = null;
@@ -2945,17 +3055,37 @@
       const base = stripOutAndBack(chain);
       if (base.length < 2) return [];
       const off = parallel(base);
-      if (!off.length) return [base];
-      // Keep terminal pins fixed; offset the run (including through mouths).
-      off[0] = [base[0][0], base[0][1]];
-      off[off.length - 1] = [
-        base[base.length - 1][0],
-        base[base.length - 1][1],
+      if (!off.length) return [ensureOrthoPoly(base)];
+      const startAtt = resolveElementAttach(
+        a,
+        fromPin,
+        startOp,
+        placeById,
+        fromSlot.slot,
+        fromSlot.count
+      );
+      const endAtt = resolveElementAttach(
+        b,
+        toPin,
+        endOp,
+        placeById,
+        toSlot.slot,
+        toSlot.count
+      );
+      return [
+        rejoinLaneEndsOrtho(
+          base[0],
+          startAtt.face || elementAttachFace(a, startOp, placeById),
+          off,
+          base[base.length - 1],
+          endAtt.face || elementAttachFace(b, endOp, placeById)
+        ),
       ];
-      return [cleanOrthoPoly(off)];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
-    return d ? pathDToSubpaths(d).map(parallel) : [];
+    return d
+      ? pathDToSubpaths(d).map((sub) => ensureOrthoPoly(parallel(sub)))
+      : [];
   }
 
   /** Tube geometry drawn only outside leaf places (stops at the mouth). */
@@ -3487,13 +3617,10 @@
       const displayD = conduitDisplayD(d, byId);
       const tube = el("path", { class: "edge-tube", d: displayD });
       tube.style.strokeWidth = String(roadW);
-      const core = el("path", { class: "edge-tube-core", d: displayD });
       tube.appendChild(el("title", null, title));
-      core.appendChild(el("title", null, title));
       edgesG.appendChild(tube);
-      edgesG.appendChild(core);
       // Keep full ``d`` for cable hop overlays; display uses clipped geometry.
-      edgePaths.push({ edge, paths: [tube, core], d });
+      edgePaths.push({ edge, paths: [tube], d });
     }
 
     for (const node of graph.nodes) {

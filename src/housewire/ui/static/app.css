@@ -1201,16 +1201,6 @@ button:hover {
   pointer-events: none;
 }
 
-.edge-tube-core {
-  fill: none;
-  stroke: #c9d1d9;
-  stroke-width: 0.75;
-  stroke-opacity: 0.25;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  pointer-events: none;
-}
-
 .cable-jacket {
   fill: none;
   stroke: #e6edf3;

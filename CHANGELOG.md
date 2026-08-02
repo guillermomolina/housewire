@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.33.2] — 2026-08-02
+
+### Fixed
+
+- Cable pin joins stay Manhattan (no diagonal cut-ins to terminals).
+- Removed the conduit centerline stroke (``edge-tube-core``).
+- Strand lanes are ordered by pin geometry to reduce crossing / stacking
+  near terminal strips.
+
 ## [0.33.1] — 2026-08-02
 
 ### Changed
