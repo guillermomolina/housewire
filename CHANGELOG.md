@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.28] — 2026-08-02
+
+### Fixed
+
+- Hop end tail: assemble pin→fan→stub→mouth then reverse (the previous
+  mouth→stub prepend created pin↔mouth loops and duplicated V leads).
+
 ## [0.34.27] — 2026-08-02
 
 ### Fixed
