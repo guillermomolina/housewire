@@ -23,6 +23,11 @@ from housewire.ui.route_quality import (
 
 REPO = Path(__file__).resolve().parents[1]
 
+# Match tests/conftest.py / route_e2e harness for Chromium path.
+os.environ.setdefault(
+    "PLAYWRIGHT_BROWSERS_PATH", str(REPO / ".playwright-browsers")
+)
+
 
 def resolve_test01_yaml() -> Path | None:
     """Locate Test_01 for live E2E (examples package, env, or local sites/)."""
@@ -189,7 +194,16 @@ class TestRouteE2ETest01(unittest.TestCase):
         from playwright.sync_api import sync_playwright
 
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            try:
+                browser = p.chromium.launch()
+            except Exception as exc:  # pragma: no cover - env dependent
+                msg = str(exc)
+                if "Executable doesn't exist" in msg or "playwright install" in msg:
+                    self.skipTest(
+                        "Playwright Chromium missing; run: make install "
+                        "(or .venv/bin/playwright install chromium)"
+                    )
+                raise
             page = browser.new_page(viewport={"width": 1600, "height": 1000})
             page.goto(self.base, wait_until="networkidle")
             page.wait_for_timeout(3500)

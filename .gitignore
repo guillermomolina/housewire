@@ -6,6 +6,8 @@ dist/
 build/
 *.egg-info/
 src/housewire.egg-info/
+.playwright-browsers/
+.tmp/
 
 /sites/
 /catalogs/

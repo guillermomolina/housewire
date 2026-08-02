@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.3] — 2026-08-02
+
+### Fixed
+
+- Live route E2E uses a project-local Playwright browser cache
+  (``.playwright-browsers/``, set by ``make install`` / ``tests/conftest.py``)
+  so ``pytest`` no longer fails when ``~/.cache/ms-playwright`` is missing.
+- Missing Chromium skips live E2E with an install hint instead of ERROR.
+
 ## [0.35.2] — 2026-08-02
 
 ### Added

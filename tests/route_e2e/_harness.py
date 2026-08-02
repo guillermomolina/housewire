@@ -13,6 +13,11 @@ from housewire.ui.route_quality import assess_live_site
 
 REPO = Path(__file__).resolve().parents[2]
 
+# Match tests/conftest.py so unittest discovery finds Chromium too.
+os.environ.setdefault(
+    "PLAYWRIGHT_BROWSERS_PATH", str(REPO / ".playwright-browsers")
+)
+
 _DUMP_JS = """() => {
   const parse = (d) => {
     const pts=[]; let x=0,y=0;
@@ -110,7 +115,16 @@ def dump_live_canvas(site: Path, *, wait_ms: int = 3500) -> dict:
             raise unittest.SkipTest("housewire serve did not start")
 
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            try:
+                browser = p.chromium.launch()
+            except Exception as exc:  # pragma: no cover - env dependent
+                msg = str(exc)
+                if "Executable doesn't exist" in msg or "playwright install" in msg:
+                    raise unittest.SkipTest(
+                        "Playwright Chromium missing; run: "
+                        ".venv/bin/playwright install chromium"
+                    ) from exc
+                raise
             page = browser.new_page(viewport={"width": 1600, "height": 1000})
             page.goto(f"http://127.0.0.1:{port}/", wait_until="networkidle")
             page.wait_for_timeout(wait_ms)

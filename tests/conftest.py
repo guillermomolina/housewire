@@ -19,3 +19,8 @@ for _candidate in _CATALOG_CANDIDATES:
     if (_candidate / "types").is_dir() or any(_candidate.glob("*.yaml")):
         os.environ.setdefault("HOUSEWIRE_CATALOG", str(_candidate))
         break
+
+# Keep Playwright browsers inside the repo (``make install`` populates this).
+# Unittest discovery does not load pytest conftest; set the same default here.
+_PLAYWRIGHT_DIR = _REPO_ROOT / ".playwright-browsers"
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(_PLAYWRIGHT_DIR))

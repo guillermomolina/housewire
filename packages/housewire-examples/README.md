@@ -68,5 +68,6 @@ Regenerate Route fixtures:
 python packages/housewire-examples/scripts/gen_route_sites.py
 ```
 
-Live E2E modules: `tests/route_e2e/test_route_01.py` … `test_route_20.py`.
+Live E2E modules: `tests/route_e2e/test_route_01.py` … `test_route_20.py`
+(requires Chromium: `make install` or `make test-route-e2e`).
 Routing rules: [`docs/routing-rules.md`](../../docs/routing-rules.md).
