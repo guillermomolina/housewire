@@ -509,18 +509,20 @@ def _build_cable_edges(
                 name_disp = str(sn).strip()
             if sl is not None and str(sl).strip():
                 label_disp = str(sl).strip()
-        # One edge per conductor when pins differ; one multi-color when same hosts.
-        # Emit one edge with all colors; pin lists use first/last for layout.
-        from_pin = members_sorted[0]["from_pin"]
-        to_pin = members_sorted[0]["to_pin"]
+        # Multi-color jacket edge: per-strand pins stay aligned with colors/
+        # conductors so each wire can land on its own terminal cell.
+        from_pins = [m["from_pin"] or None for m in members_sorted]
+        to_pins = [m["to_pin"] or None for m in members_sorted]
         row: dict[str, Any] = {
             "id": sheath,
             "name": name_disp,
             "label": label_disp,
             "from": from_id,
             "to": to_id,
-            "from_pin": from_pin or None,
-            "to_pin": to_pin or None,
+            "from_pin": from_pins[0],
+            "to_pin": to_pins[0],
+            "from_pins": from_pins,
+            "to_pins": to_pins,
             "via": sheath,
             "colors": colors,
             "via_indices": list(range(1, len(colors) + 1)),

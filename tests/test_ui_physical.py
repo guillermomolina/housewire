@@ -166,6 +166,14 @@ class TestPhysicalGraph(unittest.TestCase):
             self.assertEqual(graph["cable_edges"][0]["to"], "Enchufe_1/Socket")
             self.assertEqual(graph["cable_edges"][0].get("conduit"), "Conducto_1")
             self.assertEqual(graph["cable_edges"][0].get("from_opening"), "W2")
+            # Sheath keeps per-strand pins (not only the first conductor's).
+            self.assertEqual(
+                graph["cable_edges"][0].get("from_pins"), ["N1", "N3"]
+            )
+            self.assertEqual(
+                graph["cable_edges"][0].get("to_pins"), ["N1", "N3"]
+            )
+            self.assertEqual(graph["cable_edges"][0].get("colors"), ["BN", "BU"])
             hops = graph["cable_edges"][0].get("conduit_hops")
             self.assertEqual(len(hops), 1)
             self.assertEqual(hops[0]["conduit"], "Conducto_1")

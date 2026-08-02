@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.3] — 2026-08-02
+
+### Fixed
+
+- Multi-strand sheath cable edges keep per-conductor ``from_pins`` /
+  ``to_pins`` so each color lands on its own terminal (e.g. BU → ``N3``
+  instead of sharing the first strand’s pin).
+- Inbox attach routing picks the strip face cell and L-bend with fewer
+  turns when approaching from an adjacent opening.
+
 ## [0.32.2] — 2026-08-02
 
 ### Fixed

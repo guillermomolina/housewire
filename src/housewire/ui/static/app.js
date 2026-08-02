@@ -1630,15 +1630,63 @@
       (c) => String(c || "")[0]?.toUpperCase() === face
     );
     if (match) return match;
-    // Approach face not in pin cells (e.g. W toward NS grid): pick the cell
-    // whose anchor is closest to ``toward``.
+    // Approach face not in pin cells (e.g. W toward NS grid): prefer the
+    // cell whose outward stub points into the approach and needs fewer bends.
     let best = cells[0];
-    let bestD = Infinity;
+    let bestScore = Infinity;
     for (const c of cells) {
       const a = terminalCellAnchor(elem, c, placeById);
-      const d = Math.hypot(a.x - toward.x, a.y - toward.y);
-      if (d < bestD) {
-        bestD = d;
+      const fo = faceOutwardDelta(a.face);
+      const stub = stubPoint(a, fo.x, fo.y, INBOX_STUB);
+      const vx = toward.x - a.x;
+      const vy = toward.y - a.y;
+      const align = fo.x * vx + fo.y * vy;
+      const hv = [
+        [stub.x, stub.y],
+        [toward.x, stub.y],
+        [toward.x, toward.y],
+      ];
+      const vh = [
+        [stub.x, stub.y],
+        [stub.x, toward.y],
+        [toward.x, toward.y],
+      ];
+      const bendsOf = (poly) => {
+        let b = 0;
+        for (let i = 2; i < poly.length; i++) {
+          const ax = poly[i - 1][0] - poly[i - 2][0];
+          const ay = poly[i - 1][1] - poly[i - 2][1];
+          const bx = poly[i][0] - poly[i - 1][0];
+          const by = poly[i][1] - poly[i - 1][1];
+          if (Math.abs(ax * by - ay * bx) > 1e-6) b += 1;
+        }
+        return b;
+      };
+      const lenOf = (poly) => {
+        let L = 0;
+        for (let i = 1; i < poly.length; i++) {
+          L += Math.hypot(poly[i][0] - poly[i - 1][0], poly[i][1] - poly[i - 1][1]);
+        }
+        return L;
+      };
+      const straight =
+        Math.abs(stub.x - toward.x) < 1e-6 ||
+        Math.abs(stub.y - toward.y) < 1e-6;
+      const bestL = straight
+        ? [
+            [stub.x, stub.y],
+            [toward.x, toward.y],
+          ]
+        : bendsOf(hv) < bendsOf(vh) ||
+            (bendsOf(hv) === bendsOf(vh) && lenOf(hv) <= lenOf(vh))
+          ? hv
+          : vh;
+      const score =
+        (align < -1e-6 ? 1e6 : 0) +
+        bendsOf(bestL) * 1e3 +
+        lenOf(bestL);
+      if (score < bestScore) {
+        bestScore = score;
         best = c;
       }
     }
@@ -1833,16 +1881,72 @@
     return { x: pt.x, y: pt.y };
   }
 
+  /** Count direction changes in an orthogonal polyline. */
+  function orthoBendCount(pts) {
+    let b = 0;
+    for (let i = 2; i < pts.length; i++) {
+      const ax = pts[i - 1][0] - pts[i - 2][0];
+      const ay = pts[i - 1][1] - pts[i - 2][1];
+      const bx = pts[i][0] - pts[i - 1][0];
+      const by = pts[i][1] - pts[i - 1][1];
+      if (Math.abs(ax * by - ay * bx) > 1e-6) b += 1;
+    }
+    return b;
+  }
+
   /** Route from an element attach to a lane-join point (inbox stub + ortho). */
   function routeAttachToJoin(attach, join, preferCenter) {
     const face = attach.face || "N";
     const fo = faceOutwardDelta(face);
     const aStub = stubPoint(attach, fo.x, fo.y, INBOX_STUB);
     const j = xyOf(join);
-    const mid = orthoPtsPrefer(aStub, j, preferCenter);
+    // Prefer fewest bends (stub included); break ties with preferCenter.
+    const candidates = [];
+    if (
+      Math.abs(aStub.x - j.x) < 1e-6 ||
+      Math.abs(aStub.y - j.y) < 1e-6
+    ) {
+      candidates.push([
+        [aStub.x, aStub.y],
+        [j.x, j.y],
+      ]);
+    } else {
+      candidates.push(
+        [
+          [aStub.x, aStub.y],
+          [j.x, aStub.y],
+          [j.x, j.y],
+        ],
+        [
+          [aStub.x, aStub.y],
+          [aStub.x, j.y],
+          [j.x, j.y],
+        ]
+      );
+    }
+    let mid = candidates[0];
+    let bestBends = Infinity;
+    let bestPref = Infinity;
+    for (const c of candidates) {
+      const full = [[attach.x, attach.y], ...c];
+      const bends = orthoBendCount(full);
+      let pref = 0;
+      if (preferCenter && c.length >= 3) {
+        const corner = c[1];
+        pref = Math.hypot(corner[0] - preferCenter.x, corner[1] - preferCenter.y);
+      }
+      if (
+        bends < bestBends ||
+        (bends === bestBends && pref < bestPref)
+      ) {
+        bestBends = bends;
+        bestPref = pref;
+        mid = c;
+      }
+    }
     /** @type {number[][]} */
-    const pts = [[attach.x, attach.y], [aStub.x, aStub.y]];
-    for (let i = 1; i < mid.length; i++) pts.push(mid[i]);
+    const pts = [[attach.x, attach.y]];
+    for (const p of mid) pts.push(p);
     /** @type {number[][]} */
     const clean = [];
     for (const p of pts) {
@@ -1851,6 +1955,16 @@
       clean.push(p);
     }
     return clean;
+  }
+
+  /** Pin id for strand ``wi`` (falls back to edge.from_pin / to_pin). */
+  function cableWirePin(edge, wi, end) {
+    const arr = end === "from" ? edge.from_pins : edge.to_pins;
+    if (Array.isArray(arr) && arr.length) {
+      const p = arr[wi] != null ? arr[wi] : arr[0];
+      if (p != null && String(p) !== "") return p;
+    }
+    return end === "from" ? edge.from_pin : edge.to_pin;
   }
 
   function cableRouteKey(edge, elemById) {
@@ -2452,6 +2566,8 @@
         fromSlot: fromT,
         toSlot: toT,
         laneDist: highwayLaneOffset(lane.index, lane.count),
+        fromPin: cableWirePin(edge, wi, "from"),
+        toPin: cableWirePin(edge, wi, "to"),
       });
       const stroke = wireColorCss(code);
       for (const sub of strandSubs) {
