@@ -25,8 +25,6 @@
   let hasDocument = false;
   /** @type {string | null} */
   let activeDocId = null;
-  /** @type {Record<string, FileSystemFileHandle>} */
-  let fileHandles = {};
   /** Per-document canvas location/depth when switching tabs. */
   let docViews = {};
   let drag = null;
@@ -138,9 +136,12 @@
 
   /**
    * In-app modal. Returns the chosen button id, or null if dismissed.
+   * When ``opts.input`` is set, Enter confirms the primary button and the
+   * caller should read ``opts.input``'s field via ``promptText``.
    * @param {{
    *   title?: string,
    *   message?: string,
+   *   input?: { label?: string, value?: string, placeholder?: string },
    *   buttons?: { id: string, label: string, primary?: boolean, danger?: boolean }[]
    * }} opts
    */
@@ -149,6 +150,9 @@
     const titleEl = document.getElementById("app-modal-title");
     const msgEl = document.getElementById("app-modal-message");
     const actions = document.getElementById("app-modal-actions");
+    const inputWrap = document.getElementById("app-modal-input-wrap");
+    const inputLabel = document.getElementById("app-modal-input-label");
+    const inputEl = document.getElementById("app-modal-input");
     if (!modal || !titleEl || !msgEl || !actions) {
       return Promise.resolve(null);
     }
@@ -160,6 +164,20 @@
       titleEl.textContent = opts.title || "HouseWire";
       msgEl.textContent = opts.message || "";
       actions.innerHTML = "";
+      const wantsInput = Boolean(opts.input);
+      if (inputWrap && inputEl) {
+        if (wantsInput) {
+          inputWrap.classList.remove("hidden");
+          if (inputLabel) {
+            inputLabel.textContent = opts.input.label || "Path";
+          }
+          inputEl.value = opts.input.value || "";
+          inputEl.placeholder = opts.input.placeholder || "";
+        } else {
+          inputWrap.classList.add("hidden");
+          inputEl.value = "";
+        }
+      }
       modal.classList.remove("hidden");
       modal.setAttribute("aria-hidden", "false");
 
@@ -182,10 +200,20 @@
           ev.preventDefault();
           finish(null);
         } else if (ev.key === "Enter") {
-          const primary = buttons.find((b) => b.primary) || buttons[buttons.length - 1];
-          if (primary) {
+          if (wantsInput && ev.target === inputEl) {
             ev.preventDefault();
-            finish(primary.id);
+            const primary =
+              buttons.find((b) => b.primary) || buttons[buttons.length - 1];
+            if (primary) finish(primary.id);
+            return;
+          }
+          if (!wantsInput) {
+            const primary =
+              buttons.find((b) => b.primary) || buttons[buttons.length - 1];
+            if (primary) {
+              ev.preventDefault();
+              finish(primary.id);
+            }
           }
         }
       }
@@ -205,11 +233,49 @@
         .querySelectorAll("[data-modal-dismiss]")
         .forEach((el) => el.addEventListener("click", onDismiss));
 
-      const focusBtn =
-        actions.querySelector("button.primary") ||
-        actions.querySelector("button:last-child");
-      setTimeout(() => focusBtn && focusBtn.focus(), 0);
+      setTimeout(() => {
+        if (wantsInput && inputEl) {
+          inputEl.focus();
+          inputEl.select();
+          return;
+        }
+        const focusBtn =
+          actions.querySelector("button.primary") ||
+          actions.querySelector("button:last-child");
+        if (focusBtn) focusBtn.focus();
+      }, 0);
     });
+  }
+
+  /**
+   * In-app text prompt (no browser dialogs). Returns trimmed string or null.
+   * @param {{
+   *   title?: string,
+   *   message?: string,
+   *   label?: string,
+   *   value?: string,
+   *   placeholder?: string,
+   *   okLabel?: string
+   * }} opts
+   */
+  async function promptText(opts) {
+    const inputEl = document.getElementById("app-modal-input");
+    const choice = await appDialog({
+      title: opts.title || "HouseWire",
+      message: opts.message || "",
+      input: {
+        label: opts.label || "Path",
+        value: opts.value || "",
+        placeholder: opts.placeholder || "",
+      },
+      buttons: [
+        { id: "cancel", label: "Cancel" },
+        { id: "ok", label: opts.okLabel || "OK", primary: true },
+      ],
+    });
+    if (choice !== "ok" || !inputEl) return null;
+    const value = String(inputEl.value || "").trim();
+    return value || null;
   }
 
   /** @returns {Promise<"save"|"discard"|null>} */
@@ -4510,13 +4576,9 @@
   }
 
   async function saveDocument() {
+    // Server-side write only — never use the browser File System Access API
+    // (createWritable shows a native permission window).
     const data = await api("/api/save", { method: "POST", body: "{}" });
-    const handle = activeDocId ? fileHandles[activeDocId] : null;
-    if (handle && data.yaml != null) {
-      await writeTextToFileHandle(handle, data.yaml);
-    } else if (data.browser_origin && data.yaml != null && !handle) {
-      downloadYamlBlob(data.filename || "housewire.yaml", data.yaml);
-    }
     setStatus(`saved ${(data.saved || []).length} file(s)`);
     applyEditFlags(data);
     dirtyLocal = false;
@@ -4561,7 +4623,6 @@
     clearTimeout(saveTimer);
     saveTimer = null;
     resetCanvasState();
-    fileHandles = {};
     docViews = {};
     activeDocId = null;
     hasDocument = false;
@@ -4680,168 +4741,62 @@
     scheduleStatusRefresh();
   }
 
-  const YAML_PICKER_TYPES = [
-    {
-      description: "YAML",
-      accept: {
-        "application/yaml": [".yaml", ".yml"],
-        "text/yaml": [".yaml", ".yml"],
-        "text/plain": [".yaml", ".yml"],
-      },
-    },
-  ];
-
-  async function writeTextToFileHandle(handle, text) {
-    const writable = await handle.createWritable();
-    await writable.write(text);
-    await writable.close();
-  }
-
-  function downloadYamlBlob(filename, content) {
-    const blob = new Blob([content], { type: "application/yaml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename || "housewire.yaml";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function pickOpenYamlViaInput() {
-    return new Promise((resolve) => {
-      const input = document.getElementById("file-open-input");
-      if (!input) {
-        resolve(null);
-        return;
-      }
-      input.value = "";
-      const onChange = () => {
-        input.removeEventListener("change", onChange);
-        const file = input.files && input.files[0];
-        if (!file) {
-          resolve(null);
-          return;
-        }
-        file.text().then((content) => {
-          resolve({ handle: null, name: file.name, content });
-        }, () => resolve(null));
-      };
-      input.addEventListener("change", onChange);
-      input.click();
-    });
-  }
-
-  async function pickOpenYamlFile() {
-    if (typeof window.showOpenFilePicker === "function") {
-      try {
-        const [handle] = await window.showOpenFilePicker({
-          multiple: false,
-          types: YAML_PICKER_TYPES,
-          excludeAcceptAllOption: false,
-        });
-        const file = await handle.getFile();
-        return {
-          handle,
-          name: file.name,
-          content: await file.text(),
-        };
-      } catch (err) {
-        if (err && err.name === "AbortError") return null;
-      }
-    }
-    return pickOpenYamlViaInput();
-  }
-
-  async function pickSaveYamlFile(suggestedName, content) {
-    if (typeof window.showSaveFilePicker === "function") {
-      try {
-        const handle = await window.showSaveFilePicker({
-          suggestedName: suggestedName || "housewire.yaml",
-          types: YAML_PICKER_TYPES,
-          excludeAcceptAllOption: false,
-        });
-        await writeTextToFileHandle(handle, content);
-        return { handle, name: handle.name || suggestedName };
-      } catch (err) {
-        if (err && err.name === "AbortError") return null;
-      }
-    }
-    downloadYamlBlob(suggestedName || "housewire.yaml", content);
-    return {
-      handle: null,
-      name: suggestedName || "housewire.yaml",
-      downloaded: true,
-    };
-  }
-
-  async function isDocumentDirty() {
-    try {
-      const st = applyWorkspaceStatus(await api("/api/workspace"));
-      if (!hasDocument) return false;
-      const serverDirty = (st.dirty || []).length > 0;
-      return serverDirty || dirtyLocal;
-    } catch {
-      // Do not block Open/Close on a transient API error.
-      return false;
-    }
-  }
-
   async function fileOpen() {
-    // Multi-doc: Open always adds/activates a tab; no discard of other files.
-    const picked = await pickOpenYamlFile();
-    if (!picked) return;
+    // Multi-doc: Open adds/activates a tab via a server path (no browser picker).
+    const path = await promptText({
+      title: "Open site",
+      message: "Absolute path to a housewire YAML or site directory.",
+      label: "Path",
+      placeholder: "/path/to/site/housewire.yaml",
+      okLabel: "Open",
+    });
+    if (!path) return;
     rememberCurrentDocView();
     try {
-      const st = await api("/api/workspace/open-content", {
+      const st = await api("/api/workspace/open", {
         method: "POST",
-        body: JSON.stringify({
-          filename: picked.name,
-          content: picked.content,
-        }),
+        body: JSON.stringify({ path }),
       });
       applyWorkspaceStatus(st);
-      if (picked.handle && st.document && st.document.id) {
-        fileHandles[st.document.id] = picked.handle;
-      }
       await reloadAfterDocumentChange();
-      setStatus(`opened ${picked.name}`);
+      const name =
+        (st.document && (st.document.name || st.document.title)) || path;
+      setStatus(`opened ${name}`);
     } catch (err) {
       setStatus(String(err.message || err));
     }
   }
 
   async function fileSaveAs() {
-    let exported;
+    let suggested = "housewire.yaml";
     try {
-      exported = await api("/api/workspace/yaml");
-    } catch (err) {
-      setStatus(String(err.message || err));
-      return;
+      const exported = await api("/api/workspace/yaml");
+      if (exported.filename) suggested = exported.filename;
+    } catch {
+      /* keep default */
     }
-    const suggested = exported.filename || "housewire.yaml";
-    const result = await pickSaveYamlFile(suggested, exported.content);
-    if (!result) return;
+    const path = await promptText({
+      title: "Save as",
+      message: "Destination directory for a copy of this site.",
+      label: "Path",
+      value: "",
+      placeholder: `/path/to/${suggested.replace(/\.ya?ml$/i, "") || "site"}`,
+      okLabel: "Save as",
+    });
+    if (!path) return;
     rememberCurrentDocView();
     try {
-      const st = await api("/api/workspace/open-content", {
+      const st = await api("/api/workspace/save-as", {
         method: "POST",
-        body: JSON.stringify({
-          filename: result.name,
-          content: exported.content,
-        }),
+        body: JSON.stringify({ path }),
       });
       applyWorkspaceStatus(st);
-      if (result.handle && st.document && st.document.id) {
-        fileHandles[st.document.id] = result.handle;
-      }
       dirtyLocal = false;
       updateSaveButton(false);
       await reloadAfterDocumentChange();
-      setStatus(
-        result.downloaded
-          ? `downloaded ${result.name}`
-          : `saved as ${result.name}`
-      );
+      const name =
+        (st.document && (st.document.name || st.document.title)) || path;
+      setStatus(`saved as ${name}`);
     } catch (err) {
       setStatus(String(err.message || err));
     }
@@ -4894,7 +4849,6 @@
         method: "POST",
         body: JSON.stringify({ force: true, id: docId }),
       });
-      delete fileHandles[docId];
       delete docViews[docId];
       applyWorkspaceStatus(st);
       if (!hasDocument) {

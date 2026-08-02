@@ -481,6 +481,38 @@ body {
   color: var(--muted);
 }
 
+#app-modal-input-wrap {
+  margin: 0 0 0.85rem;
+}
+
+#app-modal-input-wrap.hidden {
+  display: none;
+}
+
+#app-modal-input-wrap span {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+#app-modal-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+#app-modal-input:focus {
+  outline: 1px solid var(--accent, #6cb6ff);
+  outline-offset: 0;
+}
+
 .modal-field {
   display: flex;
   flex-direction: column;

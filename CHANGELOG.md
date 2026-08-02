@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.2] — 2026-08-02
+
+### Changed
+
+- File Open / Save As use in-app path prompts; Save writes only via the
+  server. Removed browser File System Access pickers and ``createWritable``
+  (no native permission windows).
+
 ## [0.34.1] — 2026-08-02
 
 ### Fixed
