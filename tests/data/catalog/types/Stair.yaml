@@ -1,7 +1,7 @@
 kind: place_type
 id: Stair
 icon: fa-stairs
-title: Stair / vertical circulation
+label: Stair / vertical circulation
 description_es: >
   Escalera u otro hueco de circulacion vertical que une dos locations
   (normalmente dos Floor). No es un Room: declara connects: [A, B] con

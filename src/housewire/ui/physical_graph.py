@@ -7,6 +7,7 @@ from typing import Any
 
 from housewire.house import (
     catalog_icon,
+    catalog_type_label,
     is_place_type,
     load_catalog,
     place_label,
@@ -292,6 +293,15 @@ def _build_element_nodes(
                     "type": etype,
                     "subtype": defn.get("subtype"),
                     "icon": catalog_icon(etype, catalog=catalog, instance=defn),
+                    "type_label": catalog_type_label(
+                        etype,
+                        catalog=catalog,
+                        subtype=(
+                            str(defn.get("subtype"))
+                            if defn.get("subtype") is not None
+                            else None
+                        ),
+                    ),
                     "label": label_s,
                     "notes": notes_s,
                     "display_name": working_name or name,
@@ -749,6 +759,7 @@ def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
             "display_name": place_name(meta, place_id),
             "type": type_id,
             "icon": catalog_icon(type_id, catalog=catalog, instance=node),
+            "type_label": catalog_type_label(type_id, catalog=catalog),
             "parts": parts,
         }
         elem_rows: list[dict[str, Any]] = []
@@ -780,6 +791,15 @@ def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
                     "parent": location_id,
                     "type": etype,
                     "icon": catalog_icon(etype, catalog=catalog, instance=defn),
+                    "type_label": catalog_type_label(
+                        etype,
+                        catalog=catalog,
+                        subtype=(
+                            str(defn.get("subtype"))
+                            if defn.get("subtype") is not None
+                            else None
+                        ),
+                    ),
                     "subtype": defn.get("subtype"),
                     "label": label_s,
                     "notes": notes_s,
@@ -830,6 +850,8 @@ def list_site_outline(site_root: Path) -> list[dict[str, Any]]:
                     "display_name": info["display_name"],
                     "type": info["type"],
                     "icon": info.get("icon") or "fa-circle",
+                    "type_label": info.get("type_label")
+                    or catalog_type_label(info["type"], catalog=catalog),
                     "depth": depth,
                     "selectable": loc_id in selectable,
                 }
@@ -976,6 +998,7 @@ def build_physical_graph(
                 "display_name": place_name(meta, place_id),
                 "display_label": place_label(meta, place_id),
                 "icon": catalog_icon(type_id, catalog=catalog, instance=doc),
+                "type_label": catalog_type_label(type_id, catalog=catalog),
                 "openings": [
                     {"id": oid, "face": _opening_face(oid)} for oid in openings
                 ],

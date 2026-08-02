@@ -1,7 +1,7 @@
 kind: place_type
 id: House
 icon: fa-house
-title: House / dwelling
+label: House / dwelling
 description_es: >
   Casa o vivienda. Es un tipo de lugar como Room o Floor; no implica ser la raiz
   del arbol. La jerarquia la marca el path de carpetas (puedes montar otra

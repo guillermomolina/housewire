@@ -1,7 +1,7 @@
 kind: element_type
 id: Relay
 icon: fa-diagram-project
-title: Relay / smart switch
+label: Relay / smart switch
 description_es: >
   Relé o interruptor inteligente (p.ej. Sonoff ZBMini). Alimentación LIn+N,
   salida conmutada LOut, entradas de interruptor externo.
@@ -34,13 +34,13 @@ defaults:
   subtype: smart
 subtypes:
   smart:
-    title: Smart relay (Zigbee / Wi-Fi)
+    label: Smart relay (Zigbee / Wi-Fi)
   zbmini_r2:
-    title: Sonoff ZBMiniR2
+    label: Sonoff ZBMiniR2
   zbmini_extreme:
-    title: Sonoff ZBMini Extreme (legacy alias)
+    label: Sonoff ZBMini Extreme (legacy alias)
   mini_zbd:
-    title: Sonoff MINI Zigbee Dry (MINI-ZBD)
+    label: Sonoff MINI Zigbee Dry (MINI-ZBD)
     terminal_grid:
       N: 2
       S: 3

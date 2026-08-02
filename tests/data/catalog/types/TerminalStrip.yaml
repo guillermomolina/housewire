@@ -1,7 +1,7 @@
 kind: element_type
 id: TerminalStrip
 icon: fa-grip-lines
-title: Terminal strip / connector block
+label: Terminal strip / connector block
 description_es: >
   Regleta o bornes de empalme en caja de derivacion.
   Ids face-cell solo en N (N1..Nn); terminal_grid NS dibuja ambos lados del

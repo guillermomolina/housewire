@@ -416,6 +416,40 @@ def catalog_icon(
     return default
 
 
+def catalog_type_label(
+    type_id: object,
+    *,
+    catalog: dict[str, dict[str, Any]] | None = None,
+    subtype: str | None = None,
+) -> str:
+    """Human type name for UI: catalog ``label`` / ``name`` (legacy ``title``).
+
+    Falls back to the type id when the catalog has no display string.
+    """
+    tid = str(type_id or "").strip()
+    cat = catalog if catalog is not None else load_catalog()
+    type_def = cat.get(tid)
+    if not isinstance(type_def, dict):
+        return tid or "?"
+
+    def _pick(row: dict[str, Any]) -> str | None:
+        for key in ("label", "name", "title"):
+            raw = row.get(key)
+            if raw is not None and str(raw).strip():
+                return str(raw).strip()
+        return None
+
+    if subtype is not None:
+        subtypes = type_def.get("subtypes")
+        if isinstance(subtypes, dict):
+            sub = subtypes.get(str(subtype))
+            if isinstance(sub, dict):
+                picked = _pick(sub)
+                if picked:
+                    return picked
+    return _pick(type_def) or tid or "?"
+
+
 def _catalog_defaults_for_subtype(
     type_def: dict[str, Any] | None, subtype: str | None
 ) -> dict[str, Any]:

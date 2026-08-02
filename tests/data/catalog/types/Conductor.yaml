@@ -1,7 +1,7 @@
 kind: conductor_type
 id: Conductor
 icon: fa-minus
-title: Conductor / single wire
+label: Conductor / single wire
 description_es: >
   Hilo conductor entre dos terminales (from/to). Vive bajo cables: con type
   Conductor; no en elements.
@@ -10,18 +10,18 @@ defaults:
   color: BN
 subtypes:
   power:
-    title: Power (AC)
+    label: Power (AC)
     defaults:
       color: BN
   earth:
-    title: Protective earth
+    label: Protective earth
     defaults:
       color: GNYE
   dc:
-    title: DC
+    label: DC
     defaults:
       color: RD
   signal:
-    title: Signal / data
+    label: Signal / data
     defaults:
       color: WH

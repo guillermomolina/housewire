@@ -1,7 +1,7 @@
 kind: element_type
 id: Supply
 icon: fa-plug-circle-bolt
-title: Supply / grid feed
+label: Supply / grid feed
 description_es: Acometida / entrada de red (fase + neutro desde contador).
 qet_hint: supply_in
 terminal_grid:

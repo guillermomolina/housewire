@@ -1,7 +1,7 @@
 kind: place_type
 id: Floor
 icon: fa-layer-group
-title: Floor / level
+label: Floor / level
 description_es: >
   Planta o nivel del edificio (planta baja, -1/parking, planta 1, …).
   Usar label para el nombre humano (Planta baja, Parking).

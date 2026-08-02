@@ -1,7 +1,7 @@
 kind: place_type
 id: JunctionBox
 icon: fa-cube
-title: Junction box
+label: Junction box
 description_es: >
   Caja de derivacion. Metadatos del lugar (type/label/… en el nodo YAML).
   Declarar bocas en location.openings como lista de ids locales (N1, B1-1, …)

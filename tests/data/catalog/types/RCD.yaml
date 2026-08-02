@@ -1,7 +1,7 @@
 kind: element_type
 id: RCD
 icon: fa-shield-halved
-title: Residual current device
+label: Residual current device
 description_es: >
   Interruptor diferencial (ID / RCD). Protege contra fugas a tierra.
   No es un magnetotermico.

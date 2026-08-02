@@ -1,7 +1,7 @@
 kind: element_type
 id: Intercom
 icon: fa-phone
-title: Door entry / intercom
+label: Door entry / intercom
 description_es: Portero eléctrico / videoportero (alimentación DC).
 qet_hint: intercom
 terminal_grid:

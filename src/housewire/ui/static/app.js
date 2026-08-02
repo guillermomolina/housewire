@@ -3188,7 +3188,7 @@
       const typeEl = g.querySelector("text.node-type");
       if (typeEl) {
         typeEl.textContent = fitLabel(
-          (n.type || "") + (n.expandable ? " · +" : ""),
+          (n.type_label || n.type || "") + (n.expandable ? " · +" : ""),
           Math.max(8, w - 21)
         );
       }
@@ -3233,7 +3233,7 @@
     );
     appendTypeWithIcon(g, {
       icon: node.icon,
-      typeText: (node.type || "") + (node.expandable ? " · +" : ""),
+      typeText: (node.type_label || node.type || "") + (node.expandable ? " · +" : ""),
       x: 8,
       y: 34,
       maxW: w - 16,
@@ -3350,7 +3350,9 @@
     g.appendChild(box);
     const title =
       (elem.display_label || elem.label || elem.display_name || elem.name || elem.id) +
-      (elem.type ? ` · ${elem.type}` : "");
+      (elem.type_label || elem.type
+        ? ` · ${elem.type_label || elem.type}`
+        : "");
     g.appendChild(el("title", null, title));
     g.appendChild(
       el(
@@ -3361,7 +3363,7 @@
     );
     appendTypeWithIcon(g, {
       icon: elem.icon,
-      typeText: elem.type || "",
+      typeText: elem.type_label || elem.type || "",
       x: 4,
       y: 22,
       maxW: w - 8,
@@ -4872,7 +4874,9 @@
       row.dataset.id = node.id;
       if (node.parent) row.dataset.parent = node.parent;
       row.style.paddingLeft = `${0.25 + (node.depth || 0) * 0.75}rem`;
-      row.title = [node.type, node.id].filter(Boolean).join(" · ");
+      row.title = [node.type_label || node.type, node.id]
+        .filter(Boolean)
+        .join(" · ");
 
       const twist = document.createElement("button");
       twist.type = "button";

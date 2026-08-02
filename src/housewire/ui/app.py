@@ -230,7 +230,11 @@ def create_app(site_root: Path | None = None) -> Any:
             type_id: {
                 "id": type_id,
                 "kind": data.get("kind"),
-                "title": data.get("title"),
+                "label": (
+                    data.get("label")
+                    or data.get("name")
+                    or data.get("title")
+                ),
                 "icon": data.get("icon") or "fa-circle",
             }
             for type_id, data in sorted(cat.items())

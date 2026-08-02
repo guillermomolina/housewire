@@ -1,7 +1,7 @@
 kind: cable_type
 id: Cable
 icon: fa-minus
-title: Cable sheath / multicore jacket
+label: Cable sheath / multicore jacket
 description_es: >
   Funda o mazo que agrupa conductores (contains). No conecta terminales;
   vive bajo cables:, no en elements.
@@ -9,18 +9,18 @@ defaults:
   color: BK
 subtypes:
   power:
-    title: Power (AC)
+    label: Power (AC)
     defaults:
       color: BK
   earth:
-    title: Protective earth bundle
+    label: Protective earth bundle
     defaults:
       color: GNYE
   dc:
-    title: DC
+    label: DC
     defaults:
       color: BK
   signal:
-    title: Signal / data
+    label: Signal / data
     defaults:
       color: GY

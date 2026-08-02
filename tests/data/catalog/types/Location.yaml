@@ -1,7 +1,7 @@
 kind: place_type
 id: Location
 icon: fa-location-dot
-title: Generic place (inline / catch-all)
+label: Generic place (inline / catch-all)
 description_es: >
   Contenedor generico de ubicacion. Preferir Room, Stair, JunctionBox, DeviceBox,
   LightPoint, Panel, Floor o House en el documento de sitio (campos en la raiz del YAML).

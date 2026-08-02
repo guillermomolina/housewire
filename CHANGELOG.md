@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.33.1] — 2026-08-02
+
+### Changed
+
+- Catalog type display uses ``label`` (or ``name``; legacy ``title`` still
+  read). Canvas type captions show that label instead of the type id.
+
 ## [0.33.0] — 2026-08-02
 
 ### Changed

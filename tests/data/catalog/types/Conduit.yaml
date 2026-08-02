@@ -1,7 +1,7 @@
 kind: conduit_type
 id: Conduit
 icon: fa-grip-lines-vertical
-title: Conduit / hose
+label: Conduit / hose
 description_es: >
   Tubo o manguera entre locations (capa fisica). Une aberturas con from/to
   (LocationRef.OpeningId); contains lista cables/conductores que viajan dentro.
@@ -9,16 +9,16 @@ description_es: >
 defaults: {}
 subtypes:
   tube:
-    title: Tube (generic)
+    label: Tube (generic)
   hose:
-    title: Multi-cable hose / sheath
+    label: Multi-cable hose / sheath
   free:
-    title: Free wires / no tube
+    label: Free wires / no tube
   M16:
-    title: Tube M16
+    label: Tube M16
   M20:
-    title: Tube M20
+    label: Tube M20
   M25:
-    title: Tube M25
+    label: Tube M25
   M32:
-    title: Tube M32
+    label: Tube M32

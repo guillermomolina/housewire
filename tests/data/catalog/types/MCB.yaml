@@ -1,7 +1,7 @@
 kind: element_type
 id: MCB
 icon: fa-bolt
-title: Miniature circuit breaker
+label: Miniature circuit breaker
 description_es: >
   Magnetotermico (PIA / MCB). Protege contra sobrecarga y cortocircuito.
   No es un diferencial (RCD).

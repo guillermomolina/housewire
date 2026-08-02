@@ -1,7 +1,7 @@
 kind: place_type
 id: Panel
 icon: fa-server
-title: Electrical panel
+label: Electrical panel
 description_es: >
   Cuadro electrico / cuadro general. Metadatos del lugar (type/label/… en el nodo YAML).
   Declarar bocas en location.openings como lista de ids locales (N1, B1-1, …),

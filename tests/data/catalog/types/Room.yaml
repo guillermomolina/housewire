@@ -1,7 +1,7 @@
 kind: place_type
 id: Room
 icon: fa-door-open
-title: Room
+label: Room
 description_es: >
   Habitacion o estancia. Metadatos del lugar (type/label/… en el nodo YAML).
   Tipo de lugar: sin bornes electricos.
