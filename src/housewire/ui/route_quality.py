@@ -693,6 +693,21 @@ def highway_lane_offset(lane_index: int, strand_count: int) -> float:
     return first + i * pitch
 
 
+def jacket_mid_offset(lane_i0: int, lane_i1: int, strand_count: int) -> float:
+    """Centerline offset for a jacket spanning lanes ``i0..i1`` inclusive."""
+    a = highway_lane_offset(lane_i0, strand_count)
+    b = highway_lane_offset(lane_i1, strand_count)
+    return (a + b) / 2.0
+
+
+def cable_lanes_are_contiguous(lane_indices: Sequence[int]) -> bool:
+    """True when a cable's strand lanes form an unbroken block (for jackets)."""
+    if not lane_indices:
+        return True
+    lo, hi = min(lane_indices), max(lane_indices)
+    return set(lane_indices) == set(range(lo, hi + 1))
+
+
 def parallel_highway_bundle(centerline: Poly, strand_count: int) -> list[list[Point]]:
     """Build ``strand_count`` parallel lanes of a shared orthogonal centerline."""
     return [

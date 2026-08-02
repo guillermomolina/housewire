@@ -493,6 +493,27 @@ class TestConductorPaletteContrast(unittest.TestCase):
 
         self.assertEqual(contrast_outline_css("#ffffff"), "#0d1117")
 
+    def test_jacket_spans_contiguous_cable_lanes_not_centerline(self) -> None:
+        """WH sheath around BK+BU must sit on their lane mid, not tube center.
+
+        Highway of 3 strands: GNYE @0, BK @1, BU @2 → jacket mid ≠ 0.
+        """
+        from housewire.ui.route_quality import (
+            cable_lanes_are_contiguous,
+            highway_lane_offset,
+            jacket_mid_offset,
+        )
+
+        self.assertTrue(cable_lanes_are_contiguous([1, 2]))
+        self.assertFalse(cable_lanes_are_contiguous([0, 2]))
+        mid = jacket_mid_offset(1, 2, 3)
+        self.assertNotAlmostEqual(mid, 0.0, places=5)
+        self.assertAlmostEqual(
+            mid,
+            (highway_lane_offset(1, 3) + highway_lane_offset(2, 3)) / 2,
+            places=5,
+        )
+
 
 class TestCrossingsAndJacketGaps(unittest.TestCase):
     def test_crossing_lanes_at_corner_detected(self) -> None:

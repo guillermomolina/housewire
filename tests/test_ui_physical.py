@@ -362,6 +362,26 @@ class TestPhysicalGraph(unittest.TestCase):
         self.assertIsNotNone(lamp)
         self.assertEqual(lamp.get("jacket_color"), "WH")
         self.assertEqual(lamp.get("colors"), ["BK", "BU"])
+        # Bare PE conductor must not get a fake jacket (would paint as a peer
+        # "white/green" band on the conduit centerline).
+        pe = edges.get("Linea_lampara_T")
+        self.assertIsNotNone(pe)
+        self.assertIsNone(pe.get("jacket_color"))
+        self.assertEqual(pe.get("colors"), ["GNYE"])
+
+    def test_conduit_nesting_lamp_bundle(self) -> None:
+        """BK conduit holds WH(BK+BU) sheath + bare GNYE — graph nesting."""
+        root = Path(__file__).resolve().parents[1] / "sites" / "Tests"
+        if not root.is_dir() or not any(root.glob("*.yaml")):
+            self.skipTest("sites/Tests fixture not present")
+        graph = build_physical_graph(root, "Habitacion")
+        by_id = {e["id"]: e for e in graph.get("edges") or []}
+        tube = by_id.get("Conducto_lampara")
+        self.assertIsNotNone(tube)
+        self.assertEqual(tube.get("color"), "BK")
+        contains = set(tube.get("contains") or [])
+        self.assertIn("Linea_lampara", contains)
+        self.assertIn("Linea_lampara_T", contains)
 
     def test_conduit_color_on_graph_edge(self) -> None:
         root = Path(__file__).resolve().parents[1] / "sites" / "Tests"

@@ -2656,27 +2656,52 @@
     /** @type {Map<string, {index:number, count:number}>} */
     const laneMap = new Map();
     for (const [, list] of byRoute) {
-      // Order lanes by pin geometry so stubs into a terminal strip do not cross.
-      const xs = list.map((it) => (it.ax + it.bx) / 2);
-      const ys = list.map((it) => (it.ay + it.by) / 2);
+      // Keep strands of the same cable consecutive, then order cables by
+      // pin geometry so jackets wrap a contiguous lane span.
+      /** @type {Map<string, typeof list>} */
+      const byCable = new Map();
+      for (const it of list) {
+        if (!byCable.has(it.key)) byCable.set(it.key, []);
+        byCable.get(it.key).push(it);
+      }
+      const cableKeys = [...byCable.keys()];
+      const cableScore = (key) => {
+        const members = byCable.get(key) || [];
+        const xs = members.map((it) => (it.ax + it.bx) / 2);
+        const ys = members.map((it) => (it.ay + it.by) / 2);
+        return {
+          x: xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length),
+          y: ys.reduce((a, b) => a + b, 0) / Math.max(1, ys.length),
+        };
+      };
+      const scores = Object.fromEntries(
+        cableKeys.map((k) => [k, cableScore(k)])
+      );
+      const xs = cableKeys.map((k) => scores[k].x);
+      const ys = cableKeys.map((k) => scores[k].y);
       const xSpan = Math.max(...xs) - Math.min(...xs);
       const ySpan = Math.max(...ys) - Math.min(...ys);
-      list.sort((u, v) => {
-        const ux = (u.ax + u.bx) / 2;
-        const uy = (u.ay + u.by) / 2;
-        const vx = (v.ax + v.bx) / 2;
-        const vy = (v.ay + v.by) / 2;
+      cableKeys.sort((ka, kb) => {
+        const a = scores[ka];
+        const b = scores[kb];
         if (xSpan >= ySpan) {
-          if (Math.abs(ux - vx) > 1e-3) return ux - vx;
-          if (Math.abs(uy - vy) > 1e-3) return uy - vy;
+          if (Math.abs(a.x - b.x) > 1e-3) return a.x - b.x;
+          if (Math.abs(a.y - b.y) > 1e-3) return a.y - b.y;
         } else {
-          if (Math.abs(uy - vy) > 1e-3) return uy - vy;
-          if (Math.abs(ux - vx) > 1e-3) return ux - vx;
+          if (Math.abs(a.y - b.y) > 1e-3) return a.y - b.y;
+          if (Math.abs(a.x - b.x) > 1e-3) return a.x - b.x;
         }
-        return u.key === v.key ? u.wi - v.wi : u.key < v.key ? -1 : 1;
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
       });
-      const count = list.length;
-      list.forEach((item, index) => {
+      /** @type {typeof list} */
+      const ordered = [];
+      for (const key of cableKeys) {
+        const members = byCable.get(key) || [];
+        members.sort((u, v) => u.wi - v.wi);
+        ordered.push(...members);
+      }
+      const count = ordered.length;
+      ordered.forEach((item, index) => {
         laneMap.set(`${item.key}|${item.wi}`, { index, count });
       });
     }
@@ -3834,34 +3859,42 @@
     /** @type {SVGElement[]} */
     const paths = [];
 
-    // Jacket: follow the continuous conduit display path (no clip gaps),
-    // slightly narrower than the tube so the conduit color + contrast rim show.
-    if (layout && wireIdx.length) {
+    /**
+     * Paint a sheath jacket around this cable's contiguous lane span (not the
+     * conduit centerline — that made every jacket look like a peer strand).
+     */
+    if (layout && wireIdx.length && edge.jacket_color) {
       const laneInfos = wireIdx.map((wi) => layout.lane(edge, wi));
       const count = laneInfos[0]?.count || wireIdx.length;
       const indices = laneInfos.map((l) => l.index);
       const i0 = Math.min(...indices);
       const i1 = Math.max(...indices);
-      const jw = highwaySpanWidth(i1 - i0 + 1);
-      const jacketCss = wireColorCss(edge.jacket_color || "WH");
+      const midOff =
+        (highwayLaneOffset(i0, count) + highwayLaneOffset(i1, count)) / 2;
+      const jw = highwaySpanWidth(i1 - i0 + 1) + 1.2;
+      const jacketCss = wireColorCss(edge.jacket_color);
       const paintJacketD = (d) => {
         if (!d) return;
         for (const piece of pathDToSubpaths(d)) {
           if (piece.length < 2) continue;
+          const off =
+            Math.abs(midOff) < 1e-9
+              ? piece.map((p) => [p[0], p[1]])
+              : offsetOrthoPts(piece, midOff);
+          if (off.length < 2) continue;
           const jacket = el("path", {
             class: "cable-jacket",
-            d: pointsToPathD(piece),
+            d: pointsToPathD(off),
           });
           jacket.style.stroke = jacketCss;
-          jacket.style.strokeWidth = String(Math.max(2, jw - 1.5));
-          jacket.style.strokeOpacity = "0.55";
+          jacket.style.strokeWidth = String(Math.max(3, jw));
+          jacket.style.strokeOpacity =
+            String(edge.jacket_color).toUpperCase() === "WH" ? "0.88" : "0.75";
           jacket.appendChild(
             el(
               "title",
               null,
-              `${edgeName}${colors.length ? ` [${colors.join(",")}]` : ""}${
-                edge.jacket_color ? ` jacket ${edge.jacket_color}` : ""
-              }`
+              `${edgeName}${colors.length ? ` [${colors.join(",")}]` : ""} jacket ${edge.jacket_color}`
             )
           );
           cablesG.appendChild(jacket);
@@ -3891,6 +3924,37 @@
       }
     }
 
+    const paintStrand = (d, code, title) => {
+      if (!d) return;
+      const key = String(code || "").toUpperCase();
+      if (key === "GNYE") {
+        // Green-yellow PE: green base + yellow dashes (IEC look).
+        const gn = el("path", { class: "cable-strand", d });
+        gn.setAttribute("stroke", wireColorCss("GN"));
+        gn.setAttribute("stroke-width", String(STRAND_WIDTH));
+        gn.appendChild(el("title", null, title));
+        const ye = el("path", { class: "cable-strand cable-strand-gnye", d });
+        ye.setAttribute("stroke", wireColorCss("YE"));
+        ye.setAttribute("stroke-width", String(STRAND_WIDTH));
+        ye.setAttribute("stroke-dasharray", "5 5");
+        ye.style.strokeOpacity = "0.95";
+        const hit = el("path", { class: "cable-strand-hit", d });
+        cablesG.appendChild(hit);
+        cablesG.appendChild(gn);
+        cablesG.appendChild(ye);
+        paths.push(hit, gn, ye);
+        return;
+      }
+      const strand = el("path", { class: "cable-strand", d });
+      strand.setAttribute("stroke", wireColorCss(code));
+      strand.setAttribute("stroke-width", String(STRAND_WIDTH));
+      strand.appendChild(el("title", null, title));
+      const hit = el("path", { class: "cable-strand-hit", d });
+      cablesG.appendChild(hit);
+      cablesG.appendChild(strand);
+      paths.push(hit, strand);
+    };
+
     // Colored strands: true parallel lanes on the highway.
     for (const wi of wireIdx) {
       const code = colors[wi] || colors[0] || "GY";
@@ -3910,28 +3974,12 @@
         fromPin: cableWirePin(edge, wi, "from"),
         toPin: cableWirePin(edge, wi, "to"),
       });
-      const stroke = wireColorCss(code);
       for (const sub of strandSubs) {
-        const strand = el("path", {
-          class: "cable-strand",
-          d: pointsToPathD(sub),
-        });
-        strand.setAttribute("stroke", stroke);
-        strand.setAttribute("stroke-width", String(STRAND_WIDTH));
-        strand.appendChild(
-          el(
-            "title",
-            null,
-            `${edgeName} · ${code}${edge.via ? ` (${edge.via})` : ""}`
-          )
+        paintStrand(
+          pointsToPathD(sub),
+          code,
+          `${edgeName} · ${code}${edge.via ? ` (${edge.via})` : ""}`
         );
-        const hit = el("path", {
-          class: "cable-strand-hit",
-          d: pointsToPathD(sub),
-        });
-        cablesG.appendChild(hit);
-        cablesG.appendChild(strand);
-        paths.push(hit, strand);
       }
     }
     if (!paths.length) return null;

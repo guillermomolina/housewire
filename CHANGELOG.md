@@ -7,6 +7,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.16] — 2026-08-02
+
+### Fixed
+
+- Conduit nesting visuals: WH sheath jacket follows the BK+BU lane group
+  (offset mid-span), not the tube centerline; bare PE conductors no longer
+  get a fake jacket.
+- Strands of the same cable keep contiguous highway lanes so a jacket can
+  wrap them.
+- GNYE paints as green with yellow dashes (not a flat lime peer strand).
+
+### Added
+
+- Tests for jacket mid-offset, contiguous cable lanes, and lamp-bundle
+  nesting (BK conduit → WH(BK,BU) + bare GNYE).
+
 ## [0.34.15] — 2026-08-02
 
 ### Fixed

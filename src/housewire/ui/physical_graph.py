@@ -525,6 +525,7 @@ def _build_cable_edges(
                 break
         name_disp = members_sorted[0]["name"]
         label_disp = members_sorted[0]["label"]
+        jacket_color: str | None = None
         if isinstance(sheath_entry, dict):
             sn = sheath_entry.get("name")
             sl = sheath_entry.get("label")
@@ -532,10 +533,19 @@ def _build_cable_edges(
                 name_disp = str(sn).strip()
             if sl is not None and str(sl).strip():
                 label_disp = str(sl).strip()
-            jc = sheath_entry.get("color")
-            jacket_color = str(jc).strip().upper() if jc else None
-        else:
-            jacket_color = None
+            # Jacket only for a real Cable sheath (has ``contains``), not a
+            # bare conductor that happens to be its own sheath key.
+            has_children = bool(sheath_entry.get("contains"))
+            if has_children or len(members_sorted) > 1:
+                try:
+                    sheath_kind = resolve_link_kind(sheath_entry, catalog)
+                except ValueError:
+                    sheath_kind = "cable" if has_children else "conductor"
+                if sheath_kind == "cable" or has_children:
+                    jc = sheath_entry.get("color")
+                    jacket_color = (
+                        str(jc).strip().upper() if jc else None
+                    )
         # Multi-color jacket edge: per-strand pins stay aligned with colors/
         # conductors so each wire can land on its own terminal cell.
         from_pins = [m["from_pin"] or None for m in members_sorted]
