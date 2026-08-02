@@ -1,0 +1,91 @@
+"""Unit tests for live-canvas route invariant detectors (no Playwright)."""
+from __future__ import annotations
+
+import unittest
+
+from housewire.ui.route_quality import (
+    assess_live_canvas,
+    match_strand_to_tube,
+    point_near_polyline,
+    shared_horizontal_trunk_length,
+)
+
+
+class TestLiveCanvasInvariantsUnit(unittest.TestCase):
+    """Detectors must flag known failure shapes from the reference site."""
+
+    def test_missed_mouth_detected(self) -> None:
+        tube = [(593.0, 332.0), (593.0, 308.0), (1147.0, 308.0), (1147.0, 459.5)]
+        bad = [
+            (593.0, 332.0),
+            (593.0, 308.0),
+            (1147.0, 308.0),
+            (1147.0, 402.0),
+            (1152.0, 413.0),
+            (1205.0, 511.0),
+        ]
+        issues = assess_live_canvas([tube], [bad], tube_half_widths=[8.75])
+        self.assertTrue(
+            any("misses tube" in x and "end mouth" in x for x in issues),
+            msg=issues,
+        )
+
+    def test_good_mouth_transit_ok(self) -> None:
+        tube = [(593.0, 332.0), (593.0, 308.0), (1147.0, 308.0), (1147.0, 459.5)]
+        good = [
+            (200.0, 452.0),
+            (200.0, 332.0),
+            (593.0, 332.0),
+            (593.0, 308.0),
+            (1147.0, 308.0),
+            (1147.0, 459.5),
+            (1147.0, 505.0),
+            (1241.0, 511.0),
+        ]
+        issues = assess_live_canvas(
+            [tube],
+            [good],
+            tube_half_widths=[8.75],
+            bipolar_y_min=900.0,
+        )
+        self.assertFalse(
+            any("misses tube" in x for x in issues),
+            msg=issues,
+        )
+
+    def test_shared_trunk_detected(self) -> None:
+        a = [(660.0, 452.0), (660.0, 420.0), (598.0, 420.0), (593.0, 332.0)]
+        b = [(680.0, 452.0), (680.0, 420.0), (598.0, 420.0), (593.0, 332.0)]
+        trunks = shared_horizontal_trunk_length(
+            [a, b], y_min=400.0, y_max=440.0, min_len=40.0
+        )
+        self.assertTrue(trunks, msg=trunks)
+        issues = assess_live_canvas(
+            [[(593.0, 332.0), (700.0, 332.0)]],
+            [a, b],
+            bipolar_y_min=900.0,
+        )
+        self.assertTrue(any("shared inbox trunk" in x for x in issues), msg=issues)
+
+    def test_missing_v_detected(self) -> None:
+        tube = [(100.0, 100.0), (100.0, 200.0)]
+        bad = [(100.0, 100.0), (100.0, 200.0), (200.0, 200.0), (200.0, 452.0)]
+        issues = assess_live_canvas(
+            [tube], [bad], tube_half_widths=[10.0], bipolar_y_min=430.0
+        )
+        self.assertTrue(any("missing terminal V" in x for x in issues), msg=issues)
+
+    def test_point_near_and_match_helpers(self) -> None:
+        tube = [(0.0, 0.0), (100.0, 0.0), (100.0, 50.0)]
+        self.assertTrue(point_near_polyline((100.0, 25.0), tube, tol=1.0))
+        self.assertFalse(point_near_polyline((50.0, 25.0), tube, tol=1.0))
+        strand = [(0.0, 2.0), (100.0, 2.0), (100.0, 50.0)]
+        ti, score = match_strand_to_tube(
+            strand, [tube, [(500.0, 500.0), (600.0, 600.0)]]
+        )
+        self.assertEqual(ti, 0)
+        self.assertLess(score, 5.0)
+
+
+if __name__ == "__main__":
+    unittest.main()

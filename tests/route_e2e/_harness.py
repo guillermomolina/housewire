@@ -21,9 +21,9 @@ os.environ.setdefault(
 _DUMP_JS = """() => {
   const parse = (d) => {
     const pts=[]; let x=0,y=0;
-      const re=/([MLHVZmlhvz])([^MLHVZmlhvz]*)/g; let m;
-      while ((m=re.exec(d||''))) {
-        const cmd=m[1], args=m[2].trim().split(/[\\s,]+/).filter(Boolean).map(Number);
+    const re=/([MLHVZmlhvz])([^MLHVZmlhvz]*)/g; let m;
+    while ((m=re.exec(d||''))) {
+      const cmd=m[1], args=m[2].trim().split(/[\\s,]+/).filter(Boolean).map(Number);
       if (cmd==='M'||cmd==='L') for(let i=0;i+1<args.length;i+=2){x=args[i];y=args[i+1];pts.push([x,y]);}
       else if (cmd==='H') for(const a of args){x=a;pts.push([x,y]);}
       else if (cmd==='V') for(const a of args){y=a;pts.push([x,y]);}
@@ -32,6 +32,10 @@ _DUMP_JS = """() => {
   };
   const svg=document.getElementById('canvas');
   if (!svg) return {err:'no canvas'};
+  const body = document.body?.innerText || '';
+  if (body.includes('No locations with children found')) {
+    return {err:'no locations', body: body.slice(0, 200)};
+  }
   const tubes=[...svg.querySelectorAll('path.edge-tube')].map(el=>{
     const sw=parseFloat(getComputedStyle(el).strokeWidth)||17.5;
     return {pts:parse(el.getAttribute('d')), half:sw/2};
@@ -51,11 +55,14 @@ _DUMP_JS = """() => {
 
 
 def resolve_example_site(name: str) -> Path | None:
-    """Locate an example YAML by stem (Route_01, Test_01, …)."""
+    """Locate an example YAML by stem (Route_01, Route_21, …)."""
     env = os.environ.get("HOUSEWIRE_E2E_SITE", "").strip()
-    if env and Path(env).name.startswith(name):
+    if env:
         path = Path(env).expanduser()
-        return path if path.is_file() else None
+        if path.is_file() and (
+            path.stem == name or path.name.startswith(name)
+        ):
+            return path
     try:
         from housewire_examples import site_yaml
 
@@ -63,7 +70,13 @@ def resolve_example_site(name: str) -> Path | None:
     except Exception:
         pass
     for candidate in (
-        REPO / "packages" / "housewire-examples" / "src" / "housewire_examples" / "sites" / f"{name}.yaml",
+        REPO
+        / "packages"
+        / "housewire-examples"
+        / "src"
+        / "housewire_examples"
+        / "sites"
+        / f"{name}.yaml",
         REPO / "sites" / "Tests" / f"{name}.yaml",
     ):
         if candidate.is_file():
@@ -77,7 +90,12 @@ def free_port() -> int:
         return int(s.getsockname()[1])
 
 
-def dump_live_canvas(site: Path, *, wait_ms: int = 3500) -> dict:
+def dump_live_canvas(
+    site: Path,
+    *,
+    wait_ms: int = 2000,
+    require_tubes: bool = True,
+) -> dict:
     """Start serve, load the site, return tubes/strands dump."""
     try:
         from playwright.sync_api import sync_playwright
@@ -128,6 +146,26 @@ def dump_live_canvas(site: Path, *, wait_ms: int = 3500) -> dict:
             page = browser.new_page(viewport={"width": 1600, "height": 1000})
             page.goto(f"http://127.0.0.1:{port}/", wait_until="networkidle")
             page.wait_for_timeout(wait_ms)
+            # Wait until the canvas has painted tubes and/or strands (avoids
+            # empty dumps when outline/graph finishes after networkidle).
+            try:
+                page.wait_for_function(
+                    """(needTubes) => {
+                      const body = document.body?.innerText || '';
+                      if (body.includes('No locations with children found')) {
+                        return true; // let dump report err
+                      }
+                      const tubes = document.querySelectorAll('path.edge-tube').length;
+                      const strands = [...document.querySelectorAll('#canvas path')]
+                        .filter(el => parseFloat(el.getAttribute('stroke-width')||0) >= 2
+                          && (el.getAttribute('stroke')||'').startsWith('#')).length;
+                      return strands > 0 && (!needTubes || tubes > 0);
+                    }""",
+                    require_tubes,
+                    timeout=15000,
+                )
+            except Exception:
+                pass
             data = page.evaluate(_DUMP_JS)
             browser.close()
         return data
@@ -153,7 +191,7 @@ def assert_site_routes_ok(
         raise unittest.SkipTest(
             f"{site_name} not found (install housewire-examples)"
         )
-    data = dump_live_canvas(site)
+    data = dump_live_canvas(site, require_tubes=require_tubes)
     test.assertNotIn("err", data, msg=data)
     test.assertGreaterEqual(
         len(data.get("strands") or []),
@@ -182,21 +220,3 @@ def assert_site_routes_ok(
         [],
         msg=f"site={site_name} ver={data.get('ver')} issues={issues}",
     )
-
-
-def make_route_test(site_name: str, *, require_tubes: bool, min_strands: int):
-    """Build a TestCase class for one example site."""
-
-    class _RouteE2E(unittest.TestCase):
-        def test_live_route_invariants(self) -> None:
-            assert_site_routes_ok(
-                self,
-                site_name,
-                require_tubes=require_tubes,
-                min_strands=min_strands,
-            )
-
-    _RouteE2E.__name__ = f"Test{site_name}"
-    _RouteE2E.__qualname__ = _RouteE2E.__name__
-    _RouteE2E.__doc__ = f"Live E2E routing invariants for {site_name}."
-    return _RouteE2E

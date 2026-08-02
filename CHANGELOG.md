@@ -7,6 +7,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.5] — 2026-08-02
+
+### Changed
+
+- Renamed example ``Test_01`` → ``Route_21`` (default ``site_yaml()``).
+- Unified live route E2E under ``tests/route_e2e/`` (unit detectors +
+  ``test_route_01``…``21``); removed ``tests/test_route_e2e_test01.py``.
+- E2E harness waits for painted tubes/strands before dumping (fixes flaky
+  empty-canvas failures such as Route_08).
+- UI ``index.html`` cache-busts ``app.js`` / ``app.css`` with the live
+  ``__version__``.
+
 ## [0.35.4] — 2026-08-02
 
 ### Added

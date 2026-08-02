@@ -104,11 +104,11 @@ mouth/envelope checks and still flag out-and-back / empty canvas problems.
 
 | Site | Focus |
 |------|--------|
-| `Test_01` | Panel + room (reference regression) |
+| `Route_21` | Panel + room (reference regression) |
 | `Route_01` | Same-box link, no conduit |
 | `Route_02`–`Route_04` | Single / twin conductors, L-path |
 | `Route_05`–`Route_07` | Switch drop, lamp plane boca, bipolar V |
 | `Route_08`–`Route_12` | Strip feeds, earth, parallel tubes |
-| `Route_13` | Full Test_01 twin |
+| `Route_13` | Full Route_21 twin |
 | `Route_14`–`Route_17` | Chains, rooms, dense strip, parallel fan-out |
-| `Route_18`–`Route_20` | Multi-cable / Test_01-class stress |
+| `Route_18`–`Route_20` | Multi-cable / Route_21-class stress |

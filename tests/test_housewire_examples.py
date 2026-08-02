@@ -5,7 +5,7 @@ import unittest
 
 
 class TestHousewireExamples(unittest.TestCase):
-    def test_site_yaml_test01(self) -> None:
+    def test_site_yaml_route21(self) -> None:
         try:
             from housewire_examples import iter_site_names, site_yaml
         except ImportError as exc:
@@ -15,12 +15,12 @@ class TestHousewireExamples(unittest.TestCase):
             ) from exc
 
         names = iter_site_names()
-        self.assertIn("Test_01", names)
-        path = site_yaml("Test_01")
+        self.assertIn("Route_21", names)
+        path = site_yaml("Route_21")
         self.assertTrue(path.is_file(), msg=path)
         text = path.read_text(encoding="utf-8")
         self.assertIn("schema: house/v2", text)
-        self.assertIn("Test 01", text)
+        self.assertIn("Route 21", text)
 
 
 if __name__ == "__main__":

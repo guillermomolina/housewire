@@ -1,8 +1,8 @@
 schema: house/v2
 type: House
-label: Test 01
-notes: Minimal house — panel with supply and earth, room with switch and lamp via
-  junction box.
+label: Route 21 — reference
+notes: Reference panel + room routing (former Test_01) — panel with supply and earth,
+  room with switch and lamp via junction box.
 elements:
   Cuadro_General:
     type: Panel

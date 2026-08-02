@@ -20,13 +20,14 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 try:
     from fastapi import FastAPI, HTTPException, Request
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, HTMLResponse
     from fastapi.staticfiles import StaticFiles
 except ImportError:  # pragma: no cover - optional extra
     FastAPI = None  # type: ignore[misc, assignment]
     HTTPException = None  # type: ignore[misc, assignment]
     Request = None  # type: ignore[misc, assignment]
     FileResponse = None  # type: ignore[misc, assignment]
+    HTMLResponse = None  # type: ignore[misc, assignment]
     StaticFiles = None  # type: ignore[misc, assignment]
 
 
@@ -108,13 +109,16 @@ def create_app(site_root: Path | None = None) -> Any:
         return data
 
     @app.get("/")
-    def index() -> FileResponse:
+    def index() -> HTMLResponse:
         index_path = STATIC_DIR / "index.html"
         if not index_path.is_file():
             raise HTTPException(404, "UI static files missing")
-        # Always revalidate: query-busted JS/CSS are useless if index stays cached.
-        return FileResponse(
-            index_path,
+        html = index_path.read_text(encoding="utf-8")
+        # Bust caches with the live package version (index.html may lag).
+        html = html.replace("?v=0.35.1", f"?v={__version__}")
+        html = html.replace("?v=__VERSION__", f"?v={__version__}")
+        return HTMLResponse(
+            html,
             headers={
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",

@@ -32,4 +32,4 @@ test:
 
 # Live route E2E only (needs Chromium from ``make install``).
 test-route-e2e:
-	$(PYTHON) -m pytest tests/route_e2e tests/test_route_e2e_test01.py -v
+	$(PYTHON) -m pytest tests/route_e2e -v

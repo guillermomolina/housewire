@@ -13,7 +13,7 @@ _SITES = resources.files("housewire_examples").joinpath("sites")
 
 
 def iter_site_names() -> list[str]:
-    """Return example site stems (e.g. ``Test_01``)."""
+    """Return example site stems (e.g. ``Route_21``)."""
     names: list[str] = []
     for entry in _SITES.iterdir():
         if entry.name.endswith(".yaml"):
@@ -21,11 +21,12 @@ def iter_site_names() -> list[str]:
     return sorted(names)
 
 
-def site_yaml(name: str = "Test_01") -> Path:
+def site_yaml(name: str = "Route_21") -> Path:
     """Return a filesystem path to an example site YAML.
 
     Raises ``FileNotFoundError`` if ``name`` is unknown. When the resource
     lives inside a zip wheel, the file is materialized under a temp cache.
+    Default is ``Route_21`` (reference panel + room).
     """
     stem = name.removesuffix(".yaml")
     resource = _SITES.joinpath(f"{stem}.yaml")

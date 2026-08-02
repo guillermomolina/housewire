@@ -1,8 +1,8 @@
 schema: house/v2
 type: House
 label: Route 18 — multi cable stress
-notes: Route_18 multi-cable twin of Test_01 — panel with supply and earth, room with switch and lamp via
-  junction box.
+notes: Route_18 multi-cable twin of Route_21 — panel with supply and earth,
+  room with switch and lamp via junction box.
 elements:
   Cuadro_General:
     type: Panel

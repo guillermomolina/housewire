@@ -1,8 +1,8 @@
 schema: house/v2
 type: House
-label: Route 13 — Test_01 twin
-notes: Route_13 twin of Test_01 (full panel + room routing) — panel with supply and earth, room with switch and lamp via
-  junction box.
+label: Route 13 — reference twin
+notes: Route_13 twin of Route_21 (full panel + room routing) — panel with supply and earth,
+  room with switch and lamp via junction box.
 elements:
   Cuadro_General:
     type: Panel

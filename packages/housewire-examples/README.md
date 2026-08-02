@@ -27,8 +27,8 @@ or set `HOUSEWIRE_CATALOG` / clone `catalogs/default`.
 ## Use
 
 ```bash
-python -c "from housewire_examples import site_yaml; print(site_yaml('Test_01'))"
-housewire serve "$(python -c "from housewire_examples import site_yaml; print(site_yaml('Test_01'))")"
+python -c "from housewire_examples import site_yaml; print(site_yaml('Route_21'))"
+housewire serve "$(python -c "from housewire_examples import site_yaml; print(site_yaml('Route_21'))")"
 ```
 
 Environment override for E2E:
@@ -41,7 +41,6 @@ export HOUSEWIRE_E2E_SITE=/path/to/any-site.yaml
 
 | Name | Description |
 |------|-------------|
-| `Test_01` | Panel + room with junction box, switch, and lamp (routing E2E) |
 | `Route_01` | Same-box conductor (no conduit) |
 | `Route_02` | Two boxes, one tube, one conductor |
 | `Route_03` | Twin BN+BU in one tube |
@@ -54,21 +53,22 @@ export HOUSEWIRE_E2E_SITE=/path/to/any-site.yaml
 | `Route_10` | Feed plus earth |
 | `Route_11` | Two parallel tubes |
 | `Route_12` | Switch and lamp |
-| `Route_13` | Test_01 twin (full panel + room) |
+| `Route_13` | Route_21 twin (full panel + room) |
 | `Route_14` | Three-hop chain |
 | `Route_15` | Two rooms |
 | `Route_16` | Dense strip exits |
 | `Route_17` | Parallel east tubes (fan-out stand-in) |
-| `Route_18` | Multi-cable stress |
+| `Route_18` | Multi-cable twin of Route_21 |
 | `Route_19` | Staggered heights |
-| `Route_20` | Full stress |
+| `Route_20` | Full-stress twin of Route_21 |
+| `Route_21` | Reference panel + room (routing E2E) |
 
-Regenerate Route fixtures:
+Regenerate Route_01…Route_20 fixtures (not Route_21):
 
 ```bash
 python packages/housewire-examples/scripts/gen_route_sites.py
 ```
 
-Live E2E modules: `tests/route_e2e/test_route_01.py` … `test_route_20.py`
+Live E2E modules: `tests/route_e2e/test_route_01.py` … `test_route_21.py`
 (requires Chromium: `make install` or `make test-route-e2e`).
 Routing rules: [`docs/routing-rules.md`](../../docs/routing-rules.md).

@@ -885,18 +885,18 @@ def route_12() -> str:
 
 
 def route_13() -> str:
-    # Alias complexity: copy structure of Test_01 notes
+    # Alias: copy Route_21 (reference) with a distinct label.
     return Path(
         Path(__file__).resolve().parents[1]
         / "src"
         / "housewire_examples"
         / "sites"
-        / "Test_01.yaml"
+        / "Route_21.yaml"
     ).read_text(encoding="utf-8").replace(
-        "label: Test 01", "label: Route 13 — Test_01 twin", 1
+        "label: Route 21 — reference", "label: Route 13 — reference twin", 1
     ).replace(
-        "notes: Minimal house",
-        "notes: Route_13 twin of Test_01 (full panel + room routing)",
+        "notes: Reference panel + room routing (former Test_01)",
+        "notes: Route_13 twin of Route_21 (full panel + room routing)",
         1,
     )
 
@@ -1276,12 +1276,12 @@ def route_18() -> str:
         / "src"
         / "housewire_examples"
         / "sites"
-        / "Test_01.yaml"
+        / "Route_21.yaml"
     ).read_text(encoding="utf-8").replace(
-        "label: Test 01", "label: Route 18 — multi cable stress", 1
+        "label: Route 21 — reference", "label: Route 18 — multi cable stress", 1
     ).replace(
-        "notes: Minimal house",
-        "notes: Route_18 multi-cable twin of Test_01",
+        "notes: Reference panel + room routing (former Test_01)",
+        "notes: Route_18 multi-cable twin of Route_21",
         1,
     )
 
@@ -1389,18 +1389,18 @@ cables:
 
 
 def route_20() -> str:
-    # Highest public complexity alias: same topology as Test_01 / Route_13.
+    # Highest public complexity alias: same topology as Route_21 / Route_13.
     return Path(
         Path(__file__).resolve().parents[1]
         / "src"
         / "housewire_examples"
         / "sites"
-        / "Test_01.yaml"
+        / "Route_21.yaml"
     ).read_text(encoding="utf-8").replace(
-        "label: Test 01", "label: Route 20 — full stress", 1
+        "label: Route 21 — reference", "label: Route 20 — full stress", 1
     ).replace(
-        "notes: Minimal house",
-        "notes: Route_20 full-stress twin of Test_01",
+        "notes: Reference panel + room routing (former Test_01)",
+        "notes: Route_20 full-stress twin of Route_21",
         1,
     )
 
