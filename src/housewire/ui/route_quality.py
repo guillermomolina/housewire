@@ -244,16 +244,57 @@ def terminal_v_lead(
     slot: int,
     slot_count: int,
 ) -> list[Point]:
-    """Mirror of multi-cable ``pinToLanePts``: one V diagonal, then Manhattan."""
+    """Mirror of multi-cable ``pinToLanePts``: diagonal touches the pin."""
     out_dir, lat = _face_axes(face)
-    stub = (pin[0] + out_dir[0] * 5.0, pin[1] + out_dir[1] * 5.0)
     mid = (slot_count - 1) / 2.0
-    fan_lat = (slot - mid) * FAN_LATERAL_PITCH
+    fan_lat = (slot - mid) * max(8.0, FAN_LATERAL_PITCH)
     tip = (
-        stub[0] + out_dir[0] * 10.0 + lat[0] * fan_lat,
-        stub[1] + out_dir[1] * 10.0 + lat[1] * fan_lat,
+        pin[0] + out_dir[0] * 12.0 + lat[0] * fan_lat,
+        pin[1] + out_dir[1] * 12.0 + lat[1] * fan_lat,
     )
-    return manhattan_join_end([pin, stub, tip], lane_pt, face=face)
+    # pin → tip (V at the terminal), then Manhattan to the lane.
+    return manhattan_join_end([pin, tip], lane_pt, face=face)
+
+
+def first_segment_from_pin(pts: Poly, pin: Point, *, tol: float = 1.5) -> tuple[Point, Point] | None:
+    """Return (pin, next) for the segment that touches the pin."""
+    if len(pts) < 2:
+        return None
+    if _dist(pts[0], pin) <= tol:
+        return (pts[0][0], pts[0][1]), (pts[1][0], pts[1][1])
+    if _dist(pts[-1], pin) <= tol:
+        return (pts[-1][0], pts[-1][1]), (pts[-2][0], pts[-2][1])
+    return None
+
+
+def terminal_entry_is_perpendicular(pts: Poly, pin: Point) -> bool:
+    """True when the segment touching the pin is axis-aligned (no V)."""
+    seg = first_segment_from_pin(pts, pin)
+    if seg is None:
+        return False
+    a, b = seg
+    return not is_diagonal_segment(a, b)
+
+
+def count_diagonals_away_from_pin(
+    pts: Poly, pin: Point, *, near_radius: float = 36.0
+) -> int:
+    """Diagonals whose endpoints are both far from the pin (wrong place)."""
+    if len(pts) < 2:
+        return 0
+    n = 0
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        if not is_diagonal_segment(a, b):
+            continue
+        if _dist(a, pin) > near_radius and _dist(b, pin) > near_radius:
+            n += 1
+    return n
+
+
+def count_out_and_back(pts: Poly, *, max_leg: float = 40.0) -> int:
+    """Count collinear reverse runs (ida y vuelta on the same path)."""
+    return count_c_jogs(pts, max_leg=max_leg)
 
 
 def terminal_lead_issues(
@@ -263,7 +304,7 @@ def terminal_lead_issues(
     multi_cable: bool,
     radius: float = 36.0,
 ) -> list[str]:
-    """Flag jagged terminal leads (screenshot Regleta peaks / multi-diags)."""
+    """Flag jagged / wrong terminal leads (screenshot Regleta bugs)."""
     issues: list[str] = []
     n_diag = count_diagonals_near_point(pts, pin, radius=radius)
     if multi_cable:
@@ -273,11 +314,23 @@ def terminal_lead_issues(
             issues.append(
                 f"shared terminal: {n_diag} diagonals near pin (want exactly 1)"
             )
+        if terminal_entry_is_perpendicular(pts, pin):
+            issues.append(
+                "shared terminal: perpendicular entry at pin (want V diagonal)"
+            )
     elif n_diag:
         issues.append(
             f"single-cable terminal: {n_diag} diagonal(s) near pin "
             "(must be Manhattan)"
         )
+    n_far = count_diagonals_away_from_pin(pts, pin, near_radius=radius)
+    if n_far:
+        issues.append(
+            f"diagonal(s) away from pin ({n_far}) — V must sit on the terminal"
+        )
+    n_back = count_out_and_back(pts)
+    if n_back:
+        issues.append(f"out-and-back on same path ({n_back})")
     # Spike / reverse near pin: short segment that turns back toward the pin.
     if len(pts) >= 3:
         seq = list(pts)

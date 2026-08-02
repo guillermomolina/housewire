@@ -2849,9 +2849,10 @@
    * Lead from a terminal pin into a nearby lane point.
    *
    * Rules:
-   * - One cable on the terminal → Manhattan only (stub + L, no diagonal).
-   * - Several cables on the same terminal → exactly ONE short V diagonal
-   *   (stub → tip), then Manhattan only to the lane (never a second diagonal).
+   * - One cable → Manhattan only (optional short stub + L).
+   * - Several cables on the same terminal → V: the segment that TOUCHES the
+   *   pin is the diagonal (pin→tip). Never stub-then-90° at the pin. After
+   *   the tip, Manhattan only (caller bridges tip→spine with orthoJoinEnd).
    */
   function pinToLanePts(pin, face, lanePt, slot = 0, slotCount = 1) {
     const p = {
@@ -2867,28 +2868,28 @@
     const nSlots = Math.max(1, slotCount | 0);
     const s = Math.max(0, Math.min(nSlots - 1, slot | 0));
     const multiCable = nSlots > 1;
-    /** @type {number[][]} */
-    const pts = [[p.x, p.y]];
-    let from = p;
 
     if (multiCable && (fo.x || fo.y)) {
-      // Clean V: pin → stub → tip (one diagonal), then Manhattan to lane.
-      const stub = stubPoint(p, fo.x, fo.y, 5);
-      pts.push([stub.x, stub.y]);
+      // V leg touches the pin: pin → tip (one short diagonal).
       const nx = -fo.y;
       const ny = fo.x;
       const mid = (nSlots - 1) / 2;
-      const fanLat = (s - mid) * (STRAND_WIDTH + LANE_GAP);
+      const fanLat = (s - mid) * Math.max(8, STRAND_WIDTH + LANE_GAP);
       const tip = {
-        x: stub.x + fo.x * 10 + nx * fanLat,
-        y: stub.y + fo.y * 10 + ny * fanLat,
+        x: p.x + fo.x * 12 + nx * fanLat,
+        y: p.y + fo.y * 12 + ny * fanLat,
       };
-      pts.push([tip.x, tip.y]);
-      // Never add a second diagonal — ortho L only from tip to lane.
-      return orthoJoinEnd(pts, t, face);
+      // Stop at the tip — Manhattan bridge to the spine is done by the caller
+      // so we never leave a diagonal gap after trimSpineAfterLead.
+      return [
+        [p.x, p.y],
+        [tip.x, tip.y],
+      ];
     }
 
-    // Single cable: stub when lane is outward, then Manhattan L only.
+    /** @type {number[][]} */
+    const pts = [[p.x, p.y]];
+    let from = p;
     if (fo.x || fo.y) {
       const along = (t.x - p.x) * fo.x + (t.y - p.y) * fo.y;
       if (along > 2) {
@@ -2908,6 +2909,25 @@
       return pts;
     }
     return orthoJoinEnd(pts, t, face);
+  }
+
+  /**
+   * Join a terminal lead to the offset spine with Manhattan only (no diagonal
+   * gap after trimming spine points near the tip).
+   */
+  function mergeLeadToSpine(lead, spine, face) {
+    if (!lead || lead.length < 1) {
+      return spine ? spine.map((p) => [p[0], p[1]]) : [];
+    }
+    if (!spine || spine.length < 1) {
+      return lead.map((p) => [p[0], p[1]]);
+    }
+    const tip = lead[lead.length - 1];
+    let rest = trimSpineAfterLead(spine, tip);
+    const bridge = orthoJoinEnd([tip], rest[0], face);
+    let chain = mergeOrthoPolys(lead, bridge);
+    chain = mergeOrthoPolys(chain, rest);
+    return stripOutAndBack(stripShortZJogs(chain || []));
   }
 
   /**
@@ -3146,9 +3166,19 @@
       slot1 || 0,
       count1 || 1
     );
-    const tailRev = tail.slice().reverse();
-    let chain = mergeOrthoPolys(head, spine);
-    chain = mergeOrthoPolys(chain, tailRev);
+    let chain = mergeLeadToSpine(head, spine, face0);
+    const tip1 = tail[tail.length - 1];
+    while (chain.length >= 2) {
+      const b = chain[chain.length - 1];
+      if (Math.hypot(b[0] - tip1[0], b[1] - tip1[1]) < 12) {
+        chain = chain.slice(0, -1);
+        continue;
+      }
+      break;
+    }
+    const last = chain[chain.length - 1];
+    chain = mergeOrthoPolys(chain, orthoJoinEnd([last], tip1, face1));
+    chain = mergeOrthoPolys(chain, tail.slice().reverse());
     return stripShortZJogs(stripOutAndBack(chain || []));
   }
 
@@ -3655,9 +3685,7 @@
               fromSlot.slot,
               fromSlot.count
             );
-            const leadEnd = head[head.length - 1];
-            startOff = trimSpineAfterLead(startOff, leadEnd);
-            chain = mergeOrthoPolys(head, startOff);
+            chain = mergeLeadToSpine(head, startOff, startFace);
           }
         }
         if (!chain) {
@@ -3714,9 +3742,7 @@
               toSlot.slot,
               toSlot.count
             );
-            const leadEnd = head[head.length - 1];
-            endOff = trimSpineAfterLead(endOff, leadEnd);
-            const endPart = mergeOrthoPolys(head, endOff);
+            const endPart = mergeLeadToSpine(head, endOff, endFace);
             chain = mergeOrthoPolys(chain, endPart.slice().reverse());
           }
         } else {
@@ -3764,7 +3790,11 @@
             fromSlot.slot,
             fromSlot.count
           );
-          chain = mergeOrthoPolys(head, startOff.length ? startOff : startTail);
+          chain = mergeLeadToSpine(
+            head,
+            startOff.length ? startOff : startTail,
+            startFace
+          );
         }
         const endTail = hopEndpointTailPts(
           b,
@@ -3792,9 +3822,10 @@
             toSlot.slot,
             toSlot.count
           );
-          const endPart = mergeOrthoPolys(
+          const endPart = mergeLeadToSpine(
             head,
-            endOff.length ? endOff : endTail
+            endOff.length ? endOff : endTail,
+            endFace
           );
           chain = chain
             ? mergeOrthoPolys(chain, endPart)

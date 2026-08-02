@@ -436,7 +436,7 @@ class TestElementBorderAndVEntry(unittest.TestCase):
         ]
         issues = terminal_lead_issues(jagged, pin, multi_cable=True)
         self.assertTrue(
-            any("diagonal" in x or "spike" in x for x in issues),
+            any("diagonal" in x or "spike" in x or "perpendicular" in x for x in issues),
             msg=issues,
         )
 
@@ -451,6 +451,52 @@ class TestElementBorderAndVEntry(unittest.TestCase):
         a1 = approach_point_before_pin(clean, pin)
         assert a0 is not None and a1 is not None
         self.assertTrue(shared_terminal_entry_is_v(pin, face, [a0, a1]))
+
+    def test_screenshot_v_must_touch_pin_not_next_segment(self) -> None:
+        """Diagonals in the next segment + 90° into the pin (live Regleta)."""
+        from housewire.ui.route_quality import (
+            count_diagonals_away_from_pin,
+            count_out_and_back,
+            terminal_entry_is_perpendicular,
+            terminal_lead_issues,
+            terminal_v_lead,
+        )
+
+        pin = (200.0, 160.0)
+        face = "N"
+        # Bad: vertical into pin (90°), diagonal far above (tramo siguiente).
+        bad = [
+            pin,
+            (200.0, 140.0),  # perpendicular stub
+            (200.0, 120.0),
+            (160.0, 80.0),  # diagonal away from pin
+            (120.0, 80.0),
+        ]
+        self.assertTrue(terminal_entry_is_perpendicular(bad, pin))
+        self.assertGreaterEqual(count_diagonals_away_from_pin(bad, pin), 1)
+        issues = terminal_lead_issues(bad, pin, multi_cable=True)
+        self.assertTrue(any("perpendicular" in x for x in issues), msg=issues)
+        self.assertTrue(any("away from pin" in x for x in issues), msg=issues)
+
+        # Out-and-back on the same vertical (ida y vuelta).
+        back = [
+            (200.0, 40.0),
+            (200.0, 100.0),
+            (200.0, 60.0),  # reverses toward start
+            (240.0, 60.0),
+        ]
+        self.assertGreaterEqual(count_out_and_back(back), 1)
+        issues_b = terminal_lead_issues(
+            [pin, (200.0, 148.0), (200.0, 100.0), (200.0, 130.0), (240.0, 130.0)],
+            pin,
+            multi_cable=False,
+        )
+        self.assertTrue(any("out-and-back" in x for x in issues_b), msg=issues_b)
+
+        good = terminal_v_lead(pin, face, (200.0, 80.0), slot=0, slot_count=2)
+        self.assertFalse(terminal_entry_is_perpendicular(good, pin))
+        self.assertEqual(count_diagonals_away_from_pin(good, pin), 0)
+        self.assertEqual(terminal_lead_issues(good, pin, multi_cable=True), [])
 
     def test_outline_extra_is_thin(self) -> None:
         # Rim must stay a hairline beyond the tube (was roadW+2.5).
