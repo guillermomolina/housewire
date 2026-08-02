@@ -155,7 +155,8 @@ housewire rm element "$SITE" my-site.yaml MT_New
 
 ```bash
 make prepare          # venv + catalog + examples + pip install -e '.[dev,ui,examples,catalog]'
-make test
+make test             # unit tests, then route E2E in parallel (xdist)
+make test-route-e2e-smoke   # optional cheap subset
 ```
 
 ## Repository layout (this repo)
