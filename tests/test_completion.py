@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from fixtures import add_place, init_site, save_site
-from housewire.project.io import create_empty_house_file
+from housewire.site.io import create_empty_house_file
 
 
 class TestShellCompletion(unittest.TestCase):
@@ -29,9 +29,9 @@ class TestShellCompletion(unittest.TestCase):
         self.tmp.cleanup()
 
     def _session(self):
-        from housewire.project.session import ProjectSession
+        from housewire.site.session import SiteSession
 
-        return ProjectSession(self.root)
+        return SiteSession(self.root)
 
     def test_complete_commands(self) -> None:
         from housewire.completion import complete_candidates

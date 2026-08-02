@@ -220,7 +220,7 @@ def _site_catalog_ref(site_root: Path | None) -> str | Path | None:
     """Read optional ``catalog:`` from the site document YAML."""
     if site_root is None:
         return None
-    from housewire.project.paths import find_site_yaml
+    from housewire.site.paths import find_site_yaml
 
     path = find_site_yaml(Path(site_root))
     if path is None:
@@ -517,14 +517,14 @@ def expand_conduit(
     return out
 
 
-def path_location_parts(project_path: Path, yaml_file: Path) -> list[str]:
+def path_location_parts(site_path: Path, yaml_file: Path) -> list[str]:
     """Location prefix for a YAML file.
 
     Sites use a single root ``.yaml``/``.yml``; nested places live under
     ``elements:`` and get their path from ``_walk_locations``, so the file
     itself always contributes an empty prefix when it sits at the site root.
     """
-    relative = yaml_file.resolve().relative_to(project_path.resolve())
+    relative = yaml_file.resolve().relative_to(site_path.resolve())
     # Nested files are not supported; ignore parent dirs other than ``.``.
     if len(relative.parts) == 1 and relative.suffix.lower() in {".yaml", ".yml"}:
         return []

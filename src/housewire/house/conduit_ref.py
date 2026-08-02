@@ -51,7 +51,7 @@ def resolve_location_ref(
     current_parts: list[str],
     known: set[tuple[str, ...]],
 ) -> tuple[str, ...]:
-    """Resolve a location ref to path parts under the project root."""
+    """Resolve a location ref to path parts under the site root."""
     ref = str(location_ref).strip()
     if ref in (".", "", "self"):
         return tuple(current_parts)

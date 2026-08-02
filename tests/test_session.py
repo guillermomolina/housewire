@@ -1,4 +1,4 @@
-"""Tests for ProjectSession."""
+"""Tests for SiteSession."""
 from __future__ import annotations
 
 import tempfile
@@ -6,10 +6,10 @@ import unittest
 from pathlib import Path
 
 from fixtures import add_place, init_site, save_site
-from housewire.project.io import HOUSEWIRE_YAML, create_empty_house_file
+from housewire.site.io import HOUSEWIRE_YAML, create_empty_house_file
 
 
-class TestProjectSession(unittest.TestCase):
+class TestSiteSession(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
@@ -24,14 +24,14 @@ class TestProjectSession(unittest.TestCase):
         self.tmp.cleanup()
 
     def _session(self):
-        from housewire.project.session import ProjectSession
+        from housewire.site.session import SiteSession
 
-        return ProjectSession(self.root)
+        return SiteSession(self.root)
 
     def test_open_from_yaml_file(self) -> None:
-        from housewire.project.session import ProjectSession
+        from housewire.site.session import SiteSession
 
-        s = ProjectSession.open(self.site_yaml)
+        s = SiteSession.open(self.site_yaml)
         self.assertEqual(s.root, self.root.resolve())
         self.assertEqual(s.site_yaml(), self.site_yaml.resolve())
 
@@ -136,7 +136,7 @@ class TestProjectSession(unittest.TestCase):
         self.assertIn("zona_a", names)
 
     def test_list_elements_from_housewire(self) -> None:
-        from housewire.project import abm
+        from housewire.site import abm
 
         s = self._session()
         s.cd("zona_a")

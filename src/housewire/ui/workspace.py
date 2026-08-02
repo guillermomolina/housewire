@@ -9,9 +9,9 @@ from typing import Any
 
 import yaml
 
-from housewire.project.io import require_house_document, save_yaml
-from housewire.project.paths import find_site_yaml, is_yaml, list_root_yaml_files
-from housewire.project.session import ProjectSession
+from housewire.site.io import require_house_document, save_yaml
+from housewire.site.paths import find_site_yaml, is_yaml, list_root_yaml_files
+from housewire.site.session import SiteSession
 
 # Directories copied on Save As (editable site content).
 _SAVE_AS_SKIP = frozenset({".git", "out", ".venv", "__pycache__", ".mypy_cache"})
@@ -27,7 +27,7 @@ class Document:
 
     id: str
     root: Path
-    session: ProjectSession
+    session: SiteSession
     # True when opened from browser file content (temp site on the server).
     browser_origin: bool = False
 
@@ -66,11 +66,11 @@ class Workspace:
         return None if doc is None else doc.root
 
     @property
-    def session(self) -> ProjectSession | None:
+    def session(self) -> SiteSession | None:
         doc = self.document
         return None if doc is None else doc.session
 
-    def require_session(self) -> ProjectSession:
+    def require_session(self) -> SiteSession:
         if self.document is None:
             raise FileNotFoundError(
                 "No document open. Open a site YAML (File → Open) "
@@ -198,7 +198,7 @@ class Workspace:
         doc = Document(
             id=doc_id,
             root=root,
-            session=ProjectSession(root, site_yaml=yaml_path),
+            session=SiteSession(root, site_yaml=yaml_path),
             browser_origin=browser_origin,
         )
         return self._register(doc)

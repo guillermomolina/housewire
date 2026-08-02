@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from housewire.project.openings import openings_from_text as _openings_from_text
-from housewire.project import openings as op
+from housewire.site.openings import openings_from_text as _openings_from_text
+from housewire.site import openings as op
 
 
 class TestOpeningIds(unittest.TestCase):

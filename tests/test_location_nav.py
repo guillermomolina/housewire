@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from fixtures import add_place, init_site, save_site
-from housewire.project.io import HOUSEWIRE_YAML, load_yaml
+from housewire.site.io import HOUSEWIRE_YAML, load_yaml
 
 
 class TestLocationNavigation(unittest.TestCase):
@@ -40,9 +40,9 @@ class TestLocationNavigation(unittest.TestCase):
         self.tmp.cleanup()
 
     def _session(self):
-        from housewire.project.session import ProjectSession
+        from housewire.site.session import SiteSession
 
-        return ProjectSession(self.root)
+        return SiteSession(self.root)
 
     def test_list_locations_includes_nested_places(self) -> None:
         s = self._session()
@@ -80,7 +80,7 @@ class TestLocationNavigation(unittest.TestCase):
             s.cd("solo_carpeta")
 
     def test_add_element_inside_nested_place(self) -> None:
-        from housewire.project import abm
+        from housewire.site import abm
 
         s = self._session()
         s.cd("Parking/Caja_inline")
@@ -106,9 +106,9 @@ class TestLocationNavigation(unittest.TestCase):
         caja.setdefault("elements", {})["Regleta"] = {"type": "TerminalStrip"}
         save_site(mono, doc)
 
-        from housewire.project.session import ProjectSession
+        from housewire.site.session import SiteSession
 
-        s = ProjectSession(mono)
+        s = SiteSession(mono)
         names = [n for n, _ in s.list_locations()]
         self.assertEqual(names, ["Parking"])
         s.cd("Parking")
@@ -136,9 +136,9 @@ class TestAddLocationNested(unittest.TestCase):
         return run_shell_line(session, line)
 
     def _session(self):
-        from housewire.project.session import ProjectSession
+        from housewire.site.session import SiteSession
 
-        return ProjectSession(self.root)
+        return SiteSession(self.root)
 
     def test_add_location_nests_in_site_yaml(self) -> None:
         s = self._session()

@@ -14,13 +14,13 @@ from housewire.house import (
     load_catalog,
     place_meta_from_mapping,
 )
-from housewire.project.io import load_yaml, require_house_document, save_yaml
-from housewire.project.openings import (
+from housewire.site.io import load_yaml, require_house_document, save_yaml
+from housewire.site.openings import (
     declared_opening_ids,
     normalize_opening_id,
     validate_location_openings,
 )
-from housewire.project.validate import validate_house_document
+from housewire.site.validate import validate_house_document
 
 _ELEMENT_REF_RE = re.compile(r"(?:^|[./\[])([A-Za-z_][A-Za-z0-9_]*)")
 _PEND_CABLE_RE = re.compile(r"^PEND_Linea_(\d+)$")
@@ -260,15 +260,15 @@ def connections_referencing_element(doc: dict[str, Any], element_name: str) -> l
     return hits
 
 
-def load_editable(path: Path, project_path: Path) -> dict[str, Any]:
+def load_editable(path: Path, site_path: Path) -> dict[str, Any]:
     doc = load_yaml(path)
     require_house_document(doc, path)
     return doc
 
 
-def persist(doc: dict[str, Any], path: Path, project_path: Path) -> None:
+def persist(doc: dict[str, Any], path: Path, site_path: Path) -> None:
     require_house_document(doc, path)
-    validate_house_document(doc, project_path=project_path, yaml_path=path)
+    validate_house_document(doc, site_path=site_path, yaml_path=path)
     save_yaml(path, doc)
 
 

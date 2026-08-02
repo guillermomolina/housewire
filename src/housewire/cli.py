@@ -8,9 +8,9 @@ from pathlib import Path
 
 from housewire.commands import cmd_ls, show_file
 from housewire import __version__
-from housewire.project import abm
-from housewire.project.paths import split_project_arg
-from housewire.project.session import ProjectSession
+from housewire.site import abm
+from housewire.site.paths import split_site_arg
+from housewire.site.session import SiteSession
 from housewire.shell import run_repl
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
@@ -53,7 +53,7 @@ def _build_parser() -> argparse.ArgumentParser:
         parents=[_catalog_parent()],
         help="REPL: cd, ls, use, add, rm, save",
     )
-    sh.add_argument("project_path", help="Site YAML file or site directory")
+    sh.add_argument("site_path", help="Site YAML file or site directory")
 
     sub.add_parser("version", help="Show housewire version")
 
@@ -62,7 +62,7 @@ def _build_parser() -> argparse.ArgumentParser:
         parents=[_catalog_parent()],
         help="Interactive physical location UI (requires housewire[ui])",
     )
-    serve_p.add_argument("project_path", help="Site YAML file or site directory")
+    serve_p.add_argument("site_path", help="Site YAML file or site directory")
     serve_p.add_argument(
         "--host",
         default="127.0.0.1",
@@ -76,11 +76,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     ls_p = sub.add_parser("ls", help="List locations (cd) and elements")
-    ls_p.add_argument("project_path")
+    ls_p.add_argument("site_path")
     ls_p.add_argument("path", nargs="?", default=".", help="Relative path")
 
     show_p = sub.add_parser("show", help="Show contents of a house/v1 YAML")
-    show_p.add_argument("project_path")
+    show_p.add_argument("site_path")
     show_p.add_argument("yaml_path")
     show_p.add_argument("--element")
     show_p.add_argument("--cable")
@@ -89,7 +89,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_sub = add_p.add_subparsers(dest="add_kind", required=True)
 
     add_el = add_sub.add_parser("element")
-    add_el.add_argument("project_path")
+    add_el.add_argument("site_path")
     add_el.add_argument("yaml_path")
     add_el.add_argument("name")
     add_el.add_argument("--type", required=True)
@@ -108,7 +108,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     add_cb = add_sub.add_parser("cable")
-    add_cb.add_argument("project_path")
+    add_cb.add_argument("site_path")
     add_cb.add_argument("yaml_path")
     add_cb.add_argument("name")
     add_cb.add_argument("--section", default=None, help="default: catalog / 1.5 mm2")
@@ -119,7 +119,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_cb.add_argument("--notes")
 
     add_pend = add_sub.add_parser("pend", help="Pending cable + pass-through conduit")
-    add_pend.add_argument("project_path")
+    add_pend.add_argument("site_path")
     add_pend.add_argument("yaml_path")
     add_pend.add_argument("enter", help="Enter opening, e.g. N1")
     add_pend.add_argument("exit", help="Exit opening, e.g. S1")
@@ -131,14 +131,14 @@ def _build_parser() -> argparse.ArgumentParser:
     add_pend.add_argument("--notes")
 
     add_cn = add_sub.add_parser("connection")
-    add_cn.add_argument("project_path")
+    add_cn.add_argument("site_path")
     add_cn.add_argument("yaml_path")
     add_cn.add_argument("--from", dest="from_ref", required=True)
     add_cn.add_argument("--via", dest="via_ref", required=True)
     add_cn.add_argument("--to", dest="to_ref", required=True)
 
     add_cd = add_sub.add_parser("conduit", help="Tube between openings (physical layer)")
-    add_cd.add_argument("project_path")
+    add_cd.add_argument("site_path")
     add_cd.add_argument("yaml_path")
     add_cd.add_argument("name")
     add_cd.add_argument("--from", dest="from_ref", required=True, help="LocationRef.OpeningId")
@@ -155,7 +155,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_loc = add_sub.add_parser(
         "location", help="Create nested place under parent elements:"
     )
-    add_loc.add_argument("project_path")
+    add_loc.add_argument("site_path")
     add_loc.add_argument("name", help="New place id (leaf)")
     add_loc.add_argument(
         "--type",
@@ -189,33 +189,33 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     add_d = add_sub.add_parser("dir")
-    add_d.add_argument("project_path")
+    add_d.add_argument("site_path")
     add_d.add_argument("dir_path")
 
     rm_p = sub.add_parser("rm", help="Remove artifacts or files")
     rm_sub = rm_p.add_subparsers(dest="rm_kind", required=True)
 
     rm_el = rm_sub.add_parser("element")
-    rm_el.add_argument("project_path")
+    rm_el.add_argument("site_path")
     rm_el.add_argument("yaml_path")
     rm_el.add_argument("name")
 
     rm_cb = rm_sub.add_parser("cable")
-    rm_cb.add_argument("project_path")
+    rm_cb.add_argument("site_path")
     rm_cb.add_argument("yaml_path")
     rm_cb.add_argument("name")
 
     rm_cn = rm_sub.add_parser("connection")
-    rm_cn.add_argument("project_path")
+    rm_cn.add_argument("site_path")
     rm_cn.add_argument("yaml_path")
     rm_cn.add_argument("index", type=int)
 
     rm_f = rm_sub.add_parser("file")
-    rm_f.add_argument("project_path")
+    rm_f.add_argument("site_path")
     rm_f.add_argument("file_path")
 
     rm_d = rm_sub.add_parser("dir")
-    rm_d.add_argument("project_path")
+    rm_d.add_argument("site_path")
     rm_d.add_argument("dir_path")
 
     return parser
@@ -233,21 +233,21 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
     if cmd == "serve":
         from housewire.ui.app import run_serve
 
-        project_path = Path(args.project_path)
+        site_path = Path(args.site_path)
         try:
-            run_serve(project_path, host=args.host, port=args.port)
+            run_serve(site_path, host=args.host, port=args.port)
         except (RuntimeError, FileNotFoundError, ValueError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
         return 0
     if cmd == "shell":
-        return run_repl(Path(args.project_path))
+        return run_repl(Path(args.site_path))
     if cmd == "ls":
-        session = ProjectSession.open(Path(args.project_path))
+        session = SiteSession.open(Path(args.site_path))
         session.cd(args.path)
         return cmd_ls(session)
     if cmd == "show":
-        site_root, _site_yaml = split_project_arg(Path(args.project_path))
+        site_root, _site_yaml = split_site_arg(Path(args.site_path))
         return show_file(
             site_root,
             Path(args.yaml_path),
@@ -255,12 +255,12 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
             cable=args.cable,
         )
     if cmd == "add":
-        session = ProjectSession.open(Path(args.project_path))
-        project_path = session.root
+        session = SiteSession.open(Path(args.site_path))
+        site_path = session.root
         if args.add_kind == "location":
             from housewire.house import location_id_from_name
-            from housewire.project.io import create_inline_location
-            from housewire.project.tree import get_place_node
+            from housewire.site.io import create_inline_location
+            from housewire.site.tree import get_place_node
 
             raw = Path(args.name)
             if str(raw.parent) not in (".", ""):
@@ -271,7 +271,7 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
             yaml_path = session.site_yaml()
             if not yaml_path.is_file():
                 raise FileNotFoundError(f"No site YAML at: {yaml_path}")
-            doc = abm.load_editable(yaml_path, project_path)
+            doc = abm.load_editable(yaml_path, site_path)
             under = [
                 p for p in str(getattr(args, "under", "") or "").replace("\\", "/").split("/") if p
             ]
@@ -287,17 +287,17 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
             )
             if getattr(args, "set_specs", None):
                 abm.apply_set_specs(entry, args.set_specs, target="place")
-            abm.persist(doc, yaml_path, project_path)
+            abm.persist(doc, yaml_path, site_path)
             where = "/".join([*under, leaf_id])
-            print(f"OK {where} in {yaml_path.relative_to(project_path)}")
+            print(f"OK {where} in {yaml_path.relative_to(site_path)}")
             return 0
         if args.add_kind == "dir":
-            target = (project_path / args.dir_path).resolve()
+            target = (site_path / args.dir_path).resolve()
             target.mkdir(parents=True, exist_ok=True)
-            print(f"Created: {target.relative_to(project_path)}")
+            print(f"Created: {target.relative_to(site_path)}")
             return 0
-        yaml_path = (project_path / args.yaml_path).resolve()
-        doc = abm.load_editable(yaml_path, project_path)
+        yaml_path = (site_path / args.yaml_path).resolve()
+        doc = abm.load_editable(yaml_path, site_path)
         if args.add_kind == "element":
             abm.add_element(
                 doc,
@@ -334,7 +334,7 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
                 label=args.label,
                 notes=args.notes,
             )
-            abm.persist(doc, yaml_path, project_path)
+            abm.persist(doc, yaml_path, site_path)
             print(f"OK {cable_name} + {conduit_name}")
             return 0
         elif args.add_kind == "connection":
@@ -360,33 +360,33 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
             )
         else:
             raise ValueError(f"Unknown add kind: {args.add_kind}")
-        abm.persist(doc, yaml_path, project_path)
+        abm.persist(doc, yaml_path, site_path)
         print("OK")
         return 0
     if cmd == "rm":
-        project_path = ProjectSession.open(Path(args.project_path)).root
+        site_path = SiteSession.open(Path(args.site_path)).root
         if args.rm_kind == "file":
-            target = (project_path / args.file_path).resolve()
+            target = (site_path / args.file_path).resolve()
             target.unlink()
-            print(f"Deleted: {target.relative_to(project_path)}")
+            print(f"Deleted: {target.relative_to(site_path)}")
             return 0
         if args.rm_kind == "dir":
-            target = (project_path / args.dir_path).resolve()
+            target = (site_path / args.dir_path).resolve()
             if any(target.iterdir()):
                 print("rm dir: directory is not empty", file=sys.stderr)
                 return 1
             target.rmdir()
-            print(f"Deleted: {target.relative_to(project_path)}")
+            print(f"Deleted: {target.relative_to(site_path)}")
             return 0
-        yaml_path = (project_path / args.yaml_path).resolve()
-        doc = abm.load_editable(yaml_path, project_path)
+        yaml_path = (site_path / args.yaml_path).resolve()
+        doc = abm.load_editable(yaml_path, site_path)
         if args.rm_kind == "element":
             abm.rm_element(doc, args.name)
         elif args.rm_kind == "cable":
             abm.rm_cable(doc, args.name)
         elif args.rm_kind == "connection":
             abm.rm_connection(doc, args.index)
-        abm.persist(doc, yaml_path, project_path)
+        abm.persist(doc, yaml_path, site_path)
         print("OK")
         return 0
     print("Command not implemented", file=sys.stderr)

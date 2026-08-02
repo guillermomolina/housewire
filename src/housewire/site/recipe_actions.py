@@ -17,10 +17,10 @@ from housewire.house.conduit_ref import (
     resolve_location_ref,
     split_conduit_endpoint,
 )
-from housewire.project import abm, recipes
-from housewire.project.io import create_inline_location
-from housewire.project.session import ProjectSession
-from housewire.project.view_layout import get_physical_position, set_physical_position
+from housewire.site import abm, recipes
+from housewire.site.io import create_inline_location
+from housewire.site.session import SiteSession
+from housewire.site.view_layout import get_physical_position, set_physical_position
 
 
 def opening_grid_for(opening_id: str) -> dict[str, int]:
@@ -42,9 +42,9 @@ def colors_list(raw: str | None) -> list[str] | None:
 
 
 def _known_location_parts(root: Path) -> set[tuple[str, ...]]:
-    from housewire.project.io import load_yaml
-    from housewire.project.paths import find_site_yaml
-    from housewire.project.tree import iter_places
+    from housewire.site.io import load_yaml
+    from housewire.site.paths import find_site_yaml
+    from housewire.site.tree import iter_places
 
     known: set[tuple[str, ...]] = {()}
     site = find_site_yaml(root)
@@ -122,7 +122,7 @@ def _conduit_row(
 
 
 def _place_wiring(
-    session: ProjectSession,
+    session: SiteSession,
     *,
     place_parts: tuple[str, ...],
     place_doc: dict[str, Any],
@@ -133,7 +133,7 @@ def _place_wiring(
     Ancestors are parent place nodes inside the single site YAML (not legacy
     separate per-folder site YAML files).
     """
-    from housewire.project.tree import get_place_node
+    from housewire.site.tree import get_place_node
 
     root = session.root.resolve()
     place_rel = str(place_yaml.relative_to(root))
@@ -233,7 +233,7 @@ def _place_wiring(
 
 
 @contextmanager
-def at_location(session: ProjectSession, location_id: str | None) -> Iterator[None]:
+def at_location(session: SiteSession, location_id: str | None) -> Iterator[None]:
     """Temporarily ``cd`` the session to ``location_id`` (canvas root)."""
     if location_id is None:
         yield
@@ -252,7 +252,7 @@ def at_location(session: ProjectSession, location_id: str | None) -> Iterator[No
 
 
 def create_recipe_place(
-    session: ProjectSession,
+    session: SiteSession,
     name: str,
     *,
     type_id: str,
@@ -309,7 +309,7 @@ def create_recipe_place(
 
 
 def _position_near_source(
-    session: ProjectSession,
+    session: SiteSession,
     *,
     canvas_location_id: str,
     new_leaf_id: str,
@@ -318,7 +318,7 @@ def _position_near_source(
     offset_y: float = 0.0,
 ) -> None:
     """Place new nested node near the source box on the canvas."""
-    from housewire.project.tree import get_place_node, logical_parts_from_id
+    from housewire.site.tree import get_place_node, logical_parts_from_id
 
     try:
         box_loc, _op = split_conduit_endpoint(from_ref)
@@ -346,7 +346,7 @@ def _position_near_source(
 
 
 def run_socket_recipe(
-    session: ProjectSession,
+    session: SiteSession,
     *,
     name: str,
     from_ref: str,
@@ -420,7 +420,7 @@ def run_socket_recipe(
 
 
 def run_lamp_recipe(
-    session: ProjectSession,
+    session: SiteSession,
     *,
     name: str,
     from_ref: str,
@@ -496,7 +496,7 @@ def run_lamp_recipe(
 
 
 def run_feed_recipe(
-    session: ProjectSession,
+    session: SiteSession,
     *,
     name: str,
     from_ref: str,
@@ -569,13 +569,13 @@ def _relative_place_id(
 
 
 def place_detail(
-    session: ProjectSession,
+    session: SiteSession,
     *,
     canvas_location_id: str,
     place_id: str,
 ) -> dict[str, Any]:
     """Return detail for a nested child under the canvas root (or the canvas itself)."""
-    from housewire.project.tree import get_place_node
+    from housewire.site.tree import get_place_node
 
     place_parts = _resolve_place_parts(canvas_location_id, place_id)
     path, site_doc = session.ensure_doc()
@@ -645,7 +645,7 @@ _EDITABLE_ELEMENT_FIELDS = frozenset(
 
 
 def update_place_properties(
-    session: ProjectSession,
+    session: SiteSession,
     *,
     canvas_location_id: str,
     place_id: str,
@@ -653,8 +653,8 @@ def update_place_properties(
     element: str | None = None,
 ) -> dict[str, Any]:
     """Apply property edits to a place or nested element; return place detail."""
-    from housewire.project import abm
-    from housewire.project.tree import get_place_node
+    from housewire.site import abm
+    from housewire.site.tree import get_place_node
 
     if not isinstance(fields, dict) or not fields:
         raise ValueError("fields must be a non-empty object")

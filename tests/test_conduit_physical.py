@@ -13,9 +13,9 @@ from housewire.house.conduit_ref import (
     split_conduit_endpoint,
 )
 from housewire.house.physical import build_physical_model, model_to_dot
-from housewire.project import abm
-from housewire.project.io import HOUSEWIRE_YAML
-from housewire.project.tree import get_place_node
+from housewire.site import abm
+from housewire.site.io import HOUSEWIRE_YAML
+from housewire.site.tree import get_place_node
 
 
 class TestConduitEndpoints(unittest.TestCase):

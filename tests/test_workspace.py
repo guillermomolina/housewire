@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from fixtures import add_place, init_site, save_site
-from housewire.project.io import load_yaml, save_yaml
+from housewire.site.io import load_yaml, save_yaml
 from housewire.ui.workspace import create_workspace
 
 

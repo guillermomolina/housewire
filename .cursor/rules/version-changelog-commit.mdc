@@ -10,7 +10,7 @@ After each completed **code** change (unless the user says otherwise):
 1. **Bump the program version** in `pyproject.toml` and `src/housewire/__init__.py` (keep them in sync).
 2. **Update `CHANGELOG.md`** under `[Unreleased]` or a new version section (English, Keep a Changelog style).
 3. **Commit the program repo** (`housewire`) with a concise message focused on why.
-4. **Commit the site repo** (`projects` / external site tree) when it has related changes, in the same turn.
+4. **Commit the site repo** (`sites` / external site tree) when it has related changes, in the same turn.
 
 Do **not** push unless the user explicitly asks (or has an active standing instruction to push). A prior “no push” stands until revoked.
 

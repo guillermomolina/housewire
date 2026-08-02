@@ -1,4 +1,4 @@
-"""Interactive project session: nested place navigation in one site YAML."""
+"""Interactive site session: nested place navigation in one site YAML."""
 from __future__ import annotations
 
 import copy
@@ -7,14 +7,14 @@ from pathlib import Path
 from typing import Any
 
 from housewire.house import is_house_document, is_place_type
-from housewire.project.io import HOUSEWIRE_YAML, load_yaml
-from housewire.project.paths import (
+from housewire.site.io import HOUSEWIRE_YAML, load_yaml
+from housewire.site.paths import (
     find_site_yaml,
     is_excluded_path,
     is_yaml,
-    split_project_arg,
+    split_site_arg,
 )
-from housewire.project.tree import get_place_node, iter_place_children, site_yaml_path
+from housewire.site.tree import get_place_node, iter_place_children, site_yaml_path
 
 EDIT_HISTORY_MAX = 50
 
@@ -83,11 +83,11 @@ def _load_doc(path: Path) -> dict[str, Any] | None:
     return data
 
 
-class ProjectSession:
+class SiteSession:
     def __init__(self, root: Path, *, site_yaml: Path | None = None) -> None:
         self.root = root.resolve()
         if not self.root.is_dir():
-            raise NotADirectoryError(f"Not a project directory: {self.root}")
+            raise NotADirectoryError(f"Not a site directory: {self.root}")
         self._excluded = {(self.root / "out").resolve()}
         self.logical_parts: list[str] = []
         self.active_yaml: Path | None = None
@@ -116,9 +116,9 @@ class ProjectSession:
         return site_yaml_path(self.root)
 
     @classmethod
-    def open(cls, path: Path) -> ProjectSession:
+    def open(cls, path: Path) -> SiteSession:
         """Open a session from a site directory or a root YAML file."""
-        root, site_yaml = split_project_arg(path)
+        root, site_yaml = split_site_arg(path)
         return cls(root, site_yaml=site_yaml)
 
     def site_yaml(self) -> Path:
@@ -134,7 +134,7 @@ class ProjectSession:
 
     def ensure_doc(self, path: Path | None = None) -> tuple[Path, dict[str, Any]]:
         """Load the site yaml into the buffer if needed; return ``(path, doc)``."""
-        from housewire.project import abm
+        from housewire.site import abm
 
         resolved = (path or self.ensure_active_yaml()).resolve()
         site = self.site_yaml()
@@ -286,7 +286,7 @@ class ProjectSession:
 
     def reconcile_dirty(self, path: Path | None = None) -> bool:
         """Set dirty from buffer vs disk; clear when they match. Return dirty."""
-        from housewire.project import abm
+        from housewire.site import abm
 
         resolved, doc = self.ensure_doc(path)
         buf = self._buffers[resolved]
@@ -311,7 +311,7 @@ class ProjectSession:
 
     def save(self, path: Path | None = None, *, force: bool = False) -> Path:
         """Validate and write a buffered document to disk."""
-        from housewire.project import abm
+        from housewire.site import abm
 
         resolved, doc = self.ensure_doc(path)
         buf = self._buffers[resolved]
@@ -342,7 +342,7 @@ class ProjectSession:
 
     def reload(self, path: Path | None = None) -> Path:
         """Drop buffer and reload from disk (discards unsaved changes)."""
-        from housewire.project import abm
+        from housewire.site import abm
 
         resolved = (path or self.ensure_active_yaml()).resolve()
         if not resolved.is_file():
@@ -494,7 +494,7 @@ class ProjectSession:
         try:
             candidate.relative_to(self.root)
         except ValueError as exc:
-            raise ValueError(f"Path outside project: {raw}") from exc
+            raise ValueError(f"Path outside site: {raw}") from exc
         if is_excluded_path(candidate, self._excluded):
             raise ValueError(f"Excluded path: {raw}")
         return candidate
@@ -519,7 +519,7 @@ class ProjectSession:
                     continue
                 if segment == "..":
                     if not parts:
-                        raise ValueError("Already at project root")
+                        raise ValueError("Already at site root")
                     parts = parts[:-1]
                     continue
                 children = {c.name for c in self._list_children(parts)}

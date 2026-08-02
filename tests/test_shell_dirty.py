@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 
 from fixtures import add_place, init_site, save_site
-from housewire.project.io import HOUSEWIRE_YAML, load_yaml
-from housewire.project.tree import get_place_node
+from housewire.site.io import HOUSEWIRE_YAML, load_yaml
+from housewire.site.tree import get_place_node
 
 
 class TestShellDirtyBuffer(unittest.TestCase):
@@ -25,9 +25,9 @@ class TestShellDirtyBuffer(unittest.TestCase):
         self.tmp.cleanup()
 
     def _session(self):
-        from housewire.project.session import ProjectSession
+        from housewire.site.session import SiteSession
 
-        s = ProjectSession(self.root)
+        s = SiteSession(self.root)
 
         def fake_input(prompt: str = "") -> str:
             if not self.answers:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from housewire.project.terminals import (
+from housewire.site.terminals import (
     derive_terminal_grid,
     element_terminal_layout,
     expand_terminal_grid,

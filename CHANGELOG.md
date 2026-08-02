@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.30.0] — 2026-08-02
+
+### Changed
+
+- Rename package module ``housewire.project`` → ``housewire.site``
+  (``SiteSession``, ``site_path``, ``split_site_arg``, …).
+- Local convenience directory / gitignore entry ``projects/`` → ``sites/``.
+- Site Makefiles use ``SITE`` instead of ``PROJECT``.
+
 ## [0.29.3] — 2026-08-02
 
 ### Changed
@@ -560,7 +569,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 - Physical UI side panel: click a place for show-like detail; recipe forms
   for ``socket`` / ``lamp`` / ``feed`` (``POST /api/recipes/…``,
-  ``GET /api/place``). Shared orchestration in ``project.recipe_actions``.
+  ``GET /api/place``). Shared orchestration in ``site.recipe_actions``.
 - Tube/line edge tooltips list conduit ``contains``.
 
 ### Fixed
@@ -796,7 +805,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Physical diagram nests location clusters (Floor ⊃ boxes), not flat sibling
-  clusters; site root uses the project name (no bare `raiz`).
+  clusters; site root uses the site directory name (no bare `raiz`).
 - Physical edge labels are conduit + openings only (no cable ids).
 - WireViz output drops PNG (SVG/HTML/TSV only) to avoid cairo bitmap scaling.
 
@@ -950,7 +959,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Shell prompt is path-only (`project/cwd`); dropped the redundant
+- Shell prompt is path-only (`site/cwd`); dropped the redundant
   `[…/housewire.yaml]` suffix and the “Activo (auto)” line on `cd`.
 
 ## [0.5.2] — 2026-07-30
@@ -974,9 +983,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - Per-directory file renamed from **`index.yaml`** to **`housewire.yaml`**
   (also accepts `housewire.yml`).
 - Place type **`Site`** renamed to **`House`** (dwelling; not a privileged root).
-- Zone diagrams group by **top-level directory** under `project_path` (no
-  hard-coded site layout). Root-level YAMLs form a zone named after the project
-  directory. Remap by pointing `project_path` at another subtree or wrapping
+- Zone diagrams group by **top-level directory** under `site_path` (no
+  hard-coded site layout). Root-level YAMLs form a zone named after the site
+  directory. Remap by pointing `site_path` at another subtree or wrapping
   folders above.
 
 ### Migration
@@ -1039,7 +1048,7 @@ location:
 ### Changed
 
 - Docs no longer reference any private site repository or concrete installation names.
-- README treats site data as an external path (`$SITE`); local `projects/` remains gitignored only as an optional convenience.
+- README treats site data as an external path (`$SITE`); local `sites/` remains gitignored only as an optional convenience.
 
 ## [0.2.0] — 2026-07-30
 

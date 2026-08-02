@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from housewire import __version__
-from housewire.project.view_layout import get_physical_page, set_physical_page
+from housewire.site.view_layout import get_physical_page, set_physical_page
 from housewire.ui import physical_graph as pg
 from housewire.ui.workspace import Workspace, create_workspace
 
@@ -249,7 +249,7 @@ def create_app(site_root: Path | None = None) -> Any:
 
     @app.get("/api/place")
     def api_place(location: str, id: str) -> dict[str, Any]:
-        from housewire.project.recipe_actions import place_detail
+        from housewire.site.recipe_actions import place_detail
 
         try:
             _preload_location(location)
@@ -263,7 +263,7 @@ def create_app(site_root: Path | None = None) -> Any:
 
     @app.patch("/api/place/properties")
     async def api_place_properties(request: Request) -> dict[str, Any]:
-        from housewire.project.recipe_actions import update_place_properties
+        from housewire.site.recipe_actions import update_place_properties
 
         payload = await _json_body(request)
         location_id = str(payload.get("location_id") or "").strip()
@@ -464,7 +464,7 @@ def create_app(site_root: Path | None = None) -> Any:
         loc_yaml = _site_yaml()
         _begin_edit()
         _path, doc = session.ensure_doc(loc_yaml)
-        from housewire.project.tree import get_place_node, logical_parts_from_id
+        from housewire.site.tree import get_place_node, logical_parts_from_id
 
         place = get_place_node(doc, logical_parts_from_id(location_id))
         try:
@@ -482,7 +482,7 @@ def create_app(site_root: Path | None = None) -> Any:
 
     @app.post("/api/recipes/socket")
     async def api_recipe_socket(request: Request) -> dict[str, Any]:
-        from housewire.project.recipe_actions import run_socket_recipe
+        from housewire.site.recipe_actions import run_socket_recipe
 
         payload = await _json_body(request)
         location_id = str(payload.get("location_id") or "").strip()
@@ -520,7 +520,7 @@ def create_app(site_root: Path | None = None) -> Any:
 
     @app.post("/api/recipes/lamp")
     async def api_recipe_lamp(request: Request) -> dict[str, Any]:
-        from housewire.project.recipe_actions import run_lamp_recipe
+        from housewire.site.recipe_actions import run_lamp_recipe
 
         payload = await _json_body(request)
         location_id = str(payload.get("location_id") or "").strip()
@@ -560,7 +560,7 @@ def create_app(site_root: Path | None = None) -> Any:
 
     @app.post("/api/recipes/feed")
     async def api_recipe_feed(request: Request) -> dict[str, Any]:
-        from housewire.project.recipe_actions import run_feed_recipe
+        from housewire.site.recipe_actions import run_feed_recipe
 
         payload = await _json_body(request)
         location_id = str(payload.get("location_id") or "").strip()

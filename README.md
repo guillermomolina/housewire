@@ -146,7 +146,7 @@ docs/                   # schema-house-v1.md
 tests/
 ```
 
-Site trees (private) are **not** part of this repository. A local `projects/` path is gitignored if present for convenience; prefer a separate clone/checkout for real work.
+Site trees (private) are **not** part of this repository. A local `sites/` path is gitignored if present for convenience; prefer a separate clone/checkout for real work.
 
 ## house/v1
 

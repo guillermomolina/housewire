@@ -4,7 +4,7 @@ from pathlib import Path
 
 from housewire.commands import request_leave, run_shell_line
 from housewire.completion import enable_readline_completion
-from housewire.project.session import ProjectSession
+from housewire.site.session import SiteSession
 
 
 def read_logical_line(
@@ -40,8 +40,8 @@ def read_logical_line(
     return " ".join(cleaned)
 
 
-def run_repl(project_path: Path) -> int:
-    session = ProjectSession.open(project_path)
+def run_repl(site_path: Path) -> int:
+    session = SiteSession.open(site_path)
     print(f"housewire shell — {session.site_yaml()}")
     print(
         "Type help. Tab completes. Changes stay in memory until save. "

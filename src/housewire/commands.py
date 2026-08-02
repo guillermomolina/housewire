@@ -6,9 +6,9 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from housewire.project import abm
-from housewire.project.io import create_inline_location
-from housewire.project.session import ProjectSession
+from housewire.site import abm
+from housewire.site.io import create_inline_location
+from housewire.site.session import SiteSession
 
 if TYPE_CHECKING:
     pass
@@ -19,7 +19,7 @@ HELP_TEXT = """housewire shell commands:
   cd [path]                    navigate nested places under elements:;
                                dirty YAML stay in memory (no save prompt on cd)
   ls                           child places and elements (non-place)
-  use <site.yaml>              activate a site YAML at the project root
+  use <site.yaml>              activate a site YAML at the site root
   show                         current place: electrical layer + physical layer
   show --element NAME | --cable NAME
   pend [<enter> <exit>] [section] [--colors C1,C2] [--notes ...]
@@ -86,13 +86,13 @@ def _parse_add_args(argv: list[str]) -> tuple[str, list[str]]:
 
 
 def _opening_grid_for(opening_id: str) -> dict[str, int]:
-    from housewire.project.recipe_actions import opening_grid_for
+    from housewire.site.recipe_actions import opening_grid_for
 
     return opening_grid_for(opening_id)
 
 
 def _create_recipe_place(
-    session: ProjectSession,
+    session: SiteSession,
     name: str,
     *,
     type_id: str,
@@ -106,7 +106,7 @@ def _create_recipe_place(
     want_inline: bool = False,
     as_dir: bool = False,
 ) -> tuple[str, dict]:
-    from housewire.project.recipe_actions import create_recipe_place
+    from housewire.site.recipe_actions import create_recipe_place
 
     del want_inline, as_dir
     return create_recipe_place(
@@ -123,9 +123,9 @@ def _create_recipe_place(
     )
 
 
-def cmd_add_socket(session: ProjectSession, rest: list[str]) -> int:
-    from housewire.project import recipes
-    from housewire.project.recipe_actions import run_socket_recipe
+def cmd_add_socket(session: SiteSession, rest: list[str]) -> int:
+    from housewire.site import recipes
+    from housewire.site.recipe_actions import run_socket_recipe
 
     p = argparse.ArgumentParser(prog="add socket", add_help=False)
     p.add_argument("name")
@@ -158,9 +158,9 @@ def cmd_add_socket(session: ProjectSession, rest: list[str]) -> int:
     return 0
 
 
-def cmd_add_lamp(session: ProjectSession, rest: list[str]) -> int:
-    from housewire.project import recipes
-    from housewire.project.recipe_actions import run_lamp_recipe
+def cmd_add_lamp(session: SiteSession, rest: list[str]) -> int:
+    from housewire.site import recipes
+    from housewire.site.recipe_actions import run_lamp_recipe
 
     p = argparse.ArgumentParser(prog="add lamp", add_help=False)
     p.add_argument("name")
@@ -195,8 +195,8 @@ def cmd_add_lamp(session: ProjectSession, rest: list[str]) -> int:
     return 0
 
 
-def cmd_add_feed(session: ProjectSession, rest: list[str]) -> int:
-    from housewire.project.recipe_actions import run_feed_recipe
+def cmd_add_feed(session: SiteSession, rest: list[str]) -> int:
+    from housewire.site.recipe_actions import run_feed_recipe
 
     p = argparse.ArgumentParser(prog="add feed", add_help=False)
     p.add_argument("name", help="Cable id (conduit becomes Conducto_<name>)")
@@ -280,12 +280,12 @@ def normalize_set_argv(argv: list[str]) -> list[str]:
     return out
 
 
-def _prompt(message: str, session: ProjectSession | None = None) -> str:
+def _prompt(message: str, session: SiteSession | None = None) -> str:
     fn = session.input_fn if session is not None else input
     return fn(message).strip()
 
 
-def _confirm_unsaved(session: ProjectSession, paths: list[Path]) -> bool:
+def _confirm_unsaved(session: SiteSession, paths: list[Path]) -> bool:
     """Ask what to do with dirty buffers. True = proceed, False = cancel."""
     if not paths:
         return True
@@ -310,7 +310,7 @@ def _confirm_unsaved(session: ProjectSession, paths: list[Path]) -> bool:
     return True
 
 
-def cmd_ls(session: ProjectSession) -> int:
+def cmd_ls(session: SiteSession) -> int:
     children = session.list_location_children()
     elements = session.list_elements()
     if not children and not elements:
@@ -328,7 +328,7 @@ def cmd_ls(session: ProjectSession) -> int:
     return 0
 
 
-def cmd_pwd(session: ProjectSession) -> int:
+def cmd_pwd(session: SiteSession) -> int:
     logical = "." if not session.logical_parts else "/".join(session.logical_parts)
     print(logical)
     cursor = session.cursor()
@@ -337,7 +337,7 @@ def cmd_pwd(session: ProjectSession) -> int:
     return 0
 
 
-def cmd_show(session: ProjectSession, argv: list[str]) -> int:
+def cmd_show(session: SiteSession, argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="show", add_help=False)
     parser.add_argument("--element", dest="element")
     parser.add_argument("--cable", dest="cable")
@@ -349,9 +349,9 @@ def cmd_show(session: ProjectSession, argv: list[str]) -> int:
     return 0
 
 
-def show_file(project_path: Path, yaml_rel: Path, *, element: str | None, cable: str | None) -> int:
-    path = (project_path / yaml_rel).resolve()
-    doc = abm.load_editable(path, project_path)
+def show_file(site_path: Path, yaml_rel: Path, *, element: str | None, cable: str | None) -> int:
+    path = (site_path / yaml_rel).resolve()
+    doc = abm.load_editable(path, site_path)
     print(abm.format_show(doc, element=element, cable=cable))
     return 0
 
@@ -368,7 +368,7 @@ def _parse_pend_args(rest: list[str]) -> argparse.Namespace:
 
 
 def _resolve_pend_openings(
-    positional: list[str], session: ProjectSession | None = None
+    positional: list[str], session: SiteSession | None = None
 ) -> tuple[str, str, str | None]:
     """Return (enter, exit, section_or_none) from positional args or wizard."""
     enter: str | None = None
@@ -391,7 +391,7 @@ def _resolve_pend_openings(
     return enter, exit_op, section
 
 
-def cmd_pend(session: ProjectSession, argv: list[str]) -> int:
+def cmd_pend(session: SiteSession, argv: list[str]) -> int:
     args = _parse_pend_args(argv)
     enter, exit_op, section = _resolve_pend_openings(list(args.positional), session)
     colors = _colors_list(args.colors) if args.colors else None
@@ -411,9 +411,9 @@ def cmd_pend(session: ProjectSession, argv: list[str]) -> int:
     return 0
 
 
-def _iter_search_docs(session: ProjectSession) -> list[tuple[Path, dict]]:
+def _iter_search_docs(session: SiteSession) -> list[tuple[Path, dict]]:
     """Current place and ancestor places inside the single site document."""
-    from housewire.project.session import place_node_at
+    from housewire.site.session import place_node_at
 
     seen: set[tuple[str, ...]] = set()
     rows: list[tuple[Path, dict]] = []
@@ -440,9 +440,9 @@ def _iter_search_docs(session: ProjectSession) -> list[tuple[Path, dict]]:
 
 
 def _find_cable_doc(
-    session: ProjectSession, cable_name: str
+    session: SiteSession, cable_name: str
 ) -> tuple[Path, dict]:
-    from housewire.project import open_runs
+    from housewire.site import open_runs
 
     for path, place in _iter_search_docs(session):
         if open_runs.find_cable_in_doc(place, cable_name) is not None:
@@ -450,8 +450,8 @@ def _find_cable_doc(
     raise ValueError(f"Cable not found in current or ancestor YAMLs: {cable_name}")
 
 
-def cmd_open(session: ProjectSession, argv: list[str]) -> int:
-    from housewire.project import open_runs
+def cmd_open(session: SiteSession, argv: list[str]) -> int:
+    from housewire.site import open_runs
 
     p = argparse.ArgumentParser(prog="open", add_help=False)
     p.add_argument("positional", nargs="*")
@@ -490,8 +490,8 @@ def cmd_open(session: ProjectSession, argv: list[str]) -> int:
     return 0
 
 
-def cmd_claim(session: ProjectSession, argv: list[str]) -> int:
-    from housewire.project import open_runs
+def cmd_claim(session: SiteSession, argv: list[str]) -> int:
+    from housewire.site import open_runs
 
     p = argparse.ArgumentParser(prog="claim", add_help=False)
     p.add_argument("cable")
@@ -521,8 +521,8 @@ def cmd_claim(session: ProjectSession, argv: list[str]) -> int:
     return 0
 
 
-def cmd_land(session: ProjectSession, argv: list[str]) -> int:
-    from housewire.project import open_runs
+def cmd_land(session: SiteSession, argv: list[str]) -> int:
+    from housewire.site import open_runs
 
     p = argparse.ArgumentParser(prog="land", add_help=False)
     p.add_argument("cable")
@@ -546,8 +546,8 @@ def cmd_land(session: ProjectSession, argv: list[str]) -> int:
     return 0
 
 
-def cmd_opens(session: ProjectSession, argv: list[str]) -> int:
-    from housewire.project import open_runs
+def cmd_opens(session: SiteSession, argv: list[str]) -> int:
+    from housewire.site import open_runs
 
     del argv  # no flags yet
     found = False
@@ -572,7 +572,7 @@ def cmd_opens(session: ProjectSession, argv: list[str]) -> int:
     return 0
 
 
-def cmd_add(session: ProjectSession, argv: list[str]) -> int:
+def cmd_add(session: SiteSession, argv: list[str]) -> int:
     kind, rest = _parse_add_args(argv)
     if kind == "dir":
         if not rest:
@@ -748,7 +748,7 @@ def cmd_add(session: ProjectSession, argv: list[str]) -> int:
     raise ValueError(f"Unknown add kind: {kind}")
 
 
-def cmd_rm(session: ProjectSession, argv: list[str]) -> int:
+def cmd_rm(session: SiteSession, argv: list[str]) -> int:
     kind, rest = _parse_rm_args(argv)
     if kind == "dir":
         if not rest:
@@ -796,7 +796,7 @@ def cmd_rm(session: ProjectSession, argv: list[str]) -> int:
     raise ValueError(f"Unknown rm kind: {kind}")
 
 
-def cmd_cd(session: ProjectSession, argv: list[str]) -> int:
+def cmd_cd(session: SiteSession, argv: list[str]) -> int:
     raw = argv[0] if argv else None
     # Dirty buffers stay in memory across YAML boundaries; save/discard on exit
     # or explicit ``save`` / ``reload``.
@@ -804,7 +804,7 @@ def cmd_cd(session: ProjectSession, argv: list[str]) -> int:
     return 0
 
 
-def cmd_set(session: ProjectSession, argv: list[str]) -> int:
+def cmd_set(session: SiteSession, argv: list[str]) -> int:
     p = argparse.ArgumentParser(prog="set", add_help=False)
     p.add_argument("--element", "-e", dest="element")
     p.add_argument("tokens", nargs="+")
@@ -846,7 +846,7 @@ def cmd_set(session: ProjectSession, argv: list[str]) -> int:
     return 0
 
 
-def cmd_unset(session: ProjectSession, argv: list[str]) -> int:
+def cmd_unset(session: SiteSession, argv: list[str]) -> int:
     p = argparse.ArgumentParser(prog="unset", add_help=False)
     p.add_argument("--element", "-e", dest="element")
     p.add_argument("key")
@@ -870,7 +870,7 @@ def cmd_unset(session: ProjectSession, argv: list[str]) -> int:
     return 0
 
 
-def cmd_save(session: ProjectSession, argv: list[str]) -> int:
+def cmd_save(session: SiteSession, argv: list[str]) -> int:
     force = "--force" in argv or "-f" in argv
     dirty = session.dirty_paths()
     if not dirty:
@@ -882,7 +882,7 @@ def cmd_save(session: ProjectSession, argv: list[str]) -> int:
     return 0
 
 
-def cmd_reload(session: ProjectSession, argv: list[str]) -> int:
+def cmd_reload(session: SiteSession, argv: list[str]) -> int:
     if session.is_dirty():
         ans = _prompt(
             "Unsaved changes. Discard and reload? [y/N]: ", session
@@ -895,12 +895,12 @@ def cmd_reload(session: ProjectSession, argv: list[str]) -> int:
     return 0
 
 
-def request_leave(session: ProjectSession) -> bool:
+def request_leave(session: SiteSession) -> bool:
     """Return True if the shell may exit (saved/discarded or clean)."""
     return _confirm_unsaved(session, session.dirty_paths())
 
 
-def run_shell_line(session: ProjectSession, line: str) -> int | None:
+def run_shell_line(session: SiteSession, line: str) -> int | None:
     line = line.strip()
     if not line:
         return None

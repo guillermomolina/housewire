@@ -5,10 +5,10 @@ import shlex
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from housewire.project.paths import EXCLUDED_DIR_NAMES, is_excluded_path, is_yaml
+from housewire.site.paths import EXCLUDED_DIR_NAMES, is_excluded_path, is_yaml
 
 if TYPE_CHECKING:
-    from housewire.project.session import ProjectSession
+    from housewire.site.session import SiteSession
 
 SHELL_COMMANDS = (
     "pwd",
@@ -68,7 +68,7 @@ def _tokens_before_cursor(line: str, begidx: int) -> tuple[list[str], bool]:
 
 
 def complete_candidates(
-    session: ProjectSession,
+    session: SiteSession,
     line: str,
     text: str,
     *,
@@ -129,7 +129,7 @@ def complete_candidates(
     return []
 
 
-def complete_location_path(session: ProjectSession, partial: str) -> list[str]:
+def complete_location_path(session: SiteSession, partial: str) -> list[str]:
     """Tab-complete logical location paths (outline + inline)."""
     partial = partial or ""
     unquoted = partial
@@ -173,7 +173,7 @@ def complete_location_path(session: ProjectSession, partial: str) -> list[str]:
 
 
 def complete_path(
-    session: ProjectSession,
+    session: SiteSession,
     partial: str,
     *,
     dirs_only: bool = False,
@@ -227,7 +227,7 @@ def complete_path(
         elif child.is_file() and is_yaml(child):
             if dirs_only:
                 continue
-            from housewire.project.paths import is_housewire_yaml
+            from housewire.site.paths import is_housewire_yaml
 
             if not is_housewire_yaml(child):
                 continue
@@ -240,7 +240,7 @@ def complete_path(
 
 
 class ShellCompleter:
-    def __init__(self, session: ProjectSession) -> None:
+    def __init__(self, session: SiteSession) -> None:
         self.session = session
         self._matches: list[str] = []
 
@@ -263,7 +263,7 @@ class ShellCompleter:
             return None
 
 
-def enable_readline_completion(session: ProjectSession) -> bool:
+def enable_readline_completion(session: SiteSession) -> bool:
     """Install Tab completion. Returns False if readline is unavailable."""
     try:
         import readline

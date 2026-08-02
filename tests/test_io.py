@@ -1,15 +1,15 @@
-"""Tests de project.io."""
+"""Tests for site.io."""
 from __future__ import annotations
 
 import unittest
 
-from housewire.project.io import (
+from housewire.site.io import (
     create_empty_house_file,
     load_yaml,
     require_house_document,
     save_yaml,
 )
-from tests.helpers import make_project
+from tests.helpers import make_site
 
 
 # ---------------------------------------------------------------------------
@@ -18,7 +18,7 @@ from tests.helpers import make_project
 
 class TestIO(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp, self.root, self.yaml = make_project()
+        self.tmp, self.root, self.yaml = make_site()
 
     def tearDown(self) -> None:
         self.tmp.cleanup()

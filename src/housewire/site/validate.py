@@ -10,13 +10,13 @@ from housewire.house import (
     place_meta_from_mapping,
     validate_house_tree,
 )
-from housewire.project.openings import validate_location_openings
+from housewire.site.openings import validate_location_openings
 
 
 def validate_house_document(
     doc: dict[str, Any],
     *,
-    project_path: Path,
+    site_path: Path,
     yaml_path: Path,
 ) -> None:
     if not is_house_document(doc):
@@ -24,9 +24,9 @@ def validate_house_document(
     meta = place_meta_from_mapping(doc)
     if meta is not None:
         validate_location_openings(meta)
-    catalog = load_catalog(project_path)
+    catalog = load_catalog(site_path)
     validate_house_tree(
         doc,
         catalog=catalog,
-        file_location_parts=path_location_parts(project_path, yaml_path),
+        file_location_parts=path_location_parts(site_path, yaml_path),
     )

@@ -23,16 +23,16 @@ from housewire.house.conduit_ref import (
     resolve_location_ref,
     split_conduit_endpoint,
 )
-from housewire.project.io import load_yaml
-from housewire.project.openings import declared_opening_ids, expand_opening_grid
-from housewire.project.terminals import element_terminal_layout, grid_to_api
-from housewire.project.tree import (
+from housewire.site.io import load_yaml
+from housewire.site.openings import declared_opening_ids, expand_opening_grid
+from housewire.site.terminals import element_terminal_layout, grid_to_api
+from housewire.site.tree import (
     get_place_node,
     iter_places,
     logical_parts_from_id,
     site_yaml_path,
 )
-from housewire.project.view_layout import (
+from housewire.site.view_layout import (
     get_electrical_position,
     get_electrical_rotation,
     get_physical_page,

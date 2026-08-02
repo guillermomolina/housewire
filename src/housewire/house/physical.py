@@ -24,7 +24,7 @@ from housewire.house.conduit_ref import (
     resolve_location_ref,
     split_conduit_endpoint,
 )
-from housewire.project.openings import opening_compass_port
+from housewire.site.openings import opening_compass_port
 
 
 @dataclass
@@ -77,7 +77,7 @@ def _safe_id(value: str) -> str:
 
 
 def _load_house_files(
-    project_path: Path, yaml_files: list[Path]
+    site_path: Path, yaml_files: list[Path]
 ) -> list[tuple[list[str], dict[str, Any]]]:
     """Yield (location_parts, fragment) for each house document piece."""
     from housewire.house import _walk_locations
@@ -88,7 +88,7 @@ def _load_house_files(
             data = yaml.safe_load(handle) or {}
         if not is_house_document(data):
             continue
-        base = path_location_parts(project_path, yaml_file)
+        base = path_location_parts(site_path, yaml_file)
         try:
             fragments = _walk_locations(data, base)
         except ValueError as exc:
@@ -177,7 +177,7 @@ def _ensure_ancestor_nodes(
 
 
 def build_physical_model(
-    project_path: Path,
+    site_path: Path,
     yaml_files: list[Path],
     *,
     title: str = "",
@@ -185,9 +185,9 @@ def build_physical_model(
     """Build location↔conduit graph (physical layer)."""
     from housewire.house import is_place_type
 
-    root_name = project_path.name
+    root_name = site_path.name
     model = PhysModel(title=title or root_name)
-    pieces = _load_house_files(project_path, yaml_files)
+    pieces = _load_house_files(site_path, yaml_files)
     known: set[tuple[str, ...]] = {tuple(parts) for parts, _ in pieces}
     fragment_locations = set(known)
 
@@ -498,13 +498,13 @@ def render_physical_svg(dot_text: str, svg_path: Path, *, also_dot: bool = True)
 
 
 def export_physical_zone(
-    project_path: Path,
+    site_path: Path,
     yaml_files: list[Path],
     output_svg: Path,
     *,
     title: str,
 ) -> None:
-    model = build_physical_model(project_path, yaml_files, title=title)
+    model = build_physical_model(site_path, yaml_files, title=title)
     if not model.nodes:
         return
     render_physical_svg(model_to_dot(model), output_svg)

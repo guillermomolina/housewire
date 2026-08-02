@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Sequence
 
 from housewire.house.conduit_ref import split_conduit_endpoint
-from housewire.project import abm
+from housewire.site import abm
 
 # --- Socket (DeviceBox + Schuko) ------------------------------------------------
 

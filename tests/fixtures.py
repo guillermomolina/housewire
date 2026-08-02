@@ -4,14 +4,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from housewire.project.io import (
+from housewire.site.io import (
     HOUSEWIRE_YAML,
     create_inline_location,
     create_site_document,
     load_yaml,
     save_yaml,
 )
-from housewire.project.tree import get_place_node
+from housewire.site.tree import get_place_node
 
 
 def init_site(

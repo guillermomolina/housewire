@@ -6,10 +6,10 @@ import unittest
 from pathlib import Path
 
 from fixtures import add_place, init_site, save_site
-from housewire.project import abm
-from housewire.project.io import HOUSEWIRE_YAML
-from housewire.project.tree import get_place_node
-from housewire.project.view_layout import (
+from housewire.site import abm
+from housewire.site.io import HOUSEWIRE_YAML
+from housewire.site.tree import get_place_node
+from housewire.site.view_layout import (
     get_electrical_position,
     get_physical_page,
     get_physical_position,

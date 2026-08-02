@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from housewire.house.conduit_ref import format_conduit_endpoint, split_conduit_endpoint
-from housewire.project import abm
-from housewire.project.recipes import format_via_ref
+from housewire.site import abm
+from housewire.site.recipes import format_via_ref
 
 _OPEN_CABLE_RE = re.compile(r"^OPEN_Linea_(\d+)$")
 _STATUS_RE = re.compile(r"status:\s*(open|claimed|landed|pending)\b", re.I)

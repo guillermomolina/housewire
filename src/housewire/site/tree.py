@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from housewire.house import is_place_type
-from housewire.project.io import HOUSEWIRE_YAML
-from housewire.project.paths import find_site_yaml
+from housewire.site.io import HOUSEWIRE_YAML
+from housewire.site.paths import find_site_yaml
 
 
 def site_yaml_path(site_root: Path, *, name: str | None = None) -> Path:

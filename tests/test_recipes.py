@@ -6,9 +6,9 @@ import unittest
 from pathlib import Path
 
 from fixtures import add_place, init_site, save_site
-from housewire.project import abm, recipes
-from housewire.project.io import HOUSEWIRE_YAML
-from housewire.project.tree import get_place_node
+from housewire.site import abm, recipes
+from housewire.site.io import HOUSEWIRE_YAML
+from housewire.site.tree import get_place_node
 
 
 class TestRecipeHelpers(unittest.TestCase):
@@ -155,9 +155,9 @@ class TestShellRecipes(unittest.TestCase):
         self.tmp.cleanup()
 
     def _session(self):
-        from housewire.project.session import ProjectSession
+        from housewire.site.session import SiteSession
 
-        return ProjectSession(self.root)
+        return SiteSession(self.root)
 
     def _run(self, session, line):
         from housewire.commands import run_shell_line

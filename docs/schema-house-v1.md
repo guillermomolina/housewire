@@ -159,7 +159,7 @@ connects: [Parking, Planta_baja]
 - Children (junction boxes, switches, light points) nest under the stair’s `elements:`.
 
 The **site root** is the directory (or site YAML file) you pass to `housewire`
-(`project_path`). Logical paths (`Garage/Junction_1`) are keys under nested
+(`site_path`). Logical paths (`Garage/Junction_1`) are keys under nested
 `elements:`, not filesystem folders.
 
 - One site directory → one site YAML (nested places under `elements:`).

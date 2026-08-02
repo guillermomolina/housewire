@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from housewire.project.openings import (
+from housewire.site.openings import (
     SIDE_FACES,
     expand_opening_grid,
     normalize_opening_id,

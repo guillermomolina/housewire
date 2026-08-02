@@ -9,9 +9,9 @@ import yaml as _yaml
 
 from fixtures import add_place, init_site, save_site
 from housewire.house import is_place_type, load_catalog, validate_house_tree, _walk_locations
-from housewire.project import abm
-from housewire.project.io import HOUSEWIRE_YAML, create_empty_house_file
-from housewire.project.tree import get_place_node
+from housewire.site import abm
+from housewire.site.io import HOUSEWIRE_YAML, create_empty_house_file
+from housewire.site.tree import get_place_node
 
 
 class TestDirectoryLocation(unittest.TestCase):

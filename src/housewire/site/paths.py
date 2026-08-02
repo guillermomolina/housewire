@@ -41,8 +41,8 @@ def list_root_yaml_files(site_root: Path) -> list[Path]:
     return rows
 
 
-def split_project_arg(path: Path) -> tuple[Path, Path | None]:
-    """Split a CLI project argument into ``(site_root, site_yaml_or_None)``.
+def split_site_arg(path: Path) -> tuple[Path, Path | None]:
+    """Split a CLI site argument into ``(site_root, site_yaml_or_None)``.
 
     - YAML file → ``(parent, file)``
     - directory → ``(directory, None)`` (caller discovers the site YAML)
@@ -56,7 +56,7 @@ def split_project_arg(path: Path) -> tuple[Path, Path | None]:
         return target.parent, target
     if target.is_dir():
         return target, None
-    raise ValueError(f"Unsupported project path: {target}")
+    raise ValueError(f"Unsupported site path: {target}")
 
 
 def find_site_yaml(
