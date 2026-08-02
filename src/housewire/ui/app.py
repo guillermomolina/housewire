@@ -113,6 +113,13 @@ def create_app(site_root: Path | None = None) -> Any:
             },
         )
 
+    @app.get("/api/wire-colors")
+    def api_wire_colors() -> dict[str, Any]:
+        """Canonical housewire conductor color palette (IEC 60757 letter codes)."""
+        from housewire.house.wire_colors import wire_colors_payload
+
+        return wire_colors_payload()
+
     @app.get("/api/workspace")
     def api_workspace() -> dict[str, Any]:
         return workspace.status()

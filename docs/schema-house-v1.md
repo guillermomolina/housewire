@@ -459,8 +459,10 @@ Catalog: `catalog/Cable.yaml` (`kind: cable_type`) with per-subtype defaults for
 
 ### Color codes (`colors:`)
 
-Codes are **IEC 60757** letter abbreviations. Use uppercase in YAML (`BN`, not
-`bn`).
+housewire owns the conductor color table (`housewire.house.wire_colors`). Letter
+codes follow **IEC 60757**; CSS hex values are the housewire UI palette. Use
+uppercase in YAML (`BN`, not `bn`). The UI loads the same table from
+`GET /api/wire-colors`.
 
 | Code | Color | Typical use |
 |------|-------|-------------|
@@ -477,6 +479,7 @@ Codes are **IEC 60757** letter abbreviations. Use uppercase in YAML (`BN`, not
 | `PK` | pink | Available |
 | `TQ` | turquoise | Available |
 | `GNYE` | green-yellow | Protective earth (PE) |
+| `SR` | silver | Available |
 
 - **PE** → `GNYE` (not bare `GN` / `YE`).
 - **Neutral** → `BU` (IEC / EU practice).

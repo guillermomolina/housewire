@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.29.1] — 2026-08-02
+
+### Added
+
+- Canonical conductor color table owned by housewire
+  (``housewire.house.wire_colors``, IEC 60757 letter codes + UI CSS hex).
+- ``GET /api/wire-colors`` so the canvas loads the same palette from the program.
+
 ## [0.29.0] — 2026-08-02
 
 ### Removed
@@ -19,7 +27,6 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - Document validation no longer goes through a WireViz conversion; it walks the
   house/v1 tree directly (`validate_house_tree`).
 - Catalog `terminal_pairs` replaces `wireviz_collapse` for canvas pin layout.
-- Canvas conductor palette renamed to `IEC_WIRE_COLORS` (same IEC codes).
 - Default catalog version **0.3.0**.
 
 ## [0.28.27] — 2026-08-02

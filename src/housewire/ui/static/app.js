@@ -1712,8 +1712,11 @@
     return pointsToPathD(pts);
   }
 
-  /** IEC / housewire conductor codes → CSS stroke colors. */
-  const IEC_WIRE_COLORS = {
+  /**
+   * housewire conductor palette (IEC 60757 letter codes → CSS).
+   * Canonical source: housewire.house.wire_colors; loaded from /api/wire-colors.
+   */
+  let CONDUCTOR_COLORS = {
     BN: "#a0522d",
     BK: "#1a1a1a",
     BU: "#1e90ff",
@@ -1729,10 +1732,27 @@
     TQ: "#26a69a",
     SR: "#b0bec5",
   };
+  let UNKNOWN_WIRE_CSS = "#8b949e";
+
+  async function loadConductorColors() {
+    try {
+      const data = await api("/api/wire-colors");
+      const colors = data && data.colors;
+      if (!colors || typeof colors !== "object") return;
+      const next = {};
+      for (const [code, meta] of Object.entries(colors)) {
+        if (meta && typeof meta.css === "string") next[code] = meta.css;
+      }
+      if (Object.keys(next).length) CONDUCTOR_COLORS = next;
+      if (typeof data.unknown_css === "string") UNKNOWN_WIRE_CSS = data.unknown_css;
+    } catch {
+      /* keep embedded fallback */
+    }
+  }
 
   function wireColorCss(code) {
     const key = String(code || "").trim().toUpperCase();
-    return IEC_WIRE_COLORS[key] || "#8b949e";
+    return CONDUCTOR_COLORS[key] || UNKNOWN_WIRE_CSS;
   }
 
   function cableWireIndices(edge) {
@@ -4851,5 +4871,7 @@
     submitInsert("feed", ev.target);
   });
 
-  loadLocations().catch((err) => setStatus(String(err.message || err)));
+  loadConductorColors()
+    .then(() => loadLocations())
+    .catch((err) => setStatus(String(err.message || err)));
 })();
