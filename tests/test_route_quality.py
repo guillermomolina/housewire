@@ -885,45 +885,176 @@ class TestSymmetricVAndNoPrematureMerge(unittest.TestCase):
 
 
 class TestMouthExitAndTubeEnvelope(unittest.TestCase):
-    """Foto 1 early mouth exit; Foto 2 strand outside tube / BN+GNYE overlap."""
+    """Hard invariants: inside tube, through mouth, no mid-run overlap, no box hug."""
 
-    MOUTH = (100.0, 200.0)
-    CENTER = [
-        (100.0, 40.0),
-        (100.0, 200.0),
-        (180.0, 200.0),
-        (180.0, 220.0),
-    ]
+    START_MOUTH = (100.0, 200.0)
+    END_MOUTH = (300.0, 80.0)
+    EXTERIOR = [(100.0, 200.0), (300.0, 200.0), (300.0, 80.0)]
+    PIN_S = (100.0, 260.0)
+    PINS_E = [(320.0, 100.0), (340.0, 100.0), (360.0, 100.0)]
+    INWARD_S = (0.0, 1.0)
+    INWARD_E = (0.0, 1.0)
 
-    def test_raw_offset_exits_before_mouth(self) -> None:
+    def _good_lanes(self, n: int = 3):
+        from housewire.ui.route_quality import build_hop_lane, highway_lane_offset
+
+        return [
+            build_hop_lane(
+                self.PIN_S,
+                self.START_MOUTH,
+                self.EXTERIOR,
+                self.END_MOUTH,
+                self.PINS_E[i],
+                highway_lane_offset(i, n),
+                self.INWARD_S,
+                self.INWARD_E,
+            )
+            for i in range(n)
+        ]
+
+    def _tube_only_lanes(self, n: int = 3):
+        from housewire.ui.route_quality import (
+            converge_lane_to_mouth,
+            highway_lane_offset,
+            offset_ortho,
+        )
+
+        out = []
+        for i in range(n):
+            d = highway_lane_offset(i, n)
+            tube = (
+                offset_ortho(self.EXTERIOR, d)
+                if abs(d) > 1e-9
+                else [(float(p[0]), float(p[1])) for p in self.EXTERIOR]
+            )
+            tube = converge_lane_to_mouth(tube, self.START_MOUTH, at_start=True)
+            tube = converge_lane_to_mouth(tube, self.END_MOUTH, at_start=False)
+            out.append(tube)
+        return out
+
+    def test_raw_continuous_offset_exits_before_mouth(self) -> None:
         from housewire.ui.route_quality import (
             parallel_highway_bundle,
             strand_exits_before_mouth,
         )
 
-        raw = parallel_highway_bundle(self.CENTER, 3)
-        self.assertTrue(strand_exits_before_mouth(raw[0], self.MOUTH))
-        self.assertTrue(strand_exits_before_mouth(raw[2], self.MOUTH))
+        center = [
+            (100.0, 40.0),
+            (100.0, 200.0),
+            (180.0, 200.0),
+            (180.0, 220.0),
+        ]
+        mouth = (100.0, 200.0)
+        raw = parallel_highway_bundle(center, 3)
+        self.assertTrue(strand_exits_before_mouth(raw[0], mouth))
+        self.assertTrue(strand_exits_before_mouth(raw[2], mouth))
 
-    def test_force_through_mouth_fixes_early_exit(self) -> None:
+    def test_force_through_mouth_anti_pattern_collapses_lanes(self) -> None:
+        """0.34.20 anti-pattern: offset whole centerline then forceThroughMouth."""
+        from housewire.ui.route_quality import hop_lanes_through_mouths
+
+        center = [
+            (100.0, 230.0),
+            (100.0, 200.0),
+            (300.0, 200.0),
+            (300.0, 80.0),
+            (340.0, 80.0),
+        ]
+        broken = hop_lanes_through_mouths(
+            center, [self.START_MOUTH, self.END_MOUTH], 3
+        )
+        self.assertTrue(
+            strands_overlap(
+                broken,
+                min_separation=MIN_LANE_SEPARATION,
+                ignore_near=[self.START_MOUTH, self.END_MOUTH],
+            ),
+            msg="forceThroughMouth on a continuous offset must not be treated as OK",
+        )
+
+    def test_build_hop_lane_tube_stays_inside_conduit(self) -> None:
         from housewire.ui.route_quality import (
-            hop_lanes_through_mouths,
+            clip_poly_between_points,
+            highway_road_width,
+            strand_outside_tube,
+        )
+
+        half = highway_road_width(3) / 2.0
+        for lane in self._good_lanes(3):
+            tube = clip_poly_between_points(
+                lane, [self.START_MOUTH, self.END_MOUTH]
+            )
+            self.assertGreaterEqual(len(tube), 2, msg=lane)
+            self.assertFalse(
+                strand_outside_tube(tube, self.EXTERIOR, half_width=half),
+                msg=tube,
+            )
+
+    def test_tube_only_lanes_stay_separated(self) -> None:
+        """Parallel tube lanes (the hop exterior) must not stack mid-run."""
+        lanes = self._tube_only_lanes(3)
+        self.assertFalse(
+            strands_overlap(
+                lanes,
+                min_separation=MIN_LANE_SEPARATION,
+                ignore_near=[self.START_MOUTH, self.END_MOUTH],
+            ),
+            msg=lanes,
+        )
+
+    def test_build_hop_lane_passes_through_both_mouths(self) -> None:
+        for lane in self._good_lanes(3):
+            for mouth in (self.START_MOUTH, self.END_MOUTH):
+                d = min(
+                    ((p[0] - mouth[0]) ** 2 + (p[1] - mouth[1]) ** 2) ** 0.5
+                    for p in lane
+                )
+                self.assertLessEqual(d, 1.5, msg=(mouth, lane))
+
+    def test_build_hop_lane_no_early_mouth_exit(self) -> None:
+        from housewire.ui.route_quality import (
+            highway_road_width,
             strand_exits_before_mouth,
         )
 
-        fixed = hop_lanes_through_mouths(self.CENTER, [self.MOUTH], 3)
-        for lane in fixed:
-            self.assertFalse(
-                strand_exits_before_mouth(lane, self.MOUTH), msg=lane
-            )
-            self.assertLessEqual(
-                min(
-                    ((p[0] - 100.0) ** 2 + (p[1] - 200.0) ** 2) ** 0.5
-                    for p in lane
-                ),
-                1.5,
-                msg=lane,
-            )
+        half = highway_road_width(3) / 2.0
+        for lane in self._good_lanes(3):
+            for mouth in (self.START_MOUTH, self.END_MOUTH):
+                self.assertFalse(
+                    strand_exits_before_mouth(
+                        lane,
+                        mouth,
+                        tube_centerline=self.EXTERIOR,
+                        tube_half_width=half,
+                    ),
+                    msg=(mouth, lane),
+                )
+
+    def test_assess_bundle_flags_outside_tube_and_early_exit(self) -> None:
+        from housewire.ui.route_quality import highway_road_width
+
+        exterior = [(0.0, 0.0), (200.0, 0.0)]
+        brown = [(0.0, 40.0), (200.0, 40.0)]
+        mouth = (0.0, 0.0)
+        early = [(5.0, -20.0), (5.0, -5.0), (80.0, -5.0), (80.0, 40.0)]
+        issues = assess_bundle(
+            [brown, early],
+            openings=[mouth],
+            tube_centerline=exterior,
+            tube_half_width=highway_road_width(3) / 2.0,
+            min_separation=0.5,
+            allow_crossings=True,
+        )
+        self.assertTrue(any("outside conduit" in x for x in issues), msg=issues)
+        self.assertTrue(
+            any("exits before opening" in x for x in issues), msg=issues
+        )
+
+    def test_assess_bundle_flags_place_border_hug(self) -> None:
+        place = (50.0, 50.0, 200.0, 150.0)
+        along = [(60.0, 50.0), (180.0, 50.0), (180.0, 80.0)]
+        issues = assess_bundle([along], place_rects=[place])
+        self.assertTrue(any("hugs place" in x for x in issues), msg=issues)
 
     def test_strand_outside_tube_detected(self) -> None:
         from housewire.ui.route_quality import (
@@ -933,39 +1064,40 @@ class TestMouthExitAndTubeEnvelope(unittest.TestCase):
 
         tube = [(0.0, 0.0), (100.0, 0.0), (100.0, 80.0)]
         half = highway_road_width(3) / 2.0
-        # Brown running parallel well below the conduit (Foto 2).
         brown = [(0.0, 40.0), (100.0, 40.0), (100.0, 80.0)]
         self.assertTrue(strand_outside_tube(brown, tube, half_width=half))
         inside = [(0.0, 2.0), (100.0, 2.0), (100.0, 80.0)]
         self.assertFalse(strand_outside_tube(inside, tube, half_width=half))
 
     def test_brown_and_gnye_overlap_detected(self) -> None:
-        # Foto 2: BN and GNYE stacked on the same horizontal.
         bn = [(120.0, 100.0), (200.0, 100.0), (200.0, 140.0)]
         gnye = [(120.0, 100.0), (200.0, 100.0), (200.0, 160.0)]
         self.assertTrue(strands_overlap([bn, gnye]))
         issues = assess_bundle([bn, gnye], min_separation=MIN_LANE_SEPARATION)
         self.assertTrue(any("overlap" in x for x in issues), msg=issues)
 
-    def test_forced_lanes_stay_inside_tube_half_width(self) -> None:
-        from housewire.ui.route_quality import (
-            highway_road_width,
-            hop_lanes_through_mouths,
-            strand_outside_tube,
-        )
+    def test_good_tube_lanes_pass_assess_bundle(self) -> None:
+        from housewire.ui.route_quality import highway_road_width
 
-        fixed = hop_lanes_through_mouths(self.CENTER, [self.MOUTH], 3)
+        lanes = self._tube_only_lanes(3)
         half = highway_road_width(3) / 2.0
-        tube_center = self.CENTER[:2]
-        for lane in fixed:
-            # Only the vertical approach inside the tube (not the leave jog).
-            tube_part = [p for p in lane if abs(p[0] - self.MOUTH[0]) <= 6.0]
-            if len(tube_part) < 2:
-                continue
-            self.assertFalse(
-                strand_outside_tube(tube_part, tube_center, half_width=half),
-                msg=tube_part,
-            )
+        issues = assess_bundle(
+            lanes,
+            openings=[self.START_MOUTH, self.END_MOUTH],
+            tube_centerline=self.EXTERIOR,
+            tube_half_width=half,
+            allow_z=True,
+            allow_c=True,
+            allow_crossings=True,
+            min_separation=MIN_LANE_SEPARATION,
+        )
+        self.assertFalse(
+            any("outside conduit" in x for x in issues), msg=issues
+        )
+        self.assertFalse(
+            any("exits before opening" in x for x in issues), msg=issues
+        )
+        self.assertFalse(any("overlap" in x for x in issues), msg=issues)
 
 
 if __name__ == "__main__":

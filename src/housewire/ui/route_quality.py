@@ -477,12 +477,52 @@ def min_polyline_separation(a: Poly, b: Poly) -> float:
 
 
 def strands_overlap(
-    strands: Sequence[Poly], *, min_separation: float = MIN_LANE_SEPARATION
+    strands: Sequence[Poly],
+    *,
+    min_separation: float = MIN_LANE_SEPARATION,
+    ignore_near: Sequence[Point] | None = None,
+    ignore_radius: float = 16.0,
 ) -> bool:
-    """True when any two strands run closer than ``min_separation``."""
-    for i in range(len(strands)):
-        for j in range(i + 1, len(strands)):
-            if min_polyline_separation(strands[i], strands[j]) < min_separation:
+    """True when any two strands run closer than ``min_separation``.
+
+    Short segments near ``ignore_near`` (mouth stubs / pin meets) are skipped
+    so legal boca/pin coincidence is not scored as a mid-run overlap.
+    """
+    anchors = [(float(p[0]), float(p[1])) for p in (ignore_near or [])]
+
+    def skip_seg(a: Point, b: Point) -> bool:
+        if not anchors:
+            return False
+        if any(
+            _dist(a, q) <= ignore_radius and _dist(b, q) <= ignore_radius
+            for q in anchors
+        ):
+            return True
+        length = _dist(a, b)
+        if length <= ignore_radius * 2.0:
+            mid = ((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0)
+            if any(_dist(mid, q) <= ignore_radius for q in anchors):
+                return True
+        return False
+
+    def segments(poly: Poly) -> list[tuple[Point, Point]]:
+        out: list[tuple[Point, Point]] = []
+        for i in range(len(poly) - 1):
+            a = (float(poly[i][0]), float(poly[i][1]))
+            b = (float(poly[i + 1][0]), float(poly[i + 1][1]))
+            if _dist(a, b) < 1e-9 or skip_seg(a, b):
+                continue
+            out.append((a, b))
+        return out
+
+    segs = [segments(s) for s in strands]
+    for i in range(len(segs)):
+        for j in range(i + 1, len(segs)):
+            best = float("inf")
+            for a0, a1 in segs[i]:
+                for b0, b1 in segs[j]:
+                    best = min(best, _seg_seg_distance(a0, a1, b0, b1))
+            if best < min_separation:
                 return True
     return False
 
@@ -739,11 +779,14 @@ def assess_bundle(
     allow_terminal_v: bool = False,
     allow_crossings: bool = False,
     element_rects: Sequence[Rect] | None = None,
+    place_rects: Sequence[Rect] | None = None,
     shared_terminals: Sequence[
         tuple[Point, str, Sequence[Poly]]
     ]
     | None = None,
     openings: Sequence[Point] | None = None,
+    tube_centerline: Poly | None = None,
+    tube_half_width: float | None = None,
 ) -> list[str]:
     """Return human-readable problems for a parallel strand bundle.
 
@@ -753,12 +796,21 @@ def assess_bundle(
     ``allow_terminal_v``: short diagonals OK (multi-cable terminal V only).
     ``allow_crossings``: set True only when intentional crossing is expected.
     ``element_rects``: flag inbox segments that hug element box borders.
+    ``place_rects``: flag segments that hug place/box borders.
     ``shared_terminals``: list of (pin, face, strand_polys) that must V-enter.
-    ``openings``: mouth points where any diagonal is forbidden.
+    ``openings``: mouth points where any diagonal is forbidden; also early-exit.
+    ``tube_centerline`` / ``tube_half_width``: flag strands outside the conduit.
     """
     issues: list[str] = []
+    overlap_ignore: list[Point] = []
+    if openings:
+        overlap_ignore.extend(openings)
+    if shared_terminals:
+        overlap_ignore.extend(t[0] for t in shared_terminals)
     if len(strands) >= 2 and strands_overlap(
-        strands, min_separation=min_separation
+        strands,
+        min_separation=min_separation,
+        ignore_near=overlap_ignore or None,
     ):
         issues.append("strands overlap (lane separation too small)")
     if not allow_crossings:
@@ -803,6 +855,36 @@ def assess_bundle(
                         f"strand {i}: {n} diagonal(s) near opening {oi} "
                         "(openings are Manhattan-only)"
                     )
+                if (
+                    tube_centerline is not None
+                    and tube_half_width is not None
+                    and strand_exits_before_mouth(
+                        poly,
+                        mouth,
+                        tube_centerline=tube_centerline,
+                        tube_half_width=tube_half_width,
+                    )
+                ):
+                    issues.append(
+                        f"strand {i}: exits before opening {oi} "
+                        "(must leave through the mouth)"
+                    )
+    if tube_centerline is not None and tube_half_width is not None:
+        for i, poly in enumerate(strands):
+            # Inbox fans sit outside the tube by design — only score the
+            # mouth→mouth run when openings are known.
+            check = (
+                clip_poly_between_points(poly, openings)
+                if openings
+                else poly
+            )
+            if strand_outside_tube(
+                check, tube_centerline, half_width=tube_half_width
+            ):
+                issues.append(
+                    f"strand {i}: outside conduit envelope "
+                    f"(>{tube_half_width:g}px from centerline)"
+                )
     if element_rects:
         pins: list[Point] = []
         if shared_terminals:
@@ -814,6 +896,20 @@ def assess_bundle(
                 ):
                     issues.append(
                         f"strand {i}: hugs element rect {ri} border"
+                    )
+    if place_rects:
+        pins: list[Point] = []
+        if shared_terminals:
+            pins.extend(t[0] for t in shared_terminals)
+        if openings:
+            pins.extend(openings)
+        for ri, rect in enumerate(place_rects):
+            for i, poly in enumerate(strands):
+                if polyline_hugs_rect_border(
+                    poly, rect, ignore_near=pins
+                ):
+                    issues.append(
+                        f"strand {i}: hugs place rect {ri} border"
                     )
     if shared_terminals:
         for ti, (pin, face, polys) in enumerate(shared_terminals):
@@ -1017,32 +1113,89 @@ def force_through_mouth(pts: Poly, mouth: Point, *, radius: float = 40.0) -> lis
     return clean
 
 
+def _point_centerline_dist(p: Point, centerline: Poly) -> float:
+    """Min distance from ``p`` to any segment of ``centerline``."""
+    if len(centerline) < 2:
+        return _dist(p, centerline[0]) if centerline else 0.0
+
+    def point_seg_dist(pt: Point, a: Point, b: Point) -> float:
+        abx, aby = b[0] - a[0], b[1] - a[1]
+        lab2 = abx * abx + aby * aby
+        if lab2 < 1e-12:
+            return _dist(pt, a)
+        t = max(
+            0.0,
+            min(1.0, ((pt[0] - a[0]) * abx + (pt[1] - a[1]) * aby) / lab2),
+        )
+        return _dist(pt, (a[0] + t * abx, a[1] + t * aby))
+
+    return min(
+        point_seg_dist(p, centerline[i], centerline[i + 1])
+        for i in range(len(centerline) - 1)
+    )
+
+
 def strand_exits_before_mouth(
     pts: Poly,
     mouth: Point,
     *,
     ahead: float = 2.5,
     lateral_min: float = 3.0,
+    tube_centerline: Poly | None = None,
+    tube_half_width: float | None = None,
 ) -> bool:
-    """True when a path turns laterally before reaching the opening mouth.
+    """True when a path leaves the tube wall before reaching the opening mouth.
 
-    Foto 1: offset lanes take a horizontal jog above the boca and pierce the
-    tube wall instead of exiting through the rounded opening.
+    With ``tube_centerline`` / ``tube_half_width``: once the path has been
+    inside the tube envelope, any later vertex still short of the mouth that
+    sits outside means it pierced the wall (inbox fans never enter the tube
+    before the boca, so they are not flagged).
+
+    Without tube geometry (legacy tube-only polylines): flag a lateral peel on
+    the approach half from path start to the mouth.
     """
     if len(pts) < 2:
         return False
     mx, my = float(mouth[0]), float(mouth[1])
     mouth_p = (mx, my)
     seq = [(float(p[0]), float(p[1])) for p in pts]
+    if min(_dist(p, mouth_p) for p in seq) > ahead + 4.0:
+        return True
     best_i = min(range(len(seq)), key=lambda i: _dist(seq[i], mouth_p))
-    pre = seq[: max(1, best_i + 1)]
+
+    if tube_centerline is not None and tube_half_width is not None:
+        limit = float(tube_half_width) + 1.25
+
+        def left_tube_on_approach(approach: list[Point]) -> bool:
+            """``approach`` ordered far → mouth. Flag in-tube then outside."""
+            seen_inside = False
+            for p in approach:
+                if _dist(p, mouth_p) <= ahead:
+                    continue
+                inside = _point_centerline_dist(p, tube_centerline) <= limit
+                if inside:
+                    seen_inside = True
+                elif seen_inside:
+                    return True
+            return False
+
+        from_start = seq[: best_i + 1]
+        from_end = list(reversed(seq[best_i:]))
+        return left_tube_on_approach(from_start) or left_tube_on_approach(
+            from_end
+        )
+
+    # Legacy: approach half from start (tube-only polylines).
+    pre = seq[: min(len(seq), best_i + 1)]
+    if len(pre) < 2:
+        pre = seq[:2]
     xs = [p[0] for p in pre]
     ys = [p[1] for p in pre]
     vert_tube = (max(xs) - min(xs)) <= (max(ys) - min(ys) + 1e-9)
     from_neg = (sum(ys) / len(ys) < my) if vert_tube else (sum(xs) / len(xs) < mx)
 
-    for i in range(len(seq) - 1):
-        a, b = seq[i], seq[i + 1]
+    for i in range(len(pre) - 1):
+        a, b = pre[i], pre[i + 1]
         horiz = abs(a[1] - b[1]) < 1e-6 and abs(a[0] - b[0]) >= lateral_min
         vert = abs(a[0] - b[0]) < 1e-6 and abs(a[1] - b[1]) >= lateral_min
         mid = ((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0)
@@ -1054,9 +1207,20 @@ def strand_exits_before_mouth(
             depth = (mx - mid[0]) if from_neg else (mid[0] - mx)
             if depth > ahead:
                 return True
-    if min(_dist(p, mouth_p) for p in seq) > ahead + 4.0:
-        return True
     return False
+
+
+def clip_poly_between_points(pts: Poly, anchors: Sequence[Point]) -> list[Point]:
+    """Keep the sub-polyline spanning the vertices closest to ``anchors``."""
+    if len(pts) < 2 or not anchors:
+        return [(float(p[0]), float(p[1])) for p in pts]
+    seq = [(float(p[0]), float(p[1])) for p in pts]
+    idxs = [
+        min(range(len(seq)), key=lambda i: _dist(seq[i], (float(a[0]), float(a[1]))))
+        for a in anchors
+    ]
+    lo, hi = min(idxs), max(idxs)
+    return seq[lo : hi + 1]
 
 
 def strand_outside_tube(
@@ -1070,25 +1234,9 @@ def strand_outside_tube(
     if len(pts) < 1 or len(centerline) < 2:
         return False
     limit = half_width + slack
-
-    def point_seg_dist(p: Point, a: Point, b: Point) -> float:
-        abx, aby = b[0] - a[0], b[1] - a[1]
-        lab2 = abx * abx + aby * aby
-        if lab2 < 1e-12:
-            return _dist(p, a)
-        t = max(
-            0.0,
-            min(1.0, ((p[0] - a[0]) * abx + (p[1] - a[1]) * aby) / lab2),
-        )
-        return _dist(p, (a[0] + t * abx, a[1] + t * aby))
-
     for p in pts:
         pt = (float(p[0]), float(p[1]))
-        best = min(
-            point_seg_dist(pt, centerline[i], centerline[i + 1])
-            for i in range(len(centerline) - 1)
-        )
-        if best > limit:
+        if _point_centerline_dist(pt, centerline) > limit:
             return True
     return False
 
@@ -1099,12 +1247,103 @@ def highway_road_width(strand_count: int) -> float:
     return n * STRAND_WIDTH + (n + 1) * LANE_GAP
 
 
+def converge_lane_to_mouth(
+    pts: Poly, mouth: Point, *, at_start: bool = False
+) -> list[Point]:
+    """Local converge of an offset lane end onto ``mouth`` (keep mid-run offset)."""
+    if at_start:
+        return list(
+            reversed(converge_lane_to_mouth(list(reversed(pts)), mouth, at_start=False))
+        )
+    if len(pts) < 1:
+        return [(float(mouth[0]), float(mouth[1]))]
+    mx, my = float(mouth[0]), float(mouth[1])
+    mouth_p = (mx, my)
+    out: list[Point] = [(float(p[0]), float(p[1])) for p in pts]
+    while len(out) > 1 and _dist(out[-1], mouth_p) < 8.0:
+        out.pop()
+    last = out[-1]
+    if _dist(last, mouth_p) < 1e-6:
+        return out
+    if abs(last[0] - mx) < 1e-6 or abs(last[1] - my) < 1e-6:
+        out.append(mouth_p)
+        return out
+    if abs(last[1] - my) >= abs(last[0] - mx):
+        out.append((last[0], my))
+        out.append(mouth_p)
+    else:
+        out.append((mx, last[1]))
+        out.append(mouth_p)
+    return out
+
+
+def mouth_fan_pts(
+    mouth: Point,
+    inward: Point,
+    lane_dist: float,
+    *,
+    stub: float = 14.0,
+) -> list[Point]:
+    """mouth → inward stub → lateral fan (inbox separation after the boca)."""
+    mx, my = float(mouth[0]), float(mouth[1])
+    ix, iy = float(inward[0]), float(inward[1])
+    stub_pt = (mx + ix * stub, my + iy * stub)
+    lx, ly = -iy, ix
+    if abs(lane_dist) < 1e-9:
+        return [(mx, my), stub_pt]
+    fan = (stub_pt[0] + lx * lane_dist, stub_pt[1] + ly * lane_dist)
+    return [(mx, my), stub_pt, fan]
+
+
+def build_hop_lane(
+    pin_start: Point,
+    mouth_start: Point,
+    exterior: Poly,
+    mouth_end: Point,
+    pin_end: Point,
+    lane_dist: float,
+    inward_start: Point,
+    inward_end: Point,
+) -> list[Point]:
+    """Reference hop lane: offset tube only, converge mouths, fan inboxes.
+
+    Does **not** offset a continuous inbox+tube centerline (that peels out of
+    the conduit). Matches ``cableBaseSubpaths`` hop assembly in app.js.
+    """
+    tube = (
+        offset_ortho(exterior, lane_dist)
+        if abs(lane_dist) > 1e-9
+        else [(float(p[0]), float(p[1])) for p in exterior]
+    )
+    tube = converge_lane_to_mouth(tube, mouth_start, at_start=True)
+    tube = converge_lane_to_mouth(tube, mouth_end, at_start=False)
+
+    fan_s = mouth_fan_pts(mouth_start, inward_start, lane_dist)
+    to_mouth = list(reversed(fan_s))  # fan → stub → mouth
+    head = manhattan_join_end([pin_start], to_mouth[0])
+    head = head + to_mouth[1:]
+
+    fan_e = mouth_fan_pts(mouth_end, inward_end, lane_dist)
+    tail = manhattan_join_end(fan_e, pin_end)
+
+    chain = list(head[:-1]) + list(tube) + list(tail[1:])
+    clean: list[Point] = []
+    for p in chain:
+        if not clean or _dist(clean[-1], p) > 1e-6:
+            clean.append(p)
+    return clean
+
+
 def hop_lanes_through_mouths(
     centerline: Poly,
     mouths: Sequence[Point],
     strand_count: int,
 ) -> list[list[Point]]:
-    """Offset a shared centerline then force every lane through each mouth."""
+    """Legacy helper: offset whole centerline then forceThroughMouth (anti-pattern).
+
+    Kept so tests can prove this pattern puts lanes outside the tube.
+    Prefer ``build_hop_lane`` for correct geometry.
+    """
     lanes = parallel_highway_bundle(centerline, strand_count)
     out: list[list[Point]] = []
     for lane in lanes:

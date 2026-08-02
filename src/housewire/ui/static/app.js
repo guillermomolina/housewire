@@ -1542,90 +1542,76 @@
    * Force a lane path through an opening mouth so offset L-corners do not
    * pierce the tube wall before the boca (Foto 1 early exit).
    */
-  function forceThroughMouth(pts, mouth, radius = 40) {
-    if (!pts || pts.length < 2 || mouth == null) {
+  /**
+   * Local converge of an offset lane onto a mouth. Keeps mid-tube parallel
+   * offset intact — only rewrites the last few vertices at the boca.
+   */
+  function convergeLaneToMouth(pts, mouth, atStart) {
+    if (!pts || pts.length < 1 || mouth == null) {
       return pts ? pts.map((p) => [p[0], p[1]]) : [];
+    }
+    if (atStart) {
+      return convergeLaneToMouth(pts.slice().reverse(), mouth, false).reverse();
     }
     const mx = Array.isArray(mouth) ? mouth[0] : mouth.x;
     const my = Array.isArray(mouth) ? mouth[1] : mouth.y;
-    const mouthP = [mx, my];
-    const src = pts.map((p) => [p[0], p[1]]);
-    let bestI = 0;
-    let bestD = Infinity;
-    for (let i = 0; i < src.length; i++) {
-      const d = Math.hypot(src[i][0] - mx, src[i][1] - my);
-      if (d < bestD) {
-        bestD = d;
-        bestI = i;
-      }
-    }
-    let lo = bestI;
-    let hi = bestI;
-    while (lo > 0 && Math.hypot(src[lo - 1][0] - mx, src[lo - 1][1] - my) <= radius) {
-      lo -= 1;
-    }
-    while (
-      hi < src.length - 1 &&
-      Math.hypot(src[hi + 1][0] - mx, src[hi + 1][1] - my) <= radius
-    ) {
-      hi += 1;
-    }
-    let before = src.slice(0, lo);
-    const after = src.slice(hi + 1);
-    while (
-      before.length > 1 &&
-      Math.hypot(before[before.length - 1][0] - mx, before[before.length - 1][1] - my) <=
-        radius
-    ) {
-      before.pop();
-    }
     /** @type {number[][]} */
-    let left;
-    if (!before.length) {
-      left = [mouthP];
+    const out = pts.map((p) => [p[0], p[1]]);
+    while (
+      out.length > 1 &&
+      Math.hypot(out[out.length - 1][0] - mx, out[out.length - 1][1] - my) < 8
+    ) {
+      out.pop();
+    }
+    const last = out[out.length - 1];
+    if (Math.hypot(last[0] - mx, last[1] - my) < 1e-6) return cleanOrthoPoly(out);
+    if (Math.abs(last[0] - mx) < 1e-6 || Math.abs(last[1] - my) < 1e-6) {
+      out.push([mx, my]);
+      return cleanOrthoPoly(out);
+    }
+    if (Math.abs(last[1] - my) >= Math.abs(last[0] - mx)) {
+      out.push([last[0], my]);
+      out.push([mx, my]);
     } else {
-      left = before.map((p) => [p[0], p[1]]);
-      const last = left[left.length - 1];
-      if (Math.hypot(last[0] - mx, last[1] - my) > 1e-6) {
-        if (Math.abs(last[0] - mx) < 1e-6 || Math.abs(last[1] - my) < 1e-6) {
-          left.push([mx, my]);
-        } else if (Math.abs(last[1] - my) >= Math.abs(last[0] - mx)) {
-          left.push([last[0], my]);
-          left.push([mx, my]);
-        } else {
-          left.push([mx, last[1]]);
-          left.push([mx, my]);
-        }
-      }
+      out.push([mx, last[1]]);
+      out.push([mx, my]);
     }
-    const farAfter = after.filter(
-      (p) => Math.hypot(p[0] - mx, p[1] - my) > radius
-    );
-    const dest = farAfter.length
-      ? farAfter
-      : after.length
-        ? [after[after.length - 1]]
-        : [];
-    /** @type {number[][]} */
-    let right = [];
-    if (dest.length) {
-      right = orthoJoinEnd([mouthP], dest[0], null);
-      for (let i = 1; i < dest.length; i++) {
-        right = orthoJoinEnd(right, dest[i], null);
-      }
-      if (
-        right.length &&
-        Math.hypot(right[0][0] - mx, right[0][1] - my) < 1e-6
-      ) {
-        right = right.slice(1);
-      }
-    }
-    let merged = (left || []).concat(right || []);
-    merged = stripOutAndBack(merged, [mouthP]);
-    return cleanOrthoPoly(merged);
+    return cleanOrthoPoly(out);
   }
 
-    function orientExteriorSubs(subs, startOp, endOp) {
+  /**
+   * mouth → inward stub → lateral fan. Separates lanes in free space AFTER
+   * exiting the boca (never by peeling through the tube wall).
+   */
+  function mouthFanPts(mouth, face, laneDist) {
+    const mx = Array.isArray(mouth) ? mouth[0] : mouth.x;
+    const my = Array.isArray(mouth) ? mouth[1] : mouth.y;
+    const oi = openingInwardDelta(face);
+    const stub = stubPoint({ x: mx, y: my }, oi.x, oi.y, INBOX_STUB);
+    /** @type {number[][]} */
+    const pts = [
+      [mx, my],
+      [stub.x, stub.y],
+    ];
+    if (Math.abs(laneDist) < 1e-9) return pts;
+    const latX = -oi.y;
+    const latY = oi.x;
+    pts.push([stub.x + latX * laneDist, stub.y + latY * laneDist]);
+    return pts;
+  }
+
+  /** @deprecated destructive full-path rewrite — do not use on hop lanes. */
+  function forceThroughMouth(pts, mouth, radius = 40) {
+    // Kept only so older experiments remain callable; hop routing uses
+    // convergeLaneToMouth on the tube segment instead.
+    return convergeLaneToMouth(
+      convergeLaneToMouth(pts, mouth, false),
+      mouth,
+      true
+    );
+  }
+
+  function orientExteriorSubs(subs, startOp, endOp) {
     if (!subs || !subs.length || !startOp || !endOp) return subs || [];
     const first = subs[0][0];
     const lastSub = subs[subs.length - 1];
@@ -3855,9 +3841,10 @@
           );
       const oriented = orientExteriorSubs(exteriors, startOp, endOp);
 
-      // ONE continuous centerline (inbox → exterior → inbox), then a single
-      // +laneDist parallel offset. Flipping the sign on pin→mouth tails made
-      // lanes peel at elbows and squash/cross at openings.
+      // Tube: +laneDist parallel offset only on the exterior, then local
+      // converge onto each mouth. Inbox: mouth fan (separate AFTER the boca).
+      // Never offset a continuous inbox+tube centerline then forceThroughMouth
+      // — that peels lanes out of the conduit (0.34.20 anti-pattern).
       const startAtt = resolveElementAttach(
         a,
         fromPin,
@@ -3897,38 +3884,72 @@
         toPin
       );
 
+      // Tube only gets highway parallel offset. Inbox uses a mouth fan so
+      // lanes stay inside the conduit and only separate after the boca.
       /** @type {number[][]|null} */
-      let center = null;
-      if (startTailCtr && startTailCtr.length >= 2) {
-        // Drop the pin vertex; V/Manhattan lead is reattached after offset.
-        center = startTailCtr.slice(1).map((p) => [p[0], p[1]]);
-      }
+      let exteriorCtr = null;
       for (const ext of oriented) {
         if (!ext || ext.length < 2) continue;
-        center = center
-          ? mergeOrthoPolys(center, ext)
+        exteriorCtr = exteriorCtr
+          ? mergeOrthoPolys(exteriorCtr, ext)
           : ext.map((p) => [p[0], p[1]]);
       }
-      if (endTailCtr && endTailCtr.length >= 2) {
-        const endRev = endTailCtr
-          .slice(1)
-          .reverse()
-          .map((p) => [p[0], p[1]]);
-        center = center ? mergeOrthoPolys(center, endRev) : endRev;
-      }
-
-      if (!center || center.length < 2) {
+      if (!exteriorCtr || exteriorCtr.length < 2) {
         const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
         return d
           ? pathDToSubpaths(d).map((sub) => ensureOrthoPoly(parallel(sub)))
           : [];
       }
 
-      let chain = parallel(center);
-      // Offset L at the boca peels through the tube wall — force every lane
-      // through both openings before attaching terminal leads.
-      chain = forceThroughMouth(chain, startOp);
-      chain = forceThroughMouth(chain, endOp);
+      const startMouthFace = routeFace(
+        startPlace,
+        first.from_opening,
+        first.from_opening?.[0],
+        placeById
+      );
+      const endMouthFace = routeFace(
+        endPlace,
+        last.to_opening,
+        last.to_opening?.[0],
+        placeById
+      );
+
+      let tube = parallel(exteriorCtr);
+      tube = convergeLaneToMouth(tube, startOp, true);
+      tube = convergeLaneToMouth(tube, endOp, false);
+
+      const startFan = mouthFanPts(startOp, startMouthFace, laneDist);
+      const endFan = mouthFanPts(endOp, endMouthFace, laneDist);
+      // Toward mouth: fan → stub → mouth
+      const startFanRev = startFan.slice().reverse();
+      let head = pinToLanePts(
+        [startAtt.x, startAtt.y],
+        startFace,
+        startFanRev[0],
+        fromSlot.slot,
+        fromSlot.count
+      );
+      head = mergeLeadToSpine(head, startFanRev, startFace);
+
+      let tail = endFan.map((p) => [p[0], p[1]]);
+      const endHead = pinToLanePts(
+        [endAtt.x, endAtt.y],
+        endFace,
+        tail[tail.length - 1],
+        toSlot.slot,
+        toSlot.count
+      );
+      // Attach pin lead at the fan end, then reverse so path is mouth→…→pin
+      tail = mergeLeadToSpine(
+        endHead,
+        tail.slice().reverse(),
+        endFace
+      ).reverse();
+
+      let chain = mergeOrthoPolys(head, tube);
+      chain = mergeOrthoPolys(chain, tail);
+      if (!chain || chain.length < 2) return [];
+
       chain = liftOffsetSpineFromPin(
         chain,
         [startAtt.x, startAtt.y],
@@ -3940,38 +3961,15 @@
         endFace
       ).reverse();
 
-      const head = pinToLanePts(
-        [startAtt.x, startAtt.y],
-        startFace,
-        chain[0],
-        fromSlot.slot,
-        fromSlot.count
-      );
-      chain = mergeLeadToSpine(head, chain, startFace);
-      const endHead = pinToLanePts(
-        [endAtt.x, endAtt.y],
-        endFace,
-        chain[chain.length - 1],
-        toSlot.slot,
-        toSlot.count
-      );
-      chain = mergeLeadToSpine(
-        endHead,
-        chain.slice().reverse(),
-        endFace
-      ).reverse();
-
-      if (!chain || chain.length < 2) return [];
       const mouths = [startOp, endOp];
       let cleaned = stripShortZJogs(stripOutAndBack(chain, mouths));
-      // Openings must stay Manhattan; never rewrite terminal V diagonals.
       const pins = [startAtt, endAtt];
       cleaned = ensureManhattanNearPoint(cleaned, startOp, 48, pins);
       cleaned = ensureManhattanNearPoint(cleaned, endOp, 48, pins);
       cleaned = stripShortZJogs(stripOutAndBack(cleaned, mouths));
-      // Re-assert after strip/manhattan so peels cannot return.
-      cleaned = forceThroughMouth(cleaned, startOp);
-      cleaned = forceThroughMouth(cleaned, endOp);
+      // Do NOT forceThroughMouth / convergeLaneToMouth on the full pin→pin
+      // path: that rewrites path ends (the pins) onto the mouths and peels
+      // mid-tube lanes out of the conduit. Mouth converge is tube-only above.
       return [cleaned];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);

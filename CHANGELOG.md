@@ -7,6 +7,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.22] — 2026-08-02
+
+### Fixed
+
+- Hop routing no longer offsets a continuous inbox+tube centerline and then
+  rewrites the whole path with ``forceThroughMouth`` (that pushed strands
+  outside conduits and along place borders). Exterior gets a parallel offset
+  with local mouth converge; inbox separation uses a post-boca mouth fan.
+- ``strand_exits_before_mouth`` is tube-aware (in-tube then outside) so inbox
+  fans are not false positives; ``assess_bundle`` scores the mouth→mouth run
+  for outside-conduit checks.
+
+### Added
+
+- Hard tests: anti-pattern lane collapse, ``build_hop_lane`` inside-tube /
+  through-mouth / no early exit, place-border hug, and assess_bundle tube
+  checks. ``build_hop_lane`` / ``mouth_fan_pts`` / ``converge_lane_to_mouth``
+  reference helpers mirror the canvas hop assembly.
+
 ## [0.34.21] — 2026-08-02
 
 ### Changed
