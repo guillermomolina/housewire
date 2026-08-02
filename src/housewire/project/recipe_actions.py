@@ -42,14 +42,14 @@ def colors_list(raw: str | None) -> list[str] | None:
 
 
 def _known_location_parts(root: Path) -> set[tuple[str, ...]]:
+    from housewire.project.io import load_yaml
+    from housewire.project.paths import find_site_yaml
     from housewire.project.tree import iter_places
 
     known: set[tuple[str, ...]] = {()}
-    site = root / HOUSEWIRE_YAML
-    if not site.is_file():
+    site = find_site_yaml(root)
+    if site is None or not site.is_file():
         return known
-    from housewire.project.io import load_yaml
-
     doc = load_yaml(site)
     for parts, _node in iter_places(doc, under=()):
         known.add(parts)
@@ -128,7 +128,13 @@ def _place_wiring(
     place_doc: dict[str, Any],
     place_yaml: Path,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Cables/conduits for a place: local defs + ancestor conduits that attach here."""
+    """Cables/conduits for a place: local defs + ancestor conduits that attach here.
+
+    Ancestors are parent place nodes inside the single site YAML (not legacy
+    per-folder ``housewire.yaml`` files).
+    """
+    from housewire.project.tree import get_place_node
+
     root = session.root.resolve()
     place_rel = str(place_yaml.relative_to(root))
     cables_by_id: dict[str, dict[str, Any]] = {}
@@ -164,58 +170,60 @@ def _place_wiring(
             )
 
     known = _known_location_parts(root)
-    # Ancestor docs (parent folders up to site root), not the place itself.
-    for cut in range(len(place_parts) - 1, -1, -1):
-        ancestor = place_parts[:cut]
-        yaml_path = root.joinpath(*ancestor, HOUSEWIRE_YAML)
-        if not yaml_path.is_file():
-            continue
-        try:
-            _path, adoc = session.ensure_doc(yaml_path.resolve())
-        except FileNotFoundError:
-            continue
-        defined_in = str(yaml_path.resolve().relative_to(root))
-        cables = adoc.get("cables") or {}
-        if not isinstance(cables, dict):
-            cables = {}
-        conduits = adoc.get("conduits") or {}
-        if not isinstance(conduits, dict):
-            continue
-        for name, defn in conduits.items():
-            if not isinstance(defn, dict):
-                continue
-            cid = str(name)
-            if cid in conduits_by_id:
-                continue
+    try:
+        _site_path, site_doc = session.ensure_doc(place_yaml.resolve())
+    except FileNotFoundError:
+        site_doc = None
+
+    # Parent places inside the site document (Parking for Parking/Caja_4, …).
+    if isinstance(site_doc, dict):
+        for cut in range(len(place_parts) - 1, -1, -1):
+            ancestor = place_parts[:cut]
             try:
-                from_ref, to_ref = conduit_endpoints(defn)
-                from_loc, from_op = split_conduit_endpoint(from_ref)
-                to_loc, to_op = split_conduit_endpoint(to_ref)
-                from_parts = resolve_location_ref(
-                    from_loc, current_parts=list(ancestor), known=known
-                )
-                to_parts = resolve_location_ref(
-                    to_loc, current_parts=list(ancestor), known=known
-                )
+                adoc = get_place_node(site_doc, ancestor)
             except ValueError:
                 continue
-            if from_parts != place_parts and to_parts != place_parts:
+            cables = adoc.get("cables") or {}
+            if not isinstance(cables, dict):
+                cables = {}
+            conduits = adoc.get("conduits") or {}
+            if not isinstance(conduits, dict):
                 continue
-            conduits_by_id[cid] = _conduit_row(
-                cid,
-                defn,
-                defined_in=defined_in,
-                from_opening=from_op,
-                to_opening=to_op,
-            )
-            for cable_name in conduits_by_id[cid]["contains"]:
-                if cable_name in cables_by_id:
+            for name, defn in conduits.items():
+                if not isinstance(defn, dict):
                     continue
-                cdef = cables.get(cable_name)
-                if isinstance(cdef, dict):
-                    cables_by_id[cable_name] = _cable_row(
-                        cable_name, cdef, defined_in=defined_in
+                cid = str(name)
+                if cid in conduits_by_id:
+                    continue
+                try:
+                    from_ref, to_ref = conduit_endpoints(defn)
+                    from_loc, from_op = split_conduit_endpoint(from_ref)
+                    to_loc, to_op = split_conduit_endpoint(to_ref)
+                    from_parts = resolve_location_ref(
+                        from_loc, current_parts=list(ancestor), known=known
                     )
+                    to_parts = resolve_location_ref(
+                        to_loc, current_parts=list(ancestor), known=known
+                    )
+                except ValueError:
+                    continue
+                if from_parts != place_parts and to_parts != place_parts:
+                    continue
+                conduits_by_id[cid] = _conduit_row(
+                    cid,
+                    defn,
+                    defined_in=place_rel,
+                    from_opening=from_op,
+                    to_opening=to_op,
+                )
+                for cable_name in conduits_by_id[cid]["contains"]:
+                    if cable_name in cables_by_id:
+                        continue
+                    cdef = cables.get(cable_name)
+                    if isinstance(cdef, dict):
+                        cables_by_id[cable_name] = _cable_row(
+                            cable_name, cdef, defined_in=place_rel
+                        )
 
     cables_out = sorted(cables_by_id.values(), key=lambda r: str(r["id"]).lower())
     conduits_out = sorted(

@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.29.2] — 2026-08-02
+
+### Fixed
+
+- Place inspector wiring: cables/conduits defined on an ancestor place in the
+  single site YAML are shown again (no longer looked up via legacy per-folder
+  ``housewire.yaml`` paths).
+
 ## [0.29.1] — 2026-08-02
 
 ### Added
