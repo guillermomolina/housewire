@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.33.3] — 2026-08-02
+
+### Fixed
+
+- Conduits to B/F openings route to the contour mouth (not the interior
+  plane cell), so tubes and cables reach light points / back faces.
+- Sheath strands with opposite ``from``/``to`` group into one multi-color
+  cable edge (e.g. brown + black on a switch loop).
+
 ## [0.33.2] — 2026-08-02
 
 ### Fixed

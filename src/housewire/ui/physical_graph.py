@@ -496,8 +496,21 @@ def _build_cable_edges(
     groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for row in raw_rows:
         a, b = row["from"], row["to"]
-        key = (row["sheath"], a, b)
-        groups.setdefault(key, []).append(row)
+        if a <= b:
+            key = (row["sheath"], a, b)
+            groups.setdefault(key, []).append(row)
+        else:
+            # Opposite conductor direction: normalize to lo→hi and swap pins.
+            key = (row["sheath"], b, a)
+            groups.setdefault(key, []).append(
+                {
+                    **row,
+                    "from": b,
+                    "to": a,
+                    "from_pin": row["to_pin"],
+                    "to_pin": row["from_pin"],
+                }
+            )
 
     edges: list[dict[str, Any]] = []
     for (sheath, from_id, to_id), members in groups.items():

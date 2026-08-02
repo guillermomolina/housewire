@@ -300,6 +300,55 @@ class TestPhysicalGraph(unittest.TestCase):
             # Multi-hop: no single conduit id
             self.assertIsNone(edge.get("conduit"))
 
+    def test_opposite_direction_strands_share_cable_edge(self) -> None:
+        """Sheath conductors with flipped from/to still paint as one jacket."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = init_site(root, type_id="House", label="Site")
+            add_place(doc, "Room", type_id="Room", label="Room")
+            add_place(
+                doc,
+                "Caja",
+                under=("Room",),
+                type_id="JunctionBox",
+                label="Caja",
+            )
+            add_place(
+                doc,
+                "Caja2",
+                under=("Room",),
+                type_id="JunctionBox",
+                label="Caja2",
+            )
+            for parts in (("Room", "Caja"), ("Room", "Caja2")):
+                box = get_place_node(doc, parts)
+                box["openings"] = ["E1", "W1"]
+                abm.add_element(box, "Regleta", type_id="TerminalStrip")
+            room = get_place_node(doc, ("Room",))
+            abm.add_cable(room, "Linea", section="1.5", colors=["BN", "BK"])
+            abm.add_conduit(
+                room,
+                "Conducto",
+                contains=["Linea"],
+                from_ref="Caja.E1",
+                to_ref="Caja2.W1",
+            )
+            # Outbound brown, return black (opposite endpoints).
+            room["cables"]["Linea_1"]["from"] = "Caja/Regleta.N1"
+            room["cables"]["Linea_1"]["to"] = "Caja2/Regleta.N1"
+            room["cables"]["Linea_2"]["from"] = "Caja2/Regleta.N2"
+            room["cables"]["Linea_2"]["to"] = "Caja/Regleta.N2"
+            save_site(root, doc)
+
+            graph = build_physical_graph(root, "Room")
+            self.assertEqual(len(graph["cable_edges"]), 1)
+            edge = graph["cable_edges"][0]
+            self.assertEqual(edge.get("colors"), ["BN", "BK"])
+            self.assertEqual(edge.get("from_pins"), ["N1", "N2"])
+            self.assertEqual(edge.get("to_pins"), ["N1", "N2"])
+            self.assertEqual(edge.get("from"), "Caja/Regleta")
+            self.assertEqual(edge.get("to"), "Caja2/Regleta")
+
 
 class TestServeApi(unittest.TestCase):
     def test_create_app_endpoints(self) -> None:

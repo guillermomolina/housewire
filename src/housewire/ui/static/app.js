@@ -745,6 +745,35 @@
     return nodeCenterAbs(node, byId);
   }
 
+  /**
+   * Contour mouth for a conduit end. Side openings sit on the border; B/F
+   * plane cells are projected onto the nearest N/S/E/W edge so tubes do not
+   * aim at an interior point (which obstacles would clip away).
+   */
+  function openingMouthAbs(node, openingId, face, byId) {
+    const plane = parsePlaneOpening(openingId);
+    const f = (
+      parseSideOpening(openingId)?.face ||
+      plane?.face ||
+      face ||
+      String(openingId || "?")[0] ||
+      "?"
+    ).toUpperCase();
+    if (f !== "B" && f !== "F") {
+      return openingAnchorAbs(node, openingId, face, byId);
+    }
+    const approach = planeApproachFace(node, openingId, f, byId);
+    const local = planeAnchorLocal(node, openingId, f);
+    const a = absXY(node, byId);
+    const w = nodeW(node);
+    const h = nodeH(node);
+    if (approach === "N") return { x: a.x + local.x, y: a.y };
+    if (approach === "S") return { x: a.x + local.x, y: a.y + h };
+    if (approach === "W") return { x: a.x, y: a.y + local.y };
+    if (approach === "E") return { x: a.x + w, y: a.y + local.y };
+    return { x: a.x + local.x, y: a.y + local.y };
+  }
+
   /** Local (0,0) anchor for labels drawn inside the node group. */
   function openingAnchorLocal(node, openingId, face) {
     const w = nodeW(node);
@@ -1660,8 +1689,10 @@
     if (!a || !b) return null;
     const fromFace = routeFace(a, edge.from_opening, edge.from_opening?.[0], byId);
     const toFace = routeFace(b, edge.to_opening, edge.to_opening?.[0], byId);
-    const p1 = openingAnchorAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
-    const p2 = openingAnchorAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
+    // Mouths sit on the contour (B/F projected); interior plane cells are for
+    // markers / inbox tails only.
+    const p1 = openingMouthAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
+    const p2 = openingMouthAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
     // Include endpoints: stubs leave the faces, so mid-routes must go around
     // the boxes themselves (otherwise L/Z cuts back through the interior).
     const obstacles = placeObstacles(byId, []);
@@ -2317,14 +2348,14 @@
         const place = placeById[end === "from" ? hop.from : hop.to];
         const oid = end === "from" ? hop.from_opening : hop.to_opening;
         if (place && oid) {
-          return openingAnchorAbs(place, oid, oid?.[0], placeById);
+          return openingMouthAbs(place, oid, oid?.[0], placeById);
         }
       }
       if (edge.from_opening && edge.to_opening && edge.conduit_from && edge.conduit_to) {
         const place = placeById[end === "from" ? edge.conduit_from : edge.conduit_to];
         const oid = end === "from" ? edge.from_opening : edge.to_opening;
         if (place && oid) {
-          return openingAnchorAbs(place, oid, oid?.[0], placeById);
+          return openingMouthAbs(place, oid, oid?.[0], placeById);
         }
       }
       return elementCenter(end === "from" ? b : a, placeById);
@@ -2586,7 +2617,7 @@
   }
 
   /**
-   * In-box hop tail points: element edge → contour opening.
+   * In-box hop tail points: element → (plane cell) → contour mouth.
    * @returns {number[][]|null}
    */
   function hopEndpointTailPts(
@@ -2600,18 +2631,16 @@
   ) {
     if (!elem || !place || !openingId) return null;
     if (elem.parent && place.id && elem.parent !== place.id) return null;
-    const op = openingAnchorAbs(place, openingId, openingId?.[0], placeById);
-    const rawFace = (
-      parseSideOpening(openingId)?.face ||
-      parsePlaneOpening(openingId)?.face ||
-      String(openingId || "?")[0] ||
-      "?"
-    ).toUpperCase();
-    const opFace = rawFace;
+    const plane = parsePlaneOpening(openingId);
+    const mouth = openingMouthAbs(place, openingId, openingId?.[0], placeById);
+    const planePt = plane
+      ? openingAnchorAbs(place, openingId, openingId?.[0], placeById)
+      : mouth;
+    const opFace = routeFace(place, openingId, openingId?.[0], placeById);
     const attach = resolveElementAttach(
       elem,
       pin,
-      op,
+      planePt,
       placeById,
       slot,
       slotCount
@@ -2621,10 +2650,31 @@
       x: placeAbs.x + nodeW(place) / 2,
       y: placeAbs.y + nodeH(place) / 2,
     };
+    const attachFace =
+      attach.face || elementAttachFace(elem, planePt, placeById);
+    // For B/F, route to the plane cell as an interior attach, then out to the
+    // contour mouth so the tail joins the exterior tube.
+    if (plane) {
+      const viaPlane = inboxRoutePts(
+        attach,
+        attachFace,
+        planePt,
+        opFace,
+        prefer,
+        "element"
+      );
+      if (Math.hypot(planePt.x - mouth.x, planePt.y - mouth.y) < 1.5) {
+        return viaPlane;
+      }
+      return mergeOrthoPolys(viaPlane, [
+        [planePt.x, planePt.y],
+        [mouth.x, mouth.y],
+      ]);
+    }
     return inboxRoutePts(
       attach,
-      attach.face || elementAttachFace(elem, op, placeById),
-      op,
+      attachFace,
+      mouth,
       opFace,
       prefer,
       "opening"
@@ -2651,7 +2701,7 @@
    */
   function mouthBridgePts(place, openingId, join, placeById) {
     if (!place || !openingId || join == null) return null;
-    const op = openingAnchorAbs(place, openingId, openingId?.[0], placeById);
+    const op = openingMouthAbs(place, openingId, openingId?.[0], placeById);
     const j = xyOf(join);
     if (Math.hypot(j.x - op.x, j.y - op.y) < 1.5) {
       return [
@@ -2934,13 +2984,13 @@
         if (tubeD) {
           ext = exteriorPathD(tubeD, leafObstacles);
         } else {
-          const opA = openingAnchorAbs(
+          const opA = openingMouthAbs(
             pf,
             hop.from_opening,
             hop.from_opening?.[0],
             placeById
           );
-          const opB = openingAnchorAbs(
+          const opB = openingMouthAbs(
             pt,
             hop.to_opening,
             hop.to_opening?.[0],
@@ -2978,13 +3028,13 @@
         }
       }
 
-      const startOp = openingAnchorAbs(
+      const startOp = openingMouthAbs(
         startPlace,
         first.from_opening,
         first.from_opening?.[0],
         placeById
       );
-      const endOp = openingAnchorAbs(
+      const endOp = openingMouthAbs(
         endPlace,
         last.to_opening,
         last.to_opening?.[0],
