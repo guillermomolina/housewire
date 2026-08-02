@@ -3316,7 +3316,7 @@
    * If strip/merge collapsed a multi-cable V into a Manhattan stub, put the
    * pin→tip diagonal back so both arms stay diagonal and only meet at the pin.
    */
-  function preserveTerminalVLead(lead, chain) {
+  function preserveTerminalVLead(lead, chain, protectPts) {
     if (!lead || lead.length < 2 || !chain || chain.length < 2) {
       return chain ? chain.map((p) => [p[0], p[1]]) : [];
     }
@@ -3338,8 +3338,11 @@
     }
     const rail = lead[lead.length - 1];
     const bridge = orthoJoinEnd([rail], rest[0] || tip, null);
+    // Protect mouths/fans — unprotected stripOutAndBack shortcuts boca converges
+    // (Test_01 lamp hop skipped end mouth after V preserve).
     return stripOutAndBack(
-      mergeOrthoPolys(lead, mergeOrthoPolys(bridge, rest)) || lead
+      mergeOrthoPolys(lead, mergeOrthoPolys(bridge, rest)) || lead,
+      protectPts
     );
   }
 
@@ -4149,15 +4152,30 @@
       chain = mergeOrthoPolys(chain, tail);
       if (!chain || chain.length < 2) return [];
 
+      // Guaranteed boca transit after merges / V preserve strips.
+      chain = ensureVertexNear(chain, startOp, 2);
+      chain = ensureVertexNear(chain, endOp, 2);
+
+      const mouthProtect = [
+        startOp,
+        endOp,
+        startFanRev[0],
+        endFanTip,
+        ...startFan,
+        ...endFanFwd,
+      ];
       if (fromSlot.count > 1) {
-        chain = preserveTerminalVLead(startLead, chain);
+        chain = preserveTerminalVLead(startLead, chain, mouthProtect);
       }
       if (toSlot.count > 1) {
         chain = preserveTerminalVLead(
           endLead,
-          chain.slice().reverse()
+          chain.slice().reverse(),
+          mouthProtect
         ).reverse();
       }
+      chain = ensureVertexNear(chain, startOp, 2);
+      chain = ensureVertexNear(chain, endOp, 2);
       return [chain];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);

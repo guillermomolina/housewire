@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.32] — 2026-08-02
+
+### Fixed
+
+- ``preserveTerminalVLead`` passes mouth/fan protectPts into stripOutAndBack
+  (unprotected strip skipped lamp bocas after V restore).
+- Hop assembly re-asserts both mouths with ``ensureVertexNear`` after merge
+  and after V preserve.
+
 ## [0.34.31] — 2026-08-02
 
 ### Fixed
