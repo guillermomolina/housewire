@@ -2363,7 +2363,7 @@
    */
   let CONDUCTOR_COLORS = {
     BN: "#a0522d",
-    BK: "#6e7681",
+    BK: "#1a1a1a",
     BU: "#1e90ff",
     GNYE: "#adff2f",
     GY: "#9e9e9e",
@@ -2372,7 +2372,7 @@
     YE: "#fdd835",
     GN: "#43a047",
     VT: "#8e24aa",
-    WH: "#f0f0f0",
+    WH: "#ffffff",
     PK: "#ec407a",
     TQ: "#26a69a",
     SR: "#b0bec5",
@@ -2760,13 +2760,10 @@
     return cleanOrthoPoly(out);
   }
 
-  /** Max length (px) of a terminal-only diagonal lead into a pin. */
-  const TERMINAL_DIAG_MAX = 36;
-
   /**
-   * Lead from a terminal pin into a lane point: short face stub, then a
-   * short diagonal when that reaches the lane cleanly (avoids C-jogs).
-   * Longer gaps stay Manhattan.
+   * Lead from a terminal pin into a lane point.
+   * Always stub (short) + single diagonal when not axis-aligned — never a
+   * Manhattan Z/C. Diagonals are allowed only on these terminal leads.
    */
   function pinToLanePts(pin, face, lanePt) {
     const p = {
@@ -2783,47 +2780,31 @@
     const pts = [[p.x, p.y]];
     let from = p;
     if (fo.x || fo.y) {
-      // Keep the stub short so the allowed diagonal can finish the join.
-      const want = Math.min(10, stubDistToToward(p, fo, t));
-      const stub = stubPoint(p, fo.x, fo.y, want);
-      if (Math.hypot(stub.x - p.x, stub.y - p.y) > 1e-6) {
-        pts.push([stub.x, stub.y]);
-        from = stub;
+      const want = Math.min(6, stubDistToToward(p, fo, t));
+      if (want > 1e-6) {
+        const stub = stubPoint(p, fo.x, fo.y, want);
+        if (Math.hypot(stub.x - p.x, stub.y - p.y) > 1e-6) {
+          pts.push([stub.x, stub.y]);
+          from = stub;
+        }
       }
     }
-    const rem = Math.hypot(from.x - t.x, from.y - t.y);
+    if (Math.hypot(from.x - t.x, from.y - t.y) < 1e-6) return pts;
     const axisAligned =
       Math.abs(from.x - t.x) < 1e-6 || Math.abs(from.y - t.y) < 1e-6;
-    if (!axisAligned && rem > 1e-6 && rem <= TERMINAL_DIAG_MAX) {
+    if (axisAligned) {
       pts.push([t.x, t.y]);
       return pts;
     }
-    const rest = orthoPtsPrefer(from, t, null);
-    // Prefer a longer terminal diagonal over a Manhattan Z (two bends).
-    let bends = 0;
-    for (let i = 2; i < rest.length; i++) {
-      const ax = rest[i - 1][0] - rest[i - 2][0];
-      const ay = rest[i - 1][1] - rest[i - 2][1];
-      const bx = rest[i][0] - rest[i - 1][0];
-      const by = rest[i][1] - rest[i - 1][1];
-      if (Math.abs(ax * by - ay * bx) > 1e-6) bends += 1;
-    }
-    if (!axisAligned && rem > 1e-6 && bends >= 2 && rem <= TERMINAL_DIAG_MAX * 2.5) {
-      pts.push([t.x, t.y]);
-      return pts;
-    }
-    for (let i = 1; i < rest.length; i++) {
-      const q = rest[i];
-      const prev = pts[pts.length - 1];
-      if (Math.hypot(prev[0] - q[0], prev[1] - q[1]) < 1e-6) continue;
-      pts.push([q[0], q[1]]);
-    }
-    return cleanOrthoPoly(pts);
+    // Terminal-only diagonal (no Manhattan detour).
+    pts.push([t.x, t.y]);
+    return pts;
   }
 
   /**
-   * Keep lane-offset run; join real pins with short stub + optional diagonal
-   * (terminal leads only — highway stays Manhattan).
+   * Keep lane-offset highway; join real pins with stub+diagonal only.
+   * Trims nothing from the highway — callers must pass offset points that
+   * already end at the mouth (not at the pin).
    */
   function rejoinLaneEndsOrtho(pin0, face0, offPts, pin1, face1) {
     if (!offPts || offPts.length < 2) {
@@ -2857,8 +2838,8 @@
   }
 
   /**
-   * In-box hop tail: element → (B/F plane cell) → contour entry that joins
-   * the exterior tube.
+   * In-box hop tail: element → (B/F plane cell) → mouth (contour entry or
+   * an already lane-offset join point).
    * @returns {number[][]|null}
    */
   function hopEndpointTailPts(
@@ -2868,7 +2849,8 @@
     placeById,
     slot = 0,
     slotCount = 1,
-    pin = null
+    pin = null,
+    mouthOverride = null
   ) {
     if (!elem || !place || !openingId) return null;
     if (elem.parent && place.id && elem.parent !== place.id) return null;
@@ -2876,9 +2858,16 @@
     const entry = isPlaneOpeningId(openingId)
       ? planeContourEntryAbs(place, openingId, openingId?.[0], placeById)
       : openingMouthAbs(place, openingId, openingId?.[0], placeById);
+    const mouth =
+      mouthOverride != null
+        ? {
+            x: Array.isArray(mouthOverride) ? mouthOverride[0] : mouthOverride.x,
+            y: Array.isArray(mouthOverride) ? mouthOverride[1] : mouthOverride.y,
+          }
+        : entry;
     const planePt = plane
       ? openingAnchorAbs(place, openingId, openingId?.[0], placeById)
-      : entry;
+      : mouth;
     const opFace = routeFace(place, openingId, openingId?.[0], placeById);
     const attach = resolveElementAttach(
       elem,
@@ -2896,26 +2885,23 @@
     const attachFace =
       attach.face || elementAttachFace(elem, planePt, placeById);
     if (plane) {
-      const viaPlane = inboxRoutePts(
-        attach,
+      // Pin → plane with terminal diagonal; plane → mouth stays Manhattan.
+      const toPlane = pinToLanePts(
+        [attach.x, attach.y],
         attachFace,
-        planePt,
-        opFace,
-        prefer,
-        "element"
+        [planePt.x, planePt.y]
       );
-      if (Math.hypot(planePt.x - entry.x, planePt.y - entry.y) < 1.5) {
-        return viaPlane;
+      if (Math.hypot(planePt.x - mouth.x, planePt.y - mouth.y) < 1.5) {
+        return toPlane;
       }
-      return mergeOrthoPolys(viaPlane, [
-        [planePt.x, planePt.y],
-        [entry.x, entry.y],
-      ]);
+      const toMouth = orthoPtsPrefer(planePt, mouth, prefer);
+      return mergeOrthoPolys(toPlane, toMouth);
     }
+    // Contour opening: Manhattan into the mouth (no terminal diagonal).
     return inboxRoutePts(
       attach,
       attachFace,
-      entry,
+      mouth,
       opFace,
       prefer,
       "opening"
@@ -3311,70 +3297,16 @@
           );
       const oriented = orientExteriorSubs(exteriors, startOp, endOp);
 
+      // Parallel offset ONLY on the exterior highway. Inbox tails are built
+      // per strand to the offset mouth (stub+diagonal into pins) so unique
+      // terminals never pick up a Manhattan Z from re-offset+rejoin.
       /** @type {number[][][]} */
-      const pieces = [];
-      if (oriented.length) {
-        const startTail = hopEndpointTailPts(
-          a,
-          startPlace,
-          first.from_opening,
-          placeById,
-          fromSlot.slot,
-          fromSlot.count,
-          fromPin
-        );
-        if (startTail && startTail.length >= 2) pieces.push(startTail);
-        for (const ext of oriented) pieces.push(ext);
-        const endTail = hopEndpointTailPts(
-          b,
-          endPlace,
-          last.to_opening,
-          placeById,
-          toSlot.slot,
-          toSlot.count,
-          toPin
-        );
-        if (endTail && endTail.length >= 2) {
-          pieces.push(endTail.slice().reverse());
-        }
-      } else {
-        const startTail = hopEndpointTailPts(
-          a,
-          startPlace,
-          first.from_opening,
-          placeById,
-          fromSlot.slot,
-          fromSlot.count,
-          fromPin
-        );
-        if (startTail) pieces.push(startTail);
-        const endTail = hopEndpointTailPts(
-          b,
-          endPlace,
-          last.to_opening,
-          placeById,
-          toSlot.slot,
-          toSlot.count,
-          toPin
-        );
-        if (endTail) pieces.push(endTail);
+      const exOff = [];
+      for (const ext of oriented) {
+        const o = parallel(ext);
+        if (o && o.length >= 2) exOff.push(o);
       }
-      // One continuous centerline, then parallel offset for this strand lane.
-      // Rejoin real pins with stub+diagonal so unique terminals avoid Z/C
-      // without collapsing lanes back onto the centerline.
-      /** @type {number[][]|null} */
-      let chain = null;
-      for (const piece of pieces) {
-        if (!piece || piece.length < 2) continue;
-        chain = chain
-          ? mergeOrthoPolys(chain, piece)
-          : piece.map((p) => [p[0], p[1]]);
-      }
-      if (!chain || chain.length < 2) return [];
-      const base = stripOutAndBack(chain);
-      if (base.length < 2) return [];
-      const off = parallel(base);
-      if (!off.length) return [base];
+
       const startAtt = resolveElementAttach(
         a,
         fromPin,
@@ -3391,15 +3323,83 @@
         toSlot.slot,
         toSlot.count
       );
-      return [
-        rejoinLaneEndsOrtho(
-          [startAtt.x, startAtt.y],
-          startAtt.face || elementAttachFace(a, startOp, placeById),
-          off,
-          [endAtt.x, endAtt.y],
-          endAtt.face || elementAttachFace(b, endOp, placeById)
-        ),
-      ];
+
+      /** @type {number[][]|null} */
+      let chain = null;
+      if (exOff.length) {
+        const startJoin = exOff[0][0];
+        const endJoin =
+          exOff[exOff.length - 1][exOff[exOff.length - 1].length - 1];
+        const startTail = hopEndpointTailPts(
+          a,
+          startPlace,
+          first.from_opening,
+          placeById,
+          fromSlot.slot,
+          fromSlot.count,
+          fromPin,
+          startJoin
+        );
+        if (startTail && startTail.length >= 2) {
+          chain = startTail.map((p) => [p[0], p[1]]);
+        } else {
+          chain = pinToLanePts(
+            [startAtt.x, startAtt.y],
+            startAtt.face || elementAttachFace(a, startOp, placeById),
+            startJoin
+          );
+        }
+        for (const ext of exOff) {
+          chain = mergeOrthoPolys(chain, ext);
+        }
+        const endTail = hopEndpointTailPts(
+          b,
+          endPlace,
+          last.to_opening,
+          placeById,
+          toSlot.slot,
+          toSlot.count,
+          toPin,
+          endJoin
+        );
+        if (endTail && endTail.length >= 2) {
+          chain = mergeOrthoPolys(chain, endTail.slice().reverse());
+        } else {
+          const lead = pinToLanePts(
+            [endAtt.x, endAtt.y],
+            endAtt.face || elementAttachFace(b, endOp, placeById),
+            endJoin
+          );
+          chain = mergeOrthoPolys(chain, lead.slice().reverse());
+        }
+      } else {
+        const startTail = hopEndpointTailPts(
+          a,
+          startPlace,
+          first.from_opening,
+          placeById,
+          fromSlot.slot,
+          fromSlot.count,
+          fromPin
+        );
+        if (startTail) chain = startTail.map((p) => [p[0], p[1]]);
+        const endTail = hopEndpointTailPts(
+          b,
+          endPlace,
+          last.to_opening,
+          placeById,
+          toSlot.slot,
+          toSlot.count,
+          toPin
+        );
+        if (endTail) {
+          chain = chain
+            ? mergeOrthoPolys(chain, endTail)
+            : endTail.map((p) => [p[0], p[1]]);
+        }
+      }
+      if (!chain || chain.length < 2) return [];
+      return [stripOutAndBack(chain)];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
     return d
@@ -3464,10 +3464,26 @@
         laneDist: midOff,
       });
       const jw = highwaySpanWidth(i1 - i0 + 1);
-      const leafObs = placeObstacles(placeById, [], 2);
+      /** @type {string[]} */
+      const jacketKeep = [];
+      const hops = edge.conduit_hops || [];
+      if (hops.length) {
+        const first = hops[0];
+        const last = hops[hops.length - 1];
+        if (isPlaneOpeningId(first.from_opening)) jacketKeep.push(first.from);
+        if (isPlaneOpeningId(last.to_opening)) jacketKeep.push(last.to);
+      } else {
+        if (isPlaneOpeningId(edge.from_opening) && edge.conduit_from) {
+          jacketKeep.push(edge.conduit_from);
+        }
+        if (isPlaneOpeningId(edge.to_opening) && edge.conduit_to) {
+          jacketKeep.push(edge.conduit_to);
+        }
+      }
+      const leafObs = placeObstacles(placeById, jacketKeep, 2);
       const jacketCss = wireColorCss(edge.jacket_color || "WH");
       for (const sub of jacketSubs) {
-        // Jacket only on exterior conduit runs (not inside junction boxes).
+        // Jacket follows the tube, including into B/F bocas.
         if (sub.length < 2) continue;
         const clipped = exteriorPathD(pointsToPathD(sub), leafObs);
         if (!clipped) continue;
@@ -3556,7 +3572,11 @@
         const n = (item.edge.contains || []).length;
         const lanes = conduitLaneHint(item.edge, graph.cable_edges || []);
         const roadW = conduitRoadWidth(n, lanes);
-        const tube = item.paths[0];
+        const outline = item.paths[0];
+        const tube = item.paths[1] || item.paths[0];
+        if (outline && item.paths.length > 1) {
+          outline.style.strokeWidth = String(roadW + 2.5);
+        }
         if (tube) tube.style.strokeWidth = String(roadW);
       }
     }
@@ -3949,12 +3969,19 @@
       const lanes = conduitLaneHint(edge, graph.cable_edges || []);
       const roadW = conduitRoadWidth(n, lanes);
       const displayD = conduitDisplayD(d, byId, edge);
+      // High-contrast rim on the outermost tube (not on strand colors).
+      const tubeOutline = el("path", {
+        class: "edge-tube-outline",
+        d: displayD,
+      });
+      tubeOutline.style.strokeWidth = String(roadW + 2.5);
       const tube = el("path", { class: "edge-tube", d: displayD });
       tube.style.strokeWidth = String(roadW);
       tube.appendChild(el("title", null, title));
+      edgesG.appendChild(tubeOutline);
       edgesG.appendChild(tube);
       // Keep full ``d`` for cable hop overlays; display uses clipped geometry.
-      edgePaths.push({ edge, paths: [tube], d });
+      edgePaths.push({ edge, paths: [tubeOutline, tube], d });
     }
 
     for (const node of graph.nodes) {

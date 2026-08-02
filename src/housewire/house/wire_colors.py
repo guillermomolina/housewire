@@ -12,8 +12,7 @@ CONDUCTOR_COLORS: dict[str, dict[str, str]] = {
     "BK": {
         "label_en": "black",
         "label_es": "negro",
-        # Charcoal (not pure #000): must stay visible on the dark canvas.
-        "css": "#6e7681",
+        "css": "#1a1a1a",
         "typical": "Phase from panel / permanent lights phase",
     },
     "BN": {
@@ -67,8 +66,8 @@ CONDUCTOR_COLORS: dict[str, dict[str, str]] = {
     "WH": {
         "label_en": "white",
         "label_es": "blanco",
-        "css": "#f0f0f0",
-        "typical": "Catalog signal default (with BU)",
+        "css": "#ffffff",
+        "typical": "Sheath jacket / catalog signal default (with BU)",
     },
     "PK": {
         "label_en": "pink",

@@ -517,11 +517,13 @@ uppercase in YAML (`BN`, not `bn`). The UI loads the same table from
 
 A Cable sheath’s own `color:` (e.g. `WH`) is the **jacket** tint on the canvas
 (`jacket_color` on the physical cable edge). Conductor `color:` values are the
-individual strand strokes.
+individual strand strokes. `BK` / `WH` keep true black / white CSS; contrast on
+the dark UI comes from a thin light rim around the **conduit tube**, not from
+recoloring the conductors.
 
 | Code | Color | Typical use |
 |------|-------|-------------|
-| `BK` | black (canvas charcoal) | Phase from panel / permanent lights phase |
+| `BK` | black | Phase from panel / permanent lights phase |
 | `BN` | brown | Switched phase, lamp feeds, some socket L |
 | `RD` | red | Catalog `dc` default (with `BK`) |
 | `OG` | orange | Available; uncommon in domestic work |

@@ -1302,7 +1302,17 @@ button:hover {
   fill: none;
   stroke: #9da5b0;
   /* Width set in JS from contained strand count (presentation attrs lose to CSS). */
-  stroke-opacity: 0.2;
+  stroke-opacity: 0.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* Thin high-contrast rim around the conduit (dark UI → light rim). */
+.edge-tube-outline {
+  fill: none;
+  stroke: #e6edf3;
+  stroke-opacity: 0.85;
   stroke-linecap: round;
   stroke-linejoin: round;
   pointer-events: none;
@@ -1310,9 +1320,9 @@ button:hover {
 
 .cable-jacket {
   fill: none;
-  stroke: #f0f0f0;
+  stroke: #ffffff;
   /* Width and sheath color set in JS from jacket lane span / jacket_color. */
-  stroke-opacity: 0.55;
+  stroke-opacity: 0.45;
   stroke-linejoin: round;
   stroke-linecap: round;
   pointer-events: none;

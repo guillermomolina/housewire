@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.8] — 2026-08-02
+
+### Fixed
+
+- Terminal leads use stub + diagonal only (no Manhattan Z into unique pins).
+  Lane offset stays on the exterior highway; inbox tails join the offset mouth.
+- Route-quality tests now encode the live Lampara failure (Manhattan rejoin
+  onto a terminal strip) so that pattern cannot pass unnoticed.
+- Sheath jacket follows B/F tubes to the plane boca; `BK`/`WH` are true black /
+  white again. Contrast is a light rim on the conduit tube, not recolored wires.
+
 ## [0.34.7] — 2026-08-02
 
 ### Added
