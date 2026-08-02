@@ -4076,12 +4076,13 @@
         toSlot.count
       );
       // pin → … → fan tip → stub → mouth, then reverse to mouth→…→pin.
-      let fromPin = mergeLeadToSpine(endLead, [endFanTip], endFace);
+      let tailFromPin = mergeLeadToSpine(endLead, [endFanTip], endFace);
       const fanToMouth = endFanFwd.slice().reverse(); // fan, stub, mouth
       if (fanToMouth.length > 1) {
-        fromPin = mergeOrthoPolys(fromPin, fanToMouth.slice(1)) || fromPin;
+        tailFromPin =
+          mergeOrthoPolys(tailFromPin, fanToMouth.slice(1)) || tailFromPin;
       }
-      const tail = fromPin.slice().reverse();
+      const tail = tailFromPin.slice().reverse();
 
       let chain = mergeOrthoPolys(head, tube);
       chain = mergeOrthoPolys(chain, tail);

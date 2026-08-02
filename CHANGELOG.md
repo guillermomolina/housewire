@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.29] — 2026-08-02
+
+### Fixed
+
+- Hop routing crash: renamed shadowing ``let fromPin`` in the end-tail
+  assembly (TDZ broke all strand painting).
+
 ## [0.34.28] — 2026-08-02
 
 ### Fixed
