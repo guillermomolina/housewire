@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.3] — 2026-08-02
+
+### Changed
+
+- Restored OS Open / Save As file pickers. Save (Ctrl+S) still writes only
+  through the server so the browser "allow edit" permission aviso does not
+  appear on every save.
+
 ## [0.34.2] — 2026-08-02
 
 ### Changed
