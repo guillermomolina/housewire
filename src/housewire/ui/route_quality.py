@@ -112,6 +112,29 @@ def contrast_outline_css(fill_css: str) -> str:
     return "#ffffff" if relative_luminance(fill_css) < 0.45 else "#0d1117"
 
 
+def needs_nested_contrast_rim(
+    inner_css: str,
+    outer_css: str,
+    *,
+    inner_code: str | None = None,
+    outer_code: str | None = None,
+    lum_delta: float = 0.28,
+) -> bool:
+    """True when nested stroke would vanish into its container without a rim.
+
+    Same IEC color code (e.g. BK jacket in BK conduit) always needs the rim.
+    When codes differ, the palette already separates them. Without codes, fall
+    back to similar luminance (both dark / both light).
+    """
+    ic = (inner_code or "").strip().upper()
+    oc = (outer_code or "").strip().upper()
+    if ic and oc:
+        return ic == oc
+    if not inner_css or not outer_css:
+        return False
+    return abs(relative_luminance(inner_css) - relative_luminance(outer_css)) < lum_delta
+
+
 def jacket_path_is_gapped(pieces: Sequence[Poly], *, max_gap: float = 24.0) -> bool:
     """True when consecutive exterior jacket pieces leave a visible gap."""
     if len(pieces) < 2:

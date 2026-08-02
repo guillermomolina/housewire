@@ -539,6 +539,36 @@ class TestConductorPaletteContrast(unittest.TestCase):
 
         self.assertEqual(contrast_outline_css("#ffffff"), "#0d1117")
 
+    def test_same_color_nesting_needs_contrast_rim(self) -> None:
+        """BK jacket in BK conduit (or WH in WH) must get the thin rim."""
+        from housewire.ui.route_quality import needs_nested_contrast_rim
+
+        bk = css_for_color("BK")
+        wh = css_for_color("WH")
+        bu = css_for_color("BU")
+        self.assertTrue(
+            needs_nested_contrast_rim(bk, bk, inner_code="BK", outer_code="BK")
+        )
+        self.assertTrue(
+            needs_nested_contrast_rim(wh, wh, inner_code="WH", outer_code="WH")
+        )
+        # Distinct colors with clear luminance gap → no rim required.
+        self.assertFalse(
+            needs_nested_contrast_rim(bu, bk, inner_code="BU", outer_code="BK")
+        )
+        self.assertFalse(
+            needs_nested_contrast_rim(bk, wh, inner_code="BK", outer_code="WH")
+        )
+
+    def test_similar_luminance_nesting_needs_rim_without_matching_codes(
+        self,
+    ) -> None:
+        from housewire.ui.route_quality import needs_nested_contrast_rim
+
+        # Two dark greys without IEC codes still need a rim.
+        self.assertTrue(needs_nested_contrast_rim("#1a1a1a", "#222222"))
+        self.assertFalse(needs_nested_contrast_rim("#1a1a1a", "#ffffff"))
+
     def test_jacket_spans_contiguous_cable_lanes_not_centerline(self) -> None:
         """WH sheath around BK+BU must sit on their lane mid, not tube center.
 

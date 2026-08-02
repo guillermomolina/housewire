@@ -7,6 +7,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.21] — 2026-08-02
+
+### Changed
+
+- High-contrast rim is generalized to nested same-color content: a jacket or
+  strand inside a conduit/jacket of the same IEC color (e.g. BK in BK) gets the
+  thin outline, not only bare conduit tubes.
+
+### Added
+
+- ``needs_nested_contrast_rim`` helper and tests for same-color nesting.
+
 ## [0.34.20] — 2026-08-02
 
 ### Fixed

@@ -2521,17 +2521,60 @@
     return CONDUCTOR_COLORS[key] || UNKNOWN_WIRE_CSS;
   }
 
-  /** High-contrast rim for a fill color (light on dark, dark on light). */
-  function contrastOutlineCss(fillCss) {
+  /** sRGB relative luminance of a ``#rrggbb`` fill. */
+  function relativeLuminance(fillCss) {
     const h = String(fillCss || "").replace("#", "");
-    if (h.length !== 6) return "#ffffff";
+    if (h.length !== 6) return 0.5;
     const r = parseInt(h.slice(0, 2), 16) / 255;
     const g = parseInt(h.slice(2, 4), 16) / 255;
     const b = parseInt(h.slice(4, 6), 16) / 255;
     const chan = (c) =>
       c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-    const lum = 0.2126 * chan(r) + 0.7152 * chan(g) + 0.0722 * chan(b);
-    return lum < 0.45 ? "#ffffff" : "#0d1117";
+    return 0.2126 * chan(r) + 0.7152 * chan(g) + 0.0722 * chan(b);
+  }
+
+  /** High-contrast rim for a fill color (light on dark, dark on light). */
+  function contrastOutlineCss(fillCss) {
+    return relativeLuminance(fillCss) < 0.45 ? "#ffffff" : "#0d1117";
+  }
+
+  /**
+   * Nested content in a same-color (or similar-luminance) container needs the
+   * thin high-contrast rim — e.g. BK jacket inside a BK conduit.
+   */
+  function needsNestedContrastRim(innerCode, outerCode, innerCss, outerCss) {
+    const ic = String(innerCode || "").trim().toUpperCase();
+    const oc = String(outerCode || "").trim().toUpperCase();
+    // Distinct IEC codes are already separable; only same-code nesting
+    // (or unknown codes with similar luminance) needs the rim.
+    if (ic && oc) return ic === oc;
+    if (!innerCss || !outerCss) return false;
+    return Math.abs(relativeLuminance(innerCss) - relativeLuminance(outerCss)) < 0.28;
+  }
+
+  /** Conduit color code for a cable edge (first hop / single conduit). */
+  function conduitColorForCableEdge(edge) {
+    if (!edge || !graph) return null;
+    const hops = edge.conduit_hops || [];
+    const cid = hops.length ? hops[0].conduit : edge.conduit;
+    if (!cid) return null;
+    const ce = (graph.edges || []).find((e) => e && e.id === cid);
+    const c = ce && ce.color;
+    return c != null && String(c).trim() !== "" ? String(c).trim().toUpperCase() : null;
+  }
+
+  /** Thin rim under a stroke so same-color nesting stays visible. */
+  function appendContrastRim(parent, d, fillCss, width, className) {
+    if (!parent || !d || !(width > 0)) return null;
+    const rim = el("path", { class: className || "contrast-rim", d });
+    rim.style.stroke = contrastOutlineCss(fillCss);
+    rim.style.strokeWidth = String(width + OUTLINE_EXTRA);
+    rim.style.fill = "none";
+    rim.style.strokeOpacity = "0.85";
+    rim.style.strokeLinecap = "round";
+    rim.style.strokeLinejoin = "round";
+    parent.appendChild(rim);
+    return rim;
   }
 
   function cableWireIndices(edge) {
@@ -4004,12 +4047,33 @@
               ? piece.map((p) => [p[0], p[1]])
               : offsetOrthoPts(piece, midOff);
           if (off.length < 2) continue;
+          const jd = pointsToPathD(off);
+          const jwStroke = Math.max(3, jw);
+          const conduitCode = conduitColorForCableEdge(edge);
+          const conduitCss = conduitCode ? wireColorCss(conduitCode) : null;
+          if (
+            needsNestedContrastRim(
+              edge.jacket_color,
+              conduitCode,
+              jacketCss,
+              conduitCss
+            )
+          ) {
+            const rim = appendContrastRim(
+              cablesG,
+              jd,
+              jacketCss,
+              jwStroke,
+              "cable-jacket-outline"
+            );
+            if (rim) paths.push(rim);
+          }
           const jacket = el("path", {
             class: "cable-jacket",
-            d: pointsToPathD(off),
+            d: jd,
           });
           jacket.style.stroke = jacketCss;
-          jacket.style.strokeWidth = String(Math.max(3, jw));
+          jacket.style.strokeWidth = String(jwStroke);
           jacket.style.strokeOpacity =
             String(edge.jacket_color).toUpperCase() === "WH" ? "0.88" : "0.75";
           jacket.appendChild(
@@ -4049,10 +4113,27 @@
     const paintStrand = (d, code, title) => {
       if (!d) return;
       const key = String(code || "").toUpperCase();
+      // Immediate container: jacket if present, else the conduit tube.
+      const containerCode =
+        edge.jacket_color || conduitColorForCableEdge(edge) || null;
+      const containerCss = containerCode ? wireColorCss(containerCode) : null;
       if (key === "GNYE") {
         // Green-yellow PE: green base + yellow dashes (IEC look).
+        const gnCss = wireColorCss("GN");
+        if (
+          needsNestedContrastRim("GN", containerCode, gnCss, containerCss)
+        ) {
+          const rim = appendContrastRim(
+            cablesG,
+            d,
+            gnCss,
+            STRAND_WIDTH,
+            "cable-strand-outline"
+          );
+          if (rim) paths.push(rim);
+        }
         const gn = el("path", { class: "cable-strand", d });
-        gn.setAttribute("stroke", wireColorCss("GN"));
+        gn.setAttribute("stroke", gnCss);
         gn.setAttribute("stroke-width", String(STRAND_WIDTH));
         gn.appendChild(el("title", null, title));
         const ye = el("path", { class: "cable-strand cable-strand-gnye", d });
@@ -4067,8 +4148,21 @@
         paths.push(hit, gn, ye);
         return;
       }
+      const fillCss = wireColorCss(code);
+      if (
+        needsNestedContrastRim(key, containerCode, fillCss, containerCss)
+      ) {
+        const rim = appendContrastRim(
+          cablesG,
+          d,
+          fillCss,
+          STRAND_WIDTH,
+          "cable-strand-outline"
+        );
+        if (rim) paths.push(rim);
+      }
       const strand = el("path", { class: "cable-strand", d });
-      strand.setAttribute("stroke", wireColorCss(code));
+      strand.setAttribute("stroke", fillCss);
       strand.setAttribute("stroke-width", String(STRAND_WIDTH));
       strand.appendChild(el("title", null, title));
       const hit = el("path", { class: "cable-strand-hit", d });
