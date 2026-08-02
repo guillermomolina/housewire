@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.5] — 2026-08-02
+
+### Fixed
+
+- B/F conduits stop at the contour entry (no tube past the mouth into the
+  leaf). Cables still visit the plane cell, then join the tube.
+- Terminal leads may use a short diagonal after a tiny face stub, removing
+  unnecessary C-jogs without merging strand lanes on the highway.
+
 ## [0.34.4] — 2026-08-02
 
 ### Fixed
