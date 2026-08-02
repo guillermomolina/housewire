@@ -519,7 +519,8 @@ A Cable sheath’s own `color:` (e.g. `WH`) is the **jacket** tint on the canvas
 (`jacket_color` on the physical cable edge). Conductor `color:` values are the
 individual strand strokes. `BK` / `WH` keep true black / white CSS; contrast on
 the dark UI comes from a thin light rim around the **conduit tube**, not from
-recoloring the conductors.
+recoloring the conductors. The sheath jacket is drawn on the exterior run and
+as a short stub into B/F bocas — not through the leaf to terminal strips.
 
 | Code | Color | Typical use |
 |------|-------|-------------|

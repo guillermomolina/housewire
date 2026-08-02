@@ -2760,10 +2760,13 @@
     return cleanOrthoPoly(out);
   }
 
+  /** Max length (px) of a terminal-only diagonal lead into a pin. */
+  const TERMINAL_DIAG_MAX = 36;
+
   /**
-   * Lead from a terminal pin into a lane point.
-   * Always stub (short) + single diagonal when not axis-aligned — never a
-   * Manhattan Z/C. Diagonals are allowed only on these terminal leads.
+   * Lead from a terminal pin into a nearby lane point.
+   * Short stub + diagonal only when the remaining gap is small; longer gaps
+   * use a single Manhattan L (never a multi-bend Z, never a long diagonal).
    */
   function pinToLanePts(pin, face, lanePt) {
     const p = {
@@ -2796,9 +2799,20 @@
       pts.push([t.x, t.y]);
       return pts;
     }
-    // Terminal-only diagonal (no Manhattan detour).
-    pts.push([t.x, t.y]);
-    return pts;
+    const rem = Math.hypot(from.x - t.x, from.y - t.y);
+    // Small terminal diagonal only — never boca→element diagonals.
+    if (rem <= TERMINAL_DIAG_MAX) {
+      pts.push([t.x, t.y]);
+      return pts;
+    }
+    const rest = orthoPtsPrefer(from, t, null);
+    for (let i = 1; i < rest.length; i++) {
+      const q = rest[i];
+      const prev = pts[pts.length - 1];
+      if (Math.hypot(prev[0] - q[0], prev[1] - q[1]) < 1e-6) continue;
+      pts.push([q[0], q[1]]);
+    }
+    return cleanOrthoPoly(pts);
   }
 
   /**
@@ -2838,8 +2852,9 @@
   }
 
   /**
-   * In-box hop tail: element → (B/F plane cell) → mouth (contour entry or
-   * an already lane-offset join point).
+   * In-box hop tail (centerline): element → (B/F plane cell) → mouth.
+   * Always Manhattan between mouth/plane and the pin stub — diagonals are
+   * applied later only as a short pinToLanePts onto an offset lane.
    * @returns {number[][]|null}
    */
   function hopEndpointTailPts(
@@ -2885,19 +2900,19 @@
     const attachFace =
       attach.face || elementAttachFace(elem, planePt, placeById);
     if (plane) {
-      // Pin → plane with terminal diagonal; plane → mouth stays Manhattan.
-      const toPlane = pinToLanePts(
-        [attach.x, attach.y],
+      const viaPlane = inboxRoutePts(
+        attach,
         attachFace,
-        [planePt.x, planePt.y]
+        planePt,
+        opFace,
+        prefer,
+        "element"
       );
       if (Math.hypot(planePt.x - mouth.x, planePt.y - mouth.y) < 1.5) {
-        return toPlane;
+        return viaPlane;
       }
-      const toMouth = orthoPtsPrefer(planePt, mouth, prefer);
-      return mergeOrthoPolys(toPlane, toMouth);
+      return mergeOrthoPolys(viaPlane, orthoPtsPrefer(planePt, mouth, prefer));
     }
-    // Contour opening: Manhattan into the mouth (no terminal diagonal).
     return inboxRoutePts(
       attach,
       attachFace,
@@ -3297,9 +3312,8 @@
           );
       const oriented = orientExteriorSubs(exteriors, startOp, endOp);
 
-      // Parallel offset ONLY on the exterior highway. Inbox tails are built
-      // per strand to the offset mouth (stub+diagonal into pins) so unique
-      // terminals never pick up a Manhattan Z from re-offset+rejoin.
+      // Parallel offset on exterior AND on Manhattan inbox spines. Pins rejoin
+      // with stub + short diagonal only (no boca→element diagonals).
       /** @type {number[][][]} */
       const exOff = [];
       for (const ext of oriented) {
@@ -3323,6 +3337,9 @@
         toSlot.slot,
         toSlot.count
       );
+      const startFace =
+        startAtt.face || elementAttachFace(a, startOp, placeById);
+      const endFace = endAtt.face || elementAttachFace(b, endOp, placeById);
 
       /** @type {number[][]|null} */
       let chain = null;
@@ -3330,44 +3347,63 @@
         const startJoin = exOff[0][0];
         const endJoin =
           exOff[exOff.length - 1][exOff[exOff.length - 1].length - 1];
-        const startTail = hopEndpointTailPts(
+        // Centerline inbox to the contour entry, then lane-offset the spine.
+        const startTailCtr = hopEndpointTailPts(
           a,
           startPlace,
           first.from_opening,
           placeById,
           fromSlot.slot,
           fromSlot.count,
-          fromPin,
-          startJoin
+          fromPin
         );
-        if (startTail && startTail.length >= 2) {
-          chain = startTail.map((p) => [p[0], p[1]]);
-        } else {
+        if (startTailCtr && startTailCtr.length >= 2) {
+          const startOff = parallel(startTailCtr);
+          if (startOff.length >= 2) {
+            startOff[startOff.length - 1] = [startJoin[0], startJoin[1]];
+            const head = pinToLanePts(
+              [startAtt.x, startAtt.y],
+              startFace,
+              startOff[0]
+            );
+            chain = mergeOrthoPolys(head, startOff);
+          }
+        }
+        if (!chain) {
           chain = pinToLanePts(
             [startAtt.x, startAtt.y],
-            startAtt.face || elementAttachFace(a, startOp, placeById),
+            startFace,
             startJoin
           );
         }
         for (const ext of exOff) {
           chain = mergeOrthoPolys(chain, ext);
         }
-        const endTail = hopEndpointTailPts(
+        const endTailCtr = hopEndpointTailPts(
           b,
           endPlace,
           last.to_opening,
           placeById,
           toSlot.slot,
           toSlot.count,
-          toPin,
-          endJoin
+          toPin
         );
-        if (endTail && endTail.length >= 2) {
-          chain = mergeOrthoPolys(chain, endTail.slice().reverse());
+        if (endTailCtr && endTailCtr.length >= 2) {
+          const endOff = parallel(endTailCtr);
+          if (endOff.length >= 2) {
+            endOff[endOff.length - 1] = [endJoin[0], endJoin[1]];
+            const head = pinToLanePts(
+              [endAtt.x, endAtt.y],
+              endFace,
+              endOff[0]
+            );
+            const endPart = mergeOrthoPolys(head, endOff);
+            chain = mergeOrthoPolys(chain, endPart.slice().reverse());
+          }
         } else {
           const lead = pinToLanePts(
             [endAtt.x, endAtt.y],
-            endAtt.face || elementAttachFace(b, endOp, placeById),
+            endFace,
             endJoin
           );
           chain = mergeOrthoPolys(chain, lead.slice().reverse());
@@ -3382,7 +3418,15 @@
           fromSlot.count,
           fromPin
         );
-        if (startTail) chain = startTail.map((p) => [p[0], p[1]]);
+        if (startTail) {
+          const startOff = parallel(startTail);
+          const head = pinToLanePts(
+            [startAtt.x, startAtt.y],
+            startFace,
+            startOff[0] || startTail[0]
+          );
+          chain = mergeOrthoPolys(head, startOff.length ? startOff : startTail);
+        }
         const endTail = hopEndpointTailPts(
           b,
           endPlace,
@@ -3393,9 +3437,19 @@
           toPin
         );
         if (endTail) {
+          const endOff = parallel(endTail);
+          const head = pinToLanePts(
+            [endAtt.x, endAtt.y],
+            endFace,
+            endOff[0] || endTail[0]
+          );
+          const endPart = mergeOrthoPolys(
+            head,
+            endOff.length ? endOff : endTail
+          );
           chain = chain
-            ? mergeOrthoPolys(chain, endTail)
-            : endTail.map((p) => [p[0], p[1]]);
+            ? mergeOrthoPolys(chain, endPart)
+            : endPart.map((p) => [p[0], p[1]]);
         }
       }
       if (!chain || chain.length < 2) return [];
@@ -3421,7 +3475,9 @@
     if (edge && isPlaneOpeningId(edge.to_opening) && edge.to) {
       keep.push(edge.to);
     }
-    const leafObs = placeObstacles(byId, keep, 2);
+    // inset 0: do not leave a border corridor that paints tube into the leaf
+    // toward terminal strips on side-opening ends.
+    const leafObs = placeObstacles(byId, keep, 0);
     return exteriorPathD(fullD, leafObs) || "";
   }
 
@@ -3449,7 +3505,9 @@
     /** @type {SVGElement[]} */
     const paths = [];
 
-    // Jacket: one translucent band spanning this cable's strand lanes.
+    // Jacket: exterior highway only (+ short B/F boca stubs). Never paint the
+    // sheath through a leaf to the terminal strip (that looked like a conduit
+    // reaching the Regleta).
     if (layout && wireIdx.length) {
       const laneInfos = wireIdx.map((wi) => layout.lane(edge, wi));
       const count = laneInfos[0]?.count || wireIdx.length;
@@ -3464,49 +3522,67 @@
         laneDist: midOff,
       });
       const jw = highwaySpanWidth(i1 - i0 + 1);
-      /** @type {string[]} */
-      const jacketKeep = [];
+      // Strict: clip through every leaf (no keep). B/F boca drawn separately.
+      const leafObs = placeObstacles(placeById, [], 0);
+      const jacketCss = wireColorCss(edge.jacket_color || "WH");
+      const paintJacketPiece = (piece) => {
+        if (!piece || piece.length < 2) return;
+        const jacket = el("path", {
+          class: "cable-jacket",
+          d: pointsToPathD(piece),
+        });
+        jacket.style.stroke = jacketCss;
+        jacket.style.strokeWidth = String(jw);
+        jacket.appendChild(
+          el(
+            "title",
+            null,
+            `${edgeName}${colors.length ? ` [${colors.join(",")}]` : ""}${
+              edge.jacket_color ? ` jacket ${edge.jacket_color}` : ""
+            }`
+          )
+        );
+        cablesG.appendChild(jacket);
+        paths.push(jacket);
+      };
+      for (const sub of jacketSubs) {
+        if (sub.length < 2) continue;
+        const clipped = exteriorPathD(pointsToPathD(sub), leafObs);
+        if (!clipped) continue;
+        for (const piece of pathDToSubpaths(clipped)) paintJacketPiece(piece);
+      }
+      // Short sheath into B/F plane boca (entry → plane), lane-mid offset.
+      const bocaStub = (place, openingId) => {
+        if (!place || !isPlaneOpeningId(openingId)) return;
+        const entry = planeContourEntryAbs(
+          place,
+          openingId,
+          openingId?.[0],
+          placeById
+        );
+        const plane = openingAnchorAbs(
+          place,
+          openingId,
+          openingId?.[0],
+          placeById
+        );
+        const spine = [
+          [entry.x, entry.y],
+          [plane.x, plane.y],
+        ];
+        const off =
+          Math.abs(midOff) < 1e-9 ? spine : offsetOrthoPts(spine, midOff);
+        paintJacketPiece(off);
+      };
       const hops = edge.conduit_hops || [];
       if (hops.length) {
         const first = hops[0];
         const last = hops[hops.length - 1];
-        if (isPlaneOpeningId(first.from_opening)) jacketKeep.push(first.from);
-        if (isPlaneOpeningId(last.to_opening)) jacketKeep.push(last.to);
-      } else {
-        if (isPlaneOpeningId(edge.from_opening) && edge.conduit_from) {
-          jacketKeep.push(edge.conduit_from);
-        }
-        if (isPlaneOpeningId(edge.to_opening) && edge.conduit_to) {
-          jacketKeep.push(edge.conduit_to);
-        }
-      }
-      const leafObs = placeObstacles(placeById, jacketKeep, 2);
-      const jacketCss = wireColorCss(edge.jacket_color || "WH");
-      for (const sub of jacketSubs) {
-        // Jacket follows the tube, including into B/F bocas.
-        if (sub.length < 2) continue;
-        const clipped = exteriorPathD(pointsToPathD(sub), leafObs);
-        if (!clipped) continue;
-        for (const piece of pathDToSubpaths(clipped)) {
-          if (piece.length < 2) continue;
-          const jacket = el("path", {
-            class: "cable-jacket",
-            d: pointsToPathD(piece),
-          });
-          jacket.style.stroke = jacketCss;
-          jacket.style.strokeWidth = String(jw);
-          jacket.appendChild(
-            el(
-              "title",
-              null,
-              `${edgeName}${colors.length ? ` [${colors.join(",")}]` : ""}${
-                edge.jacket_color ? ` jacket ${edge.jacket_color}` : ""
-              }`
-            )
-          );
-          cablesG.appendChild(jacket);
-          paths.push(jacket);
-        }
+        bocaStub(placeById[first.from], first.from_opening);
+        bocaStub(placeById[last.to], last.to_opening);
+      } else if (edge.from_opening && edge.to_opening) {
+        bocaStub(placeById[edge.conduit_from], edge.from_opening);
+        bocaStub(placeById[edge.conduit_to], edge.to_opening);
       }
     }
 

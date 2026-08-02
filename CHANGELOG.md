@@ -7,6 +7,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.9] — 2026-08-02
+
+### Fixed
+
+- Inbox tails are Manhattan again; diagonals only within 36px of a pin (no
+  boca→element diagonals). Lane offset applies to exterior and inbox spines.
+- Sheath jacket paints exterior + short B/F boca stubs only (no sheath through
+  a leaf to the Regleta). `WH` jacket uses high opacity so it reads white.
+- Tube clipping uses inset 0 so side-opening ends do not leave a painted
+  corridor into the leaf.
+- Route-quality tests detect long diagonals, Z/C, overlap, and true `WH`/`BK`
+  CSS.
+
 ## [0.34.8] — 2026-08-02
 
 ### Fixed

@@ -25,10 +25,42 @@ MIN_LANE_SEPARATION = LANE_PITCH - 0.75
 MAX_Z_LEG = 28.0
 # Short reverse stub treated as an unnecessary C (px).
 MAX_C_LEG = 18.0
+# Terminal-only diagonals may be this long; longer = boca→element bug.
+TERMINAL_DIAG_MAX = 36.0
 
 
 def _dist(a: Point, b: Point) -> float:
     return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
+
+
+def is_diagonal_segment(a: Point, b: Point) -> bool:
+    return abs(a[0] - b[0]) > 1e-6 and abs(a[1] - b[1]) > 1e-6
+
+
+def count_long_diagonals(
+    pts: Poly, *, max_ok: float = TERMINAL_DIAG_MAX
+) -> int:
+    """Count non-axis-aligned segments longer than ``max_ok`` (px)."""
+    if len(pts) < 2:
+        return 0
+    n = 0
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        if not is_diagonal_segment(a, b):
+            continue
+        if _dist(a, b) > max_ok:
+            n += 1
+    return n
+
+
+def max_diagonal_length(pts: Poly) -> float:
+    """Longest diagonal segment length, or 0 if none."""
+    best = 0.0
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        if is_diagonal_segment(a, b):
+            best = max(best, _dist(a, b))
+    return best
 
 
 def _seg_seg_distance(
@@ -152,11 +184,13 @@ def assess_bundle(
     min_separation: float = MIN_LANE_SEPARATION,
     allow_z: bool = False,
     allow_c: bool = False,
+    allow_long_diagonal: bool = False,
 ) -> list[str]:
     """Return human-readable problems for a parallel strand bundle.
 
     ``allow_z`` / ``allow_c``: set True only when several strands share one
     terminal and an intentional fan is expected.
+    ``allow_long_diagonal``: set True only in tests of the detector itself.
     """
     issues: list[str] = []
     if len(strands) >= 2 and strands_overlap(
@@ -173,6 +207,14 @@ def assess_bundle(
             n = count_c_jogs(poly)
             if n:
                 issues.append(f"strand {i}: {n} unnecessary C jog(s)")
+    if not allow_long_diagonal:
+        for i, poly in enumerate(strands):
+            n = count_long_diagonals(poly)
+            if n:
+                issues.append(
+                    f"strand {i}: {n} long diagonal(s) "
+                    f"(>{TERMINAL_DIAG_MAX:g}px; boca→element)"
+                )
     return issues
 
 
