@@ -1698,8 +1698,10 @@
   }
 
   /**
-   * mouth → inward stub → lateral fan. Separates lanes in free space AFTER
-   * exiting the boca (never by peeling through the tube wall).
+   * mouth → inward stub → lateral+depth fan. Separates lanes in free space
+   * AFTER exiting the boca (never by peeling through the tube wall).
+   * Depth along inward uses laneDist so tips do not share one latitude
+   * (Test_01 shared y=420 trunk when every tip sat on stub-Y).
    */
   function mouthFanPts(mouth, face, laneDist) {
     const mx = Array.isArray(mouth) ? mouth[0] : mouth.x;
@@ -1714,7 +1716,15 @@
     if (Math.abs(laneDist) < 1e-9) return pts;
     const latX = -oi.y;
     const latY = oi.x;
-    pts.push([stub.x + latX * laneDist, stub.y + latY * laneDist]);
+    // Always deeper into the box than the stub (never back toward the boca).
+    // Negative lanes get an extra half-pitch so tip latitudes stay unique.
+    const depthAlong =
+      Math.abs(laneDist) +
+      (laneDist < 0 ? Math.max(6, (STRAND_WIDTH + LANE_GAP) * 0.5) : 0);
+    pts.push([
+      stub.x + latX * laneDist + oi.x * depthAlong,
+      stub.y + latY * laneDist + oi.y * depthAlong,
+    ]);
     return pts;
   }
 
@@ -3186,10 +3196,11 @@
   /**
    * Join a terminal lead (pin→…→rail) to a mouth-fan tip without collapsing
    * onto a shared horizontal at rail-Y (Test_01 y=420 trunk).
-   * Prefer travel along the lead's lateral (rail.x / rail.y) first, then across
-   * at the fan-tip latitude — each lane keeps its own corridor.
+   * Always travel on the pin-face column/row first (N/S → rail.x, E/W →
+   * rail.y), then across at the fan-tip latitude — never pick the axis by
+   * which delta is larger (that recreated the shared rail-Y crawl).
    */
-  function joinLeadToFanTip(lead, fanTip) {
+  function joinLeadToFanTip(lead, fanTip, face) {
     if (!lead || lead.length < 1) {
       return fanTip ? [[fanTip[0], fanTip[1]]] : [];
     }
@@ -3200,18 +3211,28 @@
     }
     /** @type {number[][]} */
     const bridge = [[rail[0], rail[1]]];
-    // Match fan-tip latitude/longitude on the lead's column first.
-    if (Math.abs(rail[0] - fanTip[0]) >= Math.abs(rail[1] - fanTip[1])) {
-      // More horizontal travel: go vertical to fanTip.y on rail.x, then across.
+    const fo = faceOutwardDelta(face || "N");
+    const ns = Math.abs(fo.y) >= Math.abs(fo.x);
+    if (ns) {
+      // N/S pin: stay on rail.x down/up to tip.y, then across.
       if (Math.abs(rail[1] - fanTip[1]) > 1e-6) {
         bridge.push([rail[0], fanTip[1]]);
       }
-      bridge.push([fanTip[0], fanTip[1]]);
+      if (Math.abs(rail[0] - fanTip[0]) > 1e-6) {
+        bridge.push([fanTip[0], fanTip[1]]);
+      } else if (bridge.length === 1) {
+        bridge.push([fanTip[0], fanTip[1]]);
+      }
     } else {
+      // E/W pin: stay on rail.y across to tip.x, then along.
       if (Math.abs(rail[0] - fanTip[0]) > 1e-6) {
         bridge.push([fanTip[0], rail[1]]);
       }
-      bridge.push([fanTip[0], fanTip[1]]);
+      if (Math.abs(rail[1] - fanTip[1]) > 1e-6) {
+        bridge.push([fanTip[0], fanTip[1]]);
+      } else if (bridge.length === 1) {
+        bridge.push([fanTip[0], fanTip[1]]);
+      }
     }
     return mergeOrthoPolys(lead, bridge) || lead;
   }
@@ -4093,7 +4114,7 @@
         fromSlot.slot,
         fromSlot.count
       );
-      let head = joinLeadToFanTip(startLead, startFanRev[0]);
+      let head = joinLeadToFanTip(startLead, startFanRev[0], startFace);
       if (startFanRev.length > 1) {
         head = mergeOrthoPolys(head, startFanRev.slice(1)) || head;
       }
@@ -4111,7 +4132,7 @@
         toSlot.count
       );
       // pin → … → fan tip → stub → mouth, then reverse to mouth→…→pin.
-      let tailFromPin = joinLeadToFanTip(endLead, endFanTip);
+      let tailFromPin = joinLeadToFanTip(endLead, endFanTip, endFace);
       const fanToMouth = endFanFwd.slice().reverse(); // fan, stub, mouth
       if (fanToMouth.length > 1) {
         tailFromPin =

@@ -1340,14 +1340,22 @@ def mouth_fan_pts(
     *,
     stub: float = 14.0,
 ) -> list[Point]:
-    """mouth → inward stub → lateral fan (inbox separation after the boca)."""
+    """mouth → inward stub → lateral+depth fan (inbox separation after boca)."""
     mx, my = float(mouth[0]), float(mouth[1])
     ix, iy = float(inward[0]), float(inward[1])
     stub_pt = (mx + ix * stub, my + iy * stub)
     lx, ly = -iy, ix
     if abs(lane_dist) < 1e-9:
         return [(mx, my), stub_pt]
-    fan = (stub_pt[0] + lx * lane_dist, stub_pt[1] + ly * lane_dist)
+    # Always deeper into the box than the stub; negative lanes get a half-pitch
+    # so tip latitudes stay unique when |lane_dist| matches a positive twin.
+    depth_along = abs(lane_dist) + (
+        max(6.0, FAN_LATERAL_PITCH * 0.5) if lane_dist < 0 else 0.0
+    )
+    fan = (
+        stub_pt[0] + lx * lane_dist + ix * depth_along,
+        stub_pt[1] + ly * lane_dist + iy * depth_along,
+    )
     return [(mx, my), stub_pt, fan]
 
 
@@ -1468,8 +1476,10 @@ def mouth_fan_join_correct(
     return out
 
 
-def join_lead_to_fan_tip(lead: Poly, fan_tip: Point) -> list[Point]:
-    """Mirror of ``joinLeadToFanTip``: column-first bridge, no shared rail-Y."""
+def join_lead_to_fan_tip(
+    lead: Poly, fan_tip: Point, face: str = "N"
+) -> list[Point]:
+    """Mirror of ``joinLeadToFanTip``: face column/row first, no rail-Y crawl."""
     if not lead:
         return [(float(fan_tip[0]), float(fan_tip[1]))]
     out: list[Point] = [(float(p[0]), float(p[1])) for p in lead]
@@ -1477,14 +1487,18 @@ def join_lead_to_fan_tip(lead: Poly, fan_tip: Point) -> list[Point]:
     rail = out[-1]
     if _dist(rail, (fx, fy)) < 1e-6:
         return out
-    if abs(rail[0] - fx) >= abs(rail[1] - fy):
+    fo = _face_axes(face)[0]
+    ns = abs(fo[1]) >= abs(fo[0])
+    if ns:
         if abs(rail[1] - fy) > 1e-6:
             out.append((rail[0], fy))
-        out.append((fx, fy))
+        if abs(out[-1][0] - fx) > 1e-6 or abs(out[-1][1] - fy) > 1e-6:
+            out.append((fx, fy))
     else:
         if abs(rail[0] - fx) > 1e-6:
             out.append((fx, rail[1]))
-        out.append((fx, fy))
+        if abs(out[-1][0] - fx) > 1e-6 or abs(out[-1][1] - fy) > 1e-6:
+            out.append((fx, fy))
     return out
 
 

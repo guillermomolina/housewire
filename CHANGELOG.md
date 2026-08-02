@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.31] — 2026-08-02
+
+### Fixed
+
+- ``joinLeadToFanTip`` always follows the pin-face column/row first (no
+  |dx|-vs-|dy| axis pick that rebuilt the shared rail-Y trunk).
+- Mouth fan tips: lateral offset plus inward depth (unique latitudes; never
+  back toward the boca).
+
 ## [0.34.30] — 2026-08-02
 
 ### Fixed

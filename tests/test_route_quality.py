@@ -1280,7 +1280,7 @@ class TestBipolarVAndLiftPreservesDiagonal(unittest.TestCase):
         ]
         tips = [(100.0, 120.0), (100.0, 100.0), (100.0, 80.0)]
         bad = shared_rail_y_join_anti_pattern(leads, tips)
-        good = [join_lead_to_fan_tip(leads[i], tips[i]) for i in range(3)]
+        good = [join_lead_to_fan_tip(leads[i], tips[i], "N") for i in range(3)]
         rail_y = leads[0][-1][1]
         tip_xs = {float(t[0]) for t in tips}
 
@@ -1297,7 +1297,7 @@ class TestBipolarVAndLiftPreservesDiagonal(unittest.TestCase):
             return False
 
         self.assertTrue(all(horiz_at_rail_toward_tip(p) for p in bad), msg=bad)
-        # Column-first join: when tip.y != rail_y, do not crawl on rail_y.
+        # Face column-first: when tip.y != rail_y, do not crawl on rail_y.
         for lead, tip, poly in zip(leads, tips, good):
             if abs(float(tip[1]) - rail_y) < 0.5:
                 continue
@@ -1308,6 +1308,16 @@ class TestBipolarVAndLiftPreservesDiagonal(unittest.TestCase):
                 [(float(p[0]), float(p[1])) for p in poly],
                 msg=poly,
             )
+
+    def test_mouth_fan_tips_have_distinct_depths(self) -> None:
+        from housewire.ui.route_quality import highway_lane_offset, mouth_fan_pts
+
+        mouth = (200.0, 200.0)
+        inward = (0.0, 1.0)
+        dists = [highway_lane_offset(i, 3) for i in range(3)]
+        tips = [mouth_fan_pts(mouth, inward, d)[-1] for d in dists]
+        ys = {round(t[1], 3) for t in tips}
+        self.assertGreaterEqual(len(ys), 2, msg=tips)
 
 
 if __name__ == "__main__":
