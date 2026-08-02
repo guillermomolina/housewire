@@ -1860,8 +1860,25 @@
     };
     if (fromPlane || toPlane) {
       // Cross the contour at a nudged entry so B-approach does not sit on N1.
+      // Interior legs (plane cell ↔ contour entry) must NOT use face stubs:
+      // orthoRoute stubs go outward and paint a dead-end spur (ghost tube).
       let cur = p1;
       let curFace = fromFace;
+      const appendInside = (fromPt, toPt) => {
+        const part = orthoRoute(
+          fromPt,
+          toPt,
+          null,
+          null,
+          occupied,
+          obstacles,
+          stayBounds,
+          hugRects
+        );
+        chain = chain
+          ? mergeOrthoPolys(chain, part)
+          : part.map((p) => [p[0], p[1]]);
+      };
       if (fromPlane) {
         const entry = planeContourEntryAbs(
           a,
@@ -1869,7 +1886,7 @@
           edge.from_opening?.[0],
           byId
         );
-        append(p1, entry, fromFace, fromFace);
+        appendInside(p1, entry);
         cur = entry;
         curFace = fromFace;
       }
@@ -1881,17 +1898,19 @@
           byId
         );
         append(cur, entry, curFace, toFace);
-        append(entry, p2, toFace, toFace);
+        appendInside(entry, p2);
       } else {
         append(cur, p2, curFace, toFace);
       }
     } else {
       append(p1, p2, fromFace, toFace);
     }
-    const pts = chain || [
-      [p1.x, p1.y],
-      [p2.x, p2.y],
-    ];
+    const pts = stripOutAndBack(
+      chain || [
+        [p1.x, p1.y],
+        [p2.x, p2.y],
+      ]
+    );
     return { d: pointsToPathD(pts), segs: segsFromPoints(pts) };
   }
 

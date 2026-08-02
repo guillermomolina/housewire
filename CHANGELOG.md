@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.4] — 2026-08-02
+
+### Fixed
+
+- B/F conduit legs inside a leaf no longer use outward face stubs (removed
+  the dead-end “ghost” tube spur at light points).
+
 ## [0.34.3] — 2026-08-02
 
 ### Changed
