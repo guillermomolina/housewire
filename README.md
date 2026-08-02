@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src/housewire/ui/static/logo.svg" alt="HouseWire" width="96" height="96">
+</p>
+
 # HouseWire
 
 Document electrical installations in YAML (`schema: house/v1`) and edit them
