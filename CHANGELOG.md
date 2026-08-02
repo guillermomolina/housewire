@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.24] — 2026-08-02
+
+### Fixed
+
+- Bipolar / multi-cable terminal V: ``liftOffsetSpineFromPin`` no longer runs
+  ``ensureOrthoPoly`` on an existing pin→tip diagonal (that flattened both
+  arms into perpendicular stubs). Hop cleaning re-applies
+  ``preserveTerminalVLead`` after mouth Manhattan strips.
+
+### Added
+
+- Tests for bipolar V, ``ensure_ortho_poly`` anti-pattern, lift preserving V,
+  and stacked inbox corridor overlap detection.
+
 ## [0.34.23] — 2026-08-02
 
 ### Changed

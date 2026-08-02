@@ -2957,6 +2957,9 @@
    * Push the first offset-spine vertex off the element face.
    * Offsetting a pin-on-face start yields (pin±lane, faceY) — a segment that
    * paints along the regleta border. Lift that point outward first.
+   *
+   * Multi-cable V (pin→tip diagonal) must not be rewritten to Manhattan —
+   * ``ensureOrthoPoly`` would collapse both arms onto the face normal.
    */
   function liftOffsetSpineFromPin(offPts, pin, face, minOut) {
     if (!offPts || offPts.length < 1) {
@@ -2971,14 +2974,23 @@
     /** @type {number[][]} */
     const out = offPts.map((q) => [q[0], q[1]]);
     if (!fo.x && !fo.y) return out;
+    // Preserve terminal V: first segment from the pin is already diagonal.
+    if (out.length >= 2) {
+      const atPin =
+        Math.hypot(out[0][0] - p.x, out[0][1] - p.y) < 1.5;
+      const diag =
+        Math.abs(out[0][0] - out[1][0]) > 1e-6 &&
+        Math.abs(out[0][1] - out[1][1]) > 1e-6;
+      if (atPin && diag) return out;
+    }
     const along =
       (out[0][0] - p.x) * fo.x + (out[0][1] - p.y) * fo.y;
-    if (along < want) {
-      const need = want - along;
-      out[0][0] += fo.x * need;
-      out[0][1] += fo.y * need;
-    }
-    // Lift can make the first segment diagonal — openings/spines stay Manhattan.
+    if (along >= want) return out;
+    const need = want - along;
+    out[0][0] += fo.x * need;
+    out[0][1] += fo.y * need;
+    // Lift can make the first segment diagonal — force Manhattan only when
+    // we actually moved a non-V spine point (single-cable / offset start).
     return ensureOrthoPoly(out);
   }
 
@@ -3924,17 +3936,17 @@
       const endFan = mouthFanPts(endOp, endMouthFace, laneDist);
       // Toward mouth: fan → stub → mouth
       const startFanRev = startFan.slice().reverse();
-      let head = pinToLanePts(
+      const startLead = pinToLanePts(
         [startAtt.x, startAtt.y],
         startFace,
         startFanRev[0],
         fromSlot.slot,
         fromSlot.count
       );
-      head = mergeLeadToSpine(head, startFanRev, startFace);
+      let head = mergeLeadToSpine(startLead, startFanRev, startFace);
 
       let tail = endFan.map((p) => [p[0], p[1]]);
-      const endHead = pinToLanePts(
+      const endLead = pinToLanePts(
         [endAtt.x, endAtt.y],
         endFace,
         tail[tail.length - 1],
@@ -3943,7 +3955,7 @@
       );
       // Attach pin lead at the fan end, then reverse so path is mouth→…→pin
       tail = mergeLeadToSpine(
-        endHead,
+        endLead,
         tail.slice().reverse(),
         endFace
       ).reverse();
@@ -3969,6 +3981,16 @@
       cleaned = ensureManhattanNearPoint(cleaned, startOp, 48, pins);
       cleaned = ensureManhattanNearPoint(cleaned, endOp, 48, pins);
       cleaned = stripShortZJogs(stripOutAndBack(cleaned, mouths));
+      // Strip / mouth Manhattan must not collapse multi-cable V at the pins.
+      if (fromSlot.count > 1) {
+        cleaned = preserveTerminalVLead(startLead, cleaned);
+      }
+      if (toSlot.count > 1) {
+        cleaned = preserveTerminalVLead(
+          endLead,
+          cleaned.slice().reverse()
+        ).reverse();
+      }
       // Do NOT forceThroughMouth / convergeLaneToMouth on the full pin→pin
       // path: that rewrites path ends (the pins) onto the mouths and peels
       // mid-tube lanes out of the conduit. Mouth converge is tube-only above.

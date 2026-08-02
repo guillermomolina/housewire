@@ -1100,5 +1100,92 @@ class TestMouthExitAndTubeEnvelope(unittest.TestCase):
         self.assertFalse(any("overlap" in x for x in issues), msg=issues)
 
 
+class TestBipolarVAndLiftPreservesDiagonal(unittest.TestCase):
+    """Bipolar terminals must keep a V; ensureOrthoPoly must not flatten it."""
+
+    def test_bipolar_terminal_v_leads_both_diagonal(self) -> None:
+        from housewire.ui.route_quality import (
+            shared_terminal_both_arms_diagonal,
+            strands_merge_before_pin,
+            terminal_entry_is_perpendicular,
+            terminal_v_lead,
+        )
+
+        pin = (200.0, 160.0)
+        face = "N"
+        a = terminal_v_lead(pin, face, (160.0, 100.0), slot=0, slot_count=2)
+        b = terminal_v_lead(pin, face, (240.0, 100.0), slot=1, slot_count=2)
+        self.assertFalse(terminal_entry_is_perpendicular(a, pin))
+        self.assertFalse(terminal_entry_is_perpendicular(b, pin))
+        self.assertTrue(shared_terminal_both_arms_diagonal([a, b], pin))
+        self.assertFalse(strands_merge_before_pin([a, b], pin))
+        issues = assess_bundle(
+            [a, b],
+            allow_terminal_v=True,
+            allow_crossings=True,
+            allow_z=True,
+            shared_terminals=[(pin, face, [a, b])],
+        )
+        self.assertFalse(
+            any(
+                "asymmetric" in x or "perpendicular" in x or "merge before" in x
+                for x in issues
+            ),
+            msg=issues,
+        )
+
+    def test_ensure_ortho_poly_destroys_v_anti_pattern(self) -> None:
+        """Always running ensureOrthoPoly on a V chain (pre-0.34.24 bug)."""
+        from housewire.ui.route_quality import (
+            ensure_ortho_poly,
+            shared_terminal_both_arms_diagonal,
+            terminal_v_lead,
+        )
+
+        pin = (200.0, 160.0)
+        face = "N"
+        a = terminal_v_lead(pin, face, (160.0, 100.0), slot=0, slot_count=2)
+        b = terminal_v_lead(pin, face, (240.0, 100.0), slot=1, slot_count=2)
+        broken = [ensure_ortho_poly(a), ensure_ortho_poly(b)]
+        self.assertFalse(
+            shared_terminal_both_arms_diagonal(broken, pin),
+            msg=broken,
+        )
+
+    def test_lift_offset_spine_preserves_bipolar_v(self) -> None:
+        from housewire.ui.route_quality import (
+            lift_offset_spine_from_pin,
+            shared_terminal_both_arms_diagonal,
+            terminal_v_lead,
+        )
+
+        pin = (200.0, 160.0)
+        face = "N"
+        a = terminal_v_lead(pin, face, (160.0, 100.0), slot=0, slot_count=2)
+        b = terminal_v_lead(pin, face, (240.0, 100.0), slot=1, slot_count=2)
+        lifted = [
+            lift_offset_spine_from_pin(a, pin, face),
+            lift_offset_spine_from_pin(b, pin, face),
+        ]
+        self.assertTrue(
+            shared_terminal_both_arms_diagonal(lifted, pin),
+            msg=lifted,
+        )
+
+    def test_inbox_stacked_corridor_still_flagged(self) -> None:
+        """Two strands on the same inbox L (screenshot Caja / Lampara)."""
+        shared = [
+            (100.0, 200.0),
+            (100.0, 140.0),
+            (180.0, 140.0),
+            (180.0, 100.0),
+        ]
+        a = list(shared)
+        b = list(shared)
+        self.assertTrue(strands_overlap([a, b]))
+        issues = assess_bundle([a, b], min_separation=MIN_LANE_SEPARATION)
+        self.assertTrue(any("overlap" in x for x in issues), msg=issues)
+
+
 if __name__ == "__main__":
     unittest.main()

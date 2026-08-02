@@ -284,6 +284,62 @@ def terminal_v_lead(
     return manhattan_join_end([pin, tip, rail], lane_pt, face=face)
 
 
+def ensure_ortho_poly(pts: Poly) -> list[Point]:
+    """Force consecutive vertices onto an orthogonal chain (mirrors app.js).
+
+    Inserts axis-aligned corners between diagonal pairs. Destructive for
+    intentional terminal V diagonals — callers must skip those.
+    """
+    if len(pts) < 2:
+        return [(float(p[0]), float(p[1])) for p in pts]
+    out: list[Point] = [(float(pts[0][0]), float(pts[0][1]))]
+    for p in pts[1:]:
+        q = (float(p[0]), float(p[1]))
+        last = out[-1]
+        if _dist(last, q) < 1e-9:
+            continue
+        if abs(last[0] - q[0]) < 1e-9 or abs(last[1] - q[1]) < 1e-9:
+            out.append(q)
+            continue
+        # Prefer horizontal-then-vertical (same default as many UI joins).
+        out.append((q[0], last[1]))
+        out.append(q)
+    clean: list[Point] = []
+    for p in out:
+        if not clean or _dist(clean[-1], p) > 1e-9:
+            clean.append(p)
+    return clean
+
+
+def lift_offset_spine_from_pin(
+    pts: Poly,
+    pin: Point,
+    face: str,
+    *,
+    min_out: float = 10.0,
+) -> list[Point]:
+    """Mirror of ``liftOffsetSpineFromPin`` — preserves pin→tip V diagonals.
+
+    The 0.34.22 bug always ran ``ensure_ortho_poly`` and collapsed bipolar V
+    arms into perpendicular stubs.
+    """
+    if len(pts) < 1:
+        return []
+    out: list[Point] = [(float(p[0]), float(p[1])) for p in pts]
+    out_dir, _lat = _face_axes(face)
+    if out_dir == (0.0, 0.0):
+        return out
+    if len(out) >= 2 and _dist(out[0], pin) < 1.5:
+        if is_diagonal_segment(out[0], out[1]):
+            return out
+    along = (out[0][0] - pin[0]) * out_dir[0] + (out[0][1] - pin[1]) * out_dir[1]
+    if along >= min_out:
+        return out
+    need = min_out - along
+    out[0] = (out[0][0] + out_dir[0] * need, out[0][1] + out_dir[1] * need)
+    return ensure_ortho_poly(out)
+
+
 def strands_merge_before_pin(
     strands: Sequence[Poly],
     pin: Point,
