@@ -2999,7 +2999,7 @@
           class: "cable-jacket",
           d: pointsToPathD(sub),
         });
-        jacket.setAttribute("stroke-width", String(jw));
+        jacket.style.strokeWidth = String(jw);
         jacket.appendChild(
           el(
             "title",
@@ -3074,7 +3074,7 @@
         const lanes = conduitLaneHint(item.edge, graph.cable_edges || []);
         const roadW = conduitRoadWidth(n, lanes);
         const tube = item.paths[0];
-        if (tube) tube.setAttribute("stroke-width", String(roadW));
+        if (tube) tube.style.strokeWidth = String(roadW);
       }
     }
     // Rebuild cable layers (jacket + strands) from scratch.
@@ -3464,7 +3464,7 @@
       const lanes = conduitLaneHint(edge, graph.cable_edges || []);
       const roadW = conduitRoadWidth(n, lanes);
       const tube = el("path", { class: "edge-tube", d });
-      tube.setAttribute("stroke-width", String(roadW));
+      tube.style.strokeWidth = String(roadW);
       const core = el("path", { class: "edge-tube-core", d });
       tube.appendChild(el("title", null, title));
       core.appendChild(el("title", null, title));

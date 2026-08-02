@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.9] — 2026-08-02
+
+### Fixed
+
+- Conduit tube and cable jacket widths are applied via inline style so CSS
+  no longer forces a fixed stroke; road width follows contained strand count.
+
 ## [0.32.8] — 2026-08-02
 
 ### Fixed

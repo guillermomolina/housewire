@@ -1194,7 +1194,7 @@ button:hover {
 .edge-tube {
   fill: none;
   stroke: #9da5b0;
-  stroke-width: 8;
+  /* Width set in JS from contained strand count (presentation attrs lose to CSS). */
   stroke-opacity: 0.2;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -1214,7 +1214,7 @@ button:hover {
 .cable-jacket {
   fill: none;
   stroke: #e6edf3;
-  stroke-width: 4;
+  /* Width set in JS from jacket lane span. */
   stroke-opacity: 0.28;
   stroke-linejoin: round;
   stroke-linecap: round;
