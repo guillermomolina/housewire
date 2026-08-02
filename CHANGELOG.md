@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.6] — 2026-08-02
+
+### Added
+
+- Parallel live route E2E via ``pytest-xdist`` (``make test`` /
+  ``make test-route-e2e`` use ``-n 4 --dist loadfile``; override with
+  ``E2E_WORKERS=N``). Smoke target ``make test-route-e2e-smoke``.
+
 ## [0.35.5] — 2026-08-02
 
 ### Changed

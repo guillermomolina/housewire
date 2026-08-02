@@ -6,7 +6,10 @@ export PLAYWRIGHT_BROWSERS_PATH
 # Local clone of housewire-catalog (optional); falls back to git via extras.
 CATALOG_LOCAL := catalogs/default
 
-.PHONY: all prepare install test test-route-e2e
+# Parallel workers for live route E2E (each spins serve + Chromium).
+E2E_WORKERS ?= 4
+
+.PHONY: all prepare install test test-route-e2e test-route-e2e-smoke
 
 # Editable install with dev tools + UI + examples + catalog.
 EXTRAS := .[dev,ui,examples,catalog]
@@ -27,9 +30,20 @@ prepare:
 
 all:
 
+# Unit/integration first; live route E2E in parallel (xdist).
 test:
-	$(PYTHON) -m pytest tests -q
+	$(PYTHON) -m pytest tests --ignore=tests/route_e2e -q
+	$(PYTHON) -m pytest tests/route_e2e -q -n $(E2E_WORKERS) --dist loadfile
 
-# Live route E2E only (needs Chromium from ``make install``).
+# Full live route suite (Chromium from ``make install``).
 test-route-e2e:
-	$(PYTHON) -m pytest tests/route_e2e -v
+	$(PYTHON) -m pytest tests/route_e2e -v -n $(E2E_WORKERS) --dist loadfile
+
+# Cheap PR smoke: detectors + a few representative sites.
+test-route-e2e-smoke:
+	$(PYTHON) -m pytest \
+		tests/route_e2e/test_invariants_unit.py \
+		tests/route_e2e/test_route_02.py \
+		tests/route_e2e/test_route_08.py \
+		tests/route_e2e/test_route_21.py \
+		-v -n $(E2E_WORKERS) --dist loadfile

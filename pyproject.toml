@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "housewire"
-version = "0.35.5"
+version = "0.35.6"
 description = "Document home electrical installations (house/v2) with an interactive UI and shell"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,6 +23,7 @@ dev = [
     "build",
     "wheel",
     "pytest>=8.0",
+    "pytest-xdist>=3.5",
     "httpx2>=2.0",
     "playwright>=1.40",
     "housewire-catalog @ git+https://github.com/guillermomolina/housewire-catalog.git",
@@ -47,3 +48,10 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 housewire = ["ui/static/*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "route_e2e: live Playwright route canvas checks (parallel-safe, heavy)",
+]
+# Cap workers for Chromium+serve memory; override with -n N.
+addopts = []
