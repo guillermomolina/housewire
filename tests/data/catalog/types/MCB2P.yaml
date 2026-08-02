@@ -6,27 +6,23 @@ description_es: >
   Magnetotermico bipolar (2P). Aqui el Moeller C50/2 hace de IGA.
   No es un IGP (interruptor de corte sin proteccion magnetotermica).
 qet_hint: mcb_2P
-# 1/2 neutro in/out; 3/4 fase in/out.
-# terminal_pairs: una fila visual por polo (entrada izquierda, salida derecha).
+# Face-cell ids: N1/S1 neutro, N2/S2 fase.
 terminal_grid:
   NS: 2
 terminals:
-  "1":
+  N1:
     label: "1"
     direction: in
     role: neutral
-  "2":
+  S1:
     label: "2"
     direction: out
     role: neutral
-  "3":
+  N2:
     label: "3"
     direction: in
     role: phase
-  "4":
+  S2:
     label: "4"
     direction: out
     role: phase
-terminal_pairs:
-  - [1, 2]
-  - [3, 4]

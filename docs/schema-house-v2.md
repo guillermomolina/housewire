@@ -60,18 +60,18 @@ cables:
     type: Conductor
     color: GY
     section: "2.5 mm2"
-    from: Caja_derivacion_4/Regleta_1.3
-    to: Enchufe_1/Socket.L
+    from: Caja_derivacion_4/Regleta_1.N3
+    to: Enchufe_1/Socket.N1
   PE:
     type: Conductor
     color: GNYE
-    from: Caja_derivacion_4/Regleta_1.2
-    to: Enchufe_1/Socket.PE
+    from: Caja_derivacion_4/Regleta_1.N2
+    to: Enchufe_1/Socket.N2
   N:
     type: Conductor
     color: BU
-    from: Caja_derivacion_4/Regleta_1.1
-    to: Enchufe_1/Socket.N
+    from: Caja_derivacion_4/Regleta_1.N1
+    to: Enchufe_1/Socket.N3
 ```
 
 `house/v1` documents (`connections:`, separate `conduits:`, multi-color cable bags)
@@ -273,10 +273,12 @@ elements:
     label: LUZ
     notes: "..."
     terminals:                # optional; merges over catalog
-      "1": { label: "" }
+      N1: { label: "1" }
 ```
 
-Terminal fields: `label`, `direction` (`in` | `out` | `inout`), `role`.
+Terminal **id** = face-cell token (`N1`, `S2`, …) — same grammar as openings.
+Optional `name` / `label` / `role` are display metadata; conductor `from`/`to`
+store the id. The UI shows `label`/`name` when present.
 
 ### Terminal grid (canvas layout)
 
@@ -284,55 +286,55 @@ Same face-grid grammar as location `opening_grid`. Declared on the catalog
 type (and optionally overridden on the instance):
 
 ```yaml
-# catalog MCB2P — 2 inputs on N, 2 outputs on S
+# catalog MCB2P — N1/S1 and N2/S2
 terminal_grid:
   NS: 2
+terminals:
+  N1: { label: "1", direction: in, role: neutral }
+  S1: { label: "2", direction: out, role: neutral }
+  N2: { label: "3", direction: in, role: phase }
+  S2: { label: "4", direction: out, role: phase }
 
-# instance: 6-way strip (3 is the catalog default)
+# instance: 6-way strip (N-side pins; NS grid draws both faces)
 Regleta_1:
   type: TerminalStrip
   terminal_grid: { NS: 6 }
   terminals:
-    "1": { direction: inout }
+    N1: { direction: inout }
     # …
-    "6": { direction: inout }
+    N6: { direction: inout }
 ```
 
 - `NS: 2` ≡ `N: 2` **and** `S: 2` (not “2 total”).
 - `N: 2` ≡ only the north face.
-- Cell ids: `N1`, `S2`, `W1`, … (same tokens as openings).
-- Pins map to cells via `terminal_pairs` (column = pair index; first pin →
-  entry face, second → exit) or, for `inout`, one column shared by both faces.
-  The canvas routes each connection pin to that cell.
-
-Catalog `terminal_pairs` pairs in/out pins for canvas layout only (not
-electrical continuity).
+- Pin id **is** the cell id; `inout` + NS also attaches the opposite face
+  (`N1` → cells `[N1, S1]`). There is no `terminal_pairs`.
 
 ### Catalog element types
 
 | type | Role |
 |------|------|
-| `MCB` | 1P+N miniature circuit breaker. Pins 1→2 (phase), 3→4 (N) |
+| `MCB` | 1P+N MCB. `N1`→`S1` (phase), `N2`→`S2` (N); labels on casing |
 | `MCB2P` | 2-pole MCB (e.g. main breaker) |
-| `RCD` | Residual-current device. Pins 1→2 (phase), 3→4 (N) |
-| `Supply` | Incoming supply (L + N) |
-| `PETerminal` | PE bar / earth terminal strip |
-| `EarthElectrode` | Earth electrode |
+| `RCD` | RCD. `N1`→`S1` (phase), `N2`→`S2` (N) |
+| `Supply` | Incoming supply (`S1`/`S2`, labels L/N) |
+| `PETerminal` | PE bar (`N1`, label PE) |
+| `EarthElectrode` | Earth electrode (`S1`, label PE) |
 | `PowerSupply` | AC/DC supply (e.g. intercom) |
-| `Intercom` | Door phone / video door phone (DC +/−) |
-| `TerminalStrip` | Terminal strip in a junction box |
-| `Socket` | Schuko / 2P+E outlet |
+| `Intercom` | Door phone / video door phone (`N1`/`N2`, labels +/−) |
+| `TerminalStrip` | Strip; pins `N1`…`Nn` with `NS` grid |
+| `Socket` | Schuko (`N1`/`N2`/`N3`, labels L/PE/N) |
 | `Switch` | Switch mechanism; subtypes `unipolar`, `crossover`, `intermediate` |
-| `Luminaire` | Lamp / pendant (default terminals 1–3) |
-| `Relay` | Smart relay / Zigbee switch (`N`, `LIn`, `LOut`, `S1`, `S2`; subtypes `zbmini_r2`, `mini_zbd`) |
+| `Luminaire` | Lamp / pendant (default `N1`–`N3`) |
+| `Relay` | Smart relay; face-cell pins (see catalog subtypes) |
 
 **Switch subtypes**
 
 | subtype | Terminals |
 |---------|-----------|
-| `unipolar` (default) | `1`, `2` |
-| `crossover` (3-way) | `C` (common), `1`, `2` (travellers) |
-| `intermediate` | `1`–`4` |
+| `unipolar` (default) | `N1`, `S1` (labels 1, 2) |
+| `crossover` (3-way) | `N1`/`N2`/`N3` (labels C, 1, 2) |
+| `intermediate` | `N1`/`S1`/`N2`/`S2` |
 
 ## Openings (`JunctionBox`, `DeviceBox`, `LightPoint`, `Panel`)
 
@@ -452,7 +454,7 @@ cables:
 
 - **Opening** (`N1`, `B1-1`): local geometry. Used in conduit `from` / `to`.
 - **Conduit**: tube between locations (`from: A.N1` → `to: B.S1`).
-- **Terminal** (`Regleta.1`): electrical connection inside the box.
+- **Terminal** (`Regleta.N1`): electrical connection inside the box.
 
 ## Cables map (`cables:`)
 
@@ -483,19 +485,19 @@ cables:
     type: Conductor
     color: BN
     section: "1.5 mm2"
-    from: Caja_A/Regleta.1
-    to: Caja_B/Socket.L
+    from: Caja_A/Regleta.N1
+    to: Caja_B/Socket.N1
   N:
     type: Conductor
     color: BU
     section: "1.5 mm2"
-    from: Caja_A/Regleta.2
-    to: Caja_B/Socket.N
+    from: Caja_A/Regleta.N2
+    to: Caja_B/Socket.N3
   PE:
     type: Conductor
     color: GNYE
-    from: Caja_A/Regleta.3
-    to: Caja_B/Socket.PE
+    from: Caja_A/Regleta.N3
+    to: Caja_B/Socket.N2
 ```
 
 **Ownership:** a place node owns the `cables` entries it declares. Conductor
@@ -552,7 +554,7 @@ add socket Outlet_5 --from Junction_2.N1 --strip Regleta
 
 add lamp Lamp_3 --from Junction_3.S1 --strip Regleta --pins 6,5,2
 add feed Linea_A_a_B --from Junction_4.E1 --to Junction_3.N1 \
-  --from-pin Regleta_2.1 --to-pin Regleta.1 --colors BK
+  --from-pin Regleta_2.1 --to-pin Regleta.N1 --colors BK
 ```
 
 ### Pending runs (incremental capture)
@@ -576,7 +578,7 @@ cd Planta_baja/Recibidor/Cuadro_General
 open S2 1.5 --colors BN,BU
 claim OPEN_Linea_01 --enter N1 --exit E2
 land OPEN_Linea_01 --from 'Cuadro_General/MT.[2, 3]' \
-  --to 'Caja_derivacion_1/Regleta.[1, 2]' --as Linea_CG_a_CD1
+  --to 'Caja_derivacion_1/Regleta.[N1, N2]' --as Linea_CG_a_CD1
 ```
 
 Status lives on the open Cable/Conductor notes (`OPEN_` ids). No separate
@@ -596,12 +598,12 @@ Conductor endpoints declared on a place may only refer to elements in **that
 place and its nested sublocations** (paths relative to the current place).
 
 - Local: `MT_Luces.1`
-- Sublocation: `Cuadro_General/Fuente_portero.+`
-- Absolute **within the same tree**: `/Parking/Caja_derivacion_1/Regleta.1`
+- Sublocation: `Cuadro_General/Fuente_portero.S1`
+- Absolute **within the same tree**: `/Parking/Caja_derivacion_1/Regleta.N1`
 
 Not allowed (lift the link to the common ancestor):
 
-- `../Salon/Caja_Luces.L` (walks upward)
+- `../Salon/Caja_Luces.N1` (walks upward)
 - sibling paths declared inside the wrong place
 
 Contained Cable/Conductor ids referenced by a Conduit must be defined in the

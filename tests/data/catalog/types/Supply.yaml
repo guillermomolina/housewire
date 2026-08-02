@@ -7,11 +7,11 @@ qet_hint: supply_in
 terminal_grid:
   S: 2
 terminals:
-  L:
+  S1:
     label: L
     direction: out
     role: phase
-  N:
+  S2:
     label: N
     direction: out
     role: neutral

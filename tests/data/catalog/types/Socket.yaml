@@ -7,15 +7,15 @@ qet_hint: socket_schuko
 terminal_grid:
   N: 3
 terminals:
-  L:
+  N1:
     label: L
     direction: in
     role: phase
-  N:
-    label: N
-    direction: in
-    role: neutral
-  PE:
+  N2:
     label: PE
     direction: in
     role: pe
+  N3:
+    label: N
+    direction: in
+    role: neutral

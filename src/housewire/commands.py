@@ -42,7 +42,7 @@ HELP_TEXT = """HouseWire shell commands:
                                nests under current place elements: (memory → save)
                                NAME with spaces → technical id + automatic label
                                --name = short working name (canvas); --label = human text
-  add socket NAME --from BOX.Op --strip ELEMENT [--pins 3,2,1]
+  add socket NAME --from BOX.Op --strip ELEMENT [--pins N3,N2,N1]
                                [--to-opening N1] [--colors GY,GNYE,BU] [--section 2.5]
                                [--label ...] [--notes …]
                                DeviceBox+Socket + Cable/Conductor+Conduit (run from parent)

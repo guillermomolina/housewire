@@ -60,7 +60,7 @@ class TestCableCatalog(unittest.TestCase):
                     "subtype": "power",
                     "section": "1.5 mm2",
                     "color": "BN",
-                    "from": "A.L",
+                    "from": "A.N1",
                     "to": "A.N",
                 },
                 "L1": {

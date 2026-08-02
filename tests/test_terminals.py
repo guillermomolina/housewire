@@ -22,34 +22,34 @@ class TestTerminalGrid(unittest.TestCase):
         self.assertEqual(grid["N"], (2, 1))
         self.assertNotIn("S", grid)
 
-    def test_mcb2p_collapse_mapping(self) -> None:
+    def test_face_cell_pins_map_to_self(self) -> None:
         terminals = {
-            "1": {"direction": "in"},
-            "2": {"direction": "out"},
-            "3": {"direction": "in"},
-            "4": {"direction": "out"},
+            "N1": {"direction": "in"},
+            "S1": {"direction": "out"},
+            "N2": {"direction": "in"},
+            "S2": {"direction": "out"},
         }
         grid = expand_terminal_grid({"NS": 2})
-        cells = pin_to_cells(terminals, grid, [[1, 2], [3, 4]])
-        self.assertEqual(cells["1"], ["N1"])
-        self.assertEqual(cells["2"], ["S1"])
-        self.assertEqual(cells["3"], ["N2"])
-        self.assertEqual(cells["4"], ["S2"])
+        cells = pin_to_cells(terminals, grid)
+        self.assertEqual(cells["N1"], ["N1"])
+        self.assertEqual(cells["S1"], ["S1"])
+        self.assertEqual(cells["N2"], ["N2"])
+        self.assertEqual(cells["S2"], ["S2"])
 
-    def test_strip_inout_columns(self) -> None:
+    def test_strip_inout_adds_opposite_face(self) -> None:
         terminals = {
-            "1": {"direction": "inout"},
-            "2": {"direction": "inout"},
-            "3": {"direction": "inout"},
+            "N1": {"direction": "inout"},
+            "N2": {"direction": "inout"},
+            "N3": {"direction": "inout"},
         }
         grid = expand_terminal_grid({"NS": 3})
-        cells = pin_to_cells(terminals, grid, None)
-        self.assertEqual(cells["1"], ["N1", "S1"])
-        self.assertEqual(cells["3"], ["N3", "S3"])
+        cells = pin_to_cells(terminals, grid)
+        self.assertEqual(cells["N1"], ["N1", "S1"])
+        self.assertEqual(cells["N3"], ["N3", "S3"])
 
-    def test_derive_from_collapse(self) -> None:
+    def test_derive_from_face_ids(self) -> None:
         self.assertEqual(
-            derive_terminal_grid({"1": {}, "2": {}}, [[1, 2], [3, 4]]),
+            derive_terminal_grid({"N1": {}, "S1": {}, "N2": {}, "S2": {}}),
             {"NS": 2},
         )
 
@@ -58,45 +58,45 @@ class TestTerminalGrid(unittest.TestCase):
             "MCB2P": {
                 "terminal_grid": {"NS": 2},
                 "terminals": {
-                    "1": {"direction": "in"},
-                    "2": {"direction": "out"},
-                    "3": {"direction": "in"},
-                    "4": {"direction": "out"},
+                    "N1": {"direction": "in"},
+                    "S1": {"direction": "out"},
+                    "N2": {"direction": "in"},
+                    "S2": {"direction": "out"},
                 },
-                "terminal_pairs": [[1, 2], [3, 4]],
             }
         }
         terminals, grid, cells = element_terminal_layout(
             {"type": "MCB2P"}, catalog
         )
-        self.assertEqual(sorted(terminals), ["1", "2", "3", "4"])
+        self.assertEqual(sorted(terminals), ["N1", "N2", "S1", "S2"])
         self.assertEqual(grid["N"], (2, 1))
-        self.assertEqual(cells["1"], ["N1"])
-        self.assertEqual(cells["4"], ["S2"])
+        self.assertEqual(cells["N1"], ["N1"])
+        self.assertEqual(cells["S2"], ["S2"])
 
     def test_instance_overrides_grid(self) -> None:
         catalog = {
             "TerminalStrip": {
                 "terminal_grid": {"NS": 3},
                 "terminals": {
-                    "1": {"direction": "inout"},
-                    "2": {"direction": "inout"},
-                    "3": {"direction": "inout"},
+                    "N1": {"direction": "inout"},
+                    "N2": {"direction": "inout"},
+                    "N3": {"direction": "inout"},
                 },
             }
         }
-        _t, grid, cells = element_terminal_layout(
+        terminals, grid, cells = element_terminal_layout(
             {
                 "type": "TerminalStrip",
                 "terminal_grid": {"NS": 6},
                 "terminals": {
-                    str(i): {"direction": "inout"} for i in range(1, 7)
+                    f"N{i}": {"direction": "inout"} for i in range(1, 7)
                 },
             },
             catalog,
         )
+        self.assertEqual(len(terminals), 6)
         self.assertEqual(grid["N"], (6, 1))
-        self.assertEqual(cells["6"], ["N6", "S6"])
+        self.assertEqual(cells["N6"], ["N6", "S6"])
 
 
 if __name__ == "__main__":

@@ -7,6 +7,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.0] — 2026-08-02
+
+### Changed
+
+- Terminal **ids** are face-cell tokens (``N1``, ``S2``, …); ``name`` /
+  ``label`` / ``role`` are display-only. Conductor refs use the id.
+- Opening drawing uses ``opening_grid`` slot count (e.g. ``N: 2`` + only
+  ``N2`` draws on the right).
+- TerminalStrip pins are ``N1``…``Nn`` (N-side convention) with ``NS`` grid
+  attaching both faces for ``inout``.
+
+### Removed
+
+- ``terminal_pairs`` (catalog and instance).
+
 ## [0.31.0] — 2026-08-02
 
 ### Changed

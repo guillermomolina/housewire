@@ -98,7 +98,7 @@ cd Garage
 add socket Outlet_5 --from Junction_2.N1 --strip Regleta
 add lamp Lamp_3 --from Junction_3.S1 --strip Regleta --pins 6,5,2
 add feed Linea_A_a_B --from Junction_4.E1 --to Junction_3.N1 \
-  --from-pin Regleta_2.1 --to-pin Regleta.1 --colors BK
+  --from-pin Regleta_2.N1 --to-pin Regleta.N1 --colors BK
 ```
 
 Unknown far end (leave a panel, claim at the next box later):
@@ -108,7 +108,7 @@ cd "Ground floor/Hall/Main panel"
 open S2 1.5 --colors BN,BU          # OPEN_Linea_01
 cd ../Junction_1
 claim OPEN_Linea_01 --enter N1 --exit E2
-land OPEN_Linea_01 --from 'Main_panel/MT.[2, 3]' --to 'Junction_1/Regleta.[1, 2]' \
+land OPEN_Linea_01 --from 'Main_panel/MT.[N2, N3]' --to 'Junction_1/Regleta.[N1, N2]' \
   --as Linea_panel_a_J1
 opens                               # list still-open runs
 ```
@@ -179,14 +179,14 @@ cables:
     type: Conductor
     color: BN
     section: "1.5 mm2"
-    from: A.1
-    to: B.1
+    from: A.N1
+    to: B.N1
   Line_X_2:
     type: Conductor
     color: BU
     section: "1.5 mm2"
-    from: A.3
-    to: B.3
+    from: A.N3
+    to: B.N3
 ```
 
 ## Version

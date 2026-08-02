@@ -7,7 +7,7 @@ qet_hint: earth_electrode
 terminal_grid:
   S: 1
 terminals:
-  PE:
+  S1:
     label: PE
     direction: out
     role: pe

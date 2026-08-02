@@ -83,8 +83,8 @@ class TestOpenClaimLandABM(unittest.TestCase):
         final = open_runs.land_open_cable(
             floor,
             name,
-            from_ref="Cuadro_General/MT.[2, 3]",
-            to_ref="Caja_derivacion_1/Regleta.[1, 3]",
+            from_ref="Cuadro_General/MT.[N2, N3]",
+            to_ref="Caja_derivacion_1/Regleta.[N1, N3]",
             as_name="Linea_CG_a_CD1",
         )
         self.assertEqual(final, "Linea_CG_a_CD1")
@@ -95,11 +95,11 @@ class TestOpenClaimLandABM(unittest.TestCase):
         )
         self.assertEqual(
             floor["cables"]["Linea_CG_a_CD1_1"]["from"],
-            "Cuadro_General/MT.2",
+            "Cuadro_General/MT.N2",
         )
         self.assertEqual(
             floor["cables"]["Linea_CG_a_CD1_1"]["to"],
-            "Caja_derivacion_1/Regleta.1",
+            "Caja_derivacion_1/Regleta.N1",
         )
 
     def test_second_claim_uses_exits(self) -> None:
@@ -181,7 +181,7 @@ class TestShellOpenClaimLand(unittest.TestCase):
 
         code = self._run(
             s,
-            "land OPEN_Linea_01 --from 'CG/MT.[1, 2]' --to 'CD1/Regleta.[1, 2]' "
+            "land OPEN_Linea_01 --from 'CG/MT.[N1, N2]' --to 'CD1/Regleta.[N1, N2]' "
             "--as Linea_CG_a_CD1",
         )
         self.assertEqual(code, 0)

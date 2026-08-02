@@ -1,8 +1,13 @@
 """Element ``terminal_grid`` — same face-grid syntax as location ``opening_grid``.
 
+Terminal **ids** are face-cell tokens (``N1``, ``S2``, …), identical to opening
+ids. Optional ``name`` / ``label`` / ``role`` are display metadata only.
+
 ``terminal_grid: { NS: 2 }`` means 2 cells on N **and** 2 on S (N1,N2,S1,S2).
-``N: 2`` means only the north face. Cell ids reuse opening-style tokens
-(``N1``, ``S2``, ``W1``, …; plane ``B1-1`` unused for typical DIN devices).
+``N: 2`` means only the north face.
+
+For ``direction: inout`` pins on an NS/WE grid, the opposite-face cell of the
+same index is also an attach point (e.g. TerminalStrip ``N1`` → ``[N1, S1]``).
 """
 
 from __future__ import annotations
@@ -22,11 +27,22 @@ parse_terminal_cell = parse_opening_id
 normalize_terminal_cell = normalize_opening_id
 
 
-def _pin_sort_key(pin: str) -> tuple[int, str]:
+def _try_parse_cell(pin: str) -> tuple[str, int, int | None] | None:
+    try:
+        return parse_opening_id(str(pin))
+    except ValueError:
+        return None
+
+
+def _pin_sort_key(pin: str) -> tuple:
+    parsed = _try_parse_cell(pin)
+    if parsed is not None:
+        face, a, b = parsed
+        return (0, face, a, b if b is not None else 0)
     text = str(pin)
     if text.isdigit():
-        return (0, f"{int(text):08d}")
-    return (1, text)
+        return (1, f"{int(text):08d}")
+    return (2, text)
 
 
 def _axis_faces(
@@ -40,27 +56,43 @@ def _axis_faces(
     return None, None
 
 
-def derive_terminal_grid(
-    terminals: dict[str, Any],
-    collapse: list[Any] | None = None,
-) -> dict[str, int]:
-    """Guess a compact ``{NS: n}`` when catalog/instance omit ``terminal_grid``."""
-    if collapse:
-        n = len([p for p in collapse if isinstance(p, (list, tuple)) and len(p) == 2])
-        return {"NS": max(1, n)}
-    pins = [str(p) for p in (terminals or {})]
-    if not pins:
-        return {}
-    dirs = [
-        str((meta or {}).get("direction") or "inout").lower()
-        if isinstance(meta, dict)
-        else "inout"
-        for meta in (terminals or {}).values()
-    ]
-    n_in = sum(1 for d in dirs if d == "in")
-    n_out = sum(1 for d in dirs if d == "out")
-    n_io = sum(1 for d in dirs if d not in {"in", "out"})
-    return {"NS": max(1, n_in, n_out, n_io)}
+def _opposite_face(face: str) -> str | None:
+    pairs = {"N": "S", "S": "N", "W": "E", "E": "W"}
+    return pairs.get(face)
+
+
+def derive_terminal_grid(terminals: dict[str, Any]) -> dict[str, int]:
+    """Guess a compact face grid from face-cell pin ids."""
+    counts: dict[str, int] = {}
+    for pin in terminals or {}:
+        parsed = _try_parse_cell(str(pin))
+        if parsed is None:
+            continue
+        face, a, b = parsed
+        if face in SIDE_FACES:
+            counts[face] = max(counts.get(face, 0), int(a))
+        elif face in {"B", "F"}:
+            cols = int(b) if b is not None else int(a)
+            rows = int(a)
+            counts[face] = max(counts.get(face, 0), cols * rows)
+    if not counts:
+        n = len(terminals or {})
+        return {"NS": max(1, n)} if n else {}
+    if "N" in counts and "S" in counts:
+        ns = max(counts["N"], counts["S"])
+        out: dict[str, int] = {"NS": ns}
+        for face, n in counts.items():
+            if face not in {"N", "S"}:
+                out[face] = n
+        return out
+    if "W" in counts and "E" in counts:
+        we = max(counts["W"], counts["E"])
+        out = {"WE": we}
+        for face, n in counts.items():
+            if face not in {"W", "E"}:
+                out[face] = n
+        return out
+    return dict(counts)
 
 
 def resolve_terminal_grid(
@@ -68,9 +100,8 @@ def resolve_terminal_grid(
     instance: dict[str, Any] | None = None,
     type_def: dict[str, Any] | None = None,
     terminals: dict[str, Any] | None = None,
-    collapse: list[Any] | None = None,
 ) -> dict[str, tuple[int, int]]:
-    """Expand instance → catalog ``terminal_grid``, or derive from pins."""
+    """Expand instance → catalog ``terminal_grid``, or derive from pin ids."""
     raw = None
     if isinstance(instance, dict) and instance.get("terminal_grid") is not None:
         raw = instance.get("terminal_grid")
@@ -78,7 +109,7 @@ def resolve_terminal_grid(
         raw = type_def.get("terminal_grid")
     if raw is not None:
         return expand_terminal_grid(raw)
-    derived = derive_terminal_grid(terminals or {}, collapse)
+    derived = derive_terminal_grid(terminals or {})
     if not derived:
         return {}
     return expand_terminal_grid(derived)
@@ -87,113 +118,57 @@ def resolve_terminal_grid(
 def pin_to_cells(
     terminals: dict[str, Any],
     grid: dict[str, tuple[int, int]],
-    collapse: list[Any] | None = None,
 ) -> dict[str, list[str]]:
-    """Map each pin id to preferred terminal cell ids (e.g. ``1`` → ``[N1]``).
+    """Map each pin id to attach cell ids.
 
-    - ``terminal_pairs`` pairs become columns: first pin → entry face, second → exit.
-    - ``inout`` pins without collapse share a column on both axis faces.
-    - ``in`` / ``out`` without collapse fill entry / exit columns in pin order.
+    Face-cell pin ids map to themselves. ``inout`` pins also attach on the
+    opposite axis face at the same index when that face exists in ``grid``
+    (TerminalStrip ``N1`` → ``[N1, S1]``).
     """
-    if not grid or not terminals:
+    if not terminals:
         return {}
-    entry, exit_ = _axis_faces(grid)
     result: dict[str, list[str]] = {}
+    entry, exit_ = _axis_faces(grid)
 
-    def add(pin: str, cells: list[str]) -> None:
+    for pin, meta in terminals.items():
         key = str(pin)
-        if key not in result:
-            result[key] = []
-        for cell in cells:
-            if cell not in result[key]:
-                result[key].append(cell)
+        cells: list[str] = []
+        parsed = _try_parse_cell(key)
+        if parsed is not None:
+            face, a, _b = parsed
+            try:
+                cell = normalize_opening_id(key)
+            except ValueError:
+                cell = key
+            cells.append(cell)
+            direction = (
+                str((meta or {}).get("direction") or "inout").lower()
+                if isinstance(meta, dict)
+                else "inout"
+            )
+            if direction == "inout" and face in SIDE_FACES:
+                opp = _opposite_face(face)
+                if opp and opp in grid:
+                    cells.append(f"{opp}{a}")
+        if cells:
+            result[key] = cells
 
-    def face_cols(face: str | None) -> int:
-        if face is None or face not in grid:
-            return 0
-        cols, rows = grid[face]
-        return max(1, int(cols) * int(rows))
-
-    pairs: list[tuple[str, str]] = []
-    if collapse:
-        for pair in collapse:
-            if isinstance(pair, (list, tuple)) and len(pair) == 2:
-                pairs.append((str(pair[0]), str(pair[1])))
-
-    if pairs:
-        for i, (a, b) in enumerate(pairs):
-            col = i + 1
-            if entry and a in terminals:
-                add(a, [f"{entry}{min(col, face_cols(entry) or col)}"])
-            if exit_ and b in terminals:
-                add(b, [f"{exit_}{min(col, face_cols(exit_) or col)}"])
-            # If a pin is missing from the pair face, still record the peer face.
-            if a in terminals and a not in result and exit_:
-                add(a, [f"{exit_}{min(col, face_cols(exit_) or col)}"])
-            if b in terminals and b not in result and entry:
-                add(b, [f"{entry}{min(col, face_cols(entry) or col)}"])
-        for pin in terminals:
-            if str(pin) not in result:
-                # Leftover pins: pack onto entry then exit.
-                col = len(result) + 1
-                cells: list[str] = []
-                if entry:
-                    cells.append(f"{entry}{min(col, face_cols(entry) or col)}")
-                if exit_:
-                    cells.append(f"{exit_}{min(col, face_cols(exit_) or col)}")
-                if cells:
-                    add(str(pin), cells)
-        return result
-
-    pins_in = [
-        str(p)
-        for p, m in terminals.items()
-        if isinstance(m, dict) and str(m.get("direction") or "").lower() == "in"
-    ]
-    pins_out = [
-        str(p)
-        for p, m in terminals.items()
-        if isinstance(m, dict) and str(m.get("direction") or "").lower() == "out"
-    ]
-    pins_io = [
-        str(p)
-        for p, m in terminals.items()
-        if str(p) not in pins_in and str(p) not in pins_out
-    ]
-    pins_in.sort(key=_pin_sort_key)
-    pins_out.sort(key=_pin_sort_key)
-    pins_io.sort(key=_pin_sort_key)
-
-    for i, pin in enumerate(pins_in):
-        col = i + 1
-        if entry:
-            add(pin, [f"{entry}{min(col, face_cols(entry) or col)}"])
-        elif exit_:
-            add(pin, [f"{exit_}{min(col, face_cols(exit_) or col)}"])
-
-    for i, pin in enumerate(pins_out):
-        col = i + 1
-        if exit_:
-            add(pin, [f"{exit_}{min(col, face_cols(exit_) or col)}"])
-        elif entry:
-            add(pin, [f"{entry}{min(col, face_cols(entry) or col)}"])
-
-    for i, pin in enumerate(pins_io):
-        col = i + 1
+    # Leftover non-cell pins (should be rare after migration).
+    leftovers = [str(p) for p in terminals if str(p) not in result]
+    leftovers.sort(key=_pin_sort_key)
+    for i, pin in enumerate(leftovers, start=1):
         cells = []
         if entry:
-            cells.append(f"{entry}{min(col, face_cols(entry) or col)}")
+            cells.append(f"{entry}{i}")
         if exit_:
-            cells.append(f"{exit_}{min(col, face_cols(exit_) or col)}")
-        # Also support WE-only or single-face grids already handled; if only one
-        # side face exists beyond axis, attach there.
+            cells.append(f"{exit_}{i}")
         if not cells:
             for face in ("N", "S", "W", "E"):
-                if face in grid and face in SIDE_FACES:
-                    cells.append(f"{face}{min(col, face_cols(face) or col)}")
+                if face in grid:
+                    cells.append(f"{face}{i}")
                     break
         if cells:
-            add(pin, cells)
+            result[pin] = cells
 
     return result
 
@@ -239,7 +214,6 @@ def element_terminal_layout(
     if subtype is None and isinstance(type_def.get("defaults"), dict):
         subtype = type_def["defaults"].get("subtype")
     type_terminals = type_def.get("terminals") or {}
-    type_collapse = type_def.get("terminal_pairs")
     type_grid_raw = type_def.get("terminal_grid")
     subtypes = type_def.get("subtypes") if isinstance(type_def, dict) else None
     if isinstance(subtypes, dict) and subtype is not None:
@@ -247,15 +221,12 @@ def element_terminal_layout(
         if isinstance(sub, dict):
             if sub.get("terminals") is not None:
                 type_terminals = sub.get("terminals") or {}
-            if "terminal_pairs" in sub:
-                type_collapse = sub.get("terminal_pairs")
             if sub.get("terminal_grid") is not None:
                 type_grid_raw = sub.get("terminal_grid")
 
     terminals = _merge_terminal_dicts(type_terminals, instance.get("terminals"))
     # If the instance lists terminals, those are the pins that exist on the
-    # device (catalog still supplies meta for shared keys). Avoid mapping
-    # unused catalog pins onto a smaller terminal_grid.
+    # device (catalog still supplies meta for shared keys).
     inst_terms = instance.get("terminals")
     if isinstance(inst_terms, dict) and inst_terms:
         terminals = {
@@ -263,9 +234,6 @@ def element_terminal_layout(
             for k in inst_terms
             if str(k) in terminals
         }
-    collapse = instance.get("terminal_pairs")
-    if collapse is None:
-        collapse = type_collapse
 
     effective_type = dict(type_def)
     if type_grid_raw is not None:
@@ -274,11 +242,6 @@ def element_terminal_layout(
         instance=instance,
         type_def=effective_type,
         terminals=terminals,
-        collapse=collapse if isinstance(collapse, list) else None,
     )
-    cells = pin_to_cells(
-        terminals,
-        grid,
-        collapse if isinstance(collapse, list) else None,
-    )
+    cells = pin_to_cells(terminals, grid)
     return terminals, grid, cells

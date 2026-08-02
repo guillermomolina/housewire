@@ -14,8 +14,9 @@ from housewire.site import abm
 
 SOCKET_DEFAULT_COLORS = ["GY", "GNYE", "BU"]
 SOCKET_DEFAULT_SECTION = "2.5 mm2"
-SOCKET_DEFAULT_STRIP_PINS = ["3", "2", "1"]  # L, PE, N on typical strip
-SOCKET_TERMINALS = ["L", "PE", "N"]
+# Strip N3=L, N2=PE, N1=N → Socket N1=L, N2=PE, N3=N
+SOCKET_DEFAULT_STRIP_PINS = ["N3", "N2", "N1"]
+SOCKET_TERMINALS = ["N1", "N2", "N3"]
 SOCKET_ELEMENT = "Socket"
 SOCKET_DEFAULT_TO_OPENING = "N1"
 SOCKET_PLACE_TYPE = "DeviceBox"
@@ -31,8 +32,8 @@ LAMP_DEFAULT_TO_OPENING = "B1-1"
 LAMP_ELEMENT = "Luminaire"
 LAMP_PLACE_TYPE = "LightPoint"
 LAMP_PLACE_SUBTYPE = "ceiling-hole"
-LAMP_DEFAULT_TO_PINS_3 = ["1", "2", "3"]
-LAMP_DEFAULT_TO_PINS_2 = ["1", "3"]
+LAMP_DEFAULT_TO_PINS_3 = ["N1", "N2", "N3"]
+LAMP_DEFAULT_TO_PINS_2 = ["N1", "N3"]
 
 # --- Feed (box ↔ box) -----------------------------------------------------------
 
@@ -49,24 +50,32 @@ class WiredRunResult:
     to_terminals: tuple[str, ...]
 
 
+def normalize_pin_id(pin: str) -> str:
+    """Bare digits become north face cells (``3`` → ``N3``)."""
+    text = str(pin).strip()
+    if text.isdigit():
+        return f"N{text}"
+    return text
+
+
 def parse_pins(raw: str | Sequence[str] | None) -> list[str]:
-    """Parse ``3,2,1`` or ``[3, 2, 1]`` into pin id strings."""
+    """Parse ``N3,N2,N1`` or ``3,2,1`` into face-cell pin id strings."""
     if raw is None:
         return []
     if isinstance(raw, (list, tuple)):
-        return [str(p).strip() for p in raw if str(p).strip()]
+        return [normalize_pin_id(p) for p in raw if str(p).strip()]
     text = str(raw).strip()
     if not text:
         return []
     if text.startswith("[") and text.endswith("]"):
         text = text[1:-1]
-    return [part.strip() for part in text.split(",") if part.strip()]
+    return [normalize_pin_id(part) for part in text.split(",") if part.strip()]
 
 
 def format_terminal_ref(element_path: str, pin: str) -> str:
-    """Build ``Box/Regleta.1``."""
+    """Build ``Box/Regleta.N1`` (bare digit pins become ``N*``)."""
     path = str(element_path).strip().rstrip(".")
-    pin_s = str(pin).strip()
+    pin_s = normalize_pin_id(pin)
     if not path or not pin_s:
         raise ValueError("element path and pin are required")
     return f"{path}.{pin_s}"
@@ -191,7 +200,12 @@ def socket_wired_run(
 ) -> WiredRunResult:
     """Wire parent doc: strip → new socket place (place must already exist)."""
     box_loc, _opening = split_conduit_endpoint(from_ref)
-    strip_pins = list(pins) if pins is not None else list(SOCKET_DEFAULT_STRIP_PINS)
+    strip_pins = (
+        list(pins)
+        if pins is not None
+        else list(SOCKET_DEFAULT_STRIP_PINS)
+    )
+    strip_pins = [normalize_pin_id(p) for p in strip_pins]
     if len(strip_pins) != 3:
         raise ValueError(
             f"socket recipe expects 3 strip pins (L,PE,N order); got {strip_pins!r}"
@@ -237,7 +251,7 @@ def lamp_wired_run(
     element_name: str = LAMP_ELEMENT,
 ) -> WiredRunResult:
     """Wire parent doc: strip → new luminaire place (place must already exist)."""
-    strip_pins = [str(p).strip() for p in pins if str(p).strip()]
+    strip_pins = [normalize_pin_id(p) for p in pins if str(p).strip()]
     if len(strip_pins) not in (2, 3):
         raise ValueError(
             f"lamp recipe expects 2 or 3 strip pins; got {strip_pins!r}"
@@ -249,7 +263,7 @@ def lamp_wired_run(
             else list(LAMP_DEFAULT_TO_PINS_2)
         )
     else:
-        dest_pins = [str(p).strip() for p in to_pins if str(p).strip()]
+        dest_pins = [normalize_pin_id(p) for p in to_pins if str(p).strip()]
     if len(dest_pins) != len(strip_pins):
         raise ValueError(
             f"to-pins length ({len(dest_pins)}) must match strip pins ({len(strip_pins)})"
@@ -342,10 +356,13 @@ def feed_wired_run(
 
 
 def _expand_pin_spec(spec: str) -> list[str]:
-    """``Path.1`` → [Path.1]; ``Path.[1, 2]`` → [Path.1, Path.2]."""
+    """``Path.N1`` → [Path.N1]; ``Path.[N1, N2]`` / ``Path.[1, 2]`` → list."""
     text = str(spec).strip()
     if ".[" in text and text.endswith("]"):
         head, _, body = text.partition(".[")
-        pins = [p.strip() for p in body[:-1].split(",") if p.strip()]
+        pins = [normalize_pin_id(p) for p in body[:-1].split(",") if p.strip()]
         return [f"{head}.{p}" for p in pins]
-    return [text]
+    if "." in text:
+        head, _, pin = text.rpartition(".")
+        return [f"{head}.{normalize_pin_id(pin)}"]
+    return [normalize_pin_id(text)]

@@ -4,19 +4,19 @@ icon: fa-grip-lines
 title: Terminal strip / connector block
 description_es: >
   Regleta o bornes de empalme en caja de derivacion.
-  Cada posicion une los conductores del mismo potencial.
-  Ampliar bornes en la instancia si la regleta tiene mas de 3 (p.ej. 6 pares)
-  con ``terminal_grid: { NS: 6 }`` y terminals 1..6.
+  Ids face-cell solo en N (N1..Nn); terminal_grid NS dibuja ambos lados del
+  mismo potencial. Ampliar en la instancia p.ej. terminal_grid: { NS: 6 }
+  y terminals N1..N6.
 qet_hint: terminal_strip
 terminal_grid:
   NS: 3
 terminals:
-  "1":
+  N1:
     label: "1"
     direction: inout
-  "2":
+  N2:
     label: "2"
     direction: inout
-  "3":
+  N3:
     label: "3"
     direction: inout

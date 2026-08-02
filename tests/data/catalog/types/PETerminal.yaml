@@ -7,7 +7,7 @@ qet_hint: pe_terminal_bar
 terminal_grid:
   NS: 1
 terminals:
-  PE:
+  N1:
     label: PE
     direction: inout
     role: pe

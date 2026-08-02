@@ -81,8 +81,8 @@ class TestPhysicalConduits(unittest.TestCase):
                 from_ref="Caja_4.W2",
                 to_ref="Enchufe_1.N1",
             )
-            parking["cables"]["Linea_1_1"]["from"] = "Caja_4/Regleta.1"
-            parking["cables"]["Linea_1_1"]["to"] = "Enchufe_1/Socket.L"
+            parking["cables"]["Linea_1_1"]["from"] = "Caja_4/Regleta.N1"
+            parking["cables"]["Linea_1_1"]["to"] = "Enchufe_1/Socket.N1"
             save_site(root, doc)
 
             site_yaml = root / HOUSEWIRE_YAML

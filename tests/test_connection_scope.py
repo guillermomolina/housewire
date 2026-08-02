@@ -32,8 +32,8 @@ cables:
     type: Conductor
     section: 1.5 mm2
     color: BN
-    from: Caja 1/Regleta.1
-    to: Enchufe.L
+    from: Caja 1/Regleta.N1
+    to: Enchufe.N1
 """,
             ["Parking"],
         )
@@ -51,8 +51,8 @@ cables:
     type: Conductor
     section: 1.5 mm2
     color: BN
-    from: ../Enchufe.L
-    to: Regleta.1
+    from: ../Enchufe.N1
+    to: Regleta.N1
 """,
                 ["Parking", "Caja 1"],
             )
@@ -71,8 +71,8 @@ cables:
     type: Conductor
     section: 1.5 mm2
     color: BN
-    from: Regleta.1
-    to: /Parking/Caja 2/Regleta.1
+    from: Regleta.N1
+    to: /Parking/Caja 2/Regleta.N1
 """,
                 ["Parking", "Caja 1"],
             )
@@ -99,8 +99,8 @@ cables:
     type: Conductor
     section: 1.5 mm2
     color: BN
-    from: /Parking/Caja 1/Regleta.1
-    to: Enchufe.L
+    from: /Parking/Caja 1/Regleta.N1
+    to: Enchufe.N1
 """,
             ["Parking"],
         )

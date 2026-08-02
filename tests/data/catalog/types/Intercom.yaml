@@ -7,11 +7,11 @@ qet_hint: intercom
 terminal_grid:
   N: 2
 terminals:
-  "+":
+  N1:
     label: "+"
     direction: in
     role: dc_positive
-  "-":
+  N2:
     label: "-"
     direction: in
     role: dc_negative

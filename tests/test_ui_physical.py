@@ -51,10 +51,10 @@ def _build_parking_wiring_site(root: Path) -> None:
         from_ref="Caja_4.W2",
         to_ref="Enchufe_1.N1",
     )
-    parking["cables"]["Linea_1_1"]["from"] = "Caja_4/Regleta.1"
-    parking["cables"]["Linea_1_1"]["to"] = "Enchufe_1/Socket.L"
-    parking["cables"]["Linea_1_2"]["from"] = "Caja_4/Regleta.3"
-    parking["cables"]["Linea_1_2"]["to"] = "Enchufe_1/Socket.N"
+    parking["cables"]["Linea_1_1"]["from"] = "Caja_4/Regleta.N1"
+    parking["cables"]["Linea_1_1"]["to"] = "Enchufe_1/Socket.N1"
+    parking["cables"]["Linea_1_2"]["from"] = "Caja_4/Regleta.N3"
+    parking["cables"]["Linea_1_2"]["to"] = "Enchufe_1/Socket.N3"
     save_site(root, doc)
 
 
@@ -273,8 +273,8 @@ class TestPhysicalGraph(unittest.TestCase):
                 from_ref="B.S1",
                 to_ref="C.N1",
             )
-            parking["cables"]["Linea_AC"]["from"] = "A/Regleta.1"
-            parking["cables"]["Linea_AC"]["to"] = "C/Regleta.1"
+            parking["cables"]["Linea_AC"]["from"] = "A/Regleta.N1"
+            parking["cables"]["Linea_AC"]["to"] = "C/Regleta.N1"
             save_site(root, doc)
 
             graph = build_physical_graph(root, "Parking")

@@ -495,20 +495,6 @@ def _pin_id(pin: object) -> object:
     return text
 
 
-def _validate_terminal_pairs(
-    terminals: dict[str, dict[str, Any]],
-    pairs: list[Any] | None,
-) -> None:
-    if not pairs:
-        return
-    for pair in pairs:
-        if not isinstance(pair, (list, tuple)) or len(pair) != 2:
-            raise ValueError(f"terminal_pairs must have 2 pins: {pair}")
-        a, b = str(pair[0]), str(pair[1])
-        if a not in terminals or b not in terminals:
-            raise ValueError(f"terminal_pairs references missing pins: {pair}")
-
-
 def _validate_element(
     name: str,
     element: dict[str, Any],
@@ -529,28 +515,26 @@ def _validate_element(
     if is_place_type(type_id):
         return
 
+    if "terminal_pairs" in element:
+        raise ValueError(
+            f"Element {name}: terminal_pairs is removed; "
+            "use face-cell terminal ids (N1, S1, …)"
+        )
+
     subtype = element.get("subtype")
     if subtype is None and isinstance(type_def.get("defaults"), dict):
         subtype = type_def["defaults"].get("subtype")
     type_terminals = type_def.get("terminals") or {}
-    type_pairs = type_def.get("terminal_pairs")
     subtypes = type_def.get("subtypes") if isinstance(type_def, dict) else None
     if isinstance(subtypes, dict) and subtype is not None:
         sub = subtypes.get(str(subtype))
         if isinstance(sub, dict):
             if sub.get("terminals") is not None:
                 type_terminals = sub.get("terminals") or {}
-            if "terminal_pairs" in sub:
-                type_pairs = sub.get("terminal_pairs")
 
     terminals = _merge_terminals(type_terminals, element.get("terminals"))
     if not terminals:
         raise ValueError(f"Type {type_id} does not define terminals")
-
-    pairs_raw = element.get("terminal_pairs")
-    if pairs_raw is None:
-        pairs_raw = type_pairs
-    _validate_terminal_pairs(terminals, pairs_raw if isinstance(pairs_raw, list) else None)
 
 
 def _validate_flat_fragment(

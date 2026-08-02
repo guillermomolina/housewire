@@ -642,12 +642,27 @@
   }
 
   function sideSlotCount(node, face, preferIndex) {
+    const f = String(face || "").toUpperCase();
+    const raw = node.opening_grid && node.opening_grid[f];
+    let fromGrid = 0;
+    if (Array.isArray(raw) && raw.length >= 1) {
+      fromGrid = Math.max(1, Number(raw[0]) || 1);
+      if (raw.length >= 2) {
+        fromGrid = Math.max(
+          fromGrid,
+          (Number(raw[0]) || 1) * (Number(raw[1]) || 1)
+        );
+      }
+    } else if (typeof raw === "number") {
+      fromGrid = Math.max(1, Number(raw) || 1);
+    }
     const declared = (node.openings || [])
-      .map((o) => parseSideOpening(o.id))
-      .filter((p) => p && p.face === face)
+      .map((o) => parseSideOpening(o.id || o))
+      .filter((p) => p && p.face === f)
       .map((p) => p.index);
     const maxDeclared = declared.length ? Math.max(...declared) : 0;
-    return Math.max(maxDeclared, preferIndex || 1, declared.length, 1);
+    // Prefer opening_grid size so N:2 + only N2 sits in the right slot.
+    return Math.max(fromGrid, maxDeclared, preferIndex || 1, 1);
   }
 
   const PLANE_R = 6;
