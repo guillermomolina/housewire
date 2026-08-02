@@ -2816,15 +2816,17 @@
       out[0][0] += fo.x * need;
       out[0][1] += fo.y * need;
     }
-    return out;
+    // Lift can make the first segment diagonal — openings/spines stay Manhattan.
+    return ensureOrthoPoly(out);
   }
 
   /**
    * Lead from a terminal pin into a nearby lane point.
-   * Stub only when the lane continues outward; short diagonal when close;
-   * otherwise a single Manhattan L (never stub-then-back C/Z).
-   * When ``slotCount > 1`` (several strands on the same terminal), fan a V
-   * with lateral offsets instead of stacking perpendicular stubs.
+   *
+   * Rules:
+   * - One cable on the terminal → Manhattan only (stub + L, no diagonal).
+   * - Several cables on the same terminal → V fan (short diagonals OK).
+   * Openings never use this helper (mouth bridges stay Manhattan).
    */
   function pinToLanePts(pin, face, lanePt, slot = 0, slotCount = 1) {
     const p = {
@@ -2839,6 +2841,7 @@
     const fo = faceOutwardDelta(face);
     const nSlots = Math.max(1, slotCount | 0);
     const s = Math.max(0, Math.min(nSlots - 1, slot | 0));
+    const multiCable = nSlots > 1;
     /** @type {number[][]} */
     const pts = [[p.x, p.y]];
     let from = p;
@@ -2855,15 +2858,15 @@
             from = stub;
           }
         }
-      } else if (nSlots > 1) {
+      } else if (multiCable) {
         // Shared terminal: always leave the face before fanning.
         const stub = stubPoint(p, fo.x, fo.y, 5);
         pts.push([stub.x, stub.y]);
         from = stub;
       }
     }
-    // Multi-strand same pin → V fan (lateral) before rejoining the lane.
-    if (nSlots > 1 && (fo.x || fo.y)) {
+    // Multi-cable same terminal → V fan (lateral) before rejoining the lane.
+    if (multiCable && (fo.x || fo.y)) {
       const nx = -fo.y;
       const ny = fo.x;
       const mid = (nSlots - 1) / 2;
@@ -2886,11 +2889,69 @@
       return pts;
     }
     const rem = Math.hypot(from.x - t.x, from.y - t.y);
-    if (rem <= TERMINAL_DIAG_MAX) {
+    // Diagonals only for multi-cable V entry — never at single-cable terminals
+    // and never as a substitute for a mouth approach.
+    if (multiCable && rem <= TERMINAL_DIAG_MAX) {
       pts.push([t.x, t.y]);
       return pts;
     }
     // One-bend L only (HV or VH) — never a 2-bend Z.
+    const hv = [
+      [from.x, from.y],
+      [t.x, from.y],
+      [t.x, t.y],
+    ];
+    const vh = [
+      [from.x, from.y],
+      [from.x, t.y],
+      [t.x, t.y],
+    ];
+    const pick =
+      Math.hypot(t.x - from.x, 0) <= Math.hypot(0, t.y - from.y) ? hv : vh;
+    for (let i = 1; i < pick.length; i++) {
+      const q = pick[i];
+      const prev = pts[pts.length - 1];
+      if (Math.hypot(prev[0] - q[0], prev[1] - q[1]) < 1e-6) continue;
+      pts.push([q[0], q[1]]);
+    }
+    return cleanOrthoPoly(pts);
+  }
+
+  /**
+   * Mouth → exterior lane join: one cable per opening, Manhattan only.
+   */
+  function mouthToLanePts(mouth, face, lanePt) {
+    const m = {
+      x: Array.isArray(mouth) ? mouth[0] : mouth.x,
+      y: Array.isArray(mouth) ? mouth[1] : mouth.y,
+    };
+    const t = {
+      x: Array.isArray(lanePt) ? lanePt[0] : lanePt.x,
+      y: Array.isArray(lanePt) ? lanePt[1] : lanePt.y,
+    };
+    if (Math.hypot(m.x - t.x, m.y - t.y) < 1e-6) return [[m.x, m.y]];
+    const fo = faceOutwardDelta(face);
+    /** @type {number[][]} */
+    const pts = [[m.x, m.y]];
+    let from = m;
+    if (fo.x || fo.y) {
+      const along =
+        (t.x - m.x) * fo.x + (t.y - m.y) * fo.y;
+      if (along > 2) {
+        const want = Math.min(INBOX_STUB, along - 0.5);
+        if (want > 1e-6) {
+          const stub = stubPoint(m, fo.x, fo.y, want);
+          pts.push([stub.x, stub.y]);
+          from = stub;
+        }
+      }
+    }
+    if (Math.hypot(from.x - t.x, from.y - t.y) < 1e-6) return pts;
+    if (Math.abs(from.x - t.x) < 1e-6 || Math.abs(from.y - t.y) < 1e-6) {
+      pts.push([t.x, t.y]);
+      return pts;
+    }
+    // Never diagonal at openings — pick a single L.
     const hv = [
       [from.x, from.y],
       [t.x, from.y],
@@ -3008,7 +3069,8 @@
   /**
    * In-box hop tail (centerline): element → (B/F plane cell) → mouth.
    * Always Manhattan between mouth/plane and the pin stub — diagonals are
-   * applied later only as a short pinToLanePts onto an offset lane.
+   * applied later only as a short multi-cable V at the terminal (never at
+   * openings: one cable per opening → Manhattan only).
    * @returns {number[][]|null}
    */
   function hopEndpointTailPts(
@@ -3093,7 +3155,7 @@
 
   /**
    * Short path from a place opening through the mouth to an exterior lane join.
-   * Keeps the inbox tail aimed at the opening (not sliding along the wall).
+   * One cable per opening — Manhattan only (no diagonals / V).
    */
   function mouthBridgePts(place, openingId, join, placeById) {
     if (!place || !openingId || join == null) return null;
@@ -3106,67 +3168,7 @@
       ];
     }
     const exitFace = routeFace(place, openingId, openingId?.[0], placeById);
-    const fo = faceOutwardDelta(exitFace);
-    if (!fo.x && !fo.y) {
-      return simpleOrthoPts(op, j);
-    }
-    const stub = stubPoint(op, fo.x, fo.y, stubDistToToward(op, fo, j));
-    /** @type {number[][][]} */
-    const candidates = [];
-    if (Math.abs(stub.x - j.x) < 1e-6 || Math.abs(stub.y - j.y) < 1e-6) {
-      candidates.push([
-        [stub.x, stub.y],
-        [j.x, j.y],
-      ]);
-    } else {
-      // Prefer leaving along the mouth normal first (vertical-first on S/N,
-      // horizontal-first on E/W) so the bridge does not slide on the wall.
-      if (exitFace === "N" || exitFace === "S") {
-        candidates.push(
-          [
-            [stub.x, stub.y],
-            [stub.x, j.y],
-            [j.x, j.y],
-          ],
-          [
-            [stub.x, stub.y],
-            [j.x, stub.y],
-            [j.x, j.y],
-          ]
-        );
-      } else {
-        candidates.push(
-          [
-            [stub.x, stub.y],
-            [j.x, stub.y],
-            [j.x, j.y],
-          ],
-          [
-            [stub.x, stub.y],
-            [stub.x, j.y],
-            [j.x, j.y],
-          ]
-        );
-      }
-    }
-    let best = candidates[0];
-    let bestBends = Infinity;
-    for (const c of candidates) {
-      const full = [[op.x, op.y], ...c];
-      const bends = orthoBendCount(full);
-      if (bends < bestBends) {
-        bestBends = bends;
-        best = c;
-      }
-    }
-    /** @type {number[][]} */
-    const pts = [[op.x, op.y]];
-    for (const p of best) {
-      const prev = pts[pts.length - 1];
-      if (prev && Math.hypot(prev[0] - p[0], prev[1] - p[1]) < 1e-6) continue;
-      pts.push(p);
-    }
-    return pts.length >= 2 ? pts : null;
+    return mouthToLanePts(op, exitFace, j);
   }
 
   /**

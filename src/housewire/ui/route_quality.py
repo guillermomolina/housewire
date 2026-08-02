@@ -26,7 +26,11 @@ MAX_Z_LEG = 28.0
 # Short reverse stub treated as an unnecessary C (px).
 MAX_C_LEG = 18.0
 # Terminal-only diagonals may be this long; longer = boca→element bug.
+# Short diagonals are allowed ONLY on multi-cable terminal V fans.
+# Openings (one cable) and single-cable terminals must stay Manhattan.
 TERMINAL_DIAG_MAX = 36.0
+# Radius around a mouth where any diagonal is forbidden.
+OPENING_DIAG_RADIUS = 48.0
 # Min run (px) along an element edge before counting as a hug.
 ELEMENT_BORDER_MIN_RUN = 12.0
 # Clearance (px) from element box edges for inbox corridors.
@@ -147,6 +151,40 @@ def count_long_diagonals(
         if _dist(a, b) > max_ok:
             n += 1
     return n
+
+
+def count_diagonals(pts: Poly) -> int:
+    """Count every non-axis-aligned segment."""
+    if len(pts) < 2:
+        return 0
+    return sum(
+        1
+        for i in range(len(pts) - 1)
+        if is_diagonal_segment(pts[i], pts[i + 1])
+    )
+
+
+def count_diagonals_near_point(
+    pts: Poly, point: Point, *, radius: float = OPENING_DIAG_RADIUS
+) -> int:
+    """Diagonals with an endpoint within ``radius`` of ``point`` (opening)."""
+    if len(pts) < 2:
+        return 0
+    n = 0
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        if not is_diagonal_segment(a, b):
+            continue
+        if _dist(a, point) <= radius or _dist(b, point) <= radius:
+            n += 1
+    return n
+
+
+def opening_approach_is_manhattan(
+    pts: Poly, mouth: Point, *, radius: float = OPENING_DIAG_RADIUS
+) -> bool:
+    """True when the approach near an opening has no diagonals."""
+    return count_diagonals_near_point(pts, mouth, radius=radius) == 0
 
 
 def max_diagonal_length(pts: Poly) -> float:
@@ -407,21 +445,25 @@ def assess_bundle(
     allow_z: bool = False,
     allow_c: bool = False,
     allow_long_diagonal: bool = False,
+    allow_terminal_v: bool = False,
     allow_crossings: bool = False,
     element_rects: Sequence[Rect] | None = None,
     shared_terminals: Sequence[
         tuple[Point, str, Sequence[Poly]]
     ]
     | None = None,
+    openings: Sequence[Point] | None = None,
 ) -> list[str]:
     """Return human-readable problems for a parallel strand bundle.
 
     ``allow_z`` / ``allow_c``: set True only when several strands share one
     terminal and an intentional fan is expected.
     ``allow_long_diagonal``: set True only in tests of the detector itself.
+    ``allow_terminal_v``: short diagonals OK (multi-cable terminal V only).
     ``allow_crossings``: set True only when intentional crossing is expected.
     ``element_rects``: flag inbox segments that hug element box borders.
     ``shared_terminals``: list of (pin, face, strand_polys) that must V-enter.
+    ``openings``: mouth points where any diagonal is forbidden.
     """
     issues: list[str] = []
     if len(strands) >= 2 and strands_overlap(
@@ -442,14 +484,34 @@ def assess_bundle(
             n = count_c_jogs(poly)
             if n:
                 issues.append(f"strand {i}: {n} unnecessary C jog(s)")
+    # Diagonals: openings + single-cable terminals → Manhattan only.
+    # Multi-cable terminal V may use short diagonals when allow_terminal_v
+    # or when shared_terminals is provided for this assessment.
+    v_ok = allow_terminal_v or bool(shared_terminals)
     if not allow_long_diagonal:
         for i, poly in enumerate(strands):
-            n = count_long_diagonals(poly)
-            if n:
+            n_long = count_long_diagonals(poly)
+            if n_long:
                 issues.append(
-                    f"strand {i}: {n} long diagonal(s) "
+                    f"strand {i}: {n_long} long diagonal(s) "
                     f"(>{TERMINAL_DIAG_MAX:g}px; boca→element)"
                 )
+            elif not v_ok:
+                n_any = count_diagonals(poly)
+                if n_any:
+                    issues.append(
+                        f"strand {i}: {n_any} diagonal(s) "
+                        "(only multi-cable terminal V may diagonal)"
+                    )
+    if openings:
+        for oi, mouth in enumerate(openings):
+            for i, poly in enumerate(strands):
+                n = count_diagonals_near_point(poly, mouth)
+                if n:
+                    issues.append(
+                        f"strand {i}: {n} diagonal(s) near opening {oi} "
+                        "(openings are Manhattan-only)"
+                    )
     if element_rects:
         pins: list[Point] = []
         if shared_terminals:

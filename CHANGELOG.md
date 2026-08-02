@@ -7,6 +7,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.13] — 2026-08-02
+
+### Changed
+
+- Routing rule: openings are one-cable / Manhattan-only (no diagonals).
+  Terminals with more than one cable enter in a V (short diagonals OK);
+  single-cable terminals stay Manhattan.
+
+### Added
+
+- Route-quality checks for any diagonal outside multi-cable V, and for
+  diagonals near openings.
+
 ## [0.34.12] — 2026-08-02
 
 ### Fixed

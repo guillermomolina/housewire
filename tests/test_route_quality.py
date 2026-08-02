@@ -51,13 +51,20 @@ def _lampara_like_bundle(*, mode: str) -> list[list[tuple[float, float]]]:
     mode:
       - ``long_diag``: boca→pin diagonal (live 0.34.8 bug)
       - ``manhattan_z``: stub + Z into pin
-      - ``short_diag``: Manhattan spine + short terminal diagonal
+      - ``short_diag``: short diagonal on single-cable pins (now forbidden)
+      - ``manhattan``: Manhattan spine + stub (single cable, no diagonal)
+      - ``multi_v``: two cables on one pin with V diagonals
     """
     center = [(200.0, 40.0), (200.0, 120.0), (320.0, 120.0)]
     lanes = parallel_highway_bundle(center, 3)
     pins = [(300.0, 100.0), (320.0, 100.0), (340.0, 100.0)]
     boca = (200.0, 40.0)
     out: list[list[tuple[float, float]]] = []
+    if mode == "multi_v":
+        pin = (320.0, 100.0)
+        a = [pin, (320.0, 94.0), (312.0, 82.0), (312.0, 120.0), (200.0, 120.0), boca]
+        b = [pin, (320.0, 94.0), (328.0, 82.0), (328.0, 120.0), (200.0, 120.0), boca]
+        return [a, b]
     for i, lane_poly in enumerate(lanes):
         if mode == "long_diag":
             strand = [boca, pins[i]]
@@ -65,20 +72,25 @@ def _lampara_like_bundle(*, mode: str) -> list[list[tuple[float, float]]]:
             join = lane_poly[-1]
             lead = _manhattan_pin_join(pins[i], join)
             strand = list(lane_poly) + list(reversed(lead))[1:]
-        else:
-            # Highway ends under the pin; only the last ~15px may diagonal.
+        elif mode == "short_diag":
             pin = pins[i]
             under = (pin[0], pin[1] + 14.0)
             spine = list(lane_poly)
-            # Extend Manhattan to sit under the pin before the short lead.
             if abs(spine[-1][0] - under[0]) > 1e-6:
                 spine.append((under[0], spine[-1][1]))
             spine.append(under)
             stub = (pin[0], pin[1] - 6.0)
-            # Short diagonal stub→under is axis-aligned vertical after stub;
-            # use a tiny diagonal from stub to a nearby lane point.
             near = (pin[0] + 8.0, pin[1] + 8.0)
             strand = spine + [near, stub, pin]
+        else:
+            # manhattan: extend lane to pin x, then vertical into pin (no diag/C).
+            pin = pins[i]
+            strand = list(lane_poly)
+            last = strand[-1]
+            if abs(last[0] - pin[0]) > 1e-6:
+                strand.append((pin[0], last[1]))
+            if abs(strand[-1][1] - pin[1]) > 1e-6 or abs(strand[-1][0] - pin[0]) > 1e-6:
+                strand.append(pin)
         out.append(strand)
     return out
 
@@ -120,11 +132,23 @@ class TestRouteQualityDetectors(unittest.TestCase):
         issues = assess_bundle([long_diag])
         self.assertTrue(any("long diagonal" in x for x in issues), msg=issues)
 
-    def test_short_terminal_diagonal_allowed(self) -> None:
+    def test_short_terminal_diagonal_forbidden_without_v(self) -> None:
+        # Single-cable terminals must stay Manhattan (no short diagonal).
         short = [(100.0, 100.0), (100.0, 94.0), (112.0, 88.0)]
         self.assertLessEqual(max_diagonal_length(short), TERMINAL_DIAG_MAX)
         self.assertEqual(count_long_diagonals(short), 0)
-        self.assertEqual(assess_bundle([short]), [])
+        issues = assess_bundle([short])
+        self.assertTrue(
+            any("diagonal" in x for x in issues),
+            msg=issues,
+        )
+
+    def test_short_v_diagonal_allowed_with_flag(self) -> None:
+        short = [(100.0, 100.0), (100.0, 94.0), (112.0, 88.0)]
+        self.assertEqual(
+            assess_bundle([short], allow_terminal_v=True),
+            [],
+        )
 
     def test_clean_l_has_no_z(self) -> None:
         clean = [(0.0, 0.0), (0.0, 50.0), (80.0, 50.0)]
@@ -161,13 +185,41 @@ class TestBothInvariantsTogether(unittest.TestCase):
             msg=f"expected Z on Manhattan terminal rejoin, got {issues}",
         )
 
-    def test_short_diag_bundle_keeps_lanes_and_no_long_diag(self) -> None:
-        good = _lampara_like_bundle(mode="short_diag")
-        highway = [poly[:3] for poly in good]
-        self.assertFalse(strands_overlap(highway))
+    def test_short_diag_on_single_pins_rejected(self) -> None:
+        bad = _lampara_like_bundle(mode="short_diag")
+        issues = assess_bundle(bad)
+        self.assertTrue(
+            any("diagonal" in x for x in issues),
+            msg=f"expected diagonal on single-cable pins, got {issues}",
+        )
+
+    def test_manhattan_single_cable_bundle_ok(self) -> None:
+        good = _lampara_like_bundle(mode="manhattan")
         for poly in good:
             self.assertEqual(count_long_diagonals(poly), 0, msg=poly)
-            self.assertEqual(count_z_jogs(poly), 0, msg=poly)
+            self.assertEqual(
+                assess_bundle([poly]),
+                [],
+                msg=poly,
+            )
+        # Parallel highway spine (before pin leads) stays separated.
+        highway = [poly[:3] for poly in good]
+        self.assertFalse(strands_overlap(highway))
+        self.assertEqual(assess_bundle(highway), [])
+
+    def test_multi_cable_terminal_v_ok(self) -> None:
+        good = _lampara_like_bundle(mode="multi_v")
+        pin = (320.0, 100.0)
+        issues = assess_bundle(
+            good,
+            allow_terminal_v=True,
+            allow_crossings=True,
+            shared_terminals=[(pin, "N", good)],
+        )
+        self.assertFalse(
+            any("perpendicular" in x for x in issues), msg=issues
+        )
+        self.assertFalse(any("long diagonal" in x for x in issues), msg=issues)
 
     def test_separated_but_with_z_still_rejected(self) -> None:
         center = [(0.0, 0.0), (0.0, 60.0), (100.0, 60.0)]
@@ -258,11 +310,35 @@ class TestElementBorderAndVEntry(unittest.TestCase):
         issues = assess_bundle(
             [a, b],
             allow_z=True,
+            allow_terminal_v=True,
             allow_crossings=True,
             shared_terminals=[(pin, face, [a, b])],
         )
         self.assertFalse(
             any("perpendicular" in x for x in issues), msg=issues
+        )
+
+    def test_opening_forbids_diagonals(self) -> None:
+        from housewire.ui.route_quality import (
+            count_diagonals_near_point,
+            opening_approach_is_manhattan,
+        )
+
+        mouth = (200.0, 40.0)
+        # Diagonal into the opening (forbidden: one cable, Manhattan only).
+        bad = [(200.0, 40.0), (220.0, 60.0), (220.0, 100.0)]
+        self.assertGreaterEqual(count_diagonals_near_point(bad, mouth), 1)
+        self.assertFalse(opening_approach_is_manhattan(bad, mouth))
+        issues = assess_bundle([bad], openings=[mouth], allow_terminal_v=True)
+        self.assertTrue(
+            any("opening" in x for x in issues), msg=issues
+        )
+        # Manhattan stub out of the mouth (no Z).
+        good = [(200.0, 40.0), (200.0, 80.0), (240.0, 80.0)]
+        self.assertTrue(opening_approach_is_manhattan(good, mouth))
+        self.assertEqual(
+            assess_bundle([good], openings=[mouth]),
+            [],
         )
 
     def test_outline_extra_is_thin(self) -> None:
