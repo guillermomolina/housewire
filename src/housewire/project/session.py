@@ -8,7 +8,12 @@ from typing import Any
 
 from housewire.house import is_house_document, is_place_type
 from housewire.project.io import HOUSEWIRE_YAML, load_yaml
-from housewire.project.paths import find_site_yaml, is_excluded_path, is_yaml
+from housewire.project.paths import (
+    find_site_yaml,
+    is_excluded_path,
+    is_yaml,
+    split_project_arg,
+)
 from housewire.project.tree import get_place_node, iter_place_children, site_yaml_path
 
 EDIT_HISTORY_MAX = 50
@@ -109,6 +114,12 @@ class ProjectSession:
         if found is not None:
             return found
         return site_yaml_path(self.root)
+
+    @classmethod
+    def open(cls, path: Path) -> ProjectSession:
+        """Open a session from a site directory or a root YAML file."""
+        root, site_yaml = split_project_arg(path)
+        return cls(root, site_yaml=site_yaml)
 
     def site_yaml(self) -> Path:
         return self._site_yaml

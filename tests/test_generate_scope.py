@@ -56,3 +56,27 @@ class TestGenerateScope(unittest.TestCase):
             self.assertEqual(args.args[0], root)
             self.assertEqual(args.args[2], (root / "out").resolve())
             self.assertTrue(args.kwargs.get("with_stubs"))
+
+    def test_run_generate_accepts_yaml_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "MyHouse"
+            root.mkdir()
+            doc = init_site(root, type_id="House", label="House")
+            add_place(doc, "Parking", type_id="Floor", label="Parking")
+            save_site(root, doc)
+            yaml_path = root / HOUSEWIRE_YAML
+
+            with (
+                mock.patch("housewire.cli.run_wireviz"),
+                mock.patch("housewire.cli.export_physical_zone"),
+                mock.patch("housewire.cli.write_and_render_wireviz") as write_wv,
+            ):
+                code = run_generate_project(yaml_path, force=True)
+
+            self.assertEqual(code, 0)
+            write_wv.assert_called_once()
+            args = write_wv.call_args
+            self.assertEqual(args.args[0], root.resolve())
+            self.assertEqual(args.args[1], [yaml_path.resolve()])
+            self.assertEqual(args.args[2], (root / "out").resolve())
+            self.assertEqual(args.args[3], "housewire")

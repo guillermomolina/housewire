@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.26] — 2026-08-02
+
+### Changed
+
+- CLI ``generate``, ``serve``, ``shell``, and ABM commands accept a site YAML
+  file path (not only a directory). Output still goes to ``<site_root>/out/``.
+
 ## [0.28.25] — 2026-08-01
 
 ### Changed

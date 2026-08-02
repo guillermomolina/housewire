@@ -636,5 +636,8 @@ def run_serve(
             "UI extras not installed. Run: pip install 'housewire[ui]'"
         ) from exc
     app = create_app(site_root)
-    print(f"housewire UI → http://{host}:{port}/  (site: {site_root})")
+    print(
+        f"housewire UI → http://{host}:{port}/  "
+        f"(site: {site_root.expanduser().resolve()})"
+    )
     uvicorn.run(app, host=host, port=port, log_level="info")

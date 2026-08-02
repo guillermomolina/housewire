@@ -45,8 +45,8 @@ def run_repl(
     project_path: Path,
     generate_fn: Callable[..., int],
 ) -> int:
-    session = ProjectSession(project_path)
-    print(f"housewire shell — {session.root}")
+    session = ProjectSession.open(project_path)
+    print(f"housewire shell — {session.site_yaml()}")
     print(
         "Type help. Tab completes. Changes stay in memory until save. "
         "Multi-line: end with \\"

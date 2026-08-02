@@ -46,10 +46,10 @@ export HOUSEWIRE_CATALOG=/path/to/housewire-catalog
 Site-specific overlays: `$SITE/catalog/*.yaml` (shallow merge by `id`). Optional
 site field `catalog: default` (or a path) in the root `housewire.yaml`.
 
-Point the CLI at any site directory (outside this repo):
+Point the CLI at a site YAML file (or its directory) outside this repo:
 
 ```bash
-export SITE="$HOME/electrical-sites/my-site"
+export SITE="$HOME/electrical-sites/my-site/housewire.yaml"
 ```
 
 ## Interactive physical UI

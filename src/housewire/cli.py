@@ -26,6 +26,7 @@ from housewire.project.paths import (
     collect_yaml_from_directory,
     is_excluded_path,
     is_yaml,
+    split_project_arg,
 )
 from housewire.project.session import ProjectSession
 from housewire.shell import run_repl
@@ -331,7 +332,9 @@ def add_external_stubs(merged: dict[str, object]) -> None:
 
 
 def output_base_name(project_path: Path) -> str:
-    return normalize_token(project_path.name)
+    """Basename for generated artifacts (directory name or YAML stem)."""
+    label = project_path.stem if is_yaml(project_path) else project_path.name
+    return normalize_token(label)
 
 
 def expected_output_files(base_name: str, output_dir: Path) -> list[Path]:
@@ -400,32 +403,33 @@ def run_generate_project(
     inputs: list[str] | None = None,
     force: bool = False,
 ) -> int:
-    """Generate WireViz + physical for the given tree (``project_path`` as root).
+    """Generate WireViz + physical for a site YAML file or site directory.
 
-    Scope is the directory you pass (site root, a Floor, a DeviceBox, …).
-    Output goes to ``<project_path>/out/``. Cross-tree refs become External stubs.
+    Output goes to ``<site_root>/out/``. Cross-tree refs become External stubs.
     """
-    output_dir = (project_path / "out").resolve()
-
-    if not project_path.exists():
-        print(f"Project path does not exist: {project_path}", file=sys.stderr)
+    try:
+        site_root, site_yaml = split_project_arg(project_path)
+    except (FileNotFoundError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
         return 1
 
-    if not project_path.is_dir():
-        print(f"Project path is not a directory: {project_path}", file=sys.stderr)
-        return 1
+    output_dir = (site_root / "out").resolve()
 
     try:
-        input_files = resolve_inputs(project_path, inputs, output_dir)
+        if site_yaml is not None and not inputs:
+            input_files = [site_yaml]
+        else:
+            input_files = resolve_inputs(site_root, inputs, output_dir)
         if not input_files:
-            print(f"No YAML files found in: {project_path}", file=sys.stderr)
+            print(f"No YAML files found in: {site_root}", file=sys.stderr)
             return 1
 
-        base_name = output_base_name(project_path)
+        base_source = site_yaml if site_yaml is not None else site_root
+        base_name = output_base_name(base_source)
         ensure_overwrite_allowed(base_name, output_dir, force=force)
 
         write_and_render_wireviz(
-            project_path, input_files, output_dir, base_name, with_stubs=True
+            site_root, input_files, output_dir, base_name, with_stubs=True
         )
 
         physical_dir = output_dir / "physical"
@@ -433,11 +437,12 @@ def run_generate_project(
             shutil.rmtree(physical_dir)
         phys_svg = physical_dir / f"{base_name}.svg"
         print(f"Physical diagram → {phys_svg}")
+        title_label = base_source.stem if is_yaml(base_source) else base_source.name
         export_physical_zone(
-            project_path,
+            site_root,
             input_files,
             phys_svg,
-            title=f"{project_path.name} (physical)",
+            title=f"{title_label} (physical)",
         )
 
     except Exception as exc:
@@ -460,7 +465,7 @@ def run_generate_project(
 def _add_generate_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "project_path",
-        help="Root of the tree to generate (site, Floor, DeviceBox, …); output in out/",
+        help="Site YAML file or site directory; output in <site>/out/",
     )
     parser.add_argument(
         "--input",
@@ -517,7 +522,7 @@ def _build_parser() -> argparse.ArgumentParser:
         parents=[_catalog_parent()],
         help="REPL: cd, ls, use, add, rm, generate",
     )
-    sh.add_argument("project_path", help="Site project path")
+    sh.add_argument("project_path", help="Site YAML file or site directory")
 
     sub.add_parser("version", help="Show housewire version")
 
@@ -526,7 +531,7 @@ def _build_parser() -> argparse.ArgumentParser:
         parents=[_catalog_parent()],
         help="Interactive physical location UI (requires housewire[ui])",
     )
-    serve_p.add_argument("project_path", help="Site project path")
+    serve_p.add_argument("project_path", help="Site YAML file or site directory")
     serve_p.add_argument(
         "--host",
         default="127.0.0.1",
@@ -697,40 +702,42 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
     if cmd == "serve":
         from housewire.ui.app import run_serve
 
-        project_path = Path(args.project_path).resolve()
+        project_path = Path(args.project_path)
         try:
             run_serve(project_path, host=args.host, port=args.port)
-        except RuntimeError as exc:
+        except (RuntimeError, FileNotFoundError, ValueError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
         return 0
     if cmd == "generate":
-        project_path = Path(args.project_path).resolve()
         return run_generate_project(
-            project_path,
+            Path(args.project_path),
             inputs=args.inputs,
             force=args.force,
         )
     if cmd == "shell":
-        project_path = Path(args.project_path).resolve()
-        return run_repl(project_path, generate_fn=_run_generate_from_shell)
+        return run_repl(
+            Path(args.project_path), generate_fn=_run_generate_from_shell
+        )
     if cmd == "ls":
-        session = ProjectSession(Path(args.project_path).resolve())
+        session = ProjectSession.open(Path(args.project_path))
         session.cd(args.path)
         return cmd_ls(session)
     if cmd == "show":
+        site_root, _site_yaml = split_project_arg(Path(args.project_path))
         return show_file(
-            Path(args.project_path).resolve(),
+            site_root,
             Path(args.yaml_path),
             element=args.element,
             cable=args.cable,
         )
     if cmd == "add":
-        project_path = Path(args.project_path).resolve()
+        session = ProjectSession.open(Path(args.project_path))
+        project_path = session.root
         if args.add_kind == "location":
             from housewire.house import location_id_from_name
-            from housewire.project.io import HOUSEWIRE_YAML, create_inline_location
-            from housewire.project.tree import get_place_node, site_yaml_path
+            from housewire.project.io import create_inline_location
+            from housewire.project.tree import get_place_node
 
             raw = Path(args.name)
             if str(raw.parent) not in (".", ""):
@@ -738,9 +745,9 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
             leaf_id, auto_label = location_id_from_name(raw.name)
             label = args.label or auto_label
             working_name = getattr(args, "working_name", None)
-            yaml_path = site_yaml_path(project_path)
+            yaml_path = session.site_yaml()
             if not yaml_path.is_file():
-                raise FileNotFoundError(f"No {HOUSEWIRE_YAML} at site root: {project_path}")
+                raise FileNotFoundError(f"No site YAML at: {yaml_path}")
             doc = abm.load_editable(yaml_path, project_path)
             under = [
                 p for p in str(getattr(args, "under", "") or "").replace("\\", "/").split("/") if p
@@ -834,7 +841,7 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
         print("OK")
         return 0
     if cmd == "rm":
-        project_path = Path(args.project_path).resolve()
+        project_path = ProjectSession.open(Path(args.project_path)).root
         if args.rm_kind == "file":
             target = (project_path / args.file_path).resolve()
             target.unlink()

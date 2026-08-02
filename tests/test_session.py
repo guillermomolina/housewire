@@ -28,6 +28,13 @@ class TestProjectSession(unittest.TestCase):
 
         return ProjectSession(self.root)
 
+    def test_open_from_yaml_file(self) -> None:
+        from housewire.project.session import ProjectSession
+
+        s = ProjectSession.open(self.site_yaml)
+        self.assertEqual(s.root, self.root.resolve())
+        self.assertEqual(s.site_yaml(), self.site_yaml.resolve())
+
     def test_initial_cwd_is_root(self) -> None:
         s = self._session()
         self.assertEqual(s.cwd_path(), self.root)

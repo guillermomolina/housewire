@@ -41,6 +41,24 @@ def list_root_yaml_files(site_root: Path) -> list[Path]:
     return rows
 
 
+def split_project_arg(path: Path) -> tuple[Path, Path | None]:
+    """Split a CLI project argument into ``(site_root, site_yaml_or_None)``.
+
+    - YAML file → ``(parent, file)``
+    - directory → ``(directory, None)`` (caller discovers the site YAML)
+    """
+    target = path.expanduser().resolve()
+    if not target.exists():
+        raise FileNotFoundError(f"Path not found: {target}")
+    if target.is_file():
+        if not is_yaml(target):
+            raise ValueError(f"Not a YAML file: {target}")
+        return target.parent, target
+    if target.is_dir():
+        return target, None
+    raise ValueError(f"Unsupported project path: {target}")
+
+
 def find_site_yaml(
     site_root: Path,
     *,
