@@ -753,5 +753,106 @@ class TestOutAndBackAndMultiCableV(unittest.TestCase):
             )
 
 
+class TestSymmetricVAndNoPrematureMerge(unittest.TestCase):
+    """Regleta N2: both blacks diagonal V; meet only at the pin."""
+
+    def test_asymmetric_v_one_diagonal_one_straight_detected(self) -> None:
+        from housewire.ui.route_quality import (
+            shared_terminal_both_arms_diagonal,
+        )
+
+        pin = (200.0, 160.0)
+        # Live bug: left arm diagonal, right arm vertical into the pin.
+        left = [
+            pin,
+            (188.0, 146.0),
+            (188.0, 120.0),
+            (120.0, 120.0),
+        ]
+        right = [
+            pin,
+            (200.0, 140.0),  # straight up — missing the other V arm
+            (200.0, 100.0),
+            (260.0, 100.0),
+        ]
+        self.assertFalse(shared_terminal_both_arms_diagonal([left, right], pin))
+        issues = assess_bundle(
+            [left, right],
+            allow_terminal_v=True,
+            allow_crossings=True,
+            shared_terminals=[(pin, "N", [left, right])],
+            min_separation=0.5,
+        )
+        self.assertTrue(
+            any("asymmetric" in x or "perpendicular" in x for x in issues),
+            msg=issues,
+        )
+
+    def test_premature_merge_before_pin_detected(self) -> None:
+        from housewire.ui.route_quality import strands_merge_before_pin
+
+        pin = (200.0, 160.0)
+        # Two blues stacked on the same vertical, only split at the pin.
+        a = [pin, (200.0, 140.0), (200.0, 100.0), (160.0, 100.0)]
+        b = [pin, (200.0, 140.0), (200.0, 100.0), (240.0, 100.0)]
+        self.assertTrue(strands_merge_before_pin([a, b], pin))
+        issues = assess_bundle(
+            [a, b],
+            allow_terminal_v=True,
+            allow_crossings=True,
+            shared_terminals=[(pin, "N", [a, b])],
+        )
+        self.assertTrue(any("merge before" in x for x in issues), msg=issues)
+
+    def test_symmetric_v_leads_do_not_merge_before_pin(self) -> None:
+        from housewire.ui.route_quality import (
+            shared_terminal_both_arms_diagonal,
+            strands_merge_before_pin,
+            terminal_v_lead,
+        )
+
+        pin = (200.0, 160.0)
+        face = "N"
+        lane_l = (180.0, 100.0)
+        lane_r = (220.0, 100.0)
+        a = terminal_v_lead(pin, face, lane_l, slot=0, slot_count=2)
+        b = terminal_v_lead(pin, face, lane_r, slot=1, slot_count=2)
+        self.assertTrue(shared_terminal_both_arms_diagonal([a, b], pin))
+        self.assertFalse(strands_merge_before_pin([a, b], pin))
+        issues = assess_bundle(
+            [a, b],
+            allow_terminal_v=True,
+            allow_crossings=True,
+            allow_z=True,
+            shared_terminals=[(pin, face, [a, b])],
+        )
+        self.assertFalse(
+            any("asymmetric" in x or "merge before" in x for x in issues),
+            msg=issues,
+        )
+
+    def test_strip_short_z_preserves_terminal_v_diagonal(self) -> None:
+        """Old stripShortZJogs treated pin→tip→L as a Z and collapsed the V."""
+        from housewire.ui.route_quality import (
+            is_diagonal_segment,
+            strip_short_z_jogs,
+            terminal_entry_is_perpendicular,
+        )
+
+        pin = (200.0, 160.0)
+        tip = (188.0, 146.0)
+        # Path shaped like the live merge after tip: diag then short ortho L.
+        path = [
+            pin,
+            tip,
+            (200.0, 146.0),
+            (200.0, 100.0),
+            (120.0, 100.0),
+        ]
+        stripped = strip_short_z_jogs(path)
+        self.assertTrue(is_diagonal_segment(stripped[0], stripped[1]))
+        self.assertFalse(terminal_entry_is_perpendicular(stripped, pin))
+
+
 if __name__ == "__main__":
     unittest.main()

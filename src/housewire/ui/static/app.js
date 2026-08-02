@@ -2880,20 +2880,27 @@
     const multiCable = nSlots > 1;
 
     if (multiCable && (fo.x || fo.y)) {
-      // V leg touches the pin: pin → tip (one short diagonal).
+      // V leg touches the pin: pin → tip (one short diagonal). Opposite slots
+      // fan to opposite laterals so both arms of the V are diagonal — never
+      // one diagonal and one vertical. A short rail past the tip keeps the
+      // strand on its lateral until the spine join (meet only at the pin).
       const nx = -fo.y;
       const ny = fo.x;
       const mid = (nSlots - 1) / 2;
-      const fanLat = (s - mid) * Math.max(8, STRAND_WIDTH + LANE_GAP);
+      const fanPitch = Math.max(12, STRAND_WIDTH + LANE_GAP);
+      const fanLat = (s - mid) * fanPitch;
       const tip = {
-        x: p.x + fo.x * 12 + nx * fanLat,
-        y: p.y + fo.y * 12 + ny * fanLat,
+        x: p.x + fo.x * 14 + nx * fanLat,
+        y: p.y + fo.y * 14 + ny * fanLat,
       };
-      // Stop at the tip — Manhattan bridge to the spine is done by the caller
-      // so we never leave a diagonal gap after trimSpineAfterLead.
+      const rail = {
+        x: tip.x + fo.x * 18,
+        y: tip.y + fo.y * 18,
+      };
       return [
         [p.x, p.y],
         [tip.x, tip.y],
+        [rail.x, rail.y],
       ];
     }
 
@@ -2932,9 +2939,15 @@
     if (!spine || spine.length < 1) {
       return lead.map((p) => [p[0], p[1]]);
     }
-    const tip = lead[lead.length - 1];
+    const tip = lead[lead.length - 1]; // rail (or tip if no rail)
     const pin = lead[0];
-    /** Pick spine join index that avoids ida-y-vuelta / long detours. */
+    const vTip = lead.length >= 2 ? lead[1] : tip;
+    const fo = faceOutwardDelta(face);
+    const latX = -fo.y;
+    const latY = fo.x;
+    const tipLat =
+      (vTip[0] - pin[0]) * latX + (vTip[1] - pin[1]) * latY;
+    /** Pick spine join index that avoids ida-y-vuelta / crossing the pin axis. */
     let best = null;
     let bestScore = Infinity;
     const lim = Math.min(spine.length, 12);
@@ -2966,25 +2979,59 @@
       const away =
         (join[0] - tip[0]) * (tip[0] - pin[0]) +
         (join[1] - tip[1]) * (tip[1] - pin[1]);
-      const score = back * 1e5 + len + (away < 0 ? 500 : 0) + i * 2;
+      // Keep each V arm on its own lateral — do not snap back to pin.x early.
+      const joinLat =
+        (join[0] - pin[0]) * latX + (join[1] - pin[1]) * latY;
+      let latPen = Math.abs(joinLat - tipLat);
+      if (Math.abs(tipLat) > 1 && tipLat * joinLat < -1e-6) latPen += 900;
+      const score =
+        back * 1e5 + len + (away < 0 ? 500 : 0) + latPen * 3 + i * 2;
       if (score < bestScore) {
         bestScore = score;
         best = trial;
       }
     }
-    return best && best.length >= 2
-      ? best
-      : stripOutAndBack(
-          stripShortZJogs(
-            mergeOrthoPolys(
-              lead,
-              mergeOrthoPolys(
-                orthoJoinEnd([tip], spine[0], face),
-                spine
-              )
-            ) || lead
-          )
-        );
+    const fallback = stripOutAndBack(
+      stripShortZJogs(
+        mergeOrthoPolys(
+          lead,
+          mergeOrthoPolys(orthoJoinEnd([tip], spine[0], face), spine)
+        ) || lead
+      )
+    );
+    const picked = best && best.length >= 2 ? best : fallback;
+    return preserveTerminalVLead(lead, picked);
+  }
+
+  /**
+   * If strip/merge collapsed a multi-cable V into a Manhattan stub, put the
+   * pin→tip diagonal back so both arms stay diagonal and only meet at the pin.
+   */
+  function preserveTerminalVLead(lead, chain) {
+    if (!lead || lead.length < 2 || !chain || chain.length < 2) {
+      return chain ? chain.map((p) => [p[0], p[1]]) : [];
+    }
+    const pin = lead[0];
+    const tip = lead[1];
+    const leadDiag =
+      Math.abs(pin[0] - tip[0]) > 1e-6 && Math.abs(pin[1] - tip[1]) > 1e-6;
+    if (!leadDiag) return chain.map((p) => [p[0], p[1]]);
+    const c0 = chain[0];
+    const c1 = chain[1];
+    const chainDiag =
+      Math.abs(c0[0] - c1[0]) > 1e-6 && Math.abs(c0[1] - c1[1]) > 1e-6;
+    const atPin = Math.hypot(c0[0] - pin[0], c0[1] - pin[1]) < 1.5;
+    if (atPin && chainDiag) return chain.map((p) => [p[0], p[1]]);
+    // Rebuild: full lead (pin→tip→rail) then Manhattan onto the chain.
+    let rest = chain.map((p) => [p[0], p[1]]);
+    if (Math.hypot(rest[0][0] - pin[0], rest[0][1] - pin[1]) < 1.5) {
+      rest = rest.slice(1);
+    }
+    const rail = lead[lead.length - 1];
+    const bridge = orthoJoinEnd([rail], rest[0] || tip, null);
+    return stripOutAndBack(
+      mergeOrthoPolys(lead, mergeOrthoPolys(bridge, rest)) || lead
+    );
   }
 
   /**
@@ -3176,6 +3223,11 @@
         const bcy = c[1] - b[1];
         const cdx = d[0] - c[0];
         const cdy = d[1] - c[1];
+        // Only strip orthogonal Z jogs — never touch terminal V diagonals.
+        const abDiag = Math.abs(abx) > 1e-6 && Math.abs(aby) > 1e-6;
+        const bcDiag = Math.abs(bcx) > 1e-6 && Math.abs(bcy) > 1e-6;
+        const cdDiag = Math.abs(cdx) > 1e-6 && Math.abs(cdy) > 1e-6;
+        if (abDiag || bcDiag || cdDiag) continue;
         if (Math.abs(abx * bcy - aby * bcx) < 1e-6) continue;
         if (Math.abs(bcx * cdy - bcy * cdx) < 1e-6) continue;
         const mid = Math.hypot(bcx, bcy);

@@ -244,16 +244,81 @@ def terminal_v_lead(
     slot: int,
     slot_count: int,
 ) -> list[Point]:
-    """Mirror of multi-cable ``pinToLanePts``: diagonal touches the pin."""
+    """Mirror of multi-cable ``pinToLanePts``: diagonal touches the pin + rail."""
     out_dir, lat = _face_axes(face)
     mid = (slot_count - 1) / 2.0
-    fan_lat = (slot - mid) * max(8.0, FAN_LATERAL_PITCH)
+    fan_pitch = max(12.0, FAN_LATERAL_PITCH)
+    fan_lat = (slot - mid) * fan_pitch
     tip = (
-        pin[0] + out_dir[0] * 12.0 + lat[0] * fan_lat,
-        pin[1] + out_dir[1] * 12.0 + lat[1] * fan_lat,
+        pin[0] + out_dir[0] * 14.0 + lat[0] * fan_lat,
+        pin[1] + out_dir[1] * 14.0 + lat[1] * fan_lat,
     )
-    # pin → tip (V at the terminal), then Manhattan to the lane.
-    return manhattan_join_end([pin, tip], lane_pt, face=face)
+    rail = (
+        tip[0] + out_dir[0] * 18.0,
+        tip[1] + out_dir[1] * 18.0,
+    )
+    # pin → tip (V at the terminal), rail stays on tip lateral, then Manhattan.
+    return manhattan_join_end([pin, tip, rail], lane_pt, face=face)
+
+
+def strands_merge_before_pin(
+    strands: Sequence[Poly],
+    pin: Point,
+    *,
+    min_separation: float = MIN_LANE_SEPARATION,
+    meet_radius: float = 4.0,
+) -> bool:
+    """True when strands run stacked outside ``meet_radius`` of the shared pin.
+
+    Multi-cable terminals may only coincide at the pin itself — any closer
+    approach farther out is a premature merge (screenshot Regleta bug).
+    """
+    if len(strands) < 2:
+        return False
+
+    def clipped(poly: Poly) -> list[Point]:
+        """Keep vertices / samples farther than ``meet_radius`` from ``pin``."""
+        out: list[Point] = []
+        for i in range(len(poly) - 1):
+            a, b = poly[i], poly[i + 1]
+            for t in (0.0, 0.25, 0.5, 0.75, 1.0):
+                x = a[0] + t * (b[0] - a[0])
+                y = a[1] + t * (b[1] - a[1])
+                if _dist((x, y), pin) > meet_radius:
+                    out.append((x, y))
+        # Dedup consecutive
+        clean: list[Point] = []
+        for p in out:
+            if not clean or _dist(clean[-1], p) > 0.5:
+                clean.append(p)
+        return clean
+
+    clips = [clipped(s) for s in strands]
+    for i in range(len(clips)):
+        for j in range(i + 1, len(clips)):
+            a, b = clips[i], clips[j]
+            if len(a) < 2 or len(b) < 2:
+                continue
+            if min_polyline_separation(a, b) < min_separation:
+                return True
+    return False
+
+
+def shared_terminal_both_arms_diagonal(
+    strands: Sequence[Poly], pin: Point
+) -> bool:
+    """True when every strand touching ``pin`` enters on a diagonal (full V)."""
+    if len(strands) < 2:
+        return True
+    for poly in strands:
+        if terminal_entry_is_perpendicular(poly, pin):
+            return False
+        seg = first_segment_from_pin(poly, pin)
+        if seg is None:
+            return False
+        if not is_diagonal_segment(seg[0], seg[1]):
+            return False
+    return True
 
 
 def first_segment_from_pin(pts: Poly, pin: Point, *, tol: float = 1.5) -> tuple[Point, Point] | None:
@@ -415,9 +480,9 @@ def _bend_dirs(pts: Poly) -> list[tuple[float, float, float]]:
 
 
 def count_z_jogs(pts: Poly, *, max_leg: float = MAX_Z_LEG) -> int:
-    """Count short Z (direction reverse after two bends) along a polyline.
+    """Count short orthogonal Z jogs (unnecessary lane hops).
 
-    Pattern: travel → turn → short leg → turn back toward the prior axis.
+    Diagonal segments (terminal V) are ignored so pin→tip→rail is not a Z.
     """
     if len(pts) < 4:
         return 0
@@ -427,6 +492,12 @@ def count_z_jogs(pts: Poly, *, max_leg: float = MAX_Z_LEG) -> int:
         b = pts[i]
         c = pts[i + 1]
         d = pts[i + 2]
+        if (
+            is_diagonal_segment(a, b)
+            or is_diagonal_segment(b, c)
+            or is_diagonal_segment(c, d)
+        ):
+            continue
         ab = (b[0] - a[0], b[1] - a[1])
         bc = (c[0] - b[0], c[1] - b[1])
         cd = (d[0] - c[0], d[1] - c[1])
@@ -449,6 +520,44 @@ def count_z_jogs(pts: Poly, *, max_leg: float = MAX_Z_LEG) -> int:
             continue
         count += 1
     return count
+
+
+def strip_short_z_jogs(pts: Poly, *, max_leg: float = MAX_Z_LEG) -> list[Point]:
+    """Mirror of ``stripShortZJogs`` in app.js (orthogonal Z only)."""
+    if len(pts) < 4:
+        return [(p[0], p[1]) for p in pts]
+    out: list[Point] = [(p[0], p[1]) for p in pts]
+    changed = True
+    while changed:
+        changed = False
+        for i in range(1, len(out) - 2):
+            a, b, c, d = out[i - 1], out[i], out[i + 1], out[i + 2]
+            if (
+                is_diagonal_segment(a, b)
+                or is_diagonal_segment(b, c)
+                or is_diagonal_segment(c, d)
+            ):
+                continue
+            abx, aby = b[0] - a[0], b[1] - a[1]
+            bcx, bcy = c[0] - b[0], c[1] - b[1]
+            cdx, cdy = d[0] - c[0], d[1] - c[1]
+            if abs(abx * bcy - aby * bcx) < 1e-6:
+                continue
+            if abs(bcx * cdy - bcy * cdx) < 1e-6:
+                continue
+            mid = _dist(b, c)
+            if mid <= 1e-6 or mid > max_leg:
+                continue
+            ab_h = abs(aby) < 1e-6
+            cd_h = abs(cdy) < 1e-6
+            bc_h = abs(bcy) < 1e-6
+            if ab_h != cd_h or ab_h == bc_h:
+                continue
+            corner = (d[0], a[1]) if ab_h else (a[0], d[1])
+            out = out[:i] + [corner] + out[i + 2 :]
+            changed = True
+            break
+    return out
 
 
 def count_c_jogs(pts: Poly, *, max_leg: float = MAX_C_LEG) -> int:
@@ -695,6 +804,17 @@ def assess_bundle(
             ):
                 issues.append(
                     f"shared terminal {ti}: perpendicular entry (want V)"
+                )
+            if len(polys) >= 2 and not shared_terminal_both_arms_diagonal(
+                polys, pin
+            ):
+                issues.append(
+                    f"shared terminal {ti}: asymmetric V "
+                    "(every cable must enter on a diagonal)"
+                )
+            if len(polys) >= 2 and strands_merge_before_pin(polys, pin):
+                issues.append(
+                    f"shared terminal {ti}: cables merge before the pin"
                 )
     return issues
 

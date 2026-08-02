@@ -7,6 +7,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.19] — 2026-08-02
+
+### Fixed
+
+- Multi-cable terminal V: ``stripShortZJogs`` no longer treats pin→tip→L as an
+  orthogonal Z, which collapsed one arm into a vertical entry.
+- Both V arms stay diagonal (wider fan + tip rail); ``mergeLeadToSpine`` prefers
+  same-lateral spine joins so strands meet only at the pin, not earlier.
+- ``preserveTerminalVLead`` restores a collapsed diagonal as a safety net.
+
+### Added
+
+- Detectors/tests for asymmetric V, premature merge before the pin, and
+  strip-Z preserving terminal diagonals.
+
 ## [0.34.18] — 2026-08-02
 
 ### Fixed
