@@ -7,6 +7,27 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.0] — 2026-08-02
+
+### Changed
+
+- Hop routing simplified to three phases (head + tube + tail) with no
+  full-chain post-passes (``preserveTerminalVLead`` / ``ensureVertexNear`` /
+  strip on the merged path).
+
+### Fixed
+
+- Hop strands use the raw conduit centerline (``exteriorPathD`` was dropping
+  border-skimming segments and truncating bocas, e.g. Test_01 lamp vertical).
+- Hop mouths follow painted tube ends; mouth fans flip toward the pin so plane
+  bocas (B/F) do not fan back into the tube.
+
+### Added
+
+- Live canvas route invariants (``assess_live_canvas``) and E2E Test_01 suite
+  that asserts boca transit, tube envelope, terminal V, and no shared inbox
+  trunk on the paths the UI actually paints.
+
 ## [0.34.33] — 2026-08-02
 
 ### Fixed

@@ -1705,11 +1705,31 @@
    * AFTER exiting the boca (never by peeling through the tube wall).
    * Depth along inward uses laneDist so tips do not share one latitude
    * (Test_01 shared y=420 trunk when every tip sat on stub-Y).
+   *
+   * ``toward`` (optional): pin / attach inside the place. If the nominal
+   * opening inward points away from it (common for plane bocas B/F), flip
+   * so the fan never goes back into the tube corridor.
    */
-  function mouthFanPts(mouth, face, laneDist) {
+  function mouthFanPts(mouth, face, laneDist, toward) {
     const mx = Array.isArray(mouth) ? mouth[0] : mouth.x;
     const my = Array.isArray(mouth) ? mouth[1] : mouth.y;
-    const oi = openingInwardDelta(face);
+    let oi = openingInwardDelta(face);
+    if (toward != null) {
+      const tx = Array.isArray(toward) ? toward[0] : toward.x;
+      const ty = Array.isArray(toward) ? toward[1] : toward.y;
+      const dx = tx - mx;
+      const dy = ty - my;
+      if (oi.x * dx + oi.y * dy < -1e-6) {
+        oi = { x: -oi.x, y: -oi.y };
+      } else if (Math.abs(oi.x) < 1e-9 && Math.abs(oi.y) < 1e-9) {
+        // Unknown face: use dominant axis toward the pin.
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          oi = { x: dx >= 0 ? 1 : -1, y: 0 };
+        } else {
+          oi = { x: 0, y: dy >= 0 ? 1 : -1 };
+        }
+      }
+    }
     const stub = stubPoint({ x: mx, y: my }, oi.x, oi.y, INBOX_STUB);
     /** @type {number[][]} */
     const pts = [
@@ -3943,7 +3963,10 @@
         const tubeD = hopTubePathD(hop);
         let ext = null;
         if (tubeD) {
-          ext = exteriorPathD(tubeD, leafObstacles);
+          // Keep the conduit centerline intact. ``exteriorPathD`` drops any
+          // segment that skims a place border and was truncating bocas
+          // (Test_01 lamp vertical never reached the painted tube end).
+          ext = tubeD;
         } else {
           const opA = isPlaneOpeningId(hop.from_opening)
             ? planeContourEntryAbs(
@@ -4055,25 +4078,6 @@
         startAtt.face || elementAttachFace(a, startOp, placeById);
       const endFace = endAtt.face || elementAttachFace(b, endOp, placeById);
 
-      const startTailCtr = hopEndpointTailPts(
-        a,
-        startPlace,
-        first.from_opening,
-        placeById,
-        fromSlot.slot,
-        fromSlot.count,
-        fromPin
-      );
-      const endTailCtr = hopEndpointTailPts(
-        b,
-        endPlace,
-        last.to_opening,
-        placeById,
-        toSlot.slot,
-        toSlot.count,
-        toPin
-      );
-
       // Tube only gets highway parallel offset. Inbox uses a mouth fan so
       // lanes stay inside the conduit and only separate after the boca.
       /** @type {number[][]|null} */
@@ -4091,6 +4095,17 @@
           : [];
       }
 
+      // Mouths for hop phases = painted tube ends (not a divergent plane-entry
+      // point). Plane bocas (B/F) otherwise pulled strands off the edge-tube.
+      const tubeStartOp = {
+        x: exteriorCtr[0][0],
+        y: exteriorCtr[0][1],
+      };
+      const tubeEndOp = {
+        x: exteriorCtr[exteriorCtr.length - 1][0],
+        y: exteriorCtr[exteriorCtr.length - 1][1],
+      };
+
       const startMouthFace = routeFace(
         startPlace,
         first.from_opening,
@@ -4105,11 +4120,22 @@
       );
 
       let tube = parallel(exteriorCtr);
-      tube = convergeLaneToMouth(tube, startOp, true);
-      tube = convergeLaneToMouth(tube, endOp, false);
+      tube = convergeLaneToMouth(tube, tubeStartOp, true);
+      tube = convergeLaneToMouth(tube, tubeEndOp, false);
+      // Phase contract: tube endpoints ARE the mouths (exact).
+      if (tube.length >= 1) {
+        tube[0] = [tubeStartOp.x, tubeStartOp.y];
+        tube[tube.length - 1] = [tubeEndOp.x, tubeEndOp.y];
+        tube = cleanOrthoPoly(tube);
+      }
 
-      const startFan = mouthFanPts(startOp, startMouthFace, laneDist);
-      const endFan = mouthFanPts(endOp, endMouthFace, laneDist);
+      const startFan = mouthFanPts(
+        tubeStartOp,
+        startMouthFace,
+        laneDist,
+        startAtt
+      );
+      const endFan = mouthFanPts(tubeEndOp, endMouthFace, laneDist, endAtt);
       // Toward mouth: fan → stub → mouth. Join lead to fan tip via
       // joinLeadToFanTip (column-first) so lanes do not share rail-Y.
       const startFanRev = startFan.slice().reverse();
@@ -4125,8 +4151,28 @@
         head = mergeOrthoPolys(head, startFanRev.slice(1)) || head;
       }
       head = stripShortZJogs(
-        stripOutAndBack(head, [startOp, startFanRev[0], ...startFan])
+        stripOutAndBack(head, [tubeStartOp, startFanRev[0], ...startFan])
       );
+      // Phase contract: head ends on the start mouth.
+      {
+        const sx = tubeStartOp.x;
+        const sy = tubeStartOp.y;
+        if (!head.length) {
+          head = [[sx, sy]];
+        } else if (
+          Math.hypot(head[head.length - 1][0] - sx, head[head.length - 1][1] - sy) >
+          1e-6
+        ) {
+          const last = head[head.length - 1];
+          if (Math.abs(last[0] - sx) >= 1e-6 && Math.abs(last[1] - sy) >= 1e-6) {
+            // Prefer matching mouth latitude on current column (N/S faces).
+            head.push([last[0], sy]);
+          }
+          head.push([sx, sy]);
+        } else {
+          head[head.length - 1] = [sx, sy];
+        }
+      }
 
       const endFanFwd = endFan.map((p) => [p[0], p[1]]);
       const endFanTip = endFanFwd[endFanFwd.length - 1];
@@ -4145,40 +4191,58 @@
           mergeOrthoPolys(tailFromPin, fanToMouth.slice(1)) || tailFromPin;
       }
       tailFromPin = stripShortZJogs(
-        stripOutAndBack(tailFromPin, [endOp, endFanTip, ...endFanFwd])
+        stripOutAndBack(tailFromPin, [tubeEndOp, endFanTip, ...endFanFwd])
       );
+      // Phase contract: pin-side path ends on the end mouth before reverse.
+      // (mergeOrthoPolys ignores 1-point arrays — append explicitly.)
+      {
+        const ex = tubeEndOp.x;
+        const ey = tubeEndOp.y;
+        if (!tailFromPin.length) {
+          tailFromPin = [[ex, ey]];
+        } else if (
+          Math.hypot(
+            tailFromPin[tailFromPin.length - 1][0] - ex,
+            tailFromPin[tailFromPin.length - 1][1] - ey
+          ) > 1e-6
+        ) {
+          const last = tailFromPin[tailFromPin.length - 1];
+          if (Math.abs(last[0] - ex) >= 1e-6 && Math.abs(last[1] - ey) >= 1e-6) {
+            tailFromPin.push([last[0], ey]);
+          }
+          tailFromPin.push([ex, ey]);
+        } else {
+          tailFromPin[tailFromPin.length - 1] = [ex, ey];
+        }
+      }
       const tail = tailFromPin.slice().reverse();
 
-      // Tube stays pristine (never stripOutAndBack across mouth converges —
-      // that collapsed boca zigzags into a shortcut past the mouth).
-      let chain = mergeOrthoPolys(head, tube);
-      chain = mergeOrthoPolys(chain, tail);
+      // Tube stays pristine. Explicit phase concat (no full-chain post-passes).
+      /** @type {number[][]} */
+      const concatPhases = (headPts, tubePts, tailPts) => {
+        /** @type {number[][]} */
+        const out = [];
+        const append = (seg) => {
+          for (const p of seg || []) {
+            const prev = out[out.length - 1];
+            if (
+              prev &&
+              Math.hypot(prev[0] - p[0], prev[1] - p[1]) < 1e-6
+            ) {
+              continue;
+            }
+            out.push([p[0], p[1]]);
+          }
+        };
+        append(headPts);
+        append(tubePts);
+        append(tailPts);
+        return out.length >= 2 ? out : [];
+      };
+      let chain = concatPhases(head, tube, tail);
+      // Re-assert exterior = canonical tube between bocas (phase contract).
+      chain = spliceTubeSegment(chain, tube, tubeStartOp, tubeEndOp);
       if (!chain || chain.length < 2) return [];
-
-      // Guaranteed boca transit after merges / V preserve strips.
-      chain = ensureVertexNear(chain, startOp, 2);
-      chain = ensureVertexNear(chain, endOp, 2);
-
-      const mouthProtect = [
-        startOp,
-        endOp,
-        startFanRev[0],
-        endFanTip,
-        ...startFan,
-        ...endFanFwd,
-      ];
-      if (fromSlot.count > 1) {
-        chain = preserveTerminalVLead(startLead, chain, mouthProtect);
-      }
-      if (toSlot.count > 1) {
-        chain = preserveTerminalVLead(
-          endLead,
-          chain.slice().reverse(),
-          mouthProtect
-        ).reverse();
-      }
-      chain = ensureVertexNear(chain, startOp, 2);
-      chain = ensureVertexNear(chain, endOp, 2);
       return [chain];
     }
     const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);

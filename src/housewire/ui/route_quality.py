@@ -1647,3 +1647,232 @@ def attach_v_leads(
     else:
         merged = list(tail) + rev
     return list(reversed(merged))
+
+
+def _seg_dist(p: Point, a: Point, b: Point) -> float:
+    abx, aby = b[0] - a[0], b[1] - a[1]
+    lab2 = abx * abx + aby * aby
+    if lab2 < 1e-12:
+        return _dist(p, a)
+    t = max(0.0, min(1.0, ((p[0] - a[0]) * abx + (p[1] - a[1]) * aby) / lab2))
+    return _dist(p, (a[0] + t * abx, a[1] + t * aby))
+
+
+def point_near_polyline(p: Point, poly: Poly, *, tol: float = 3.0) -> bool:
+    """True if ``p`` lies within ``tol`` of any vertex or segment of ``poly``."""
+    if not poly:
+        return False
+    pts = [(float(q[0]), float(q[1])) for q in poly]
+    if any(_dist(p, q) <= tol for q in pts):
+        return True
+    for a, b in zip(pts, pts[1:]):
+        if _seg_dist(p, a, b) <= tol:
+            return True
+    return False
+
+
+def polyline_dist_to_centerline(poly: Poly, centerline: Poly) -> float:
+    """Max distance from any vertex of ``poly`` to ``centerline`` segments."""
+    if not poly or len(centerline) < 2:
+        return 0.0
+    cl = [(float(p[0]), float(p[1])) for p in centerline]
+    worst = 0.0
+    for q in poly:
+        d = min(
+            _seg_dist((float(q[0]), float(q[1])), cl[i], cl[i + 1])
+            for i in range(len(cl) - 1)
+        )
+        if d > worst:
+            worst = d
+    return worst
+
+
+def match_strand_to_tube(
+    strand: Poly, tubes: Sequence[Poly]
+) -> tuple[int, float]:
+    """Return (tube_index, mean_dist) for the tube this strand follows best."""
+    if not tubes or not strand:
+        return -1, float("inf")
+    best_i, best_score = -1, float("inf")
+    s = [(float(p[0]), float(p[1])) for p in strand]
+    for ti, tube in enumerate(tubes):
+        if len(tube) < 2:
+            continue
+        t = [(float(p[0]), float(p[1])) for p in tube]
+        xs = [p[0] for p in t]
+        ys = [p[1] for p in t]
+        pad = 40.0
+        mid = [
+            p
+            for p in s
+            if min(xs) - pad <= p[0] <= max(xs) + pad
+            and min(ys) - pad <= p[1] <= max(ys) + pad
+        ]
+        if len(mid) < 2:
+            continue
+        near = [
+            p
+            for p in mid
+            if min(_seg_dist(p, t[i], t[i + 1]) for i in range(len(t) - 1)) < 50
+        ]
+        if len(near) < 2:
+            continue
+        score = sum(
+            min(_seg_dist(p, t[i], t[i + 1]) for i in range(len(t) - 1))
+            for p in near
+        ) / len(near)
+        if score < best_score:
+            best_score = score
+            best_i = ti
+    return best_i, best_score
+
+
+def shared_horizontal_trunk_length(
+    strands: Sequence[Poly],
+    *,
+    y_min: float,
+    y_max: float,
+    min_len: float = 40.0,
+) -> list[tuple[float, float, int]]:
+    """Detect long horizontals at the same Y shared by ≥2 strands (inbox trunk).
+
+    Returns list of (y, length, strand_count) for offending latitudes.
+    """
+    # y -> list of (x0, x1) intervals per strand
+    by_y: dict[int, list[list[tuple[float, float]]]] = {}
+    for strand in strands:
+        pts = [(float(p[0]), float(p[1])) for p in strand]
+        local: dict[int, list[tuple[float, float]]] = {}
+        for a, b in zip(pts, pts[1:]):
+            if abs(a[1] - b[1]) > 0.75:
+                continue
+            y = round(a[1])
+            if y < y_min or y > y_max:
+                continue
+            lo, hi = sorted((a[0], b[0]))
+            if hi - lo < 1.0:
+                continue
+            local.setdefault(y, []).append((lo, hi))
+        for y, segs in local.items():
+            by_y.setdefault(y, []).append(segs)
+
+    bad: list[tuple[float, float, int]] = []
+    for y, per_strand in by_y.items():
+        if len(per_strand) < 2:
+            continue
+        # Total covered length union proxy: max pairwise overlap span.
+        total = 0.0
+        for segs in per_strand:
+            total += sum(hi - lo for lo, hi in segs)
+        # Overlap: any two strands share an x-range at this y.
+        overlap = 0.0
+        for i in range(len(per_strand)):
+            for j in range(i + 1, len(per_strand)):
+                for a0, a1 in per_strand[i]:
+                    for b0, b1 in per_strand[j]:
+                        lo, hi = max(a0, b0), min(a1, b1)
+                        if hi - lo > overlap:
+                            overlap = hi - lo
+        if overlap >= min_len:
+            bad.append((float(y), overlap, len(per_strand)))
+    return bad
+
+
+def assess_live_canvas(
+    tubes: Sequence[Poly],
+    strands: Sequence[Poly],
+    *,
+    tube_half_widths: Sequence[float] | None = None,
+    mouth_tol: float = 3.0,
+    envelope_margin: float = 2.5,
+    trunk_y_min: float = 400.0,
+    trunk_y_max: float = 440.0,
+    bipolar_y_min: float = 430.0,
+) -> list[str]:
+    """Invariants for a live Test_01-style canvas (tubes + colored strands).
+
+    Used by the Playwright E2E so failures match what the UI actually paints.
+    """
+    issues: list[str] = []
+    if not tubes:
+        issues.append("no edge-tube paths on canvas")
+    if len(strands) < 1:
+        issues.append("no cable strands on canvas")
+        return issues
+
+    halves = list(tube_half_widths or [])
+    while len(halves) < len(tubes):
+        # Match app.js highwayRoadWidth defaults (3-lane ~17.5 → 8.75).
+        halves.append(8.75)
+
+    for si, strand in enumerate(strands):
+        pts = [(float(p[0]), float(p[1])) for p in strand]
+        if len(pts) < 2:
+            issues.append(f"strand {si}: too short")
+            continue
+        ti, _ = match_strand_to_tube(pts, tubes)
+        if ti < 0:
+            issues.append(f"strand {si}: no matching tube")
+            continue
+        tube = [(float(p[0]), float(p[1])) for p in tubes[ti]]
+        mouth_a, mouth_b = tube[0], tube[-1]
+        if not point_near_polyline(mouth_a, pts, tol=mouth_tol):
+            issues.append(f"strand {si}: misses tube[{ti}] start mouth")
+        if not point_near_polyline(mouth_b, pts, tol=mouth_tol):
+            issues.append(f"strand {si}: misses tube[{ti}] end mouth")
+
+        # Envelope: only vertices BETWEEN the two mouth visits on this strand
+        # (inbox fans before/after bocas must not inflate max_d).
+        def nearest_idx(mouth: Point) -> int:
+            best_i, best_d = 0, float("inf")
+            for i, p in enumerate(pts):
+                d = _dist(p, mouth)
+                # Also consider segment distance to catch mouth mid-edge.
+                if i + 1 < len(pts):
+                    d = min(d, _seg_dist(mouth, p, pts[i + 1]))
+                if d < best_d:
+                    best_d = d
+                    best_i = i
+            return best_i
+
+        i0 = nearest_idx(mouth_a)
+        i1 = nearest_idx(mouth_b)
+        if i1 < i0:
+            i0, i1 = i1, i0
+        corridor = pts[i0 + 1 : i1]
+        if corridor:
+            max_d = max(
+                min(_seg_dist(p, tube[i], tube[i + 1]) for i in range(len(tube) - 1))
+                for p in corridor
+            )
+            limit = halves[ti] + envelope_margin
+            if max_d > limit:
+                issues.append(
+                    f"strand {si}: outside tube[{ti}] envelope "
+                    f"(max_d={max_d:.1f} > {limit:.1f})"
+                )
+
+        n_back = count_out_and_back(pts)
+        if n_back:
+            issues.append(f"strand {si}: out-and-back ({n_back})")
+
+        # Bipolar-ish: path ends near Regleta band → expect a terminal diagonal.
+        end_hi = pts[0][1] > bipolar_y_min or pts[-1][1] > bipolar_y_min
+        if end_hi:
+            d0 = abs(pts[0][0] - pts[1][0]) > 0.5 and abs(pts[0][1] - pts[1][1]) > 0.5
+            d1 = (
+                abs(pts[-1][0] - pts[-2][0]) > 0.5
+                and abs(pts[-1][1] - pts[-2][1]) > 0.5
+            )
+            if not (d0 or d1):
+                issues.append(f"strand {si}: missing terminal V diagonal")
+
+    trunks = shared_horizontal_trunk_length(
+        strands, y_min=trunk_y_min, y_max=trunk_y_max, min_len=40.0
+    )
+    for y, length, n in trunks:
+        issues.append(
+            f"shared inbox trunk at y≈{y:.0f} overlap={length:.0f}px "
+            f"across {n} strands"
+        )
+    return issues
