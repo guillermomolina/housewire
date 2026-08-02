@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.17] — 2026-08-02
+
+### Fixed
+
+- Multi-cable terminal V: the diagonal touches the pin (no 90° stub first);
+  tip→spine is Manhattan via ``mergeLeadToSpine`` so diagonals cannot appear
+  in the next segment after spine trim.
+- Stronger out-and-back stripping after lead/spine merge.
+
+### Added
+
+- Detectors for perpendicular pin entry, diagonals away from the pin, and
+  out-and-back (ida y vuelta) on the same path.
+
 ## [0.34.16] — 2026-08-02
 
 ### Fixed
