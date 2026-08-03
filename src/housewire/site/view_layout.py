@@ -127,6 +127,107 @@ def get_electrical_rotation(element: dict[str, Any]) -> int:
     return value if value in _ROTATIONS else 0
 
 
+def _parse_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off", ""}:
+        return False
+    raise ValueError(f"expected boolean, got {value!r}")
+
+
+def _get_flips(layer: dict[str, Any] | None) -> tuple[bool, bool]:
+    if layer is None:
+        return False, False
+    return bool(layer.get("flip_ns")), bool(layer.get("flip_we"))
+
+
+def _ensure_view_layer(obj: dict[str, Any], layer: str) -> dict[str, Any]:
+    if not isinstance(obj, dict):
+        raise ValueError("object must be a map")
+    view = obj.get("view")
+    if view is None:
+        view = {}
+        obj["view"] = view
+    elif not isinstance(view, dict):
+        raise ValueError("view must be a map")
+    layer_map = view.get(layer)
+    if layer_map is None:
+        layer_map = {}
+        view[layer] = layer_map
+    elif not isinstance(layer_map, dict):
+        raise ValueError(f"view.{layer} must be a map")
+    return layer_map
+
+
+def _set_flips(
+    obj: dict[str, Any],
+    layer: str,
+    *,
+    flip_ns: bool | None = None,
+    flip_we: bool | None = None,
+) -> None:
+    """Write flip flags; drop keys when false to keep YAML tidy."""
+    layer_map = _ensure_view_layer(obj, layer)
+    cur_ns, cur_we = _get_flips(layer_map)
+    ns = cur_ns if flip_ns is None else bool(flip_ns)
+    we = cur_we if flip_we is None else bool(flip_we)
+    if ns:
+        layer_map["flip_ns"] = True
+    else:
+        layer_map.pop("flip_ns", None)
+    if we:
+        layer_map["flip_we"] = True
+    else:
+        layer_map.pop("flip_we", None)
+    # Drop empty layer if only flips were present and both cleared — keep x/y.
+    if not layer_map:
+        view = obj.get("view")
+        if isinstance(view, dict):
+            view.pop(layer, None)
+            if not view:
+                obj.pop("view", None)
+
+
+def get_physical_flips(place: dict[str, Any]) -> tuple[bool, bool]:
+    """Return ``(flip_ns, flip_we)`` from ``view.physical`` (default false)."""
+    return _get_flips(get_physical_view(place))
+
+
+def set_physical_flips(
+    place: dict[str, Any],
+    *,
+    flip_ns: bool | None = None,
+    flip_we: bool | None = None,
+) -> None:
+    """Write ``view.physical.flip_ns`` / ``flip_we`` (omit when false)."""
+    _set_flips(place, "physical", flip_ns=flip_ns, flip_we=flip_we)
+
+
+def get_electrical_flips(element: dict[str, Any]) -> tuple[bool, bool]:
+    """Return ``(flip_ns, flip_we)`` from ``view.electrical`` (default false)."""
+    return _get_flips(get_electrical_view(element))
+
+
+def set_electrical_flips(
+    element: dict[str, Any],
+    *,
+    flip_ns: bool | None = None,
+    flip_we: bool | None = None,
+) -> None:
+    """Write ``view.electrical.flip_ns`` / ``flip_we`` (omit when false)."""
+    _set_flips(element, "electrical", flip_ns=flip_ns, flip_we=flip_we)
+
+
+def parse_flip_field(raw: Any) -> bool:
+    """Parse a Properties-panel flip value to bool."""
+    return _parse_bool(raw)
+
+
 def get_physical_page(place: dict[str, Any]) -> dict[str, Any]:
     """Return ``views.physical`` with defaults for page size / representation."""
     views = place.get("views")

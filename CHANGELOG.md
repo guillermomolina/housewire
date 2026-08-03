@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.13] — 2026-08-03
+
+### Added
+
+- View-only ``flip_ns`` / ``flip_we`` on ``view.physical`` (places) and
+  ``view.electrical`` (elements): mirror canvas content and openings/terminals
+  without renaming YAML ids. Nested flips compose (XOR). Editable from the
+  Properties panel.
+
 ## [0.35.12] — 2026-08-03
 
 ### Fixed

@@ -705,9 +705,77 @@
       return { x: node.x ?? 0, y: node.y ?? 0 };
     }
     const pa = absXY(parent, map);
+    const flips = ownFlips(parent);
+    const local = mirrorLocalInParent(
+      node.x ?? 0,
+      node.y ?? 0,
+      nodeW(node),
+      nodeH(node),
+      parent,
+      flips
+    );
     return {
-      x: pa.x + PAD + (node.x ?? 0),
-      y: pa.y + HEADER + (node.y ?? 0),
+      x: pa.x + PAD + local.x,
+      y: pa.y + HEADER + local.y,
+    };
+  }
+
+  /** Own flip flags on a graph place/element (no ancestors). */
+  function ownFlips(obj) {
+    return { ns: Boolean(obj?.flip_ns), we: Boolean(obj?.flip_we) };
+  }
+
+  /**
+   * Effective flips: XOR own flags with ancestor places along the chain.
+   * ``placeById`` maps place ids (elements use ``parent`` as host place).
+   */
+  function effectiveFlips(nodeOrElem, placeById) {
+    let ns = Boolean(nodeOrElem?.flip_ns);
+    let we = Boolean(nodeOrElem?.flip_we);
+    let pid = nodeOrElem?.parent || null;
+    const map = placeById || {};
+    while (pid) {
+      const p = map[pid];
+      if (!p) break;
+      ns = ns !== Boolean(p.flip_ns);
+      we = we !== Boolean(p.flip_we);
+      pid = p.parent || null;
+    }
+    return { ns, we };
+  }
+
+  /** Remap N↔S / E↔W for drawing and routing when flipped. */
+  function flipFace(face, flips) {
+    let f = String(face || "").toUpperCase();
+    if (flips?.ns) {
+      if (f === "N") f = "S";
+      else if (f === "S") f = "N";
+    }
+    if (flips?.we) {
+      if (f === "E") f = "W";
+      else if (f === "W") f = "E";
+    }
+    return f;
+  }
+
+  /** Mirror child local origin inside parent content box (PAD/HEADER aware). */
+  function mirrorLocalInParent(localX, localY, childW, childH, parent, flips) {
+    const cw = Math.max(0, nodeW(parent) - 2 * PAD);
+    const ch = Math.max(0, nodeH(parent) - HEADER - PAD);
+    let x = localX;
+    let y = localY;
+    if (flips?.we) x = cw - localX - childW;
+    if (flips?.ns) y = ch - localY - childH;
+    return { x, y };
+  }
+
+  /** Screen drag delta → stored local delta under a possibly flipped parent. */
+  function storedDragDelta(parent, dx, dy) {
+    if (!parent) return { dx, dy };
+    const flips = ownFlips(parent);
+    return {
+      dx: flips.we ? -dx : dx,
+      dy: flips.ns ? -dy : dy,
     };
   }
 
@@ -801,7 +869,7 @@
   const PLANE_CENTER_BIAS = 18;
 
   /** Local coords for B/F openings on a face grid, almost touching the border. */
-  function planeAnchorLocal(node, openingId, face) {
+  function planeAnchorLocal(node, openingId, face, byId) {
     const w = nodeW(node);
     const h = nodeH(node);
     const plane = parsePlaneOpening(openingId);
@@ -810,8 +878,13 @@
       return { x: w / 2, y: h / 2 };
     }
     const { cols, rows } = planeGridDims(node, f, plane);
-    let x = planeCellCenter(w, cols, plane.col, PLANE_R);
-    let y = planeCellCenter(h, rows, plane.row, PLANE_R);
+    const flips = effectiveFlips(node, idMap(byId));
+    let col = plane.col;
+    let row = plane.row;
+    if (flips.we) col = cols + 1 - col;
+    if (flips.ns) row = rows + 1 - row;
+    let x = planeCellCenter(w, cols, col, PLANE_R);
+    let y = planeCellCenter(h, rows, row, PLANE_R);
     const margin = PLANE_R + 5;
     // Always offset a cell that would sit on the place center.
     if (Math.abs(x - w / 2) < 1e-6) {
@@ -825,32 +898,8 @@
 
   function openingAnchorAbs(node, openingId, face, byId) {
     const a = absXY(node, byId);
-    const w = nodeW(node);
-    const h = nodeH(node);
-    const side = parseSideOpening(openingId);
-    const plane = parsePlaneOpening(openingId);
-    const f = (
-      side?.face ||
-      plane?.face ||
-      face ||
-      (openingId || "?")[0] ||
-      "?"
-    ).toUpperCase();
-
-    if (f === "B" || f === "F") {
-      const local = planeAnchorLocal(node, openingId, f);
-      return { x: a.x + local.x, y: a.y + local.y };
-    }
-
-    const index = side?.index || 1;
-    const n = sideSlotCount(node, f, index);
-    const t = index / (n + 1);
-
-    if (f === "N") return { x: a.x + t * w, y: a.y };
-    if (f === "S") return { x: a.x + t * w, y: a.y + h };
-    if (f === "W") return { x: a.x, y: a.y + t * h };
-    if (f === "E") return { x: a.x + w, y: a.y + t * h };
-    return nodeCenterAbs(node, byId);
+    const local = openingAnchorLocal(node, openingId, face, byId);
+    return { x: a.x + local.x, y: a.y + local.y };
   }
 
   /**
@@ -868,7 +917,7 @@
     return Boolean(plane && (plane.face === "B" || plane.face === "F"));
   }
 
-  /** Absolute positions of side openings on one contour face. */
+  /** Absolute positions of side openings on one contour face (visual face). */
   function sideOpeningAbsOnFace(node, face, byId) {
     const f = String(face || "").toUpperCase();
     /** @type {{x:number,y:number}[]} */
@@ -876,8 +925,11 @@
     for (const o of node.openings || []) {
       const id = o && (o.id != null ? o.id : o);
       const side = parseSideOpening(id);
-      if (!side || side.face !== f) continue;
-      out.push(openingAnchorAbs(node, id, f, byId));
+      if (!side) continue;
+      const local = openingAnchorLocal(node, id, side.face, byId);
+      const visual = local.face || side.face;
+      if (visual !== f) continue;
+      out.push(openingAnchorAbs(node, id, side.face, byId));
     }
     return out;
   }
@@ -927,7 +979,7 @@
       return openingAnchorAbs(node, openingId, face, byId);
     }
     const approach = planeApproachFace(node, openingId, f, byId);
-    const local = planeAnchorLocal(node, openingId, f);
+    const local = planeAnchorLocal(node, openingId, f, byId);
     const a = absXY(node, byId);
     const w = nodeW(node);
     const h = nodeH(node);
@@ -942,31 +994,46 @@
   }
 
   /** Local (0,0) anchor for labels drawn inside the node group. */
-  function openingAnchorLocal(node, openingId, face) {
+  function openingAnchorLocal(node, openingId, face, byId) {
     const w = nodeW(node);
     const h = nodeH(node);
     const side = parseSideOpening(openingId);
     const plane = parsePlaneOpening(openingId);
-    const f = (
+    const rawFace = (
       side?.face ||
       plane?.face ||
       face ||
       (openingId || "?")[0] ||
       "?"
     ).toUpperCase();
+    const placeMap = idMap(byId) || Object.fromEntries(
+      (graph?.nodes || []).map((n) => [n.id, n])
+    );
+    const flips = effectiveFlips(node, placeMap);
 
-    if (f === "B" || f === "F") {
-      return planeAnchorLocal(node, openingId, f);
+    if (rawFace === "B" || rawFace === "F") {
+      return planeAnchorLocal(node, openingId, rawFace, placeMap);
     }
 
+    const visualFace = flipFace(rawFace, flips);
     const index = side?.index || 1;
-    const n = sideSlotCount(node, f, index);
-    const t = index / (n + 1);
-    if (f === "N") return { x: t * w, y: 0 };
-    if (f === "S") return { x: t * w, y: h };
-    if (f === "W") return { x: 0, y: t * h };
-    if (f === "E") return { x: w, y: t * h };
-    return { x: w / 2, y: h / 2 };
+    const n = sideSlotCount(node, rawFace, index);
+    let t = index / (n + 1);
+    // Mirror along-face order so slot indices stay visually consistent.
+    if (
+      (visualFace === "N" || visualFace === "S") && flips.we
+    ) {
+      t = 1 - t;
+    } else if (
+      (visualFace === "E" || visualFace === "W") && flips.ns
+    ) {
+      t = 1 - t;
+    }
+    if (visualFace === "N") return { x: t * w, y: 0, face: visualFace };
+    if (visualFace === "S") return { x: t * w, y: h, face: visualFace };
+    if (visualFace === "W") return { x: 0, y: t * h, face: visualFace };
+    if (visualFace === "E") return { x: w, y: t * h, face: visualFace };
+    return { x: w / 2, y: h / 2, face: visualFace };
   }
 
   /** Nearest contour face for routing stubs into a B/F opening. */
@@ -992,7 +1059,10 @@
     if (f === "B" || f === "F") {
       return planeApproachFace(node, openingId, f, byId);
     }
-    return f;
+    const placeMap = idMap(byId) || Object.fromEntries(
+      (graph?.nodes || []).map((n) => [n.id, n])
+    );
+    return flipFace(f, effectiveFlips(node, placeMap));
   }
 
   function ensurePositions() {
@@ -2292,10 +2362,19 @@
     const parent = placeById[elem.parent];
     if (!parent) return { x: elem.x ?? 0, y: elem.y ?? 0 };
     const a = absXY(parent, placeById);
+    const flips = ownFlips(parent);
+    const local = mirrorLocalInParent(
+      elem.x ?? 0,
+      elem.y ?? 0,
+      elem.w ?? ELEM_W,
+      elem.h ?? ELEM_H,
+      parent,
+      flips
+    );
     // Same content origin as nested locations (PAD / HEADER).
     return {
-      x: a.x + PAD + (elem.x ?? 0),
-      y: a.y + HEADER + (elem.y ?? 0),
+      x: a.x + PAD + local.x,
+      y: a.y + HEADER + local.y,
     };
   }
 
@@ -2409,13 +2488,18 @@
   }
 
   /** Local (element-space) anchor for a terminal cell id. */
-  function terminalCellAnchorLocal(elem, cellId) {
+  function terminalCellAnchorLocal(elem, cellId, placeById) {
     const w = elem.w ?? ELEM_W;
     const h = elem.h ?? ELEM_H;
     const side = parseSideOpening(cellId);
-    const face = (side?.face || String(cellId || "?")[0] || "?").toUpperCase();
+    const rawFace = (side?.face || String(cellId || "?")[0] || "?").toUpperCase();
+    const placeMap = placeById || Object.fromEntries(
+      (graph?.nodes || []).map((n) => [n.id, n])
+    );
+    const flips = effectiveFlips(elem, placeMap);
+    const face = flipFace(rawFace, flips);
     const index = side?.index || 1;
-    const raw = elem.terminal_grid && elem.terminal_grid[face];
+    const raw = elem.terminal_grid && elem.terminal_grid[rawFace];
     let n = index;
     if (Array.isArray(raw) && raw.length >= 1) {
       n = Math.max(1, Number(raw[0]) || 1);
@@ -2424,7 +2508,9 @@
       }
     }
     n = Math.max(n, index);
-    const t = index / (n + 1);
+    let t = index / (n + 1);
+    if ((face === "N" || face === "S") && flips.we) t = 1 - t;
+    else if ((face === "E" || face === "W") && flips.ns) t = 1 - t;
     if (face === "N") return { x: t * w, y: 0, face };
     if (face === "S") return { x: t * w, y: h, face };
     if (face === "W") return { x: 0, y: t * h, face };
@@ -2435,7 +2521,7 @@
   /** Side opening-style cell on an element (``N1``, ``S2``, …). */
   function terminalCellAnchor(elem, cellId, placeById) {
     const p = elementAbsXY(elem, placeById);
-    const local = terminalCellAnchorLocal(elem, cellId);
+    const local = terminalCellAnchorLocal(elem, cellId, placeById);
     return { x: p.x + local.x, y: p.y + local.y, face: local.face };
   }
 
@@ -4883,9 +4969,11 @@
     if (!g || !node.openings?.length) return;
     const w = nodeW(node);
     const h = nodeH(node);
+    const placeMap = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
     for (const op of node.openings) {
       const face = (op.face || op.id?.[0] || "?").toUpperCase();
-      const anchor = openingAnchorLocal(node, op.id, face);
+      const anchor = openingAnchorLocal(node, op.id, face, placeMap);
+      const visualFace = anchor.face || flipFace(face, effectiveFlips(node, placeMap));
       const sel = `[data-opening="${CSS.escape(String(op.id))}"]`;
       if (face === "B" || face === "F") {
         const circle = g.querySelector(`circle${sel}`);
@@ -4903,14 +4991,14 @@
       const text = g.querySelector(`text.opening-side${sel}`);
       if (!text) continue;
       const labelX =
-        face === "W" ? 4 : face === "E" ? w - 4 : anchor.x;
+        visualFace === "W" ? 4 : visualFace === "E" ? w - 4 : anchor.x;
       const labelY =
-        face === "N" ? 10 : face === "S" ? h - 3 : anchor.y + 3;
+        visualFace === "N" ? 10 : visualFace === "S" ? h - 3 : anchor.y + 3;
       text.setAttribute("x", String(labelX));
       text.setAttribute("y", String(labelY));
       text.setAttribute(
         "text-anchor",
-        face === "W" ? "start" : face === "E" ? "end" : "middle"
+        visualFace === "W" ? "start" : visualFace === "E" ? "end" : "middle"
       );
     }
   }
@@ -5007,11 +5095,12 @@
         (o) => o.face !== "B" && o.face !== "F"
       );
       for (const op of sides) {
-        const anchor = openingAnchorLocal(node, op.id, op.face);
+        const anchor = openingAnchorLocal(node, op.id, op.face, byId);
+        const visualFace = anchor.face || op.face;
         const labelX =
-          op.face === "W" ? 4 : op.face === "E" ? w - 4 : anchor.x;
+          visualFace === "W" ? 4 : visualFace === "E" ? w - 4 : anchor.x;
         const labelY =
-          op.face === "N" ? 10 : op.face === "S" ? h - 3 : anchor.y + 3;
+          visualFace === "N" ? 10 : visualFace === "S" ? h - 3 : anchor.y + 3;
         g.appendChild(
           el(
             "text",
@@ -5021,14 +5110,18 @@
               x: labelX,
               y: labelY,
               "text-anchor":
-                op.face === "W" ? "start" : op.face === "E" ? "end" : "middle",
+                visualFace === "W"
+                  ? "start"
+                  : visualFace === "E"
+                    ? "end"
+                    : "middle",
             },
             op.id
           )
         );
       }
       for (const op of planes) {
-        const anchor = openingAnchorLocal(node, op.id, op.face);
+        const anchor = openingAnchorLocal(node, op.id, op.face, byId);
         const markClass =
           op.face === "F" ? "opening-front-mark" : "opening-back-mark";
         const textClass =
@@ -5144,7 +5237,7 @@
         const n = cols * rows;
         for (let i = 1; i <= n; i++) {
           const cellId = `${face}${i}`;
-          const local = terminalCellAnchorLocal(elem, cellId);
+          const local = terminalCellAnchorLocal(elem, cellId, placeById);
           const mark = el("circle", {
             class: "element-terminal",
             cx: String(local.x),
@@ -5341,6 +5434,12 @@
       span.className = "props-readonly";
       span.textContent = value || "—";
       dd.appendChild(span);
+    } else if (spec.checkbox) {
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.dataset.prop = spec.key;
+      input.checked = Boolean(spec.value);
+      dd.appendChild(input);
     } else if (spec.multiline) {
       const ta = document.createElement("textarea");
       ta.dataset.prop = spec.key;
@@ -5366,7 +5465,7 @@
         scheduleSaveProps();
       });
       el.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter" && el.tagName === "INPUT") {
+        if (ev.key === "Enter" && el.tagName === "INPUT" && el.type !== "checkbox") {
           ev.preventDefault();
           el.blur();
         }
@@ -5386,12 +5485,13 @@
     if (!propsTarget || !locationId) return;
     const meta = document.getElementById("props-meta");
     if (!meta) return;
-    /** @type {Record<string, string>} */
+    /** @type {Record<string, string|boolean>} */
     const fields = {};
     meta.querySelectorAll("[data-prop]").forEach((el) => {
       const key = el.getAttribute("data-prop");
       if (!key) return;
-      fields[key] = el.value;
+      if (el.type === "checkbox") fields[key] = el.checked;
+      else fields[key] = el.value;
     });
     if (!Object.keys(fields).length) return;
     const body = {
@@ -5479,6 +5579,18 @@
       value: elem.notes || "",
       editable: true,
       multiline: true,
+    });
+    appendPropsRow(meta, {
+      key: "flip_ns",
+      value: Boolean(elem.flip_ns),
+      editable: true,
+      checkbox: true,
+    });
+    appendPropsRow(meta, {
+      key: "flip_we",
+      value: Boolean(elem.flip_we),
+      editable: true,
+      checkbox: true,
     });
     appendPropsRow(meta, {
       key: "terminals",
@@ -5654,6 +5766,18 @@
         value: detail.notes || "",
         editable: true,
         multiline: true,
+      });
+      appendPropsRow(meta, {
+        key: "flip_ns",
+        value: Boolean(detail.flip_ns),
+        editable: true,
+        checkbox: true,
+      });
+      appendPropsRow(meta, {
+        key: "flip_we",
+        value: Boolean(detail.flip_we),
+        editable: true,
+        checkbox: true,
       });
       bindPropsEditors(meta);
       const ul = document.getElementById("props-elements");
@@ -5860,18 +5984,25 @@
     }
     const dx = (ev.clientX - drag.startClientX) / scale;
     const dy = (ev.clientY - drag.startClientY) / scale;
+    const placeMap = Object.fromEntries(
+      (graph?.nodes || []).map((n) => [n.id, n])
+    );
     for (const item of drag.items || []) {
       if (item.kind === "place") {
         const node = graph?.nodes.find((n) => n.id === item.id);
         if (!node) continue;
-        node.x = Math.max(0, Math.round(item.origX + dx));
-        node.y = Math.max(0, Math.round(item.origY + dy));
+        const parent = node.parent ? placeMap[node.parent] : null;
+        const d = storedDragDelta(parent, dx, dy);
+        node.x = Math.max(0, Math.round(item.origX + d.dx));
+        node.y = Math.max(0, Math.round(item.origY + d.dy));
       } else if (item.kind === "element") {
         const elem = (graph?.elements || []).find((e) => e.id === item.id);
         if (!elem) continue;
+        const parent = elem.parent ? placeMap[elem.parent] : null;
+        const d = storedDragDelta(parent, dx, dy);
         // Keep x/y >= 0; parent place grows via measureVisibleSizes.
-        elem.x = Math.max(0, Math.round(item.origX + dx));
-        elem.y = Math.max(0, Math.round(item.origY + dy));
+        elem.x = Math.max(0, Math.round(item.origX + d.dx));
+        elem.y = Math.max(0, Math.round(item.origY + d.dy));
       }
     }
     updateNodeVisual(null);

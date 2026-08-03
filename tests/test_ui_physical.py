@@ -10,10 +10,14 @@ from housewire.site import abm
 from housewire.site.io import HOUSEWIRE_YAML
 from housewire.site.tree import get_place_node
 from housewire.site.view_layout import (
+    get_electrical_flips,
     get_electrical_position,
+    get_physical_flips,
     get_physical_page,
     get_physical_position,
+    set_electrical_flips,
     set_electrical_position,
+    set_physical_flips,
     set_physical_page,
     set_physical_position,
 )
@@ -95,6 +99,31 @@ class TestViewLayout(unittest.TestCase):
         self.assertEqual(element["view"]["electrical"]["rotation"], 90)
         with self.assertRaises(ValueError):
             set_electrical_position(element, -1, 0)
+
+    def test_physical_and_electrical_flips(self) -> None:
+        place: dict = {"schema": "house/v2", "type": "Room"}
+        self.assertEqual(get_physical_flips(place), (False, False))
+        set_physical_flips(place, flip_ns=True, flip_we=True)
+        self.assertEqual(get_physical_flips(place), (True, True))
+        self.assertEqual(
+            place["view"]["physical"],
+            {"flip_ns": True, "flip_we": True},
+        )
+        set_physical_flips(place, flip_ns=False, flip_we=False)
+        self.assertNotIn("view", place)
+
+        set_physical_position(place, 10, 20)
+        set_physical_flips(place, flip_we=True)
+        self.assertEqual(place["view"]["physical"]["x"], 10.0)
+        self.assertTrue(place["view"]["physical"]["flip_we"])
+        self.assertNotIn("flip_ns", place["view"]["physical"])
+
+        element: dict = {"type": "Socket"}
+        self.assertEqual(get_electrical_flips(element), (False, False))
+        set_electrical_flips(element, flip_ns=True)
+        self.assertEqual(get_electrical_flips(element), (True, False))
+        set_electrical_flips(element, flip_ns=False)
+        self.assertNotIn("view", element)
 
 
 class TestPhysicalGraph(unittest.TestCase):
@@ -660,6 +689,40 @@ class TestServeApi(unittest.TestCase):
                 if e["id"] == "Regleta"
             )
             self.assertEqual(reg["label"], "Strip A")
+            flips = client.patch(
+                "/api/place/properties",
+                json={
+                    "location_id": "Parking",
+                    "id": "Caja_4",
+                    "fields": {"flip_ns": True, "flip_we": False},
+                    "depth": 1,
+                },
+            )
+            self.assertEqual(flips.status_code, 200, flips.text)
+            self.assertTrue(flips.json()["detail"]["flip_ns"])
+            self.assertFalse(flips.json()["detail"]["flip_we"])
+            node = next(
+                n for n in flips.json()["graph"]["nodes"] if n["id"] == "Caja_4"
+            )
+            self.assertTrue(node["flip_ns"])
+            self.assertFalse(node["flip_we"])
+            elem_flips = client.patch(
+                "/api/place/properties",
+                json={
+                    "location_id": "Parking",
+                    "id": "Caja_4",
+                    "element": "Regleta",
+                    "fields": {"flip_we": True},
+                    "depth": 1,
+                },
+            )
+            self.assertEqual(elem_flips.status_code, 200, elem_flips.text)
+            graphed = next(
+                e
+                for e in elem_flips.json()["graph"]["elements"]
+                if e["leaf_id"] == "Regleta" or e["id"].endswith("/Regleta")
+            )
+            self.assertTrue(graphed["flip_we"])
             dirty = client.get("/api/workspace").json()
             self.assertTrue(dirty.get("dirty"))
 

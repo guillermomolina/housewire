@@ -621,8 +621,11 @@ def place_detail(
         place_doc=doc,
         place_yaml=path,
     )
+    from housewire.site.view_layout import get_physical_flips
+
     rel_id = _relative_place_id(canvas_location_id, place_parts)
     leaf = place_parts[-1] if place_parts else ""
+    flip_ns, flip_we = get_physical_flips(doc)
     return {
         "id": rel_id,
         "path": f"{path.relative_to(session.root)}#{'/'.join(place_parts)}",
@@ -635,6 +638,8 @@ def place_detail(
         "notes": meta.get("notes"),
         "install": meta.get("install"),
         "mount": meta.get("mount"),
+        "flip_ns": flip_ns,
+        "flip_we": flip_we,
         "openings": [str(o) for o in openings],
         "connects": [str(c) for c in connects],
         "elements": elements,
@@ -645,11 +650,22 @@ def place_detail(
 
 # Fields the Properties panel may edit (shell ``set`` allows more).
 _EDITABLE_PLACE_FIELDS = frozenset(
-    {"name", "label", "type", "subtype", "notes", "install", "mount"}
+    {
+        "name",
+        "label",
+        "type",
+        "subtype",
+        "notes",
+        "install",
+        "mount",
+        "flip_ns",
+        "flip_we",
+    }
 )
 _EDITABLE_ELEMENT_FIELDS = frozenset(
-    {"name", "label", "type", "subtype", "notes"}
+    {"name", "label", "type", "subtype", "notes", "flip_ns", "flip_we"}
 )
+_FLIP_FIELDS = frozenset({"flip_ns", "flip_we"})
 
 
 def update_place_properties(
@@ -663,6 +679,11 @@ def update_place_properties(
     """Apply property edits to a place or nested element; return place detail."""
     from housewire.site import abm
     from housewire.site.tree import get_place_node
+    from housewire.site.view_layout import (
+        parse_flip_field,
+        set_electrical_flips,
+        set_physical_flips,
+    )
 
     if not isinstance(fields, dict) or not fields:
         raise ValueError("fields must be a non-empty object")
@@ -695,7 +716,11 @@ def update_place_properties(
             + f". Editable: {', '.join(sorted(allowed))}"
         )
 
+    flip_updates: dict[str, bool] = {}
     for key, raw in fields.items():
+        if key in _FLIP_FIELDS:
+            flip_updates[key] = parse_flip_field(raw)
+            continue
         if raw is None or (isinstance(raw, str) and raw.strip() == ""):
             if key in target:
                 abm.unset_field(target, key)
@@ -703,6 +728,20 @@ def update_place_properties(
         # Plain text from the Properties panel (notes often contain "a: b").
         # Do not YAML-parse — that raises or turns free text into mappings.
         abm.set_field(target, key, raw, target=target_kind)
+
+    if flip_updates:
+        if element:
+            set_electrical_flips(
+                target,
+                flip_ns=flip_updates.get("flip_ns"),
+                flip_we=flip_updates.get("flip_we"),
+            )
+        else:
+            set_physical_flips(
+                target,
+                flip_ns=flip_updates.get("flip_ns"),
+                flip_we=flip_updates.get("flip_we"),
+            )
 
     session.mark_dirty(path)
     return place_detail(

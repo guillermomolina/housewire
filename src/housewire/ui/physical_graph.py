@@ -35,8 +35,10 @@ from housewire.site.tree import (
     site_yaml_path,
 )
 from housewire.site.view_layout import (
+    get_electrical_flips,
     get_electrical_position,
     get_electrical_rotation,
+    get_physical_flips,
     get_physical_page,
     get_physical_position,
     get_physical_view,
@@ -314,6 +316,8 @@ def _build_element_nodes(
                     "w": ew,
                     "h": eh,
                     "rotation": get_electrical_rotation(defn),
+                    "flip_ns": get_electrical_flips(defn)[0],
+                    "flip_we": get_electrical_flips(defn)[1],
                 }
             )
             index += 1
@@ -1008,6 +1012,7 @@ def build_physical_graph(
                 rotation = int(rotation)
             except (TypeError, ValueError):
                 rotation = 0
+        flip_ns, flip_we = get_physical_flips(doc)
         parent_id = "/".join(parts[:-1]) if len(parts) > 1 else None
         has_deeper = any(
             len(other) > depth and other[: len(parts)] == parts
@@ -1054,6 +1059,8 @@ def build_physical_graph(
                 "w": width,
                 "h": height,
                 "rotation": rotation,
+                "flip_ns": flip_ns,
+                "flip_we": flip_we,
                 "expandable": has_deeper,
             }
         )

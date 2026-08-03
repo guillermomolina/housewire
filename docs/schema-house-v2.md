@@ -393,6 +393,8 @@ view:
     x: 120
     y: 80
     rotation: 0    # optional: 0 | 90 | 180 | 270
+    flip_ns: false # optional view-only N↔S mirror (content + openings)
+    flip_we: false # optional view-only W↔E mirror
 
 # On an element inside a place (electrical LOD layer)
 elements:
@@ -403,6 +405,8 @@ elements:
         x: 24
         y: 40
         rotation: 0    # optional: 0 | 90 | 180 | 270
+        flip_ns: false # optional view-only N↔S mirror
+        flip_we: false # optional view-only W↔E mirror
 
 # On the canvas root place (any location that has child places)
 views:
@@ -414,8 +418,12 @@ views:
 
 - **`view.physical`**: canvas coordinates for that place under its parent canvas.
   ``x`` and ``y`` must be ``>= 0`` (parent-local origin at the content top-left).
+  Optional ``flip_ns`` / ``flip_we`` mirror the place and its nested content on
+  the canvas only (opening ids in YAML stay the same; mouths move with the
+  flip). Nested flips compose (XOR) with ancestors.
 - **`view.electrical`**: coordinates of an **element** inside its hosting place
   box (parent-local, ``>= 0``). Used when the UI **Elements** layer is on.
+  Same optional ``flip_ns`` / ``flip_we`` for the element box and terminals.
 - **`views.physical`**: page size and preferred conduit drawing mode for the
   canvas root location (often a `Floor` or `Room`, but any place type works).
 - Canvas zoom (pan/wheel) is independent of `representation` (legacy YAML;
