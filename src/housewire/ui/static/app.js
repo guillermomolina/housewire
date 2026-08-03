@@ -514,6 +514,28 @@
     }
   }
 
+  function apiErrorMessage(body, fallback) {
+    const raw = (body && String(body).trim()) || fallback || "request failed";
+    try {
+      const parsed = JSON.parse(raw);
+      const detail = parsed && parsed.detail;
+      if (typeof detail === "string" && detail.trim()) return detail.trim();
+      if (Array.isArray(detail)) {
+        const parts = detail
+          .map((item) => {
+            if (typeof item === "string") return item;
+            if (item && typeof item.msg === "string") return item.msg;
+            return "";
+          })
+          .filter(Boolean);
+        if (parts.length) return parts.join("; ");
+      }
+    } catch {
+      /* plain text body */
+    }
+    return raw;
+  }
+
   async function api(path, options) {
     const res = await fetch(path, {
       headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
@@ -521,7 +543,7 @@
     });
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(body || res.statusText);
+      throw new Error(apiErrorMessage(body, res.statusText));
     }
     return res.json();
   }
