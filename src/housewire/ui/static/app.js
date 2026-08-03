@@ -696,7 +696,8 @@
     return false;
   }
 
-  /** Shift+drag selection box (works on empty canvas and inside places). */
+  /** Shift+drag selection box (works on empty canvas and inside places).
+   *  Ctrl/Cmd+Shift makes the marquee additive. */
   function beginMarquee(ev) {
     if (!ev || ev.button !== 0 || !ev.shiftKey) return false;
     if (drag || marquee || panDrag) return false;
@@ -704,7 +705,7 @@
       pointerId: ev.pointerId,
       startClientX: ev.clientX,
       startClientY: ev.clientY,
-      additive: isModClick(ev),
+      additive: Boolean(ev.ctrlKey || ev.metaKey),
       moved: false,
       captured: true,
     };
@@ -1142,7 +1143,9 @@
     /** @type {string[]} */
     const fullContainers = [];
     /** @type {string[]} */
-    const leafHits = [];
+    const fullLeaves = [];
+    /** @type {string[]} */
+    const partialLeaves = [];
     for (const node of graph?.nodes || []) {
       if (!nodesById[node.id]) continue;
       const rect = placeWorldRect(node, byId);
@@ -1151,7 +1154,8 @@
         if (rectContains(worldRect, rect)) fullContainers.push(node.id);
         continue;
       }
-      if (rectsIntersect(rect, worldRect)) leafHits.push(node.id);
+      if (rectContains(worldRect, rect)) fullLeaves.push(node.id);
+      else if (rectsIntersect(rect, worldRect)) partialLeaves.push(node.id);
     }
     const fullSet = new Set(fullContainers);
     const topContainers = fullContainers.filter(
@@ -1160,8 +1164,10 @@
     const topContainerSet = new Set(topContainers);
     for (const id of topContainers) hit.add(id);
 
-    for (const pid of leafHits) {
+    const fullLeafSet = new Set();
+    for (const pid of fullLeaves) {
       if (selectionHasAncestorPlace(pid, topContainerSet)) continue;
+      fullLeafSet.add(pid);
       hit.add(pid);
     }
 
@@ -1172,26 +1178,30 @@
         if (!elementsById[elem.id]) continue;
         if (!rectsIntersect(elementWorldRect(elem, byId), worldRect)) continue;
         const parent = elem.parent;
+        // Fully enclosed host (leaf or ancestor container) → host wins.
         if (
           parent &&
-          (topContainerSet.has(parent) ||
-            selectionHasAncestorPlace(parent, topContainerSet))
+          (fullLeafSet.has(parent) ||
+            topContainerSet.has(parent) ||
+            selectionHasAncestorPlace(parent, topContainerSet) ||
+            selectionHasAncestorPlace(parent, fullLeafSet))
         ) {
           continue;
         }
         elemHits.push(elem.id);
       }
     }
-    // Leaf places still cover their elements' boxes; if any hosted element is
-    // in the marquee, keep the elements and drop the parent place.
+    // Partial leaf: if any hosted element is hit, keep elements and drop leaf.
     const hostsWithHitElems = new Set();
     for (const eid of elemHits) {
       const p = elemById[eid]?.parent;
       if (p) hostsWithHitElems.add(p);
       hit.add(eid);
     }
-    for (const pid of [...hit]) {
-      if (byId[pid] && hostsWithHitElems.has(pid)) hit.delete(pid);
+    for (const pid of partialLeaves) {
+      if (selectionHasAncestorPlace(pid, topContainerSet)) continue;
+      if (hostsWithHitElems.has(pid)) continue;
+      hit.add(pid);
     }
     return normalizeSelectionSet(hit);
   }
@@ -7654,7 +7664,10 @@
       x2: Math.max(w0.x, w1.x),
       y2: Math.max(w0.y, w1.y),
     };
-    const hit = idsInMarqueeWorld(worldRect, finished.additive);
+    const hit = idsInMarqueeWorld(
+      worldRect,
+      finished.additive || isModClick(ev)
+    );
     commitSelection(hit, [...hit].slice(-1)[0] ?? null);
     await syncInspectorFromSelection();
   }
@@ -8256,8 +8269,13 @@
     }
     const data = await api("/api/locations");
     canvasLocations = data.locations || [];
-    await loadOutline();
     const saved = activeDocId ? docViews[activeDocId] : null;
+    // Restore electrical before outline so element rows match the canvas view.
+    if (saved && typeof saved.showElectrical === "boolean") {
+      showElectrical = saved.showElectrical;
+      syncElectricalUi();
+    }
+    await loadOutline();
     let target =
       (saved &&
         saved.locationId &&
@@ -8267,10 +8285,6 @@
       canvasLocations.find((r) => r.selectable !== false && r.id === ".") ||
       canvasLocations.find((r) => r.selectable !== false);
     if (target) {
-      if (saved && typeof saved.showElectrical === "boolean") {
-        showElectrical = saved.showElectrical;
-        syncElectricalUi();
-      }
       if (saved && saved.depthLevel) depthLevel = saved.depthLevel;
       else depthLevel = DEPTH_DEFAULT;
       const hasCamera =

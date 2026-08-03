@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.44.1] — 2026-08-03
+
+### Fixed
+
+- Restore electrical on/off before building the Outline on reload (F5).
+- Shift+marquee: a fully enclosed place (leaf or container) is selected alone;
+  its elements are not also selected.
+- Ctrl/Cmd+Shift+marquee adds the box to the current selection.
+
 ## [0.44.0] — 2026-08-03
 
 ### Changed
