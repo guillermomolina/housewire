@@ -617,6 +617,9 @@
     const hit = additive ? new Set(selectedIds) : new Set();
     for (const node of graph?.nodes || []) {
       if (!nodesById[node.id]) continue;
+      // Containers always contain the marquee drawn on their floor; only
+      // select leaf places (and elements below), not parent boxes.
+      if (childrenOf(node.id).length) continue;
       if (rectsIntersect(placeWorldRect(node, byId), worldRect)) {
         hit.add(node.id);
       }

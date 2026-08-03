@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.14] — 2026-08-03
+
+### Fixed
+
+- Shift+drag marquee no longer selects container places (only leaf places and
+  elements), so boxing inside a room does not also select the room.
+
 ## [0.35.13] — 2026-08-03
 
 ### Added
