@@ -54,22 +54,45 @@ on the whole chain) must not undo mouth transit or collapse lanes.
 
 ### Terminals and openings
 
-11. **Multi-cable terminal → V** — When several conductors share one pin, the
-    segment that **touches** the pin is a short diagonal. Both arms of a
-    bipolar pair are diagonal; they meet **only** at the pin.
-12. **Single-cable terminal → Manhattan** — One conductor on a pin: orthogonal
-    only (optional short stub + L). No decorative diagonal.
-13. **Openings → Manhattan** — Approach to an opening/mouth is Manhattan; no
-    long boca→element diagonal.
-14. **Meet only at the pin** — Multi-cable leads must not merge before the
-    pin (no premature shared stub at the terminal).
+Terminals (element pins) and openings (location mouths / bocas) are **not**
+the same endpoint kind. Multi-cable geometry differs:
+
+| Endpoint | One cable | Several cables |
+|----------|-----------|----------------|
+| **Terminal** | Manhattan (12) | Short **V** at the pin (11); meet **only** at the pin (14) |
+| **Opening** | Manhattan (12) | Stay **parallel**, never touch; enter the location side by side (13) |
+
+**Who enters the location.** Only leaf runs that end on a terminal
+(typically `Conductor`, or any cable whose endpoints are element pins) draw
+an inbox path from the boca to the pin. Intermediate `Cable` sheaths
+(cables-of-cables / jackets with `contains`) are drawn in the conduit and
+**stop at the mouth** — they do not cross into the place interior.
+
+11. **Multi-cable terminal → V** *(terminals only)* — When several
+    conductors share one pin, the segment that **touches** the pin is a
+    short diagonal. Both arms of a bipolar pair are diagonal; they meet
+    **only** at the pin.
+12. **Single cable → Manhattan** *(terminals and openings)* — One conductor
+    on a pin, or one cable at a mouth: orthogonal only (optional short stub
+    + L). No decorative diagonal at either endpoint kind.
+13. **Multi-cable opening → parallel** *(openings only)* — When several
+    cables share an opening, they keep lane separation through the mouth
+    and into the location. They **never** merge or touch at the boca (unlike
+    a shared terminal). Entry is side-by-side / parallel, still Manhattan
+    near the mouth (no V, no long boca→element diagonal).
+14. **Meet only at the pin** *(terminals only)* — Multi-cable leads must
+    not merge before the pin (no premature shared stub at the terminal).
+    Does not apply to openings — see (13).
 
 ### Overlaps and diagonals
 
 15. **No illegal mid-run overlaps** — Parallel strands keep minimum lane
-    separation except where they legally meet (mouth converge, pin).
+    separation except where they legally meet: tube-side mouth converge
+    (exterior lanes join onto the boca for transit) and shared **pins**.
+    Inside a place after a multi-cable opening, strands stay apart (13).
 16. **No long diagonals** — Diagonals longer than the terminal-V budget are
-    forbidden (especially boca→element shortcuts).
+    forbidden (especially boca→element shortcuts). Short diagonals are
+    allowed only for multi-cable terminal V (11).
 
 ## Hop assembly contract
 
