@@ -1,0 +1,21 @@
+---
+description: Follow docs/routing-rules.md when changing cable canvas routing
+globs: src/housewire/ui/static/app.js,src/housewire/ui/route_quality.py,tests/route_e2e/**/*,tests/test_route_quality.py,docs/routing-rules.md
+alwaysApply: false
+---
+
+# Cable routing rules
+
+When changing hop assembly, lane packing, mouth/terminal geometry, route
+quality detectors, or live route E2E:
+
+1. **Read** [`docs/routing-rules.md`](docs/routing-rules.md) before editing.
+   That file is the source of truth (rules 1–16, hop contract, E2E checks).
+2. **Do not** restate or fork the full rule list here — update the doc if
+   behavior intentionally changes, then align code and tests.
+3. Keep **terminals vs openings** distinct: multi-cable terminals may V-meet
+   at the pin; multi-cable openings stay parallel and never meet at the boca.
+4. Pack highway lanes **per conduit**, not per end-to-end route key (avoids
+   fat empty tubes with strands stacked on the centerline).
+5. After routing changes, run relevant `tests/route_e2e` / `test_route_quality`
+   and fix failures against the documented invariants.
