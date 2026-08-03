@@ -735,23 +735,80 @@
     }
   }
 
-  function toggleSelectionId(id) {
-    if (selectedIds.has(id)) {
-      selectedIds.delete(id);
-      if (selectedId === id) {
-        selectedId = [...selectedIds].slice(-1)[0] ?? null;
+  /**
+   * Drop place/element descendants when an ancestor place is also selected.
+   * Never keep both a container and its contents in the selection.
+   */
+  function normalizeSelectionSet(raw) {
+    const byId = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
+    const elemById = Object.fromEntries(
+      (graph?.elements || []).map((e) => [e.id, e])
+    );
+    const places = new Set();
+    const elems = new Set();
+    for (const id of raw || []) {
+      if (byId[id]) places.add(id);
+      else if (elemById[id]) elems.add(id);
+    }
+    const keptPlaces = new Set();
+    for (const id of places) {
+      if (selectionHasAncestorPlace(id, places)) continue;
+      keptPlaces.add(id);
+    }
+    const keptElems = new Set();
+    for (const id of elems) {
+      const parent = elemById[id]?.parent;
+      if (
+        parent &&
+        (keptPlaces.has(parent) ||
+          selectionHasAncestorPlace(parent, keptPlaces))
+      ) {
+        continue;
       }
+      keptElems.add(id);
+    }
+    return new Set([...keptPlaces, ...keptElems]);
+  }
+
+  /** Remove ancestor places of ``id`` so a child can replace its container. */
+  function stripAncestorsFromSet(set, id) {
+    const byId = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
+    const elemById = Object.fromEntries(
+      (graph?.elements || []).map((e) => [e.id, e])
+    );
+    let cur = byId[id] ? byId[id].parent : elemById[id]?.parent;
+    while (cur) {
+      set.delete(cur);
+      cur = byId[cur]?.parent;
+    }
+  }
+
+  function commitSelection(ids, primaryId) {
+    const normalized = normalizeSelectionSet(ids);
+    selectedIds = normalized;
+    if (primaryId != null && normalized.has(primaryId)) {
+      selectedId = primaryId;
     } else {
-      selectedIds.add(id);
-      selectedId = id;
+      selectedId = [...normalized].slice(-1)[0] ?? null;
     }
     setSelectedVisual();
   }
 
+  function toggleSelectionId(id) {
+    if (selectedIds.has(id)) {
+      const next = new Set(selectedIds);
+      next.delete(id);
+      commitSelection(next, null);
+      return;
+    }
+    const next = new Set(selectedIds);
+    stripAncestorsFromSet(next, id);
+    next.add(id);
+    commitSelection(next, id);
+  }
+
   function replaceSelection(id) {
-    selectedIds = id == null ? new Set() : new Set([id]);
-    selectedId = id;
-    setSelectedVisual();
+    commitSelection(id == null ? new Set() : new Set([id]), id);
   }
 
   function clientToWorld(clientX, clientY) {
@@ -764,6 +821,16 @@
 
   function rectsIntersect(a, b) {
     return !(a.x2 < b.x1 || a.x1 > b.x2 || a.y2 < b.y1 || a.y1 > b.y2);
+  }
+
+  /** True when ``outer`` fully contains ``inner``. */
+  function rectContains(outer, inner) {
+    return (
+      outer.x1 <= inner.x1 &&
+      outer.y1 <= inner.y1 &&
+      outer.x2 >= inner.x2 &&
+      outer.y2 >= inner.y2
+    );
   }
 
   function placeWorldRect(node, byId) {
@@ -1073,23 +1140,46 @@
     );
     const hit = additive ? new Set(selectedIds) : new Set();
     /** @type {string[]} */
-    const placeHits = [];
+    const fullContainers = [];
+    /** @type {string[]} */
+    const leafHits = [];
     for (const node of graph?.nodes || []) {
       if (!nodesById[node.id]) continue;
-      // Containers always contain the marquee drawn on their floor.
-      if (childrenOf(node.id).length) continue;
-      if (rectsIntersect(placeWorldRect(node, byId), worldRect)) {
-        placeHits.push(node.id);
+      const rect = placeWorldRect(node, byId);
+      if (childrenOf(node.id).length) {
+        // Containers: only when the marquee fully encloses the box.
+        if (rectContains(worldRect, rect)) fullContainers.push(node.id);
+        continue;
       }
+      if (rectsIntersect(rect, worldRect)) leafHits.push(node.id);
     }
+    const fullSet = new Set(fullContainers);
+    const topContainers = fullContainers.filter(
+      (id) => !selectionHasAncestorPlace(id, fullSet)
+    );
+    const topContainerSet = new Set(topContainers);
+    for (const id of topContainers) hit.add(id);
+
+    for (const pid of leafHits) {
+      if (selectionHasAncestorPlace(pid, topContainerSet)) continue;
+      hit.add(pid);
+    }
+
     /** @type {string[]} */
     const elemHits = [];
     if (showElectrical) {
       for (const elem of graph?.elements || []) {
         if (!elementsById[elem.id]) continue;
-        if (rectsIntersect(elementWorldRect(elem, byId), worldRect)) {
-          elemHits.push(elem.id);
+        if (!rectsIntersect(elementWorldRect(elem, byId), worldRect)) continue;
+        const parent = elem.parent;
+        if (
+          parent &&
+          (topContainerSet.has(parent) ||
+            selectionHasAncestorPlace(parent, topContainerSet))
+        ) {
+          continue;
         }
+        elemHits.push(elem.id);
       }
     }
     // Leaf places still cover their elements' boxes; if any hosted element is
@@ -1098,13 +1188,12 @@
     for (const eid of elemHits) {
       const p = elemById[eid]?.parent;
       if (p) hostsWithHitElems.add(p);
+      hit.add(eid);
     }
-    for (const pid of placeHits) {
-      if (hostsWithHitElems.has(pid)) continue;
-      hit.add(pid);
+    for (const pid of [...hit]) {
+      if (byId[pid] && hostsWithHitElems.has(pid)) hit.delete(pid);
     }
-    for (const eid of elemHits) hit.add(eid);
-    return hit;
+    return normalizeSelectionSet(hit);
   }
 
   function idMap(byId) {
@@ -6235,6 +6324,11 @@
       raiseNode(node.id);
       if (isModClick(ev)) {
         toggleSelectionId(node.id);
+        syncInspectorFromSelection();
+        if (!selectedIds.has(node.id)) {
+          drag = null;
+          return;
+        }
       } else if (!selectedIds.has(node.id)) {
         replaceSelection(node.id);
       }
@@ -6381,6 +6475,11 @@
       if (gEl && gEl.parentNode) gEl.parentNode.appendChild(gEl);
       if (isModClick(ev)) {
         toggleSelectionId(elem.id);
+        syncInspectorFromSelection();
+        if (!selectedIds.has(elem.id)) {
+          drag = null;
+          return;
+        }
       } else if (!selectedIds.has(elem.id)) {
         replaceSelection(elem.id);
       }
@@ -6645,7 +6744,7 @@
 
   function selectElement(elem) {
     replaceSelection(elem.id);
-    highlightOutline(canvasToSiteId(elem.id));
+    highlightOutlineSelection();
     fillElementInspector(elem);
   }
 
@@ -7232,21 +7331,24 @@
       return;
     }
     replaceSelection(id);
-    highlightOutline(id ? canvasToSiteId(id) : locationId);
+    highlightOutlineSelection();
     await fillPlaceInspector(id);
   }
 
   async function syncInspectorFromSelection() {
     setSelectedVisual();
     if (selectedIds.size === 0) {
-      highlightOutline(locationId);
+      highlightOutlineSelection();
       await fillPlaceInspector(null);
       return;
     }
     if (selectedIds.size > 1) {
       setStatus(`${selectedIds.size} selected`);
+      highlightOutlineSelection();
+      await fillPlaceInspector(null);
+      return;
     }
-    highlightOutline(selectedId ? canvasToSiteId(selectedId) : locationId);
+    highlightOutlineSelection();
     const elem = (graph?.elements || []).find((e) => e.id === selectedId);
     if (elem) fillElementInspector(elem);
     else await fillPlaceInspector(selectedId);
@@ -7553,8 +7655,7 @@
       y2: Math.max(w0.y, w1.y),
     };
     const hit = idsInMarqueeWorld(worldRect, finished.additive);
-    selectedIds = hit;
-    selectedId = [...hit].slice(-1)[0] ?? null;
+    commitSelection(hit, [...hit].slice(-1)[0] ?? null);
     await syncInspectorFromSelection();
   }
 
@@ -8369,21 +8470,48 @@
       });
       host.appendChild(row);
     }
-    applyOutlineActive(selectedId ? canvasToSiteId(selectedId) : locationId);
+    applyOutlineSelectionActive();
   }
 
-  function applyOutlineActive(activeId) {
+  /** Site ids for every canvas selection (for outline multi-highlight). */
+  function selectionSiteIds() {
+    const out = new Set();
+    for (const id of selectedIds) {
+      out.add(canvasToSiteId(id));
+    }
+    if (!out.size && locationId) out.add(locationId);
+    return out;
+  }
+
+  function applyOutlineSelectionActive() {
     const host = document.getElementById("outline-tree");
     if (!host) return;
+    const active = selectionSiteIds();
     for (const btn of host.querySelectorAll(".outline-item")) {
       const id = btn.dataset.id;
-      btn.classList.toggle(
-        "active",
-        id === activeId || (activeId == null && id === locationId)
-      );
+      btn.classList.toggle("active", active.has(id));
     }
   }
 
+  function highlightOutlineSelection() {
+    let needPaint = false;
+    const before = collapsedOutline.size;
+    for (const id of selectedIds) {
+      const siteId = canvasToSiteId(id);
+      if (!siteId) continue;
+      expandOutlineAncestors(siteId);
+      if (
+        outlineNodes.some((n) => n.id === siteId && isOutlineHidden(n))
+      ) {
+        needPaint = true;
+      }
+    }
+    if (before !== collapsedOutline.size) needPaint = true;
+    if (needPaint) renderOutline();
+    else applyOutlineSelectionActive();
+  }
+
+  /** @deprecated Prefer highlightOutlineSelection for canvas selection. */
   function highlightOutline(activeId) {
     if (activeId) {
       const before = collapsedOutline.size;
@@ -8398,6 +8526,18 @@
       }
     }
     applyOutlineActive(activeId);
+  }
+
+  function applyOutlineActive(activeId) {
+    const host = document.getElementById("outline-tree");
+    if (!host) return;
+    for (const btn of host.querySelectorAll(".outline-item")) {
+      const id = btn.dataset.id;
+      btn.classList.toggle(
+        "active",
+        id === activeId || (activeId == null && id === locationId)
+      );
+    }
   }
 
   function siteToCanvasRelative(siteId) {

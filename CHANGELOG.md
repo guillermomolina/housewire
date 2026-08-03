@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.44.0] — 2026-08-03
+
+### Changed
+
+- Multi-selection is hierarchical: never keep a container and its descendants
+  selected together. Selecting a parent drops children; selecting a child drops
+  ancestors. Shift+marquee selects a container only when it is fully enclosed
+  (contents are not also selected). Ctrl/Cmd click toggles with the same rule.
+- Outline highlights every selected item. Properties stays empty when more than
+  one item is selected (status shows the count).
+
 ## [0.43.4] — 2026-08-03
 
 ### Fixed
