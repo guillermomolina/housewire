@@ -26,5 +26,5 @@ class TestVersion(unittest.TestCase):
         out = buf.getvalue()
         self.assertIn(f"HouseWire {__version__}", out)
         self.assertIn("Guillermo Adrián Molina", out)
-        self.assertIn("MIT", out)
+        self.assertIn("SSPL", out)
         self.assertIn("github.com/guillermomolina/housewire", out)

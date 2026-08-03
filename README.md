@@ -11,7 +11,15 @@ This repository is the **program only**. Site/installation YAML lives in a **sep
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Copyright (c) 2026 Guillermo Adrián Molina.
+**Server Side Public License v1 (SSPL-1.0)** — see [LICENSE](LICENSE).
+Copyright (c) 2026 Guillermo Adrián Molina.
+
+You may use, modify, and self-host HouseWire under the SSPL. If you offer
+HouseWire (or a modified version) to third parties **as a service**, the SSPL
+requires you to make the complete Service Source Code available under the SSPL
+(not only the HouseWire program itself). Site/installation YAML you author
+remains your data; this license covers the HouseWire software in this
+repository.
 
 ## Requirements
 

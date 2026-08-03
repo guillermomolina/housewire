@@ -1,9 +1,9 @@
 """HouseWire — document home electrical installations (UI + shell)."""
 
 __title__ = "HouseWire"
-__version__ = "0.44.3"
+__version__ = "0.45.0"
 __author__ = "Guillermo Adrián Molina"
-__license__ = "MIT"
+__license__ = "SSPL-1.0"
 __copyright__ = "Copyright (c) 2026 Guillermo Adrián Molina"
 __description__ = (
     "Document home electrical installations in YAML (house/v2) and edit them "

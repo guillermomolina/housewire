@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.45.0] — 2026-08-03
+
+### Changed
+
+- License switched from MIT to **Server Side Public License v1 (SSPL-1.0)**.
+  See ``LICENSE`` and the README license note (service offering obligations).
+
 ## [0.44.3] — 2026-08-03
 
 ### Fixed

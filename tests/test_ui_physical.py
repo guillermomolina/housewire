@@ -485,7 +485,7 @@ class TestServeApi(unittest.TestCase):
             about = client.get("/api/about").json()
             self.assertEqual(about["title"], "HouseWire")
             self.assertEqual(about["author"], "Guillermo Adrián Molina")
-            self.assertEqual(about["license"], "MIT")
+            self.assertEqual(about["license"], "SSPL-1.0")
             self.assertIn("github.com/guillermomolina/housewire", about["repository"])
             self.assertTrue(about["version"])
             self.assertTrue(about["description"])
