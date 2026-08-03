@@ -899,6 +899,13 @@
     }
     const dx = (ev.clientX - drag.startClientX) / scale;
     const dy = (ev.clientY - drag.startClientY) / scale;
+    const placeMap = Object.fromEntries(
+      (graph?.nodes || []).map((n) => [n.id, n])
+    );
+    const parent = resizeHostParent(drag.targetKind, drag.targetId, placeMap);
+    const flips = parent ? ownFlips(parent) : canvasFlips();
+    const d = storedDragDelta(parent, dx, dy);
+    const handle = mapResizeHandleThroughFlips(drag.handle, flips);
     const minW = drag.targetKind === "element" ? ELEM_W : LEAF_W;
     const minH = drag.targetKind === "element" ? ELEM_H : LEAF_H;
     const next = computeResizedBox(
@@ -908,9 +915,9 @@
         w: drag.origW,
         h: drag.origH,
       },
-      drag.handle,
-      dx,
-      dy,
+      handle,
+      d.dx,
+      d.dy,
       minW,
       minH
     );
@@ -1275,6 +1282,32 @@
       dx: flips.we ? -dx : dx,
       dy: flips.ns ? -dy : dy,
     };
+  }
+
+  /**
+   * Visual resize handle → stored-space handle when the host mirrors children.
+   * Under WE flip the visual east edge is the stored west edge, etc.
+   */
+  function mapResizeHandleThroughFlips(handle, flips) {
+    let h = String(handle || "");
+    if (!flips) return h;
+    if (flips.we) {
+      h = h.replaceAll("e", "\0").replaceAll("w", "e").replaceAll("\0", "w");
+    }
+    if (flips.ns) {
+      h = h.replaceAll("n", "\0").replaceAll("s", "n").replaceAll("\0", "s");
+    }
+    return h;
+  }
+
+  /** Host place for flip mirroring of a place/element (null = canvas root). */
+  function resizeHostParent(targetKind, targetId, placeMap) {
+    if (targetKind === "place") {
+      const node = graph?.nodes.find((n) => n.id === targetId);
+      return node?.parent ? placeMap[node.parent] || null : null;
+    }
+    const elem = (graph?.elements || []).find((e) => e.id === targetId);
+    return elem?.parent ? placeMap[elem.parent] || null : null;
   }
 
   function nodeCenterAbs(node, byId) {

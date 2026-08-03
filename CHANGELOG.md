@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.41.1] — 2026-08-03
+
+### Fixed
+
+- Canvas resize under a flipped host (parent or canvas WE/NS) maps the visual
+  edge/corner and drag delta into stored coordinates, matching move-drag
+  mirroring so boxes no longer jump the wrong way.
+
 ## [0.41.0] — 2026-08-03
 
 ### Added
