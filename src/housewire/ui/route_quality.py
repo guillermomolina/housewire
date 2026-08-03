@@ -1360,6 +1360,64 @@ def strand_lateral_offsets(
     return out
 
 
+def tubes_colinear_overlap(
+    tubes: Sequence[Poly],
+    *,
+    tube_half_widths: Sequence[float] | None = None,
+    min_overlap: float = 24.0,
+    lane_gap: float = LANE_GAP,
+) -> list[str]:
+    """Flag distinct conduits whose painted strokes stack on the same corridor.
+
+    Perpendicular crossings are ignored. Centerline separation must be at least
+    ``half_a + half_b + lane_gap`` along a shared axis-aligned run.
+    """
+    issues: list[str] = []
+    if len(tubes) < 2:
+        return issues
+    halves = list(tube_half_widths or [])
+    while len(halves) < len(tubes):
+        halves.append(8.75)
+
+    def segs(poly: Poly) -> list[tuple[str, float, float, float]]:
+        out: list[tuple[str, float, float, float]] = []
+        for i in range(len(poly) - 1):
+            x1, y1 = float(poly[i][0]), float(poly[i][1])
+            x2, y2 = float(poly[i + 1][0]), float(poly[i + 1][1])
+            if abs(x1 - x2) < 1e-6 and abs(y1 - y2) < 1e-6:
+                continue
+            if abs(y1 - y2) < 1e-6:
+                out.append(("H", y1, min(x1, x2), max(x1, x2)))
+            elif abs(x1 - x2) < 1e-6:
+                out.append(("V", x1, min(y1, y2), max(y1, y2)))
+        return out
+
+    for i in range(len(tubes)):
+        if len(tubes[i]) < 2:
+            continue
+        si = segs(tubes[i])
+        for j in range(i + 1, len(tubes)):
+            if len(tubes[j]) < 2:
+                continue
+            need = float(halves[i]) + float(halves[j]) + float(lane_gap)
+            total = 0.0
+            for axis_a, lat_a, a0, a1 in si:
+                for axis_b, lat_b, b0, b1 in segs(tubes[j]):
+                    if axis_a != axis_b:
+                        continue
+                    if abs(lat_a - lat_b) >= need:
+                        continue
+                    ov = max(0.0, min(a1, b1) - max(a0, b0))
+                    if ov > 1.0:
+                        total += ov
+            if total >= min_overlap:
+                issues.append(
+                    f"tubes[{i}]/[{j}] colinear-overlap "
+                    f"len≈{total:.0f}px (need sep≥{need:.1f}px)"
+                )
+    return issues
+
+
 def tube_packing_underfill(
     tube: Poly,
     strands: Sequence[Poly],
@@ -2047,6 +2105,11 @@ def assess_live_canvas(
         )
         if under:
             issues.append(f"tube[{ti}]: {under}")
+
+    for msg in tubes_colinear_overlap(
+        tubes, tube_half_widths=halves, min_overlap=24.0
+    ):
+        issues.append(msg)
 
     trunks = shared_horizontal_trunk_length(
         unique_strands, y_min=trunk_y_min, y_max=trunk_y_max, min_len=40.0

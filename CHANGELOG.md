@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.9] — 2026-08-03
+
+### Fixed
+
+- Distinct conduits no longer colinear-stack mid-run: conflict clearance uses
+  painted half-widths (``half_a + half_b + laneGap``), and avoiding stack beats
+  saving a bend when scoring orthogonal candidates (routing rule 15).
+
+### Clarified
+
+- ``docs/routing-rules.md`` rule 15: strands on their own tube are required;
+  stacking two tube strokes is not. Live detector ``tubes colinear-overlap``
+  plus E2E ``test_conduit_overlap``.
+
 ## [0.35.8] — 2026-08-03
 
 ### Fixed

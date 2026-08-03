@@ -86,10 +86,16 @@ an inbox path from the boca to the pin. Intermediate `Cable` sheaths
 
 ### Overlaps and diagonals
 
-15. **No illegal mid-run overlaps** — Parallel strands keep minimum lane
-    separation except where they legally meet at shared **pins** (14).
-    Multi-cable openings must not meet at the boca (13). Tube envelope still
-    contains mid-run vertices (1).
+15. **No illegal mid-run overlaps**
+    - **Strands in the same conduit** — Keep minimum lane separation except
+      where they legally meet at shared **pins** (14). Multi-cable openings
+      must not meet at the boca (13). Riding along the host tube centerline
+      (inside the stroke) is required (1), not an illegal overlap.
+    - **Distinct conduits** — Two tubes must not **colinear-stack** for a
+      long mid-run: centerlines stay at least
+      ``halfWidth_a + halfWidth_b + laneGap`` apart. Perpendicular crossings
+      are allowed (cheap). Strands of conduit A sitting on conduit B’s
+      stroke is wrong; strands of A on A’s own tube is correct.
 16. **No long diagonals** — Diagonals longer than the terminal-V budget are
     forbidden (especially boca→element shortcuts). Short diagonals are
     allowed only for multi-cable terminal V (11).
@@ -126,6 +132,7 @@ site, dumps `path.edge-tube` and colored strands, then runs
 | Terminal V | `missing terminal V diagonal` |
 | Opening parallel | `multi-cable strands meet` / `meet at mouth` |
 | Tube packing | `tube underfilled` |
+| Conduit stack | `tubes colinear-overlap` |
 | Out-and-back | `out-and-back` |
 
 Sites without conduits (same-box only, e.g. `Route_01`) skip tube

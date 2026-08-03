@@ -124,6 +124,54 @@ class TestLiveCanvasInvariantsUnit(unittest.TestCase):
         )
         self.assertFalse(any("underfilled" in x for x in issues), msg=issues)
 
+    def test_stacked_conduits_flag_colinear_overlap(self) -> None:
+        """Distinct tubes on the same corridor must not share a long run."""
+        from housewire.ui.route_quality import tubes_colinear_overlap
+
+        a = [(0.0, 100.0), (400.0, 100.0)]
+        b = [(0.0, 102.0), (400.0, 102.0)]  # almost stacked; halves 8.75
+        issues = tubes_colinear_overlap(
+            [a, b], tube_half_widths=[8.75, 8.75], min_overlap=24.0
+        )
+        self.assertTrue(any("colinear-overlap" in x for x in issues), msg=issues)
+        canvas = assess_live_canvas(
+            [a, b],
+            [
+                [(0.0, 100.0), (400.0, 100.0)],
+                [(0.0, 102.0), (400.0, 102.0)],
+            ],
+            tube_half_widths=[8.75, 8.75],
+            bipolar_y_min=900.0,
+        )
+        self.assertTrue(
+            any("colinear-overlap" in x for x in canvas), msg=canvas
+        )
+
+    def test_parallel_separated_conduits_ok(self) -> None:
+        from housewire.ui.route_quality import tubes_colinear_overlap
+
+        # half 8.75+8.75+2.5 = 20 → sep 22 clears
+        a = [(0.0, 100.0), (400.0, 100.0)]
+        b = [(0.0, 122.0), (400.0, 122.0)]
+        self.assertEqual(
+            tubes_colinear_overlap(
+                [a, b], tube_half_widths=[8.75, 8.75], min_overlap=24.0
+            ),
+            [],
+        )
+
+    def test_crossing_conduits_not_colinear_overlap(self) -> None:
+        from housewire.ui.route_quality import tubes_colinear_overlap
+
+        h = [(0.0, 100.0), (400.0, 100.0)]
+        v = [(200.0, 0.0), (200.0, 200.0)]
+        self.assertEqual(
+            tubes_colinear_overlap(
+                [h, v], tube_half_widths=[8.75, 8.75], min_overlap=24.0
+            ),
+            [],
+        )
+
     def test_point_near_and_match_helpers(self) -> None:
         tube = [(0.0, 0.0), (100.0, 0.0), (100.0, 50.0)]
         self.assertTrue(point_near_polyline((100.0, 25.0), tube, tol=1.0))

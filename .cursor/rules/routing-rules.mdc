@@ -17,5 +17,7 @@ quality detectors, or live route E2E:
    at the pin; multi-cable openings stay parallel and never meet at the boca.
 4. Pack highway lanes **per conduit**, not per end-to-end route key (avoids
    fat empty tubes with strands stacked on the centerline).
-5. After routing changes, run relevant `tests/route_e2e` / `test_route_quality`
+5. Distinct **conduits** must not colinear-stack; strands riding their **own**
+   tube stroke is correct. See rule 15 in the doc.
+6. After routing changes, run relevant `tests/route_e2e` / `test_route_quality`
    and fix failures against the documented invariants.

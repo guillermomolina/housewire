@@ -1108,9 +1108,10 @@
     return d;
   }
 
-  function segsFromPoints(pts) {
-    /** @type {{axis:string,x?:number,y?:number,a:number,b:number}[]} */
+  function segsFromPoints(pts, half) {
+    /** @type {{axis:string,x?:number,y?:number,a:number,b:number,half:number}[]} */
     const segs = [];
+    const h = half != null ? Number(half) : 0;
     for (let i = 1; i < pts.length; i++) {
       const x1 = pts[i - 1][0];
       const y1 = pts[i - 1][1];
@@ -1123,6 +1124,7 @@
           y: y1,
           a: Math.min(x1, x2),
           b: Math.max(x1, x2),
+          half: h,
         });
       } else if (Math.abs(x1 - x2) < 1e-6) {
         segs.push({
@@ -1130,6 +1132,7 @@
           x: x1,
           a: Math.min(y1, y2),
           b: Math.max(y1, y2),
+          half: h,
         });
       }
     }
@@ -1140,19 +1143,27 @@
     return Math.max(0, Math.min(a2, b2) - Math.max(a1, b1));
   }
 
-  /** Colinear stack is expensive; a proper crossing is a smaller penalty. */
+  /**
+   * Colinear stack is expensive; a proper crossing is a smaller penalty.
+   * When segments carry ``half`` (conduit road half-width), require centerline
+   * separation ≥ half_a + half_b + LANE_GAP so painted tubes do not sit on
+   * top of each other (rule: distinct conduits must not colinear-overlap).
+   */
   function segConflict(s, o, eps) {
+    const clear =
+      (Number(s.half) || 0) + (Number(o.half) || 0) + LANE_GAP;
+    const need = Math.max(eps || 0, clear > LANE_GAP ? clear : 6);
     if (s.axis === "H" && o.axis === "H") {
-      if (Math.abs(s.y - o.y) > eps) return 0;
+      if (Math.abs(s.y - o.y) >= need) return 0;
       const ov = rangeOverlapLen(s.a, s.b, o.a, o.b);
-      if (ov <= eps) return 0;
-      return 200 + ov;
+      if (ov <= 1) return 0;
+      return 200 + ov + (need - Math.abs(s.y - o.y));
     }
     if (s.axis === "V" && o.axis === "V") {
-      if (Math.abs(s.x - o.x) > eps) return 0;
+      if (Math.abs(s.x - o.x) >= need) return 0;
       const ov = rangeOverlapLen(s.a, s.b, o.a, o.b);
-      if (ov <= eps) return 0;
-      return 200 + ov;
+      if (ov <= 1) return 0;
+      return 200 + ov + (need - Math.abs(s.x - o.x));
     }
     if (s.axis === "H" && o.axis === "V") {
       const y = s.y;
@@ -1170,10 +1181,10 @@
     return 0;
   }
 
-  function pathConflictCost(pts, occupied, eps) {
+  function pathConflictCost(pts, occupied, eps, half) {
     if (!occupied || !occupied.length) return 0;
     let cost = 0;
-    for (const s of segsFromPoints(pts)) {
+    for (const s of segsFromPoints(pts, half)) {
       for (const o of occupied) {
         cost += segConflict(s, o, eps);
       }
@@ -1313,7 +1324,7 @@
    * candidates that avoid colinear overlap (and lightly avoid crossings).
    * ``obstacles`` are place rects to go around (C / outer rails).
    */
-  function orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles, stayBounds, hugRects) {
+  function orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles, stayBounds, hugRects, halfWidth) {
     const x1 = p1.x;
     const y1 = p1.y;
     const x2 = p2.x;
@@ -1324,8 +1335,14 @@
 
     const STUB = 20;
     const DETOUR = 48;
-    const LANE = 14;
-    const OVERLAP_EPS = 6;
+    const half = halfWidth != null ? Number(halfWidth) : 0;
+    let maxOccHalf = 0;
+    for (const o of occupied || []) {
+      maxOccHalf = Math.max(maxOccHalf, Number(o.half) || 0);
+    }
+    // Parallel rails must clear painted tube strokes, not just 6px eps.
+    const LANE = Math.max(14, half + maxOccHalf + LANE_GAP);
+    const OVERLAP_EPS = Math.max(6, half + LANE_GAP);
     const pts = [[x1, y1]];
     let ax = x1;
     let ay = y1;
@@ -1366,7 +1383,8 @@
       [x1, y1],
       [x2, y2],
       stayBounds,
-      hugRects
+      hugRects,
+      half
     );
     for (const p of mid) {
       pts.push(p);
@@ -1377,9 +1395,19 @@
     return cleanOrthoPoly(pts);
   }
 
-  function orthoPathD(p1, p2, fromFace, toFace, occupied, obstacles, stayBounds, hugRects) {
+  function orthoPathD(p1, p2, fromFace, toFace, occupied, obstacles, stayBounds, hugRects, halfWidth) {
     return pointsToPathD(
-      orthoRoute(p1, p2, fromFace, toFace, occupied, obstacles, stayBounds, hugRects)
+      orthoRoute(
+        p1,
+        p2,
+        fromFace,
+        toFace,
+        occupied,
+        obstacles,
+        stayBounds,
+        hugRects,
+        halfWidth
+      )
     );
   }
 
@@ -1804,7 +1832,8 @@
     prePoint,
     postPoint,
     stayBounds,
-    hugRects
+    hugRects,
+    halfWidth
   ) {
     const start = [ax, ay];
     const end = [bx, by];
@@ -2006,66 +2035,69 @@
     let bestConflict = Infinity;
     let bestLen = Infinity;
     const eps = overlapEps ?? 6;
+    const half = halfWidth != null ? Number(halfWidth) : 0;
     for (const pts of raw) {
       // Include face stubs in bend count: exit-stub + horizontal-first L is
       // down→right→down (2 bends), while vertical-first merges into 1 bend.
       const full = scorePoly(pts);
       const bends = polyBends(full);
-      const conflict = pathConflictCost(full, occupied, eps);
+      const conflict = pathConflictCost(full, occupied, eps, half);
       const obstacle = pathObstacleCost(full, obstacles);
       const outside = pathOutsideBoundsCost(full, stayBounds);
       const hug = pathBorderHugCost(full, hugRects);
       const entry = pathEntryExcessCost(full, toFace);
       const len = polyLength(full);
-      // Lexicographic: clear boxes, stay in parent, fewest bends first
-      // (avoid staircases), then soft wall/entry preference.
+      // Lexicographic: clear boxes, stay in parent, then avoid colinear
+      // tube stacks (rule 15) even if that costs an extra bend, then soft
+      // bend/hug/entry/length preferences.
       if (
         obstacle < bestObstacle - 1e-9 ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           outside < bestOutside - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
+          conflict < bestConflict - 1e-9) ||
+        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+          Math.abs(outside - bestOutside) < 1e-9 &&
+          Math.abs(conflict - bestConflict) < 1e-9 &&
           bends < bestBends) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
+          Math.abs(conflict - bestConflict) < 1e-9 &&
           bends === bestBends &&
           hug < bestHug - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
+          Math.abs(conflict - bestConflict) < 1e-9 &&
           bends === bestBends &&
           Math.abs(hug - bestHug) < 1e-9 &&
           entry < bestEntry - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
-          bends === bestBends &&
-          Math.abs(hug - bestHug) < 1e-9 &&
-          Math.abs(entry - bestEntry) < 1e-9 &&
-          conflict < bestConflict - 1e-9) ||
-        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          Math.abs(outside - bestOutside) < 1e-9 &&
-          bends === bestBends &&
-          Math.abs(hug - bestHug) < 1e-9 &&
-          Math.abs(entry - bestEntry) < 1e-9 &&
           Math.abs(conflict - bestConflict) < 1e-9 &&
+          bends === bestBends &&
+          Math.abs(hug - bestHug) < 1e-9 &&
+          Math.abs(entry - bestEntry) < 1e-9 &&
           len < bestLen)
       ) {
         best = pts;
         bestObstacle = obstacle;
         bestOutside = outside;
+        bestConflict = conflict;
         bestBends = bends;
         bestHug = hug;
         bestEntry = entry;
-        bestConflict = conflict;
         bestLen = len;
       }
     }
     return best;
   }
 
-  function edgePathD(edge, byId, occupied) {
+  function edgePathD(edge, byId, occupied, halfWidth) {
     const a = byId[edge.from];
     const b = byId[edge.to];
     if (!a || !b) return null;
+    const half = halfWidth != null ? Number(halfWidth) : 0;
     const fromFace = routeFace(a, edge.from_opening, edge.from_opening?.[0], byId);
     const toFace = routeFace(b, edge.to_opening, edge.to_opening?.[0], byId);
     const fromPlane = isPlaneOpeningId(edge.from_opening);
@@ -2105,7 +2137,8 @@
         occupied,
         obstacles,
         stayBounds,
-        hugRects
+        hugRects,
+        half
       );
       chain = chain
         ? mergeOrthoPolys(chain, part)
@@ -2122,7 +2155,8 @@
         occupied,
         obstacles,
         stayBounds,
-        hugRects
+        hugRects,
+        half
       );
       chain = chain
         ? mergeOrthoPolys(chain, part)
@@ -2164,7 +2198,7 @@
         [p2.x, p2.y],
       ]
     );
-    return { d: pointsToPathD(pts), segs: segsFromPoints(pts) };
+    return { d: pointsToPathD(pts), segs: segsFromPoints(pts, half) };
   }
 
   function elementAbsXY(elem, placeById) {
@@ -4587,15 +4621,16 @@
     /** @type {{axis:string,x?:number,y?:number,a:number,b:number}[]} */
     const occupied = [];
     for (const item of edgePaths) {
-      const routed = edgePathD(item.edge, byId, occupied);
+      const n = (item.edge.contains || []).length;
+      const lanes = conduitLaneHint(item.edge, graph.cable_edges || []);
+      const roadW = conduitRoadWidth(n, lanes);
+      const half = roadW / 2;
+      const routed = edgePathD(item.edge, byId, occupied, half);
       if (routed) {
         item.d = routed.d;
         const displayD = conduitDisplayD(routed.d, byId, item.edge);
         for (const path of item.paths) path.setAttribute("d", displayD);
         for (const s of routed.segs) occupied.push(s);
-        const n = (item.edge.contains || []).length;
-        const lanes = conduitLaneHint(item.edge, graph.cable_edges || []);
-        const roadW = conduitRoadWidth(n, lanes);
         const outline = item.paths[0];
         const tube = item.paths[1] || item.paths[0];
         const tubeCss = wireColorCss(item.edge.color || "GY");
@@ -4984,10 +5019,14 @@
       if (childrenOf(node.id).length) paintNode(node, containersG, byId);
     }
 
-    /** @type {{axis:string,x?:number,y?:number,a:number,b:number}[]} */
+    /** @type {{axis:string,x?:number,y?:number,a:number,b:number,half?:number}[]} */
     const occupied = [];
     for (const edge of graph.edges) {
-      const routed = edgePathD(edge, byId, occupied);
+      const n = (edge.contains || []).length;
+      const lanes = conduitLaneHint(edge, graph.cable_edges || []);
+      const roadW = conduitRoadWidth(n, lanes);
+      const half = roadW / 2;
+      const routed = edgePathD(edge, byId, occupied, half);
       if (!routed) continue;
       const d = routed.d;
       for (const s of routed.segs) occupied.push(s);
@@ -4996,9 +5035,6 @@
       const title = contains
         ? `${edgeName}: ${contains}`
         : String(edgeName || "");
-      const n = (edge.contains || []).length;
-      const lanes = conduitLaneHint(edge, graph.cable_edges || []);
-      const roadW = conduitRoadWidth(n, lanes);
       const displayD = conduitDisplayD(d, byId, edge);
       const tubeCss = wireColorCss(edge.color || "GY");
       const outlineCss = contrastOutlineCss(tubeCss);
