@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.37.0] — 2026-08-03
+
+### Changed
+
+- Ortho routing tries a narrow candidate set first (few lane offsets, box rails
+  only) and expands to the full search only when the narrow pass still hits
+  obstacles or stacks. Cuts CPU on clear routes without changing the scoring
+  order for hard cases.
+
 ## [0.36.0] — 2026-08-03
 
 ### Changed

@@ -2203,21 +2203,11 @@
   ) {
     const start = [ax, ay];
     const end = [bx, by];
-    /** @type {number[][][]} */
-    const raw = [];
     const needLanes =
       lane &&
       ((occupied && occupied.length) || (obstacles && obstacles.length));
-
-    const push = (pts) => {
-      const cleaned = cleanOrthoPoly([start, ...pts, end]);
-      if (cleaned.length < 2) return;
-      if (!isOrthoPoly(cleaned)) return;
-      if (hasUTurn(cleaned)) return;
-      const next = cleaned[1];
-      if (!leavesOutward(fromFace, ax, ay, next[0], next[1])) return;
-      raw.push(cleaned.slice(1)); // intermediates through end
-    };
+    const eps = overlapEps ?? 6;
+    const half = halfWidth != null ? Number(halfWidth) : 0;
 
     /** Score bends on the full opening→stub→…→stub→opening path. */
     const scorePoly = (midThroughEnd) => {
@@ -2231,7 +2221,6 @@
         (Math.abs(postPoint[0] - end[0]) > 1e-6 ||
           Math.abs(postPoint[1] - end[1]) > 1e-6)
       ) {
-        // end is already last of midThroughEnd; append opening if distinct
         const last = full[full.length - 1];
         if (
           !last ||
@@ -2244,246 +2233,258 @@
       return cleanOrthoPoly(full);
     };
 
-    // 0 bends — only when already aligned (same x or same y)
-    if (Math.abs(ax - bx) < 1e-6 || Math.abs(ay - by) < 1e-6) {
-      push([]);
-    }
+    /**
+     * Emit ortho candidates.
+     * @param {number} maxLaneK parallel lane multiples (0..8)
+     * @param {number} maxObsK obstacle-rail lane multiples
+     * @param {boolean} obstacleCPatterns include 3-bend C around each box
+     * @param {boolean} wideDetours also try 2×detour side C loops
+     */
+    const emitCandidates = (maxLaneK, maxObsK, obstacleCPatterns, wideDetours) => {
+      /** @type {number[][][]} */
+      const raw = [];
+      const push = (pts) => {
+        const cleaned = cleanOrthoPoly([start, ...pts, end]);
+        if (cleaned.length < 2) return;
+        if (!isOrthoPoly(cleaned)) return;
+        if (hasUTurn(cleaned)) return;
+        const next = cleaned[1];
+        if (!leavesOutward(fromFace, ax, ay, next[0], next[1])) return;
+        raw.push(cleaned.slice(1));
+      };
 
-    // 1 bend (L)
-    push([[bx, ay]]);
-    push([[ax, by]]);
+      if (Math.abs(ax - bx) < 1e-6 || Math.abs(ay - by) < 1e-6) {
+        push([]);
+      }
+      push([[bx, ay]]);
+      push([[ax, by]]);
 
-    // 2 bends (Z through mid) + parallel lanes to dodge prior routes / boxes
-    const mx = (ax + bx) / 2;
-    const my = (ay + by) / 2;
-    const laneOffs = [0];
-    if (needLanes) {
-      for (let k = 1; k <= 8; k++) {
-        laneOffs.push(k * lane, -k * lane);
-      }
-    }
-    for (const off of laneOffs) {
-      push([[mx + off, ay], [mx + off, by]]);
-      push([[ax, my + off], [bx, my + off]]);
-    }
-
-    // 2 bends: outer rails (approach from beyond the entry stub)
-    if (toFace === "S" || fromFace === "S") {
-      for (const off of laneOffs) {
-        const yOut = Math.max(ay, by) + stub + Math.max(0, off);
-        push([[ax, yOut], [bx, yOut]]);
-      }
-    }
-    if (toFace === "N" || fromFace === "N") {
-      for (const off of laneOffs) {
-        const yOut = Math.min(ay, by) - stub - Math.max(0, off);
-        push([[ax, yOut], [bx, yOut]]);
-      }
-    }
-    if (toFace === "E" || fromFace === "E") {
-      for (const off of laneOffs) {
-        const xOut = Math.max(ax, bx) + stub + Math.max(0, off);
-        push([[xOut, ay], [xOut, by]]);
-      }
-    }
-    if (toFace === "W" || fromFace === "W") {
-      for (const off of laneOffs) {
-        const xOut = Math.min(ax, bx) - stub - Math.max(0, off);
-        push([[xOut, ay], [xOut, by]]);
-      }
-    }
-
-    // Tight clearance rails along place walls (same scale as mouth stubs).
-    if (hugRects && hugRects.length) {
-      const c = WALL_CLEARANCE;
-      for (const r of hugRects) {
-        push([[r.x - c, ay], [r.x - c, by]]);
-        push([[r.x + r.w + c, ay], [r.x + r.w + c, by]]);
-        push([[ax, r.y - c], [bx, r.y - c]]);
-        push([[ax, r.y + r.h + c], [bx, r.y + r.h + c]]);
-      }
-    }
-
-    // Always emit outer rails on all four sides when dodging boxes (true C).
-    if (obstacles && obstacles.length) {
-      for (const off of laneOffs) {
-        const yHi = Math.max(ay, by) + detour + Math.max(0, off);
-        const yLo = Math.min(ay, by) - detour - Math.max(0, off);
-        const xHi = Math.max(ax, bx) + detour + Math.max(0, off);
-        const xLo = Math.min(ax, bx) - detour - Math.max(0, off);
-        push([[ax, yHi], [bx, yHi]]);
-        push([[ax, yLo], [bx, yLo]]);
-        push([[xHi, ay], [xHi, by]]);
-        push([[xLo, ay], [xLo, by]]);
-      }
-      // Rails that clear each obstacle rect (endpoint boxes included).
-      // Use stub-scale pad (not a wide detour) so the open side of a C
-      // matches the mouth exit jog.
-      const obsOffs = needLanes ? [0, lane, -lane, 2 * lane, -2 * lane] : [0];
-      const pad = Math.max(stub, WALL_CLEARANCE);
-      for (const r of obstacles) {
-        const xR = r.x + r.w + pad;
-        const xL = r.x - pad;
-        const yB = r.y + r.h + pad;
-        const yT = r.y - pad;
-        for (const off of obsOffs) {
-          const o = Math.abs(off);
-          const xRo = xR + (off >= 0 ? o : 0);
-          const xLo = xL - (off <= 0 ? o : 0);
-          const yBo = yB + (off >= 0 ? o : 0);
-          const yTo = yT - (off <= 0 ? o : 0);
-          push([[xRo, ay], [xRo, by]]);
-          push([[xLo, ay], [xLo, by]]);
-          push([[ax, yBo], [bx, yBo]]);
-          push([[ax, yTo], [bx, yTo]]);
-          push([[xRo, ay], [xRo, yBo], [bx, yBo]]);
-          push([[xRo, ay], [xRo, yTo], [bx, yTo]]);
-          push([[xLo, ay], [xLo, yBo], [bx, yBo]]);
-          push([[xLo, ay], [xLo, yTo], [bx, yTo]]);
-          push([[ax, yBo], [xRo, yBo], [xRo, by]]);
-          push([[ax, yBo], [xLo, yBo], [xLo, by]]);
-          push([[ax, yTo], [xRo, yTo], [xRo, by]]);
-          push([[ax, yTo], [xLo, yTo], [xLo, by]]);
+      const mx = (ax + bx) / 2;
+      const my = (ay + by) / 2;
+      const laneOffs = [0];
+      if (needLanes && maxLaneK > 0) {
+        for (let k = 1; k <= maxLaneK; k++) {
+          laneOffs.push(k * lane, -k * lane);
         }
       }
-    }
-
-    // 3 bends: side C loops
-    const detours = obstacles && obstacles.length ? [detour, detour * 2] : [detour];
-    for (const d0 of detours) {
       for (const off of laneOffs) {
-        const right = Math.max(ax, bx) + d0 + Math.max(0, off);
-        const left = Math.min(ax, bx) - d0 - Math.max(0, off);
-        const top = Math.min(ay, by) - d0 - Math.max(0, off);
-        const bot = Math.max(ay, by) + d0 + Math.max(0, off);
-        push([[right, ay], [right, by]]);
-        push([[left, ay], [left, by]]);
-        push([[ax, top], [bx, top]]);
-        push([[ax, bot], [bx, bot]]);
-        push([
-          [right, ay],
-          [right, bot],
-          [bx, bot],
-        ]);
-        push([
-          [left, ay],
-          [left, top],
-          [bx, top],
-        ]);
-        push([
-          [ax, bot],
-          [right, bot],
-          [right, by],
-        ]);
-        push([
-          [ax, top],
-          [left, top],
-          [left, by],
-        ]);
+        push([[mx + off, ay], [mx + off, by]]);
+        push([[ax, my + off], [bx, my + off]]);
       }
-    }
 
+      if (toFace === "S" || fromFace === "S") {
+        for (const off of laneOffs) {
+          const yOut = Math.max(ay, by) + stub + Math.max(0, off);
+          push([[ax, yOut], [bx, yOut]]);
+        }
+      }
+      if (toFace === "N" || fromFace === "N") {
+        for (const off of laneOffs) {
+          const yOut = Math.min(ay, by) - stub - Math.max(0, off);
+          push([[ax, yOut], [bx, yOut]]);
+        }
+      }
+      if (toFace === "E" || fromFace === "E") {
+        for (const off of laneOffs) {
+          const xOut = Math.max(ax, bx) + stub + Math.max(0, off);
+          push([[xOut, ay], [xOut, by]]);
+        }
+      }
+      if (toFace === "W" || fromFace === "W") {
+        for (const off of laneOffs) {
+          const xOut = Math.min(ax, bx) - stub - Math.max(0, off);
+          push([[xOut, ay], [xOut, by]]);
+        }
+      }
+
+      if (hugRects && hugRects.length) {
+        const c = WALL_CLEARANCE;
+        for (const r of hugRects) {
+          push([[r.x - c, ay], [r.x - c, by]]);
+          push([[r.x + r.w + c, ay], [r.x + r.w + c, by]]);
+          push([[ax, r.y - c], [bx, r.y - c]]);
+          push([[ax, r.y + r.h + c], [bx, r.y + r.h + c]]);
+        }
+      }
+
+      if (obstacles && obstacles.length) {
+        for (const off of laneOffs) {
+          const yHi = Math.max(ay, by) + detour + Math.max(0, off);
+          const yLo = Math.min(ay, by) - detour - Math.max(0, off);
+          const xHi = Math.max(ax, bx) + detour + Math.max(0, off);
+          const xLo = Math.min(ax, bx) - detour - Math.max(0, off);
+          push([[ax, yHi], [bx, yHi]]);
+          push([[ax, yLo], [bx, yLo]]);
+          push([[xHi, ay], [xHi, by]]);
+          push([[xLo, ay], [xLo, by]]);
+        }
+        const obsOffs = [0];
+        if (needLanes && maxObsK > 0) {
+          for (let k = 1; k <= maxObsK; k++) {
+            obsOffs.push(k * lane, -k * lane);
+          }
+        }
+        const pad = Math.max(stub, WALL_CLEARANCE);
+        for (const r of obstacles) {
+          const xR = r.x + r.w + pad;
+          const xL = r.x - pad;
+          const yB = r.y + r.h + pad;
+          const yT = r.y - pad;
+          for (const off of obsOffs) {
+            const o = Math.abs(off);
+            const xRo = xR + (off >= 0 ? o : 0);
+            const xLo = xL - (off <= 0 ? o : 0);
+            const yBo = yB + (off >= 0 ? o : 0);
+            const yTo = yT - (off <= 0 ? o : 0);
+            // Always try axis-aligned rails that clear the box.
+            push([[xRo, ay], [xRo, by]]);
+            push([[xLo, ay], [xLo, by]]);
+            push([[ax, yBo], [bx, yBo]]);
+            push([[ax, yTo], [bx, yTo]]);
+            if (!obstacleCPatterns) continue;
+            push([[xRo, ay], [xRo, yBo], [bx, yBo]]);
+            push([[xRo, ay], [xRo, yTo], [bx, yTo]]);
+            push([[xLo, ay], [xLo, yBo], [bx, yBo]]);
+            push([[xLo, ay], [xLo, yTo], [bx, yTo]]);
+            push([[ax, yBo], [xRo, yBo], [xRo, by]]);
+            push([[ax, yBo], [xLo, yBo], [xLo, by]]);
+            push([[ax, yTo], [xRo, yTo], [xRo, by]]);
+            push([[ax, yTo], [xLo, yTo], [xLo, by]]);
+          }
+        }
+      }
+
+      const detours =
+        wideDetours && obstacles && obstacles.length
+          ? [detour, detour * 2]
+          : [detour];
+      for (const d0 of detours) {
+        for (const off of laneOffs) {
+          const right = Math.max(ax, bx) + d0 + Math.max(0, off);
+          const left = Math.min(ax, bx) - d0 - Math.max(0, off);
+          const top = Math.min(ay, by) - d0 - Math.max(0, off);
+          const bot = Math.max(ay, by) + d0 + Math.max(0, off);
+          push([[right, ay], [right, by]]);
+          push([[left, ay], [left, by]]);
+          push([[ax, top], [bx, top]]);
+          push([[ax, bot], [bx, bot]]);
+          push([[right, ay], [right, bot], [bx, bot]]);
+          push([[left, ay], [left, top], [bx, top]]);
+          push([[ax, bot], [right, bot], [right, by]]);
+          push([[ax, top], [left, top], [left, by]]);
+        }
+      }
+      return raw;
+    };
+
+    const pickBest = (raw) => {
+      let best = raw[0];
+      let bestObstacle = Infinity;
+      let bestOutside = Infinity;
+      let bestStack = Infinity;
+      let bestLen = Infinity;
+      let bestBends = Infinity;
+      let bestHug = Infinity;
+      let bestEntry = Infinity;
+      let bestCross = Infinity;
+      let hasClearInside = false;
+      if (stayBounds) {
+        for (const pts of raw) {
+          const full = scorePoly(pts);
+          if (
+            pathObstacleCost(full, obstacles) <= 0 &&
+            pathOutsideBoundsCost(full, stayBounds) <= 0
+          ) {
+            hasClearInside = true;
+            break;
+          }
+        }
+      }
+      for (const pts of raw) {
+        const full = scorePoly(pts);
+        const bends = polyBends(full);
+        const stack = pathStackConflictCost(full, occupied, eps, half);
+        const cross = pathCrossConflictCost(full, occupied, half);
+        const obstacle = pathObstacleCost(full, obstacles);
+        let outside = pathOutsideBoundsCost(full, stayBounds);
+        if (hasClearInside && outside > 0) outside += 1e6;
+        const hug = pathBorderHugCost(full, hugRects);
+        const entry = pathEntryExcessCost(full, toFace);
+        const len = polyLength(full);
+        if (
+          obstacle < bestObstacle - 1e-9 ||
+          (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+            stack < bestStack - 1e-9) ||
+          (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+            Math.abs(stack - bestStack) < 1e-9 &&
+            outside < bestOutside - 1e-9) ||
+          (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+            Math.abs(stack - bestStack) < 1e-9 &&
+            Math.abs(outside - bestOutside) < 1e-9 &&
+            len < bestLen - 1e-6) ||
+          (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+            Math.abs(stack - bestStack) < 1e-9 &&
+            Math.abs(outside - bestOutside) < 1e-9 &&
+            Math.abs(len - bestLen) < 1e-6 &&
+            bends < bestBends) ||
+          (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+            Math.abs(stack - bestStack) < 1e-9 &&
+            Math.abs(outside - bestOutside) < 1e-9 &&
+            Math.abs(len - bestLen) < 1e-6 &&
+            bends === bestBends &&
+            hug < bestHug - 1e-9) ||
+          (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+            Math.abs(stack - bestStack) < 1e-9 &&
+            Math.abs(outside - bestOutside) < 1e-9 &&
+            Math.abs(len - bestLen) < 1e-6 &&
+            bends === bestBends &&
+            Math.abs(hug - bestHug) < 1e-9 &&
+            entry < bestEntry - 1e-9) ||
+          (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+            Math.abs(stack - bestStack) < 1e-9 &&
+            Math.abs(outside - bestOutside) < 1e-9 &&
+            Math.abs(len - bestLen) < 1e-6 &&
+            bends === bestBends &&
+            Math.abs(hug - bestHug) < 1e-9 &&
+            Math.abs(entry - bestEntry) < 1e-9 &&
+            cross < bestCross - 1e-9)
+        ) {
+          best = pts;
+          bestObstacle = obstacle;
+          bestOutside = outside;
+          bestStack = stack;
+          bestLen = len;
+          bestBends = bends;
+          bestHug = hug;
+          bestEntry = entry;
+          bestCross = cross;
+        }
+      }
+      return {
+        pts: best,
+        obstacle: bestObstacle,
+        stack: bestStack,
+        outside: bestOutside,
+      };
+    };
+
+    // Narrow pass: few lanes, rails only around boxes (no per-obstacle C).
+    let raw = emitCandidates(needLanes ? 2 : 0, needLanes ? 1 : 0, false, false);
     if (!raw.length) {
-      // Fallback: forced side C
       return [
         [ax + detour, ay],
         [ax + detour, by],
         [bx, by],
       ];
     }
-
-    let best = raw[0];
-    let bestObstacle = Infinity;
-    let bestOutside = Infinity;
-    let bestStack = Infinity;
-    let bestLen = Infinity;
-    let bestBends = Infinity;
-    let bestHug = Infinity;
-    let bestEntry = Infinity;
-    let bestCross = Infinity;
-    const eps = overlapEps ?? 6;
-    const half = halfWidth != null ? Number(halfWidth) : 0;
-    // Prefer staying inside the parent when any clear in-bounds path exists
-    // (otherwise inbox strands escape and force a later place grow).
-    let hasClearInside = false;
-    if (stayBounds) {
-      for (const pts of raw) {
-        const full = scorePoly(pts);
-        if (
-          pathObstacleCost(full, obstacles) <= 0 &&
-          pathOutsideBoundsCost(full, stayBounds) <= 0
-        ) {
-          hasClearInside = true;
-          break;
-        }
-      }
+    let picked = pickBest(raw);
+    if (picked.obstacle <= 0 && picked.stack <= 0 && picked.outside <= 0) {
+      return picked.pts;
     }
-    for (const pts of raw) {
-      // Include face stubs in bend count: exit-stub + horizontal-first L is
-      // down→right→down (2 bends), while vertical-first merges into 1 bend.
-      const full = scorePoly(pts);
-      const bends = polyBends(full);
-      const stack = pathStackConflictCost(full, occupied, eps, half);
-      const cross = pathCrossConflictCost(full, occupied, half);
-      const obstacle = pathObstacleCost(full, obstacles);
-      let outside = pathOutsideBoundsCost(full, stayBounds);
-      if (hasClearInside && outside > 0) outside += 1e6;
-      const hug = pathBorderHugCost(full, hugRects);
-      const entry = pathEntryExcessCost(full, toFace);
-      const len = polyLength(full);
-      // Lexicographic: clear boxes, avoid colinear stacks (rule 15), stay in
-      // parent, then shorter runs (cut vueltones). Perpendicular crossings
-      // are cheap — prefer a short X over a long C around another strand.
-      if (
-        obstacle < bestObstacle - 1e-9 ||
-        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          stack < bestStack - 1e-9) ||
-        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          Math.abs(stack - bestStack) < 1e-9 &&
-          outside < bestOutside - 1e-9) ||
-        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          Math.abs(stack - bestStack) < 1e-9 &&
-          Math.abs(outside - bestOutside) < 1e-9 &&
-          len < bestLen - 1e-6) ||
-        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          Math.abs(stack - bestStack) < 1e-9 &&
-          Math.abs(outside - bestOutside) < 1e-9 &&
-          Math.abs(len - bestLen) < 1e-6 &&
-          bends < bestBends) ||
-        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          Math.abs(stack - bestStack) < 1e-9 &&
-          Math.abs(outside - bestOutside) < 1e-9 &&
-          Math.abs(len - bestLen) < 1e-6 &&
-          bends === bestBends &&
-          hug < bestHug - 1e-9) ||
-        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          Math.abs(stack - bestStack) < 1e-9 &&
-          Math.abs(outside - bestOutside) < 1e-9 &&
-          Math.abs(len - bestLen) < 1e-6 &&
-          bends === bestBends &&
-          Math.abs(hug - bestHug) < 1e-9 &&
-          entry < bestEntry - 1e-9) ||
-        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          Math.abs(stack - bestStack) < 1e-9 &&
-          Math.abs(outside - bestOutside) < 1e-9 &&
-          Math.abs(len - bestLen) < 1e-6 &&
-          bends === bestBends &&
-          Math.abs(hug - bestHug) < 1e-9 &&
-          Math.abs(entry - bestEntry) < 1e-9 &&
-          cross < bestCross - 1e-9)
-      ) {
-        best = pts;
-        bestObstacle = obstacle;
-        bestOutside = outside;
-        bestStack = stack;
-        bestLen = len;
-        bestBends = bends;
-        bestHug = hug;
-        bestEntry = entry;
-        bestCross = cross;
-      }
-    }
-    return best;
+    // Wide pass: full lane set + obstacle C patterns + 2×detour loops.
+    raw = emitCandidates(needLanes ? 8 : 0, needLanes ? 2 : 0, true, true);
+    if (!raw.length) return picked.pts;
+    return pickBest(raw).pts;
   }
 
   function edgePathD(edge, byId, occupied, halfWidth) {
