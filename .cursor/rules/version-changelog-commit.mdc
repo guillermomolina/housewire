@@ -12,6 +12,17 @@ After each completed **code** change (unless the user says otherwise):
 3. **Commit the program repo** (HouseWire / `housewire`) with a concise message focused on why.
 4. **Commit the site repo** (`sites` / external site tree) when it has related changes, in the same turn.
 
+## SemVer choice
+
+- **Minor** (`x.Y.0`): new behavior or a deliberate feature phase (UI gestures,
+  routing strategy, performance pipeline stages, new API fields users rely on).
+- **Patch** (`x.y.Z`): bugfixes and small corrections (“fix this”, regressions,
+  typos in behavior) that do not ship a new capability.
+- **Major** only for breaking public API / schema changes.
+
+Do **not** default every change to patch. Prefer minor when the change is a
+planned capability or phase; use patch for follow-up fixes.
+
 Do **not** push unless the user explicitly asks (or has an active standing instruction to push). A prior “no push” stands until revoked.
 
 Skip version/changelog only for pure docs/rules/chore with no package behavior change, or when the user says so.

@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.36.0] — 2026-08-03
+
+### Changed
+
+- Canvas drag no longer re-routes conduits and cables on every pointermove:
+  transforms update live; full edge refresh runs once on drop. Dragging dense
+  layouts stays responsive.
+
 ## [0.35.24] — 2026-08-03
 
 ### Changed

@@ -5503,7 +5503,14 @@
     g.setAttribute("transform", `translate(${a.x},${a.y})`);
   }
 
-  function updateNodeVisual(_node) {
+  /**
+   * Update place/element transforms (and optional sizes/labels).
+   * @param {unknown} [_node]
+   * @param {{ refresh?: boolean }} [opts] When refresh is false, skip conduit/
+   *   cable re-route (use during pointermove drag; call again on pointerup).
+   */
+  function updateNodeVisual(_node, opts) {
+    const refresh = !opts || opts.refresh !== false;
     const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
     measureVisibleSizes();
     for (const n of graph.nodes) {
@@ -5537,7 +5544,7 @@
     for (const e of graph.elements || []) {
       updateElementVisual(e, byId);
     }
-    refreshEdges();
+    if (refresh) refreshEdges();
   }
 
   function paintNode(node, layerG, byId) {
@@ -6649,6 +6656,8 @@
     }
     lastTap = { id: null, t: 0 };
     if (!locationId) return;
+    // Re-route tubes/cables once after the drag, not on every pointermove.
+    updateNodeVisual(null);
     await syncInspectorFromSelection();
     try {
       const placePositions = {};
@@ -6743,7 +6752,8 @@
         elem.y = Math.max(0, Math.round(item.origY + d.dy));
       }
     }
-    updateNodeVisual(null);
+    // Transforms only while dragging; full cable/conduit re-route on drop.
+    updateNodeVisual(null, { refresh: false });
   }
 
   async function endMarquee(ev) {

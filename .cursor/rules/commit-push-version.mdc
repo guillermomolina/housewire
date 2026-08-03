@@ -8,6 +8,8 @@ alwaysApply: true
 After completing a user-requested change that modifies source (program, site, or catalog):
 
 1. **Bump version** when program source changes (`pyproject.toml`, `src/housewire/__init__.py`, FastAPI `version=` or import `__version__`). Move `[Unreleased]` notes into a dated `CHANGELOG.md` section for that version.
+   - Prefer **minor** for new behavior / planned feature phases; **patch** for
+     bugfixes and small corrections (see `version-changelog-commit`).
 2. **Catalog** (`catalogs/default` / housewire-catalog) has its **own** SemVer in `catalog.yaml` (`version:`) and `CHANGELOG.md`. Bump it only when catalog types/metadata change; keep it independent of HouseWire’s version.
-3. **Commit and push** every repo that has related changes (program, site under `sites/`, catalog). Do not leave completed work uncommitted/unpushed unless the user says not to.
+3. **Commit** every repo that has related changes (program, site under `sites/`, catalog). **Push** only when the user asks (see `version-changelog-commit` / `commit-by-default`). Do not leave completed work uncommitted unless the user says not to.
 4. Do not force-push; do not skip hooks.
