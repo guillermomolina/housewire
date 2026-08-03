@@ -38,8 +38,11 @@ ELEMENT_BORDER_MIN_RUN = 12.0
 ELEMENT_BORDER_CLEARANCE = 6.0
 # Contrast rim beyond tube stroke (must match app.js OUTLINE_EXTRA).
 OUTLINE_EXTRA = 0.8
-# Lateral pitch used for shared-terminal V fans.
+# Lateral pitch used for shared-terminal V fans (match app.js TERMINAL_FAN_PITCH).
 FAN_LATERAL_PITCH = LANE_PITCH
+# Outward pin→tip and tip→rail depths (match app.js TERMINAL_FAN_TIP/_RAIL).
+TERMINAL_FAN_TIP = 12.0
+TERMINAL_FAN_RAIL = 14.0
 
 
 def _dist(a: Point, b: Point) -> float:
@@ -271,15 +274,14 @@ def terminal_v_lead(
     """Mirror of multi-cable ``pinToLanePts``: diagonal touches the pin + rail."""
     out_dir, lat = _face_axes(face)
     mid = (slot_count - 1) / 2.0
-    fan_pitch = max(12.0, FAN_LATERAL_PITCH)
-    fan_lat = (slot - mid) * fan_pitch
+    fan_lat = (slot - mid) * FAN_LATERAL_PITCH
     tip = (
-        pin[0] + out_dir[0] * 14.0 + lat[0] * fan_lat,
-        pin[1] + out_dir[1] * 14.0 + lat[1] * fan_lat,
+        pin[0] + out_dir[0] * TERMINAL_FAN_TIP + lat[0] * fan_lat,
+        pin[1] + out_dir[1] * TERMINAL_FAN_TIP + lat[1] * fan_lat,
     )
     rail = (
-        tip[0] + out_dir[0] * 18.0,
-        tip[1] + out_dir[1] * 18.0,
+        tip[0] + out_dir[0] * TERMINAL_FAN_RAIL,
+        tip[1] + out_dir[1] * TERMINAL_FAN_RAIL,
     )
     # pin → tip (V at the terminal), rail stays on tip lateral, then Manhattan.
     return manhattan_join_end([pin, tip, rail], lane_pt, face=face)
@@ -346,25 +348,32 @@ def strands_merge_before_pin(
     pin: Point,
     *,
     min_separation: float = MIN_LANE_SEPARATION,
-    meet_radius: float = 4.0,
+    meet_radius: float | None = None,
 ) -> bool:
     """True when strands run stacked outside ``meet_radius`` of the shared pin.
 
     Multi-cable terminals may only coincide at the pin itself — any closer
     approach farther out is a premature merge (screenshot Regleta bug).
+    Points on the terminal-V diagonals (within tip depth of the pin) are
+    excluded: arms necessarily converge there.
     """
     if len(strands) < 2:
         return False
+    radius = (
+        float(meet_radius)
+        if meet_radius is not None
+        else TERMINAL_FAN_TIP + 1.0
+    )
 
     def clipped(poly: Poly) -> list[Point]:
-        """Keep vertices / samples farther than ``meet_radius`` from ``pin``."""
+        """Keep vertices / samples farther than ``radius`` from ``pin``."""
         out: list[Point] = []
         for i in range(len(poly) - 1):
             a, b = poly[i], poly[i + 1]
             for t in (0.0, 0.25, 0.5, 0.75, 1.0):
                 x = a[0] + t * (b[0] - a[0])
                 y = a[1] + t * (b[1] - a[1])
-                if _dist((x, y), pin) > meet_radius:
+                if _dist((x, y), pin) > radius:
                     out.append((x, y))
         # Dedup consecutive
         clean: list[Point] = []

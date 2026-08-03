@@ -71,7 +71,11 @@ an inbox path from the boca to the pin. Intermediate `Cable` sheaths
 11. **Multi-cable terminal → V** *(terminals only)* — When several
     conductors share one pin, the segment that **touches** the pin is a
     short diagonal. Both arms of a bipolar pair are diagonal; they meet
-    **only** at the pin.
+    **only** at the pin. Lateral pitch between V tips matches lane pitch
+    (strand width + gap) so fans stay compact but strands stay distinct.
+    If fans of consecutive terminals on the same face would overlap, the
+    element (and thus its host place) widens so slot spacing clears both
+    envelopes.
 12. **Single cable → Manhattan** *(terminals and openings)* — One conductor
     on a pin, or one cable at a mouth: orthogonal only (optional short stub
     + L). No decorative diagonal at either endpoint kind.

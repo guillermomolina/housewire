@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.18] — 2026-08-03
+
+### Fixed
+
+- Multi-cable terminal V fans use lane pitch (not a 12px floor) so strands stay
+  closer while remaining distinct; elements widen when consecutive terminal
+  fans would overlap (host place grows with them).
+
 ## [0.35.17] — 2026-08-03
 
 ### Fixed

@@ -56,6 +56,14 @@
   /** Must stay in sync with housewire.ui.route_quality highway constants. */
   const STRAND_WIDTH = 2.5;
   const LANE_GAP = STRAND_WIDTH;
+  const LANE_PITCH = STRAND_WIDTH + LANE_GAP;
+  /** Shared-terminal V: lateral pitch (keep strands distinct but tight). */
+  const TERMINAL_FAN_PITCH = LANE_PITCH;
+  /** Outward depth pin→tip and tip→rail for multi-cable terminal V. */
+  const TERMINAL_FAN_TIP = 12;
+  const TERMINAL_FAN_RAIL = 14;
+  /** Min clear between adjacent terminal fan envelopes on one face. */
+  const TERMINAL_FAN_CLEAR = STRAND_WIDTH;
 
   function loadCollapsedOutline() {
     try {
@@ -3340,11 +3348,14 @@
 
     /** @type {Map<string, {slot:number, count:number}>} */
     const terminalMap = new Map();
-    for (const [, list] of byTerminal) {
+    /** @type {Map<string, number>} */
+    const cellCountMap = new Map();
+    for (const [tk, list] of byTerminal) {
       list.sort((u, v) =>
         u.key === v.key ? u.wi - v.wi : u.key < v.key ? -1 : 1
       );
       const count = list.length;
+      cellCountMap.set(tk, count);
       list.forEach((item, slot) => {
         terminalMap.set(`${item.key}|${item.wi}|${item.end}`, {
           slot: count > 1 ? slot : 0,
@@ -3382,6 +3393,14 @@
             slot: 0,
             count: 1,
           }
+        );
+      },
+      /** Cables attached to one face-cell (``elemId|cell:N1``) or face bucket. */
+      cellCableCount(elemId, cellId) {
+        return (
+          cellCountMap.get(`${elemId}|cell:${cellId}`) ||
+          cellCountMap.get(`${elemId}|face:${String(cellId || "")[0]}`) ||
+          0
         );
       },
       /** Same-box / no-conduit fallback (route bucket). */
@@ -3573,15 +3592,14 @@
       const nx = -fo.y;
       const ny = fo.x;
       const mid = (nSlots - 1) / 2;
-      const fanPitch = Math.max(12, STRAND_WIDTH + LANE_GAP);
-      const fanLat = (s - mid) * fanPitch;
+      const fanLat = (s - mid) * TERMINAL_FAN_PITCH;
       const tip = {
-        x: p.x + fo.x * 14 + nx * fanLat,
-        y: p.y + fo.y * 14 + ny * fanLat,
+        x: p.x + fo.x * TERMINAL_FAN_TIP + nx * fanLat,
+        y: p.y + fo.y * TERMINAL_FAN_TIP + ny * fanLat,
       };
       const rail = {
-        x: tip.x + fo.x * 18,
-        y: tip.y + fo.y * 18,
+        x: tip.x + fo.x * TERMINAL_FAN_RAIL,
+        y: tip.y + fo.y * TERMINAL_FAN_RAIL,
       };
       return [
         [p.x, p.y],
@@ -5509,20 +5527,96 @@
     for (const kid of childrenOf(id)) raiseNode(kid.id);
   }
 
+  function terminalFanHalfWidth(cableCount) {
+    const n = Math.max(1, cableCount | 0);
+    if (n <= 1) return 0;
+    return ((n - 1) / 2) * TERMINAL_FAN_PITCH;
+  }
+
+  /**
+   * Widen elements so multi-cable terminal V fans on consecutive cells do not
+   * overlap (rule 11/15). Growing the element also grows the host place via
+   * ``measureVisibleSizes``.
+   * @returns {boolean} true if any element size changed
+   */
+  function expandElementsForTerminalFans(layout, elemById) {
+    if (!layout) return false;
+    let changed = false;
+    for (const elem of Object.values(elemById || {})) {
+      const grid = elem.terminal_grid;
+      if (!grid || typeof grid !== "object") continue;
+      let needW = elem.w ?? ELEM_W;
+      let needH = elem.h ?? ELEM_H;
+      for (const face of Object.keys(grid)) {
+        const raw = grid[face];
+        let cols = 1;
+        let rows = 1;
+        if (Array.isArray(raw)) {
+          cols = Math.max(1, Number(raw[0]) || 1);
+          rows = Math.max(1, Number(raw[1]) || 1);
+        }
+        const n = cols * rows;
+        if (n < 1) continue;
+        /** @type {number[]} */
+        const counts = [];
+        for (let i = 1; i <= n; i++) {
+          counts.push(layout.cellCableCount(elem.id, `${face}${i}`) || 0);
+        }
+        const edgePad = 4;
+        let minAlong = face === "N" || face === "S" ? ELEM_W : ELEM_H;
+        // Equal slot layout uses t = i/(n+1); spacing = size/(n+1).
+        const edgeHalf = Math.max(
+          terminalFanHalfWidth(counts[0]),
+          terminalFanHalfWidth(counts[n - 1])
+        );
+        minAlong = Math.max(minAlong, (edgeHalf + edgePad) * (n + 1));
+        for (let i = 0; i < n - 1; i++) {
+          const pair =
+            terminalFanHalfWidth(counts[i]) +
+            terminalFanHalfWidth(counts[i + 1]) +
+            TERMINAL_FAN_CLEAR;
+          minAlong = Math.max(minAlong, pair * (n + 1));
+        }
+        if (face === "N" || face === "S") needW = Math.max(needW, minAlong);
+        else if (face === "E" || face === "W") needH = Math.max(needH, minAlong);
+      }
+      const curW = elem.w ?? ELEM_W;
+      const curH = elem.h ?? ELEM_H;
+      if (needW > curW + 0.5 || needH > curH + 0.5) {
+        elem.w = needW;
+        elem.h = needH;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
   function render() {
     if (!graph) return;
     ensurePositions();
     measureVisibleSizes();
-    clearSvg();
-
-    worldEl = el("g", { id: "world" });
-    applyWorldTransform();
-    svg.appendChild(worldEl);
 
     const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
     const elemById = Object.fromEntries(
       (graph.elements || []).map((e) => [e.id, e])
     );
+
+    /** @type {ReturnType<typeof buildCableLayout>|null} */
+    let layout = null;
+    if (showElectrical) {
+      layout = buildCableLayout(graph.cable_edges || [], elemById, byId);
+      if (expandElementsForTerminalFans(layout, elemById)) {
+        measureVisibleSizes();
+        // Rebuild so attach points use the widened terminal spacing.
+        layout = buildCableLayout(graph.cable_edges || [], elemById, byId);
+      }
+    }
+
+    clearSvg();
+
+    worldEl = el("g", { id: "world" });
+    applyWorldTransform();
+    svg.appendChild(worldEl);
 
     // Containers → leaves → conduits → elements → cables (cables on top so
     // in-box tails stay visible over tube caps).
@@ -5596,11 +5690,7 @@
     }
 
     // Cables: white jacket + colored strands (above tubes + elements).
-    if (showElectrical) {
-      const elemById = Object.fromEntries(
-        (graph.elements || []).map((e) => [e.id, e])
-      );
-      const layout = buildCableLayout(graph.cable_edges || [], elemById, byId);
+    if (showElectrical && layout) {
       for (const edge of graph.cable_edges || []) {
         const item = appendCableVisuals(
           cablesG,
