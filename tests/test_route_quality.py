@@ -351,6 +351,7 @@ class TestElementBorderAndVEntry(unittest.TestCase):
             ensure_manhattan_near_point,
             manhattan_join_end,
             opening_approach_is_manhattan,
+            strands_meet_at_opening,
         )
 
         mouth = (200.0, 200.0)
@@ -381,32 +382,34 @@ class TestElementBorderAndVEntry(unittest.TestCase):
         )
         self.assertTrue(any("opening" in x for x in issues), msg=issues)
 
-        # Fix path: drop snapped mouth, Manhattan-join (arrive vertically).
+        # Fix path: parallel lane crossings (rule 13) + Manhattan join.
+        brown_cross = (195.0, 200.0)
+        green_cross = (205.0, 200.0)
         brown_fix = manhattan_join_end(
-            brown_snap[:-1], mouth, face="S"
+            brown_snap[:-1], brown_cross, face="S"
         )
         green_fix = manhattan_join_end(
-            green_snap[:-1], mouth, face="S"
+            green_snap[:-1], green_cross, face="S"
         )
-        self.assertTrue(opening_approach_is_manhattan(brown_fix, mouth))
-        self.assertTrue(opening_approach_is_manhattan(green_fix, mouth))
+        self.assertTrue(opening_approach_is_manhattan(brown_fix, brown_cross))
+        self.assertTrue(opening_approach_is_manhattan(green_fix, green_cross))
         self.assertEqual(
-            count_diagonals_near_point(brown_fix, mouth), 0
-        )
-        self.assertEqual(
-            count_diagonals_near_point(green_fix, mouth), 0
+            count_diagonals_near_point(brown_fix, brown_cross), 0
         )
         self.assertEqual(
-            assess_bundle(
-                [brown_fix],
-                openings=[mouth],
-            ),
-            [],
+            count_diagonals_near_point(green_fix, green_cross), 0
+        )
+        self.assertFalse(
+            strands_meet_at_opening(
+                [brown_fix, green_fix], mouth, min_separation=MIN_LANE_SEPARATION
+            )
         )
         self.assertEqual(
             assess_bundle(
-                [green_fix],
+                [brown_fix, green_fix],
                 openings=[mouth],
+                min_separation=MIN_LANE_SEPARATION,
+                allow_crossings=True,
             ),
             [],
         )
@@ -914,7 +917,6 @@ class TestMouthExitAndTubeEnvelope(unittest.TestCase):
 
     def _tube_only_lanes(self, n: int = 3):
         from housewire.ui.route_quality import (
-            converge_lane_to_mouth,
             highway_lane_offset,
             offset_ortho,
         )
@@ -927,8 +929,6 @@ class TestMouthExitAndTubeEnvelope(unittest.TestCase):
                 if abs(d) > 1e-9
                 else [(float(p[0]), float(p[1])) for p in self.EXTERIOR]
             )
-            tube = converge_lane_to_mouth(tube, self.START_MOUTH, at_start=True)
-            tube = converge_lane_to_mouth(tube, self.END_MOUTH, at_start=False)
             out.append(tube)
         return out
 
@@ -997,19 +997,44 @@ class TestMouthExitAndTubeEnvelope(unittest.TestCase):
             strands_overlap(
                 lanes,
                 min_separation=MIN_LANE_SEPARATION,
-                ignore_near=[self.START_MOUTH, self.END_MOUTH],
             ),
             msg=lanes,
         )
 
-    def test_build_hop_lane_passes_through_both_mouths(self) -> None:
+    def test_build_hop_lane_passes_near_both_mouths(self) -> None:
+        from housewire.ui.route_quality import highway_road_width
+
+        half = highway_road_width(3) / 2.0
         for lane in self._good_lanes(3):
             for mouth in (self.START_MOUTH, self.END_MOUTH):
                 d = min(
                     ((p[0] - mouth[0]) ** 2 + (p[1] - mouth[1]) ** 2) ** 0.5
                     for p in lane
                 )
-                self.assertLessEqual(d, 1.5, msg=(mouth, lane))
+                self.assertLessEqual(d, half + 0.5, msg=(mouth, lane, d))
+
+    def test_multi_cable_opening_lanes_do_not_meet_at_mouth(self) -> None:
+        """Rule 13: parallel openings never collapse onto the center boca."""
+        from housewire.ui.route_quality import strands_meet_at_opening
+
+        lanes = self._good_lanes(3)
+        for mouth in (self.START_MOUTH, self.END_MOUTH):
+            self.assertFalse(
+                strands_meet_at_opening(lanes, mouth),
+                msg=(mouth, lanes),
+            )
+        issues = assess_bundle(
+            lanes,
+            openings=[self.START_MOUTH, self.END_MOUTH],
+            min_separation=MIN_LANE_SEPARATION,
+            allow_crossings=True,
+            allow_z=True,
+            allow_c=True,
+        )
+        self.assertFalse(
+            any("meet at mouth" in x for x in issues),
+            msg=issues,
+        )
 
     def test_build_hop_lane_no_early_mouth_exit(self) -> None:
         from housewire.ui.route_quality import (

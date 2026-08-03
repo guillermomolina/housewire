@@ -49,7 +49,7 @@ on the whole chain) must not undo mouth transit or collapse lanes.
    join to the fan tip).
 9. **No border hugging** — Strands should not run along place or element
    rectangle borders for long mid-run stretches.
-10. **No out-and-back** — No collinear reverse (ida y vuelta) on the same
+10. **No out-and-back** — No collinear reverse (back and forth) on the same
     axis mid-path, except protected mouth zigzags.
 
 ### Terminals and openings
@@ -87,9 +87,9 @@ an inbox path from the boca to the pin. Intermediate `Cable` sheaths
 ### Overlaps and diagonals
 
 15. **No illegal mid-run overlaps** — Parallel strands keep minimum lane
-    separation except where they legally meet: tube-side mouth converge
-    (exterior lanes join onto the boca for transit) and shared **pins**.
-    Inside a place after a multi-cable opening, strands stay apart (13).
+    separation except where they legally meet at shared **pins** (14).
+    Multi-cable openings must not meet at the boca (13). Tube envelope still
+    contains mid-run vertices (1).
 16. **No long diagonals** — Diagonals longer than the terminal-V budget are
     forbidden (especially boca→element shortcuts). Short diagonals are
     allowed only for multi-cable terminal V (11).
@@ -97,14 +97,18 @@ an inbox path from the boca to the pin. Intermediate `Cable` sheaths
 ## Hop assembly contract
 
 ```text
-head (ends at start mouth)
-  + tube (start mouth → end mouth, offset lanes, converge at ends)
-  + tail (starts at end mouth)
+head (ends at start lane crossing)
+  + tube (start crossing → end crossing, parallel offset lanes)
+  + tail (starts at end lane crossing)
 ```
 
-- Strip out-and-back only on **head** / **tail**, with mouths and fan tips
+- Single-cable: crossings coincide with the painted boca.
+- Multi-cable: crossings stay on parallel offsets through the mouth — do
+  **not** converge every lane onto the center boca.
+- Strip out-and-back only on **head** / **tail**, with crossings and fan tips
   protected.
-- Tube stays pristine; mouths are the painted tube endpoints.
+- Tube stays pristine; painted tube endpoints are the centerline bocas
+  (strands pass within the tube half-width).
 - Do not run `preserveTerminalVLead` / `ensureVertexNear` / unprotected
   `stripOutAndBack` on the merged chain.
 
@@ -120,6 +124,7 @@ site, dumps `path.edge-tube` and colored strands, then runs
 | Envelope | `outside tube[i] envelope` |
 | Shared trunk | `shared inbox trunk at y≈…` |
 | Terminal V | `missing terminal V diagonal` |
+| Opening parallel | `multi-cable strands meet` / `meet at mouth` |
 | Out-and-back | `out-and-back` |
 
 Sites without conduits (same-box only, e.g. `Route_01`) skip tube

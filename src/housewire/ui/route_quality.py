@@ -27,7 +27,8 @@ MAX_Z_LEG = 28.0
 MAX_C_LEG = 18.0
 # Terminal-only diagonals may be this long; longer = boca→element bug.
 # Short diagonals are allowed ONLY on multi-cable terminal V fans.
-# Openings (one cable) and single-cable terminals must stay Manhattan.
+# Openings (all) and single-cable terminals must stay Manhattan.
+# Multi-cable openings stay parallel through the boca (never meet there).
 TERMINAL_DIAG_MAX = 36.0
 # Radius around a mouth where any diagonal is forbidden.
 OPENING_DIAG_RADIUS = 48.0
@@ -859,8 +860,8 @@ def assess_bundle(
     """
     issues: list[str] = []
     overlap_ignore: list[Point] = []
-    if openings:
-        overlap_ignore.extend(openings)
+    # Shared terminals may legally meet at the pin (rule 14). Multi-cable
+    # openings must NOT meet at the boca (rule 13) — do not ignore openings.
     if shared_terminals:
         overlap_ignore.extend(t[0] for t in shared_terminals)
     if len(strands) >= 2 and strands_overlap(
@@ -869,6 +870,15 @@ def assess_bundle(
         ignore_near=overlap_ignore or None,
     ):
         issues.append("strands overlap (lane separation too small)")
+    if openings and len(strands) >= 2:
+        for oi, mouth in enumerate(openings):
+            if strands_meet_at_opening(
+                strands, mouth, min_separation=min_separation
+            ):
+                issues.append(
+                    f"multi-cable opening {oi}: strands meet at mouth "
+                    "(want parallel; rule 13)"
+                )
     if not allow_crossings:
         n = count_strand_crossings(strands)
         if n:
@@ -1340,7 +1350,13 @@ def mouth_fan_pts(
     *,
     stub: float = 14.0,
 ) -> list[Point]:
-    """mouth → inward stub → lateral+depth fan (inbox separation after boca)."""
+    """Crossing → inward stub → optional lateral+depth fan.
+
+    For multi-cable openings (rule 13), pass the lane crossing as ``mouth``
+    with ``lane_dist=0`` so strands stub inward without collapsing onto the
+    center boca. Non-zero ``lane_dist`` keeps the legacy post-mouth fan when
+    ``mouth`` is the center boca.
+    """
     mx, my = float(mouth[0]), float(mouth[1])
     ix, iy = float(inward[0]), float(inward[1])
     stub_pt = (mx + ix * stub, my + iy * stub)
@@ -1369,25 +1385,34 @@ def build_hop_lane(
     inward_start: Point,
     inward_end: Point,
 ) -> list[Point]:
-    """Reference hop lane: offset tube only, converge mouths, fan inboxes.
+    """Reference hop lane: offset tube, parallel mouths, fan inboxes.
 
-    Does **not** offset a continuous inbox+tube centerline (that peels out of
-    the conduit). Matches ``cableBaseSubpaths`` hop assembly in app.js.
+    Multi-cable (``lane_dist ≠ 0``): keep parallel through openings — do **not**
+    converge onto the center boca (rule 13). Single-cable may snap to the
+    painted mouth. Does **not** offset a continuous inbox+tube centerline.
+    Matches ``cableBaseSubpaths`` hop assembly in app.js.
     """
     tube = (
         offset_ortho(exterior, lane_dist)
         if abs(lane_dist) > 1e-9
         else [(float(p[0]), float(p[1])) for p in exterior]
     )
-    tube = converge_lane_to_mouth(tube, mouth_start, at_start=True)
-    tube = converge_lane_to_mouth(tube, mouth_end, at_start=False)
+    if abs(lane_dist) < 1e-9:
+        tube = converge_lane_to_mouth(tube, mouth_start, at_start=True)
+        tube = converge_lane_to_mouth(tube, mouth_end, at_start=False)
+        if tube:
+            tube[0] = (float(mouth_start[0]), float(mouth_start[1]))
+            tube[-1] = (float(mouth_end[0]), float(mouth_end[1]))
 
-    fan_s = mouth_fan_pts(mouth_start, inward_start, lane_dist)
-    to_mouth = list(reversed(fan_s))  # fan → stub → mouth
+    crossing_s = tube[0]
+    crossing_e = tube[-1]
+    # Fan from the lane crossing (lane_dist already in the tube offset).
+    fan_s = mouth_fan_pts(crossing_s, inward_start, 0.0)
+    to_mouth = list(reversed(fan_s))  # fan → stub → crossing
     head = manhattan_join_end([pin_start], to_mouth[0])
     head = head + to_mouth[1:]
 
-    fan_e = mouth_fan_pts(mouth_end, inward_end, lane_dist)
+    fan_e = mouth_fan_pts(crossing_e, inward_end, 0.0)
     tail = manhattan_join_end(fan_e, pin_end)
 
     chain = list(head[:-1]) + list(tube) + list(tail[1:])
@@ -1396,6 +1421,57 @@ def build_hop_lane(
         if not clean or _dist(clean[-1], p) > 1e-6:
             clean.append(p)
     return clean
+
+
+def dedupe_identical_polylines(
+    strands: Sequence[Poly], *, ndigits: int = 2
+) -> list[list[Point]]:
+    """Drop duplicate paints of the same geometry (e.g. GNYE green+yellow)."""
+    seen: set[tuple[tuple[float, float], ...]] = set()
+    out: list[list[Point]] = []
+    for poly in strands:
+        key = tuple(
+            (round(float(p[0]), ndigits), round(float(p[1]), ndigits)) for p in poly
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append([(float(p[0]), float(p[1])) for p in poly])
+    return out
+
+
+def strands_meet_at_opening(
+    strands: Sequence[Poly],
+    mouth: Point,
+    *,
+    near_radius: float = 8.0,
+    min_separation: float = MIN_LANE_SEPARATION,
+) -> bool:
+    """True when ≥2 strands collapse onto the same point near ``mouth``.
+
+    Multi-cable openings must stay parallel through the boca (rule 13) —
+    meeting at the mouth is allowed only for shared terminals (rule 14).
+    """
+    if len(strands) < 2:
+        return False
+    mouth_p = (float(mouth[0]), float(mouth[1]))
+    closest: list[Point] = []
+    for poly in strands:
+        if len(poly) < 1:
+            continue
+        best = min(
+            ((float(p[0]), float(p[1])) for p in poly),
+            key=lambda p: _dist(p, mouth_p),
+        )
+        if _dist(best, mouth_p) <= near_radius:
+            closest.append(best)
+    if len(closest) < 2:
+        return False
+    for i in range(len(closest)):
+        for j in range(i + 1, len(closest)):
+            if _dist(closest[i], closest[j]) < min_separation:
+                return True
+    return False
 
 
 def ensure_vertex_near(
@@ -1783,7 +1859,7 @@ def assess_live_canvas(
     strands: Sequence[Poly],
     *,
     tube_half_widths: Sequence[float] | None = None,
-    mouth_tol: float = 3.0,
+    mouth_tol: float | None = None,
     envelope_margin: float = 2.5,
     trunk_y_min: float = 400.0,
     trunk_y_max: float = 440.0,
@@ -1805,8 +1881,13 @@ def assess_live_canvas(
         # Match app.js highwayRoadWidth defaults (3-lane ~17.5 → 8.75).
         halves.append(8.75)
 
-    for si, strand in enumerate(strands):
-        pts = [(float(p[0]), float(p[1])) for p in strand]
+    # GNYE is painted as two overlapping paths (green + yellow); treat as one.
+    unique_strands = dedupe_identical_polylines(strands)
+
+    # Group strands by matched tube for multi-cable opening checks (rule 13).
+    by_tube: dict[int, list[tuple[int, list[Point]]]] = {}
+
+    for si, pts in enumerate(unique_strands):
         if len(pts) < 2:
             issues.append(f"strand {si}: too short")
             continue
@@ -1814,11 +1895,15 @@ def assess_live_canvas(
         if ti < 0:
             issues.append(f"strand {si}: no matching tube")
             continue
+        by_tube.setdefault(ti, []).append((si, pts))
         tube = [(float(p[0]), float(p[1])) for p in tubes[ti]]
         mouth_a, mouth_b = tube[0], tube[-1]
-        if not point_near_polyline(mouth_a, pts, tol=mouth_tol):
+        # Parallel lanes pass near the painted boca within the tube half-width
+        # (rule 13); single-cable still hits the center within a few px.
+        tol = float(mouth_tol) if mouth_tol is not None else max(3.0, halves[ti])
+        if not point_near_polyline(mouth_a, pts, tol=tol):
             issues.append(f"strand {si}: misses tube[{ti}] start mouth")
-        if not point_near_polyline(mouth_b, pts, tol=mouth_tol):
+        if not point_near_polyline(mouth_b, pts, tol=tol):
             issues.append(f"strand {si}: misses tube[{ti}] end mouth")
 
         # Envelope: only vertices BETWEEN the two mouth visits on this strand
@@ -1867,8 +1952,20 @@ def assess_live_canvas(
             if not (d0 or d1):
                 issues.append(f"strand {si}: missing terminal V diagonal")
 
+    for ti, group in by_tube.items():
+        if len(group) < 2:
+            continue
+        tube = [(float(p[0]), float(p[1])) for p in tubes[ti]]
+        polys = [pts for _, pts in group]
+        for mouth_i, mouth in enumerate((tube[0], tube[-1])):
+            if strands_meet_at_opening(polys, mouth):
+                issues.append(
+                    f"tube[{ti}] mouth {mouth_i}: multi-cable strands meet "
+                    "(want parallel opening; rule 13)"
+                )
+
     trunks = shared_horizontal_trunk_length(
-        strands, y_min=trunk_y_min, y_max=trunk_y_max, min_len=40.0
+        unique_strands, y_min=trunk_y_min, y_max=trunk_y_max, min_len=40.0
     )
     for y, length, n in trunks:
         issues.append(
@@ -1884,7 +1981,7 @@ def assess_live_site(
     *,
     tube_half_widths: Sequence[float] | None = None,
     require_tubes: bool = False,
-    mouth_tol: float = 3.0,
+    mouth_tol: float | None = None,
     envelope_margin: float = 2.5,
     trunk_y_min: float = 400.0,
     trunk_y_max: float = 440.0,

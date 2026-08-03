@@ -1701,10 +1701,15 @@
   }
 
   /**
-   * mouth → inward stub → lateral+depth fan. Separates lanes in free space
-   * AFTER exiting the boca (never by peeling through the tube wall).
-   * Depth along inward uses laneDist so tips do not share one latitude
-   * (Test_01 shared y=420 trunk when every tip sat on stub-Y).
+   * mouth → inward stub → optional lateral+depth fan.
+   *
+   * Rule 13 (multi-cable openings): pass the lane's mouth *crossing* (already
+   * offset) with ``laneDist = 0`` so the fan stubs inward without collapsing
+   * onto the center boca. Rule 6 still applies: separate in free space, never
+   * by peeling through the tube wall.
+   *
+   * When ``laneDist ≠ 0`` and ``mouth`` is the center boca (legacy / single
+   * call sites), keep the post-mouth lateral fan for inbox tip uniqueness.
    *
    * ``toward`` (optional): pin / attach inside the place. If the nominal
    * opening inward points away from it (common for plane bocas B/F), flip
@@ -4120,23 +4125,39 @@
       );
 
       let tube = parallel(exteriorCtr);
-      tube = convergeLaneToMouth(tube, tubeStartOp, true);
-      tube = convergeLaneToMouth(tube, tubeEndOp, false);
-      // Phase contract: tube endpoints ARE the mouths (exact).
-      if (tube.length >= 1) {
-        tube[0] = [tubeStartOp.x, tubeStartOp.y];
-        tube[tube.length - 1] = [tubeEndOp.x, tubeEndOp.y];
-        tube = cleanOrthoPoly(tube);
+      // Rule 13: multi-cable openings stay parallel through the boca — do not
+      // collapse every lane onto the center mouth (that is terminal-only).
+      // Single-cable: snap tube ends to the painted boca for clean transit.
+      const multiAtOpening = Math.abs(laneDist) >= 1e-9;
+      if (!multiAtOpening) {
+        tube = convergeLaneToMouth(tube, tubeStartOp, true);
+        tube = convergeLaneToMouth(tube, tubeEndOp, false);
+        if (tube.length >= 1) {
+          tube[0] = [tubeStartOp.x, tubeStartOp.y];
+          tube[tube.length - 1] = [tubeEndOp.x, tubeEndOp.y];
+          tube = cleanOrthoPoly(tube);
+        }
       }
+      // Lane crossing = tube endpoint (center mouth when laneDist≈0).
+      const startCrossing = {
+        x: tube[0][0],
+        y: tube[0][1],
+      };
+      const endCrossing = {
+        x: tube[tube.length - 1][0],
+        y: tube[tube.length - 1][1],
+      };
 
+      // Fan from the lane crossing. Multi-cable already carries lateral in the
+      // crossing (laneDist=0 here); single-cable may still use laneDist=0.
       const startFan = mouthFanPts(
-        tubeStartOp,
+        startCrossing,
         startMouthFace,
-        laneDist,
+        0,
         startAtt
       );
-      const endFan = mouthFanPts(tubeEndOp, endMouthFace, laneDist, endAtt);
-      // Toward mouth: fan → stub → mouth. Join lead to fan tip via
+      const endFan = mouthFanPts(endCrossing, endMouthFace, 0, endAtt);
+      // Toward mouth: fan → stub → crossing. Join lead to fan tip via
       // joinLeadToFanTip (column-first) so lanes do not share rail-Y.
       const startFanRev = startFan.slice().reverse();
       const startLead = pinToLanePts(
@@ -4151,12 +4172,12 @@
         head = mergeOrthoPolys(head, startFanRev.slice(1)) || head;
       }
       head = stripShortZJogs(
-        stripOutAndBack(head, [tubeStartOp, startFanRev[0], ...startFan])
+        stripOutAndBack(head, [startCrossing, startFanRev[0], ...startFan])
       );
-      // Phase contract: head ends on the start mouth.
+      // Phase contract: head ends on the start lane crossing.
       {
-        const sx = tubeStartOp.x;
-        const sy = tubeStartOp.y;
+        const sx = startCrossing.x;
+        const sy = startCrossing.y;
         if (!head.length) {
           head = [[sx, sy]];
         } else if (
@@ -4165,7 +4186,7 @@
         ) {
           const last = head[head.length - 1];
           if (Math.abs(last[0] - sx) >= 1e-6 && Math.abs(last[1] - sy) >= 1e-6) {
-            // Prefer matching mouth latitude on current column (N/S faces).
+            // Prefer matching crossing latitude on current column (N/S faces).
             head.push([last[0], sy]);
           }
           head.push([sx, sy]);
@@ -4183,21 +4204,21 @@
         toSlot.slot,
         toSlot.count
       );
-      // pin → … → fan tip → stub → mouth, then reverse to mouth→…→pin.
+      // pin → … → fan tip → stub → crossing, then reverse to crossing→…→pin.
       let tailFromPin = joinLeadToFanTip(endLead, endFanTip, endFace);
-      const fanToMouth = endFanFwd.slice().reverse(); // fan, stub, mouth
+      const fanToMouth = endFanFwd.slice().reverse(); // fan, stub, crossing
       if (fanToMouth.length > 1) {
         tailFromPin =
           mergeOrthoPolys(tailFromPin, fanToMouth.slice(1)) || tailFromPin;
       }
       tailFromPin = stripShortZJogs(
-        stripOutAndBack(tailFromPin, [tubeEndOp, endFanTip, ...endFanFwd])
+        stripOutAndBack(tailFromPin, [endCrossing, endFanTip, ...endFanFwd])
       );
-      // Phase contract: pin-side path ends on the end mouth before reverse.
+      // Phase contract: pin-side path ends on the end crossing before reverse.
       // (mergeOrthoPolys ignores 1-point arrays — append explicitly.)
       {
-        const ex = tubeEndOp.x;
-        const ey = tubeEndOp.y;
+        const ex = endCrossing.x;
+        const ey = endCrossing.y;
         if (!tailFromPin.length) {
           tailFromPin = [[ex, ey]];
         } else if (
@@ -4240,8 +4261,8 @@
         return out.length >= 2 ? out : [];
       };
       let chain = concatPhases(head, tube, tail);
-      // Re-assert exterior = canonical tube between bocas (phase contract).
-      chain = spliceTubeSegment(chain, tube, tubeStartOp, tubeEndOp);
+      // Re-assert exterior = canonical tube between lane crossings.
+      chain = spliceTubeSegment(chain, tube, startCrossing, endCrossing);
       if (!chain || chain.length < 2) return [];
       return [chain];
     }

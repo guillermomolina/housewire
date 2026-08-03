@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.7] — 2026-08-03
+
+### Fixed
+
+- Multi-cable openings stay **parallel through the boca** (routing rule 13):
+  hop assembly no longer collapses every lane onto the center mouth.
+  Detectors flag mouth meets; live E2E ignores duplicate GNYE green+yellow
+  paints of the same geometry.
+
+### Changed
+
+- ``docs/routing-rules.md`` hop contract: lane crossings (parallel offsets)
+  instead of converging all strands at painted bocas.
+
 ## [0.35.6] — 2026-08-02
 
 ### Added
