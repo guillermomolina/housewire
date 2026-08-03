@@ -633,9 +633,9 @@ Not allowed (lift the link to the common ancestor):
 - sibling paths declared inside the wrong place
 
 Contained Cable/Conductor ids referenced by a Conduit must be defined in the
-**same** place node’s `cables:` map, or in an **ancestor** place (typical for
-cross-location runs lifted to a common ancestor that still pass through local
-hop conduits). Sibling or unrelated places are not allowed.
+**same** place node’s `cables:` map. Cross-location runs (and the Conduits that
+carry them) are declared on the **common ancestor** so endpoints and
+`contains` never need `../` — only downward paths into nested places.
 
 ## Qualified name prefixes
 

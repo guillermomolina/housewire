@@ -7,13 +7,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.44.3] — 2026-08-03
+
+### Fixed
+
+- Revert conduit ``contains`` ancestor lookups. Links stay in one place’s
+  ``cables:`` map; cross-location runs (cable + hop conduits) are declared on
+  the common ancestor so references only go downward (no ``../``).
+- Keep clearer FastAPI ``detail`` text in UI Save/API errors (from 0.44.2).
+
 ## [0.44.2] — 2026-08-03
 
 ### Fixed
 
-- Conduit ``contains`` may reference cables declared on an **ancestor** place
-  (cross-location runs at the common ancestor that still pass through local
-  hop tubes). Save no longer rejects those sites.
+- ~~Conduit ``contains`` may reference cables declared on an **ancestor** place~~
+  (reverted in 0.44.3).
 - UI Save/API errors show the FastAPI ``detail`` text instead of raw JSON.
 
 ## [0.44.1] — 2026-08-03

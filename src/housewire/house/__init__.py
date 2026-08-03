@@ -610,13 +610,7 @@ def _validate_flat_fragment(
     location_parts: list[str],
     seen_elements: set[str],
     seen_cables: set[str],
-    ancestor_cable_ids: set[str] | None = None,
-) -> set[str]:
-    """Validate one place fragment.
-
-    Returns the short ``cables:`` ids declared here so descendants can reference
-    ancestor links in Conduit/Cable ``contains``.
-    """
+) -> None:
     reject_legacy_keys(fragment)
     prefix = location_prefix(location_parts)
     element_map: dict[str, str] = {}
@@ -646,23 +640,18 @@ def _validate_flat_fragment(
         cable_map[str(name)] = new_name
         local_cable_ids.add(str(name))
 
-    # Same-map ids plus ancestor places (cross-location runs lifted to a
-    # common ancestor, still listed in descendant hop conduits).
-    cable_ids = set(ancestor_cable_ids or ()) | local_cable_ids
-
     for name, definition in (cables or {}).items():
         validate_link_entry(
             str(name),
             definition,
             catalog=catalog,
-            cable_ids=cable_ids,
+            cable_ids=local_cable_ids,
             current_location=location_parts,
             local_prefix=prefix,
             element_map=element_map,
             normalize_element_ref=_normalize_local_element_ref,
             split_element_terminal=_split_element_terminal,
         )
-    return local_cable_ids
 
 
 def validate_house_tree(
@@ -702,27 +691,14 @@ def validate_house_tree(
 
     seen_elements: set[str] = set()
     seen_cables: set[str] = set()
-    # Parent-before-child walk: stack of (location_parts, local cable short ids).
-    cable_id_stack: list[tuple[list[str], set[str]]] = []
     for location_parts, fragment in fragments:
-        parts_n = _norm_location_parts(location_parts)
-        while cable_id_stack:
-            top_parts, _ = cable_id_stack[-1]
-            if _location_contains(top_parts, parts_n) and top_parts != parts_n:
-                break
-            cable_id_stack.pop()
-        ancestor_ids: set[str] = set()
-        for _, ids in cable_id_stack:
-            ancestor_ids |= ids
-        local_ids = _validate_flat_fragment(
+        _validate_flat_fragment(
             fragment,
             catalog=catalog,
             location_parts=location_parts,
             seen_elements=seen_elements,
             seen_cables=seen_cables,
-            ancestor_cable_ids=ancestor_ids,
         )
-        cable_id_stack.append((parts_n, local_ids))
 
 
 def _expand_endpoint_token(token: str) -> list[str]:
