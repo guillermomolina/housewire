@@ -6002,7 +6002,35 @@
     const g = elementsById[elem.id];
     if (!g) return;
     const a = elementAbsXY(elem, placeById);
+    const w = elem.w ?? ELEM_W;
+    const h = elem.h ?? ELEM_H;
     g.setAttribute("transform", `translate(${a.x},${a.y})`);
+    const box = g.querySelector(".element-box");
+    if (box) {
+      box.setAttribute("width", String(w));
+      box.setAttribute("height", String(h));
+    }
+    const label = g.querySelector("text.element-label");
+    if (label) {
+      label.textContent = fitLabel(
+        elem.display_name || elem.name || elem.leaf_id || elem.id,
+        w - 4
+      );
+    }
+    const typeEl = g.querySelector("text.element-type");
+    if (typeEl) {
+      typeEl.textContent = fitLabel(
+        elem.type_label || elem.type || "",
+        Math.max(8, w - 15)
+      );
+    }
+    for (const mark of g.querySelectorAll("circle.element-terminal")) {
+      const cellId = mark.getAttribute("data-terminal");
+      if (!cellId) continue;
+      const local = terminalCellAnchorLocal(elem, cellId, placeById);
+      mark.setAttribute("cx", String(local.x));
+      mark.setAttribute("cy", String(local.y));
+    }
   }
 
   /**
@@ -7219,7 +7247,10 @@
         await syncInspectorFromSelection();
         return;
       }
-      updateNodeVisual(null);
+      // Full paint when electrical is on so terminal fans / inbox expansion
+      // and cable attach points match the new box size.
+      if (showElectrical) render();
+      else updateNodeVisual(null);
       await syncInspectorFromSelection();
       try {
         const payload = {};

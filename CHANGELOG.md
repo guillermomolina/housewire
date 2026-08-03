@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.42.2] — 2026-08-03
+
+### Fixed
+
+- Element resize in the electrical view updates the box, terminal marks, and
+  re-routes cables after the drag (previously only the stored size changed).
+
 ## [0.42.1] — 2026-08-03
 
 ### Changed
