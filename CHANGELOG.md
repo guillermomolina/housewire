@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.43.3] — 2026-08-03
+
+### Fixed
+
+- Properties conduits for a place include tubes that attach to nested children
+  (e.g. a stair lists conduits that end on a device box inside it), not only
+  exact endpoint matches.
+
 ## [0.43.2] — 2026-08-03
 
 ### Fixed

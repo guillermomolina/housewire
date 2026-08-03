@@ -182,6 +182,14 @@ def _place_wiring(
     except FileNotFoundError:
         site_doc = None
 
+    def _endpoint_touches_place(endpoint_parts: tuple[str, ...]) -> bool:
+        """True if the conduit end is this place or a nested child of it."""
+        if endpoint_parts == place_parts:
+            return True
+        if len(endpoint_parts) <= len(place_parts):
+            return False
+        return endpoint_parts[: len(place_parts)] == place_parts
+
     if isinstance(site_doc, dict):
         for cut in range(len(place_parts) - 1, -1, -1):
             ancestor = place_parts[:cut]
@@ -215,7 +223,10 @@ def _place_wiring(
                     )
                 except ValueError:
                     continue
-                if from_parts != place_parts and to_parts != place_parts:
+                if not (
+                    _endpoint_touches_place(tuple(from_parts))
+                    or _endpoint_touches_place(tuple(to_parts))
+                ):
                     continue
                 conduits_by_id[cid] = _conduit_row(
                     cid,

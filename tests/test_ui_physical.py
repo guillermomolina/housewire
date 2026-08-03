@@ -651,6 +651,72 @@ class TestServeApi(unittest.TestCase):
             self.assertTrue(enchufe["conduits"])
             self.assertTrue(enchufe["cables"])
 
+    def test_place_detail_conduits_include_nested_endpoints(self) -> None:
+        """Parent place lists ancestor conduits that attach to a child place."""
+        try:
+            from fastapi.testclient import TestClient
+        except (ImportError, RuntimeError):
+            self.skipTest("fastapi/httpx not installed")
+
+        from housewire.ui.app import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = init_site(root, type_id="House", label="Site")
+            add_place(doc, "Parking", type_id="Floor", label="Parking")
+            add_place(
+                doc, "Escalera", under=(), type_id="Stair", label="Escalera"
+            )
+            add_place(
+                doc,
+                "Caja_4",
+                under=("Parking",),
+                type_id="JunctionBox",
+                label="Caja 4",
+            )
+            add_place(
+                doc,
+                "Interruptor_2",
+                under=("Escalera",),
+                type_id="DeviceBox",
+                label="Int 2",
+            )
+            caja = get_place_node(doc, ("Parking", "Caja_4"))
+            caja["openings"] = ["W1"]
+            inter = get_place_node(doc, ("Escalera", "Interruptor_2"))
+            inter["openings"] = ["N1"]
+            house = get_place_node(doc, ())
+            abm.add_cable(house, "Linea_escalera", section="1.5", colors=["BN"])
+            abm.add_conduit(
+                house,
+                "Conducto_CD4_a_Escalera",
+                contains=["Linea_escalera"],
+                from_ref="Parking/Caja_4.W1",
+                to_ref="Escalera/Interruptor_2.N1",
+            )
+            save_site(root, doc)
+
+            client = TestClient(create_app(root))
+            caja_detail = client.get(
+                "/api/place",
+                params={"location": ".", "id": "Parking/Caja_4"},
+            ).json()
+            esc_detail = client.get(
+                "/api/place",
+                params={"location": ".", "id": "Escalera"},
+            ).json()
+            inter_detail = client.get(
+                "/api/place",
+                params={"location": ".", "id": "Escalera/Interruptor_2"},
+            ).json()
+            for detail in (caja_detail, esc_detail, inter_detail):
+                ids = {c["id"] for c in detail.get("conduits") or []}
+                self.assertIn(
+                    "Conducto_CD4_a_Escalera",
+                    ids,
+                    msg=f"missing on {detail.get('id')}: {ids}",
+                )
+
     def test_place_properties_patch(self) -> None:
         try:
             from fastapi.testclient import TestClient
