@@ -7,12 +7,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.42.1] — 2026-08-03
+
+### Changed
+
+- ``icon:`` is a single Lucide kebab id only (``plug``, ``zap``, …). Empty or
+  invalid values fall back to ``circle``.
+
 ## [0.42.0] — 2026-08-03
 
 ### Changed
 
-- UI icons use a local Lucide SVG sprite (no Font Awesome CDN). Catalog and
-  instance ``icon:`` values are Lucide ids; legacy ``fa-*`` tokens still map.
+- UI icons use a local Lucide SVG sprite. Catalog and instance ``icon:`` values
+  are Lucide ids (``plug``, ``zap``, …).
 
 ## [0.41.2] — 2026-08-03
 

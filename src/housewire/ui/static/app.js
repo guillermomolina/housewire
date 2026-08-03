@@ -126,72 +126,12 @@
   }
 
   function normalizeIconId(raw) {
-    const FA_TO_LUCIDE = {
-      "arrow-down-long": "arrow-down",
-      "arrow-right-arrow-left": "arrow-left-right",
-      "battery-full": "battery-full",
-      bolt: "zap",
-      box: "box",
-      "caret-down": "chevron-down",
-      "caret-right": "chevron-right",
-      check: "check",
-      "chevron-right": "chevron-right",
-      circle: "circle",
-      "circle-info": "info",
-      "clock-rotate-left": "history",
-      cube: "box",
-      "diagram-project": "workflow",
-      "door-open": "door-open",
-      "earth-europe": "earth",
-      expand: "maximize-2",
-      "file-export": "file-output",
-      "floppy-disk": "save",
-      "folder-open": "folder-open",
-      "grip-lines": "grip-horizontal",
-      "grip-lines-vertical": "grip-vertical",
-      house: "house",
-      info: "info",
-      "layer-group": "layers",
-      lightbulb: "lightbulb",
-      link: "link",
-      "location-dot": "map-pin",
-      "magnifying-glass-minus": "zoom-out",
-      "magnifying-glass-plus": "zoom-in",
-      minus: "minus",
-      moon: "moon",
-      phone: "phone",
-      plug: "plug",
-      "plug-circle-bolt": "plug-zap",
-      plus: "plus",
-      "rotate-left": "undo-2",
-      "rotate-right": "redo-2",
-      server: "server",
-      "shield-halved": "shield-half",
-      stairs: "waves-ladder",
-      sun: "sun",
-      "table-cells-large": "layout-grid",
-      "toggle-on": "toggle-right",
-      xmark: "x",
-      zap: "zap",
-    };
     let text = String(raw == null ? "" : raw).trim().toLowerCase();
     if (!text) return "circle";
     text = text.replace(/_/g, "-");
-    const parts = text.split(/\s+/).filter(Boolean);
-    let token = parts[parts.length - 1] || "";
-    if (token.startsWith("fa-")) token = token.slice(3);
-    if (
-      token === "solid" ||
-      token === "regular" ||
-      token === "brands" ||
-      token === "light" ||
-      token === "thin"
-    ) {
-      return "circle";
-    }
-    if (FA_TO_LUCIDE[token]) return FA_TO_LUCIDE[token];
-    if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(token)) return token;
-    return "circle";
+    const token = text.split(/\s+/).filter(Boolean)[0] || "";
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(token)) return "circle";
+    return token;
   }
 
   /** HTML for a Lucide icon from the local sprite. */

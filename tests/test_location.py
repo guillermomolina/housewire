@@ -129,10 +129,7 @@ class TestDirectoryLocation(unittest.TestCase):
             self.assertIn(type_id, catalog)
             self.assertTrue(is_place_type(type_id))
             self.assertNotIn("wireviz_skip", catalog[type_id])
-            self.assertTrue(
-                str(catalog[type_id].get("icon") or "").strip()
-                and not str(catalog[type_id].get("icon")).startswith("fa-")
-            )
+            self.assertTrue(bool(str(catalog[type_id].get("icon") or "").strip()))
 
     def test_site_catalog_icon_overlay(self) -> None:
         from housewire.house import catalog_icon, normalize_icon_id
@@ -158,17 +155,11 @@ class TestDirectoryLocation(unittest.TestCase):
                 ),
                 "phone",
             )
-            # Legacy Font Awesome tokens still resolve.
-            self.assertEqual(normalize_icon_id("fa-plug"), "plug")
-            self.assertEqual(normalize_icon_id("fa-solid fa-bolt"), "zap")
-            self.assertEqual(
-                catalog_icon(
-                    "Socket",
-                    catalog=merged,
-                    instance={"type": "Socket", "icon": "fa-star"},
-                ),
-                "star",
-            )
+            self.assertEqual(normalize_icon_id("plug"), "plug")
+            self.assertEqual(normalize_icon_id("zoom-in"), "zoom-in")
+            self.assertEqual(normalize_icon_id(""), "circle")
+            self.assertEqual(normalize_icon_id("!!!"), "circle")
+            self.assertEqual(normalize_icon_id("plug extra"), "plug")
 
 
 class TestLocationElementLegacyInline(unittest.TestCase):

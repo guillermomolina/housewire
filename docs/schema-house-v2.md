@@ -39,8 +39,7 @@ icon: plug-zap
 ```
 
 Values are Lucide icon ids shipped in the UI sprite (``plug``, ``zap``,
-``house``, …). Legacy Font Awesome tokens (``fa-plug`` or ``fa-solid fa-plug``)
-are still accepted and mapped to Lucide equivalents.
+``house``, …).
 
 ## Nodes vs links
 
