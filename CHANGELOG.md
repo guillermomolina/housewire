@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.38.0] — 2026-08-03
+
+### Changed
+
+- Cache place/element obstacle rects, border rects, and a parent→children index
+  once per render/refresh frame so each conduit and strand does not rebuild the
+  same geometry.
+
 ## [0.37.0] — 2026-08-03
 
 ### Changed

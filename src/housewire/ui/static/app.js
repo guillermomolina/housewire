@@ -459,9 +459,107 @@
     return res.json();
   }
 
+  /** Stable empty list for childrenOf misses (do not mutate). */
+  const EMPTY_NODES = Object.freeze([]);
+
+  /** @type {Map<string|null, object[]>|null} */
+  let kidsByParent = null;
+  /** @type {object|null} */
+  let kidsGraphRef = null;
+
+  function ensureKidsIndex() {
+    if (kidsByParent && kidsGraphRef === graph) return kidsByParent;
+    kidsGraphRef = graph;
+    kidsByParent = new Map();
+    for (const n of graph?.nodes || []) {
+      const key = n.parent || null;
+      let arr = kidsByParent.get(key);
+      if (!arr) {
+        arr = [];
+        kidsByParent.set(key, arr);
+      }
+      arr.push(n);
+    }
+    return kidsByParent;
+  }
+
   function childrenOf(parentId) {
-    const key = parentId || null;
-    return (graph?.nodes || []).filter((n) => (n.parent || null) === key);
+    const idx = ensureKidsIndex();
+    return idx.get(parentId || null) || EMPTY_NODES;
+  }
+
+  /**
+   * Per-frame routing geometry (obstacles / borders). Built once at the start
+   * of render / refreshEdges so each edge does not rebuild the same rects.
+   * @type {{
+   *   placeById: object,
+   *   elemById: object|null,
+   *   borderRects: {x:number,y:number,w:number,h:number}[],
+   *   placeLeaves: Record<string, {id:string,x:number,y:number,w:number,h:number}[]>,
+   *   elements: Record<string, {id:string,x:number,y:number,w:number,h:number}[]>,
+   * }|null}
+   */
+  let routeGeomCache = null;
+
+  function beginRouteGeomCache(placeById, elemById) {
+    const placeLeaves = {};
+    for (const pad of [0, 2, 8]) {
+      /** @type {{id:string,x:number,y:number,w:number,h:number}[]} */
+      const rects = [];
+      for (const n of Object.values(placeById || {})) {
+        if (!n || childrenOf(n.id).length) continue;
+        const a = absXY(n, placeById);
+        const w = nodeW(n) - 2 * pad;
+        const h = nodeH(n) - 2 * pad;
+        if (w < 4 || h < 4) continue;
+        rects.push({ id: n.id, x: a.x + pad, y: a.y + pad, w, h });
+      }
+      placeLeaves[String(pad)] = rects;
+    }
+    /** @type {Record<string, {id:string,x:number,y:number,w:number,h:number}[]>} */
+    const elements = {};
+    for (const pad of [2]) {
+      /** @type {{id:string,x:number,y:number,w:number,h:number}[]} */
+      const rects = [];
+      for (const e of Object.values(elemById || {})) {
+        if (!e) continue;
+        const a = elementAbsXY(e, placeById);
+        const w = (e.w ?? ELEM_W) - 2 * pad;
+        const h = (e.h ?? ELEM_H) - 2 * pad;
+        if (w < 4 || h < 4) continue;
+        rects.push({ id: e.id, x: a.x + pad, y: a.y + pad, w, h });
+      }
+      elements[String(pad)] = rects;
+    }
+    /** @type {{x:number,y:number,w:number,h:number}[]} */
+    const borderRects = [];
+    for (const n of Object.values(placeById || {})) {
+      if (!n) continue;
+      const a = absXY(n, placeById);
+      borderRects.push({ x: a.x, y: a.y, w: nodeW(n), h: nodeH(n) });
+    }
+    routeGeomCache = {
+      placeById,
+      elemById: elemById || null,
+      borderRects,
+      placeLeaves,
+      elements,
+    };
+  }
+
+  function endRouteGeomCache() {
+    routeGeomCache = null;
+  }
+
+  function filterCachedIdRects(all, excludeIds) {
+    const ex = excludeIds && excludeIds.length ? new Set(excludeIds) : null;
+    /** @type {{x:number,y:number,w:number,h:number}[]} */
+    const out = [];
+    for (const r of all || []) {
+      if (ex && ex.has(r.id)) continue;
+      out.push({ x: r.x, y: r.y, w: r.w, h: r.h });
+    }
+    return out;
   }
 
   function isModClick(ev) {
@@ -1530,8 +1628,18 @@
 
   /** Shrunk leaf-place rects as routing obstacles (skip rooms/containers). */
   function placeObstacles(byId, excludeIds, inset) {
-    const ex = new Set(excludeIds || []);
     const pad = inset == null ? 8 : inset;
+    if (
+      routeGeomCache &&
+      routeGeomCache.placeById === byId &&
+      routeGeomCache.placeLeaves[String(pad)]
+    ) {
+      return filterCachedIdRects(
+        routeGeomCache.placeLeaves[String(pad)],
+        excludeIds
+      );
+    }
+    const ex = new Set(excludeIds || []);
     /** @type {{x:number,y:number,w:number,h:number}[]} */
     const rects = [];
     for (const n of Object.values(byId)) {
@@ -1552,8 +1660,19 @@
    * the pin only via the outward lead (never pierce the box to the far face).
    */
   function elementObstacles(elemById, placeById, excludeIds, inset) {
-    const ex = new Set(excludeIds || []);
     const pad = inset == null ? 2 : inset;
+    if (
+      routeGeomCache &&
+      routeGeomCache.placeById === placeById &&
+      routeGeomCache.elemById === elemById &&
+      routeGeomCache.elements[String(pad)]
+    ) {
+      return filterCachedIdRects(
+        routeGeomCache.elements[String(pad)],
+        excludeIds
+      );
+    }
+    const ex = new Set(excludeIds || []);
     /** @type {{x:number,y:number,w:number,h:number}[]} */
     const rects = [];
     for (const e of Object.values(elemById || {})) {
@@ -1666,6 +1785,9 @@
   }
 
   function placeBorderRects(byId) {
+    if (routeGeomCache && routeGeomCache.placeById === byId) {
+      return routeGeomCache.borderRects;
+    }
     /** @type {{x:number,y:number,w:number,h:number}[]} */
     const rects = [];
     for (const n of Object.values(byId || {})) {
@@ -5407,54 +5529,59 @@
   function refreshEdges() {
     if (!graph) return;
     const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
-    /** @type {{axis:string,x?:number,y?:number,a:number,b:number}[]} */
-    const occupied = [];
-    for (const item of edgePaths) {
-      const n = (item.edge.contains || []).length;
-      const lanes = conduitLaneHint(item.edge, graph.cable_edges || []);
-      const roadW = conduitRoadWidth(n, lanes);
-      const half = roadW / 2;
-      const routed = edgePathD(item.edge, byId, occupied, half);
-      if (routed) {
-        item.d = routed.d;
-        const displayD = conduitDisplayD(routed.d, byId, item.edge);
-        for (const path of item.paths) path.setAttribute("d", displayD);
-        for (const s of routed.segs) occupied.push(s);
-        const outline = item.paths[0];
-        const tube = item.paths[1] || item.paths[0];
-        const tubeCss = wireColorCss(item.edge.color || "GY");
-        const outlineCss = contrastOutlineCss(tubeCss);
-        if (outline && item.paths.length > 1) {
-          outline.style.strokeWidth = String(roadW + OUTLINE_EXTRA);
-          outline.style.stroke = outlineCss;
-        }
-        if (tube) {
-          tube.style.strokeWidth = String(roadW);
-          tube.style.stroke = tubeCss;
-          tube.style.strokeOpacity = item.edge.color ? "0.85" : "0.25";
+    const elemById = Object.fromEntries(
+      (graph.elements || []).map((e) => [e.id, e])
+    );
+    beginRouteGeomCache(byId, elemById);
+    try {
+      /** @type {{axis:string,x?:number,y?:number,a:number,b:number}[]} */
+      const occupied = [];
+      for (const item of edgePaths) {
+        const n = (item.edge.contains || []).length;
+        const lanes = conduitLaneHint(item.edge, graph.cable_edges || []);
+        const roadW = conduitRoadWidth(n, lanes);
+        const half = roadW / 2;
+        const routed = edgePathD(item.edge, byId, occupied, half);
+        if (routed) {
+          item.d = routed.d;
+          const displayD = conduitDisplayD(routed.d, byId, item.edge);
+          for (const path of item.paths) path.setAttribute("d", displayD);
+          for (const s of routed.segs) occupied.push(s);
+          const outline = item.paths[0];
+          const tube = item.paths[1] || item.paths[0];
+          const tubeCss = wireColorCss(item.edge.color || "GY");
+          const outlineCss = contrastOutlineCss(tubeCss);
+          if (outline && item.paths.length > 1) {
+            outline.style.strokeWidth = String(roadW + OUTLINE_EXTRA);
+            outline.style.stroke = outlineCss;
+          }
+          if (tube) {
+            tube.style.strokeWidth = String(roadW);
+            tube.style.stroke = tubeCss;
+            tube.style.strokeOpacity = item.edge.color ? "0.85" : "0.25";
+          }
         }
       }
-    }
-    // Rebuild cable layers (jacket + strands) from scratch.
-    const cablesG = worldEl && worldEl.querySelector("g.cables");
-    if (cablesG && showElectrical) {
-      cablesG.innerHTML = "";
-      cablePaths = [];
-      const elemById = Object.fromEntries(
-        (graph.elements || []).map((e) => [e.id, e])
-      );
-      const layout = buildCableLayout(graph.cable_edges || [], elemById, byId);
-      for (const edge of graph.cable_edges || []) {
-        const item = appendCableVisuals(
-          cablesG,
-          edge,
-          byId,
-          elemById,
-          occupied,
-          layout
-        );
-        if (item) cablePaths.push(item);
+      // Rebuild cable layers (jacket + strands) from scratch.
+      const cablesG = worldEl && worldEl.querySelector("g.cables");
+      if (cablesG && showElectrical) {
+        cablesG.innerHTML = "";
+        cablePaths = [];
+        const layout = buildCableLayout(graph.cable_edges || [], elemById, byId);
+        for (const edge of graph.cable_edges || []) {
+          const item = appendCableVisuals(
+            cablesG,
+            edge,
+            byId,
+            elemById,
+            occupied,
+            layout
+          );
+          if (item) cablePaths.push(item);
+        }
       }
+    } finally {
+      endRouteGeomCache();
     }
   }
 
@@ -5907,93 +6034,98 @@
     worldEl.appendChild(elementsG);
     worldEl.appendChild(cablesG);
 
-    const byDepth = [...graph.nodes].sort(
-      (a, b) => (a.parts?.length || 0) - (b.parts?.length || 0)
-    );
-    for (const node of byDepth) {
-      if (childrenOf(node.id).length) paintNode(node, containersG, byId);
-    }
-
-    /** @type {{axis:string,x?:number,y?:number,a:number,b:number,half?:number}[]} */
-    const occupied = [];
-    for (const edge of graph.edges) {
-      const n = (edge.contains || []).length;
-      const lanes = conduitLaneHint(edge, graph.cable_edges || []);
-      const roadW = conduitRoadWidth(n, lanes);
-      const half = roadW / 2;
-      const routed = edgePathD(edge, byId, occupied, half);
-      if (!routed) continue;
-      const d = routed.d;
-      for (const s of routed.segs) occupied.push(s);
-      const contains = (edge.contains || []).join(", ");
-      const edgeName = edge.name || edge.id;
-      const title = contains
-        ? `${edgeName}: ${contains}`
-        : String(edgeName || "");
-      const displayD = conduitDisplayD(d, byId, edge);
-      const tubeCss = wireColorCss(edge.color || "GY");
-      const outlineCss = contrastOutlineCss(tubeCss);
-      // High-contrast rim around the conduit (esp. black tubes on dark UI).
-      const tubeOutline = el("path", {
-        class: "edge-tube-outline",
-        d: displayD,
-      });
-      tubeOutline.style.stroke = outlineCss;
-      tubeOutline.style.strokeWidth = String(roadW + OUTLINE_EXTRA);
-      tubeOutline.style.strokeOpacity = "0.95";
-      const tube = el("path", { class: "edge-tube", d: displayD });
-      tube.style.stroke = tubeCss;
-      tube.style.strokeWidth = String(roadW);
-      tube.style.strokeOpacity = edge.color ? "0.85" : "0.25";
-      tube.appendChild(el("title", null, title));
-      edgesG.appendChild(tubeOutline);
-      edgesG.appendChild(tube);
-      // Keep full ``d`` for cable hop overlays; display uses clipped geometry.
-      edgePaths.push({ edge, paths: [tubeOutline, tube], d });
-    }
-
-    for (const node of graph.nodes) {
-      if (!childrenOf(node.id).length) paintNode(node, leavesG, byId);
-    }
-
-    if (showElectrical) {
-      for (const elem of graph.elements || []) {
-        if (elem.parent && !byId[elem.parent]) continue;
-        // Like depth: interior elements only when the place is a leaf in view.
-        if (elem.parent && childrenOf(elem.parent).length) continue;
-        paintElement(elem, elementsG, byId);
+    beginRouteGeomCache(byId, elemById);
+    try {
+      const byDepth = [...graph.nodes].sort(
+        (a, b) => (a.parts?.length || 0) - (b.parts?.length || 0)
+      );
+      for (const node of byDepth) {
+        if (childrenOf(node.id).length) paintNode(node, containersG, byId);
       }
-    }
 
-    // Cables: white jacket + colored strands (above tubes + elements).
-    if (showElectrical && layout) {
-      inboxCablePtsByParent = {};
-      for (const edge of graph.cable_edges || []) {
-        const item = appendCableVisuals(
-          cablesG,
-          edge,
-          byId,
-          elemById,
-          occupied,
-          layout
-        );
-        if (item) cablePaths.push(item);
+      /** @type {{axis:string,x?:number,y?:number,a:number,b:number,half?:number}[]} */
+      const occupied = [];
+      for (const edge of graph.edges) {
+        const n = (edge.contains || []).length;
+        const lanes = conduitLaneHint(edge, graph.cable_edges || []);
+        const roadW = conduitRoadWidth(n, lanes);
+        const half = roadW / 2;
+        const routed = edgePathD(edge, byId, occupied, half);
+        if (!routed) continue;
+        const d = routed.d;
+        for (const s of routed.segs) occupied.push(s);
+        const contains = (edge.contains || []).join(", ");
+        const edgeName = edge.name || edge.id;
+        const title = contains
+          ? `${edgeName}: ${contains}`
+          : String(edgeName || "");
+        const displayD = conduitDisplayD(d, byId, edge);
+        const tubeCss = wireColorCss(edge.color || "GY");
+        const outlineCss = contrastOutlineCss(tubeCss);
+        // High-contrast rim around the conduit (esp. black tubes on dark UI).
+        const tubeOutline = el("path", {
+          class: "edge-tube-outline",
+          d: displayD,
+        });
+        tubeOutline.style.stroke = outlineCss;
+        tubeOutline.style.strokeWidth = String(roadW + OUTLINE_EXTRA);
+        tubeOutline.style.strokeOpacity = "0.95";
+        const tube = el("path", { class: "edge-tube", d: displayD });
+        tube.style.stroke = tubeCss;
+        tube.style.strokeWidth = String(roadW);
+        tube.style.strokeOpacity = edge.color ? "0.85" : "0.25";
+        tube.appendChild(el("title", null, title));
+        edgesG.appendChild(tubeOutline);
+        edgesG.appendChild(tube);
+        // Keep full ``d`` for cable hop overlays; display uses clipped geometry.
+        edgePaths.push({ edge, paths: [tubeOutline, tube], d });
       }
-      if (
-        renderExpandPass < 1 &&
-        expandPlacesForInboxCables(inboxCablePtsByParent, byId)
-      ) {
-        measureVisibleSizes();
-        renderExpandPass += 1;
+
+      for (const node of graph.nodes) {
+        if (!childrenOf(node.id).length) paintNode(node, leavesG, byId);
+      }
+
+      if (showElectrical) {
+        for (const elem of graph.elements || []) {
+          if (elem.parent && !byId[elem.parent]) continue;
+          // Like depth: interior elements only when the place is a leaf in view.
+          if (elem.parent && childrenOf(elem.parent).length) continue;
+          paintElement(elem, elementsG, byId);
+        }
+      }
+
+      // Cables: white jacket + colored strands (above tubes + elements).
+      if (showElectrical && layout) {
+        inboxCablePtsByParent = {};
+        for (const edge of graph.cable_edges || []) {
+          const item = appendCableVisuals(
+            cablesG,
+            edge,
+            byId,
+            elemById,
+            occupied,
+            layout
+          );
+          if (item) cablePaths.push(item);
+        }
+        if (
+          renderExpandPass < 1 &&
+          expandPlacesForInboxCables(inboxCablePtsByParent, byId)
+        ) {
+          measureVisibleSizes();
+          renderExpandPass += 1;
+          inboxCablePtsByParent = null;
+          render();
+          renderExpandPass = 0;
+          return;
+        }
         inboxCablePtsByParent = null;
-        render();
-        renderExpandPass = 0;
-        return;
       }
-      inboxCablePtsByParent = null;
+      renderExpandPass = 0;
+      updateDepthLabel();
+    } finally {
+      endRouteGeomCache();
     }
-    renderExpandPass = 0;
-    updateDepthLabel();
   }
 
   function selectElement(elem) {
