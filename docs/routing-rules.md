@@ -93,10 +93,11 @@ an inbox path from the boca to the pin. Intermediate `Cable` sheaths
 
 17. **Route around foreign bodies** — Same idea for tubes and strands:
     - **Conduits** go around leaf **locations** (not through place interiors).
-    - **Inbox cables** go around foreign **elements** in the place: mid-run
-      segments must not pierce another element’s box. Endpoint elements
-      (pins on the strand’s ends) are exempt. Perpendicular clearance past a
-      box edge is fine; cutting through the interior is not.
+    - **Inbox cables** go around **elements** in the place: mid-run segments
+      must not pierce an element’s box. That includes the from/to element —
+      enter only from the pin face (outward stub / V); never cut through the
+      body to reach a far-side pin. Quality checks still exempt short pin-edge
+      landings on the endpoint rect; a deep pierce of that same box is not OK.
 
 ### Overlaps and diagonals
 

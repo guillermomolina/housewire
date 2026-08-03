@@ -1436,7 +1436,8 @@
 
   /**
    * Element box rects as inbox routing obstacles (rule 17).
-   * Exclude endpoint elements (pins on the cable ends).
+   * Include endpoint elements too: corridors must go *around* them and meet
+   * the pin only via the outward lead (never pierce the box to the far face).
    */
   function elementObstacles(elemById, placeById, excludeIds, inset) {
     const ex = new Set(excludeIds || []);
@@ -4381,16 +4382,30 @@
       const o2 = faceOutwardDelta(f2);
       const s1 = stubPoint(p1, o1.x, o1.y, inboxStubDepth(fromSlot.count));
       const s2 = stubPoint(p2, o2.x, o2.y, inboxStubDepth(toSlot.count));
-      const elemObs = elementObstacles(elemById, placeById, [a.id, b.id], 2);
-      // Inflate foreign boxes so lane-parallel offsets stay clear (rule 17).
+      // Foreign boxes: inflate so lane-parallel offsets stay clear (rule 17).
+      // Endpoint boxes: include uninflated so the corridor cannot pierce the
+      // from/to body to reach a far-side pin (enter from the pin face only).
+      const foreignObs = elementObstacles(elemById, placeById, [a.id, b.id], 2);
+      const endObs = [];
+      for (const e of [a, b]) {
+        if (!e) continue;
+        const ea = elementAbsXY(e, placeById);
+        const pad = 2;
+        const w = (e.w ?? ELEM_W) - 2 * pad;
+        const h = (e.h ?? ELEM_H) - 2 * pad;
+        if (w < 4 || h < 4) continue;
+        endObs.push({ x: ea.x + pad, y: ea.y + pad, w, h });
+      }
       const lanePad =
         laneCountHint * (STRAND_WIDTH + LANE_GAP) + LANE_GAP;
-      const inflatedObs = elemObs.map((r) => ({
-        x: r.x,
-        y: r.y - lanePad,
-        w: r.w,
-        h: r.h + 2 * lanePad,
-      }));
+      const inflatedObs = foreignObs
+        .map((r) => ({
+          x: r.x,
+          y: r.y - lanePad,
+          w: r.w,
+          h: r.h + 2 * lanePad,
+        }))
+        .concat(endObs);
       // Inbox element clearance (rule 17) outranks prior tube occupation.
       const corridor = orthoRoute(
         s1,
@@ -4460,9 +4475,9 @@
     const parentExclude = [a.parent, b.parent].filter(Boolean);
     const outsideObstacles = placeObstacles(placeById, parentExclude);
     const leafObstacles = placeObstacles(placeById, [], 2);
-    // Free-space legs skirt foreign elements as well as leaf places (rule 17).
+    // Free-space legs skirt all elements, including endpoints (rule 17).
     const freeObstacles = outsideObstacles.concat(
-      elementObstacles(elemById, placeById, [a.id, b.id], 2)
+      elementObstacles(elemById, placeById, null, 2)
     );
 
     let hops = edge.conduit_hops;
@@ -4627,13 +4642,8 @@
       const startFace =
         startAtt.face || elementAttachFace(a, startOp, placeById);
       const endFace = endAtt.face || elementAttachFace(b, endOp, placeById);
-      const startElemObs = elementObstacles(
-        elemById,
-        placeById,
-        [a.id],
-        2
-      );
-      const endElemObs = elementObstacles(elemById, placeById, [b.id], 2);
+      const startElemObs = elementObstacles(elemById, placeById, null, 2);
+      const endElemObs = elementObstacles(elemById, placeById, null, 2);
 
       // Tube only gets highway parallel offset. Inbox uses a mouth fan so
       // lanes stay inside the conduit and only separate after the boca.

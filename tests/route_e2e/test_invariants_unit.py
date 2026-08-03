@@ -196,6 +196,23 @@ class TestLiveCanvasInvariantsUnit(unittest.TestCase):
         mid = (120.0, 80.0, 72.0, 28.0)
         self.assertEqual(strands_through_elements([strand], [mid]), [])
 
+    def test_strand_deep_pierce_of_endpoint_element_flagged(self) -> None:
+        from housewire.ui.route_quality import strands_through_elements
+
+        # Pin on the north face, corridor under the box → vertical pierce.
+        strand = [(50.0, 20.0), (50.0, 120.0)]
+        box = (20.0, 40.0, 60.0, 60.0)
+        issues = strands_through_elements([strand], [box])
+        self.assertTrue(any("through element" in x for x in issues), msg=issues)
+
+    def test_strand_short_landing_on_endpoint_ok(self) -> None:
+        from housewire.ui.route_quality import strands_through_elements
+
+        # Short stub just outside / on the north edge — not a body pierce.
+        strand = [(50.0, 38.0), (50.0, 20.0)]
+        box = (20.0, 40.0, 60.0, 60.0)
+        self.assertEqual(strands_through_elements([strand], [box]), [])
+
     def test_point_near_and_match_helpers(self) -> None:
         tube = [(0.0, 0.0), (100.0, 0.0), (100.0, 50.0)]
         self.assertTrue(point_near_polyline((100.0, 25.0), tube, tol=1.0))

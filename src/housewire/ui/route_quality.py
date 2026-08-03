@@ -864,10 +864,10 @@ def strands_through_elements(
     inset: float = 4.0,
     min_overlap: float = 8.0,
 ) -> list[str]:
-    """Flag mid-run strands that pierce foreign element box interiors (rule 17).
+    """Flag mid-run strands that pierce element box interiors (rule 17).
 
-    Rects that contain either strand endpoint (pins) are exempt so landing on
-    the from/to element is not treated as a pierce.
+    Rects that contain a strand endpoint (pins) still allow a short landing
+    on the pin edge, but a deep pierce through that same body is flagged.
     """
     issues: list[str] = []
     if not element_rects:
@@ -880,8 +880,6 @@ def strands_through_elements(
         for ri, rect in enumerate(element_rects):
             rx, ry, rw, rh = (float(x) for x in rect)
             if rw <= 2 * inset or rh <= 2 * inset:
-                continue
-            if any(_point_in_rect(e, (rx, ry, rw, rh), pad=2.0) for e in ends):
                 continue
             ir = (rx + inset, ry + inset, rw - 2 * inset, rh - 2 * inset)
             ix, iy, iw, ih = ir
@@ -899,7 +897,16 @@ def strands_through_elements(
                         continue
                     ov = max(0.0, min(max(ay, by), iy + ih) - max(min(ay, by), iy))
                     total += ov
-            if total >= min_overlap:
+            endpoint_box = any(
+                _point_in_rect(e, (rx, ry, rw, rh), pad=2.0) for e in ends
+            )
+            # Pin-edge landings are short; crossing most of the box is a pierce.
+            threshold = (
+                max(min_overlap * 3.0, min(iw, ih) * 0.4)
+                if endpoint_box
+                else min_overlap
+            )
+            if total >= threshold:
                 issues.append(
                     f"strand {si}: through element[{ri}] "
                     f"overlap≈{total:.0f}px (rule 17)"

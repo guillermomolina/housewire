@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.20] — 2026-08-03
+
+### Fixed
+
+- Inbox corridors no longer pierce the from/to element to reach a far-side
+  pin (rule 17): endpoint boxes are routing obstacles; approach stays on the
+  pin face. Quality checks flag a deep pierce of an endpoint box, not only
+  foreign elements.
+
 ## [0.35.19] — 2026-08-03
 
 ### Fixed
