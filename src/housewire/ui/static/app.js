@@ -2535,8 +2535,9 @@
     if (!cells || !cells.length) return null;
     if (cells.length === 1) return cells[0];
     const face = elementAttachFace(elem, toward, placeById);
+    const flips = effectiveFlips(elem, placeById);
     const match = cells.find(
-      (c) => String(c || "")[0]?.toUpperCase() === face
+      (c) => flipFace(String(c || "")[0], flips) === face
     );
     if (match) return match;
     // Approach face not in pin cells (e.g. W toward NS grid): prefer the
@@ -2602,6 +2603,17 @@
     return best;
   }
 
+  /** True when ``cellId`` (e.g. N2) sits on this element's terminal_grid. */
+  function cellIdOnElementGrid(elem, cellId) {
+    const side = parseSideOpening(cellId);
+    if (!side || !elem?.terminal_grid) return false;
+    const raw = elem.terminal_grid[side.face];
+    if (!Array.isArray(raw) || !raw.length) return false;
+    const cols = Math.max(1, Number(raw[0]) || 1);
+    const rows = Math.max(1, Number(raw[1]) || 1);
+    return side.index >= 1 && side.index <= cols * rows;
+  }
+
   /**
    * Attach for a connection pin when ``terminal_grid`` is known; otherwise
    * fall back to fanned mid-face slots. Returns ``{x,y,face}``.
@@ -2614,7 +2626,12 @@
     slot = 0,
     slotCount = 1
   ) {
-    const cell = pickPinCell(elem, pin, toward, placeById);
+    let cell = pickPinCell(elem, pin, toward, placeById);
+    // Face-cell pin ids (N2, S1, …) attach even if instance terminals omitted
+    // them from terminal_pins while the catalog grid still paints the cell.
+    if (!cell && pin && cellIdOnElementGrid(elem, pin)) {
+      cell = String(pin);
+    }
     if (cell) return terminalCellAnchor(elem, cell, placeById);
     const pt = elementAttachPoint(elem, toward, placeById, slot, slotCount);
     const face = elementAttachFace(elem, toward, placeById);
@@ -3177,7 +3194,9 @@
           const elem = end === "from" ? a : b;
           const toward = end === "from" ? towardFrom : towardTo;
           const pin = end === "from" ? fromPin : toPin;
-          const cell = pickPinCell(elem, pin, toward, placeById);
+          const cell =
+            pickPinCell(elem, pin, toward, placeById) ||
+            (pin && cellIdOnElementGrid(elem, pin) ? String(pin) : null);
           const tk = cell
             ? `${elem.id}|cell:${cell}`
             : `${elem.id}|face:${elementAttachFace(elem, toward, placeById)}`;
@@ -4666,10 +4685,96 @@
       if (!chain || chain.length < 2) return [];
       return [chain];
     }
-    const d = orthoPathD(c1, c2, null, null, occupied, freeObstacles);
-    return d
-      ? pathDToSubpaths(d).map((sub) => ensureOrthoPoly(parallel(sub)))
-      : [];
+
+    // Free-space (no conduit hops): pin → stub → corridor → stub → pin.
+    // Never route element-center to element-center — that misses terminals.
+    {
+      const p1 = resolveElementAttach(
+        a,
+        fromPin,
+        c2,
+        placeById,
+        fromSlot.slot,
+        fromSlot.count
+      );
+      const p2 = resolveElementAttach(
+        b,
+        toPin,
+        c1,
+        placeById,
+        toSlot.slot,
+        toSlot.count
+      );
+      const f1 = p1.face || elementAttachFace(a, c2, placeById);
+      const f2 = p2.face || elementAttachFace(b, c1, placeById);
+      const o1 = faceOutwardDelta(f1);
+      const o2 = faceOutwardDelta(f2);
+      const s1 = stubPoint(p1, o1.x, o1.y, INBOX_STUB);
+      const s2 = stubPoint(p2, o2.x, o2.y, INBOX_STUB);
+      const corridor = orthoRoute(
+        s1,
+        s2,
+        null,
+        null,
+        occupied,
+        freeObstacles,
+        null,
+        null
+      );
+      const corridorOff = parallel(
+        (corridor || []).map((p) =>
+          Array.isArray(p) ? [p[0], p[1]] : [p.x, p.y]
+        )
+      );
+      if (!corridorOff.length) return [];
+      const head = pinToLanePts(
+        [p1.x, p1.y],
+        f1,
+        corridorOff[0],
+        fromSlot.slot,
+        fromSlot.count
+      );
+      const tail = pinToLanePts(
+        [p2.x, p2.y],
+        f2,
+        corridorOff[corridorOff.length - 1],
+        toSlot.slot,
+        toSlot.count
+      );
+      const joinAvoid = (fromPt, toPt) =>
+        orthoRoute(
+          { x: fromPt[0], y: fromPt[1] },
+          { x: toPt[0], y: toPt[1] },
+          null,
+          null,
+          occupied,
+          freeObstacles,
+          null,
+          null
+        );
+      let chain = head.map((p) => [p[0], p[1]]);
+      const hEnd = chain[chain.length - 1];
+      const c0 = corridorOff[0];
+      if (
+        hEnd &&
+        c0 &&
+        Math.hypot(hEnd[0] - c0[0], hEnd[1] - c0[1]) > 1e-6
+      ) {
+        chain = mergeOrthoPolys(chain, joinAvoid(hEnd, c0)) || chain;
+      }
+      chain = mergeOrthoPolys(chain, corridorOff) || chain;
+      const c1pt = corridorOff[corridorOff.length - 1];
+      const tip = tail[tail.length - 1];
+      if (
+        c1pt &&
+        tip &&
+        Math.hypot(c1pt[0] - tip[0], c1pt[1] - tip[1]) > 1e-6
+      ) {
+        chain = mergeOrthoPolys(chain, joinAvoid(c1pt, tip)) || chain;
+      }
+      chain = mergeOrthoPolys(chain, tail.slice().reverse()) || chain;
+      return [cleanOrthoPoly(chain || [])];
+    }
   }
 
   /**

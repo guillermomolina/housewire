@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.15] — 2026-08-03
+
+### Fixed
+
+- Free-space cables (no conduit) route pin-to-pin instead of element-center to
+  element-center, so strands land on terminal cells (e.g. Supply / earth).
+- Face-cell pins still on the catalog ``terminal_grid`` stay attachable when an
+  instance only lists a subset of terminals (e.g. cable to ``N2`` on an MCB).
+
 ## [0.35.14] — 2026-08-03
 
 ### Fixed

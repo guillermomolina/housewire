@@ -73,6 +73,32 @@ class TestTerminalGrid(unittest.TestCase):
         self.assertEqual(cells["N1"], ["N1"])
         self.assertEqual(cells["S2"], ["S2"])
 
+    def test_instance_subset_keeps_grid_face_cells(self) -> None:
+        catalog = {
+            "MCB": {
+                "terminal_grid": {"NS": 2},
+                "terminals": {
+                    "N1": {"direction": "in"},
+                    "S1": {"direction": "out"},
+                    "N2": {"direction": "in"},
+                    "S2": {"direction": "out"},
+                },
+            }
+        }
+        terminals, grid, cells = element_terminal_layout(
+            {
+                "type": "MCB",
+                "terminals": {
+                    "N1": {"label": ""},
+                    "S1": {"label": ""},
+                },
+            },
+            catalog,
+        )
+        self.assertEqual(grid["N"], (2, 1))
+        self.assertIn("N2", terminals)
+        self.assertEqual(cells["N2"], ["N2"])
+
     def test_instance_overrides_grid(self) -> None:
         catalog = {
             "TerminalStrip": {

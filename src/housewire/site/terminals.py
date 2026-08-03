@@ -225,16 +225,6 @@ def element_terminal_layout(
                 type_grid_raw = sub.get("terminal_grid")
 
     terminals = _merge_terminal_dicts(type_terminals, instance.get("terminals"))
-    # If the instance lists terminals, those are the pins that exist on the
-    # device (catalog still supplies meta for shared keys).
-    inst_terms = instance.get("terminals")
-    if isinstance(inst_terms, dict) and inst_terms:
-        terminals = {
-            str(k): terminals[str(k)]
-            for k in inst_terms
-            if str(k) in terminals
-        }
-
     effective_type = dict(type_def)
     if type_grid_raw is not None:
         effective_type["terminal_grid"] = type_grid_raw
@@ -243,5 +233,27 @@ def element_terminal_layout(
         type_def=effective_type,
         terminals=terminals,
     )
+    # If the instance lists terminals, drop non-listed pins — except catalog
+    # face-cell pins that still sit on the painted grid (cables may reference
+    # N2 even when the instance only overrode N1/S1 labels).
+    inst_terms = instance.get("terminals")
+    if isinstance(inst_terms, dict) and inst_terms:
+        keep = {str(k) for k in inst_terms if str(k) in terminals}
+        for pin in list(terminals):
+            if pin in keep:
+                continue
+            parsed = _try_parse_cell(pin)
+            if parsed is None:
+                terminals.pop(pin, None)
+                continue
+            face, idx, _b = parsed
+            dims = grid.get(face)
+            if not dims:
+                terminals.pop(pin, None)
+                continue
+            cols, rows = int(dims[0]), int(dims[1])
+            if idx < 1 or idx > cols * rows:
+                terminals.pop(pin, None)
+                continue
     cells = pin_to_cells(terminals, grid)
     return terminals, grid, cells
