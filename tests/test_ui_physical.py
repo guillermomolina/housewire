@@ -723,6 +723,19 @@ class TestServeApi(unittest.TestCase):
                 if e["leaf_id"] == "Regleta" or e["id"].endswith("/Regleta")
             )
             self.assertTrue(graphed["flip_we"])
+            canvas_flip = client.patch(
+                "/api/place/properties",
+                json={
+                    "location_id": "Parking",
+                    "id": ".",
+                    "fields": {"flip_ns": True},
+                    "depth": 1,
+                },
+            )
+            self.assertEqual(canvas_flip.status_code, 200, canvas_flip.text)
+            self.assertTrue(canvas_flip.json()["detail"]["flip_ns"])
+            self.assertTrue(canvas_flip.json()["graph"]["location"]["flip_ns"])
+            self.assertTrue(canvas_flip.json().get("can_undo"))
             dirty = client.get("/api/workspace").json()
             self.assertTrue(dirty.get("dirty"))
 

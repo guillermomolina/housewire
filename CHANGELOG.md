@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.16] — 2026-08-03
+
+### Fixed
+
+- View flips apply immediately on checkbox click (and undo/redo): canvas-location
+  ``flip_*`` is exposed on the graph and remaps top-level places/elements;
+  flipping is in-place (same footprint / content AABB). Checkbox styling no
+  longer stretches under ``width: 100%``.
+
 ## [0.35.15] — 2026-08-03
 
 ### Fixed

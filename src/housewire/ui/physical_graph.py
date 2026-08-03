@@ -1168,6 +1168,7 @@ def build_physical_graph(
         if not canvas_parts
         else canvas_parts[-1]
     )
+    canvas_flip_ns, canvas_flip_we = get_physical_flips(loc_doc)
     return {
         "location": {
             "id": location_id,
@@ -1186,6 +1187,8 @@ def build_physical_graph(
             "display_name": place_name(loc_meta, canvas_leaf),
             "display_label": place_label(loc_meta, canvas_leaf),
             "type": str(loc_meta.get("type") or "Location"),
+            "flip_ns": canvas_flip_ns,
+            "flip_we": canvas_flip_we,
         },
         "page": page,
         "depth": depth,

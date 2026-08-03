@@ -701,11 +701,21 @@
   function absXY(node, byId) {
     const map = idMap(byId);
     if (!node.parent) {
-      return { x: node.x ?? 0, y: node.y ?? 0 };
+      return mirrorTopLevel(
+        node.x ?? 0,
+        node.y ?? 0,
+        nodeW(node),
+        nodeH(node)
+      );
     }
     const parent = map[node.parent];
     if (!parent) {
-      return { x: node.x ?? 0, y: node.y ?? 0 };
+      return mirrorTopLevel(
+        node.x ?? 0,
+        node.y ?? 0,
+        nodeW(node),
+        nodeH(node)
+      );
     }
     const pa = absXY(parent, map);
     const flips = ownFlips(parent);
@@ -728,9 +738,15 @@
     return { ns: Boolean(obj?.flip_ns), we: Boolean(obj?.flip_we) };
   }
 
+  /** Flips of the canvas location (the place currently open). */
+  function canvasFlips() {
+    const loc = graph?.location || {};
+    return { ns: Boolean(loc.flip_ns), we: Boolean(loc.flip_we) };
+  }
+
   /**
-   * Effective flips: XOR own flags with ancestor places along the chain.
-   * ``placeById`` maps place ids (elements use ``parent`` as host place).
+   * Effective flips: XOR own flags with ancestor places and the canvas
+   * location flips.
    */
   function effectiveFlips(nodeOrElem, placeById) {
     let ns = Boolean(nodeOrElem?.flip_ns);
@@ -744,6 +760,9 @@
       we = we !== Boolean(p.flip_we);
       pid = p.parent || null;
     }
+    const c = canvasFlips();
+    ns = ns !== c.ns;
+    we = we !== c.we;
     return { ns, we };
   }
 
@@ -761,21 +780,81 @@
     return f;
   }
 
-  /** Mirror child local origin inside parent content box (PAD/HEADER aware). */
-  function mirrorLocalInParent(localX, localY, childW, childH, parent, flips) {
-    const cw = Math.max(0, nodeW(parent) - 2 * PAD);
-    const ch = Math.max(0, nodeH(parent) - HEADER - PAD);
+  /**
+   * In-place mirror frame for top-level canvas items: the AABB of current
+   * top-level places/elements (stored coords), so flipping the canvas does
+   * not slide the cluster to another page region.
+   */
+  function canvasMirrorRect() {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    let any = false;
+    for (const n of graph?.nodes || []) {
+      if (n.parent) continue;
+      any = true;
+      const x = n.x ?? 0;
+      const y = n.y ?? 0;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + nodeW(n));
+      maxY = Math.max(maxY, y + nodeH(n));
+    }
+    for (const e of graph?.elements || []) {
+      if (e.parent) continue;
+      any = true;
+      const x = e.x ?? 0;
+      const y = e.y ?? 0;
+      const w = e.w ?? ELEM_W;
+      const h = e.h ?? ELEM_H;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + w);
+      maxY = Math.max(maxY, y + h);
+    }
+    if (!any) {
+      const page = graph?.page || {};
+      return {
+        x: 0,
+        y: 0,
+        w: Number(page.width) || 2000,
+        h: Number(page.height) || 1400,
+      };
+    }
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+  }
+
+  /** Mirror a top-left origin inside an axis-aligned rect (in-place). */
+  function mirrorInRect(localX, localY, childW, childH, rect, flips) {
     let x = localX;
     let y = localY;
-    if (flips?.we) x = cw - localX - childW;
-    if (flips?.ns) y = ch - localY - childH;
+    if (flips?.we) {
+      x = rect.x + (rect.w - ((localX - rect.x) + childW));
+    }
+    if (flips?.ns) {
+      y = rect.y + (rect.h - ((localY - rect.y) + childH));
+    }
     return { x, y };
   }
 
-  /** Screen drag delta → stored local delta under a possibly flipped parent. */
+  function mirrorTopLevel(x, y, w, h) {
+    const flips = canvasFlips();
+    if (!flips.ns && !flips.we) return { x, y };
+    return mirrorInRect(x, y, w, h, canvasMirrorRect(), flips);
+  }
+
+  /** Mirror child local origin inside parent content box (PAD/HEADER aware). */
+  function mirrorLocalInParent(localX, localY, childW, childH, parent, flips) {
+    if (!flips?.ns && !flips?.we) return { x: localX, y: localY };
+    const cw = Math.max(0, nodeW(parent) - 2 * PAD);
+    const ch = Math.max(0, nodeH(parent) - HEADER - PAD);
+    return mirrorInRect(localX, localY, childW, childH, { x: 0, y: 0, w: cw, h: ch }, flips);
+  }
+
+  /** Screen drag delta → stored local delta under a possibly flipped host. */
   function storedDragDelta(parent, dx, dy) {
-    if (!parent) return { dx, dy };
-    const flips = ownFlips(parent);
+    const flips = parent ? ownFlips(parent) : canvasFlips();
     return {
       dx: flips.we ? -dx : dx,
       dy: flips.ns ? -dy : dy,
@@ -2361,9 +2440,23 @@
   }
 
   function elementAbsXY(elem, placeById) {
-    if (!elem.parent) return { x: elem.x ?? 0, y: elem.y ?? 0 };
+    if (!elem.parent) {
+      return mirrorTopLevel(
+        elem.x ?? 0,
+        elem.y ?? 0,
+        elem.w ?? ELEM_W,
+        elem.h ?? ELEM_H
+      );
+    }
     const parent = placeById[elem.parent];
-    if (!parent) return { x: elem.x ?? 0, y: elem.y ?? 0 };
+    if (!parent) {
+      return mirrorTopLevel(
+        elem.x ?? 0,
+        elem.y ?? 0,
+        elem.w ?? ELEM_W,
+        elem.h ?? ELEM_H
+      );
+    }
     const a = absXY(parent, placeById);
     const flips = ownFlips(parent);
     const local = mirrorLocalInParent(
@@ -5534,21 +5627,35 @@
 
   function appendPropsRow(meta, spec) {
     const dt = document.createElement("dt");
-    dt.textContent = spec.key;
     const dd = document.createElement("dd");
     const value = spec.value == null ? "" : String(spec.value);
     if (!spec.editable) {
+      dt.textContent = spec.key;
       const span = document.createElement("span");
       span.className = "props-readonly";
       span.textContent = value || "—";
       dd.appendChild(span);
     } else if (spec.checkbox) {
+      const id = `prop-${spec.key}`;
+      const label = document.createElement("label");
+      label.className = "props-check";
+      label.htmlFor = id;
+      dt.textContent = "";
+      const dtLabel = document.createElement("label");
+      dtLabel.className = "props-check-key";
+      dtLabel.htmlFor = id;
+      dtLabel.textContent = spec.key;
+      dt.appendChild(dtLabel);
       const input = document.createElement("input");
       input.type = "checkbox";
+      input.id = id;
       input.dataset.prop = spec.key;
       input.checked = Boolean(spec.value);
-      dd.appendChild(input);
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(spec.checkLabel || "on"));
+      dd.appendChild(label);
     } else if (spec.multiline) {
+      dt.textContent = spec.key;
       const ta = document.createElement("textarea");
       ta.dataset.prop = spec.key;
       ta.value = value;
@@ -5556,6 +5663,7 @@
       ta.spellcheck = false;
       dd.appendChild(ta);
     } else {
+      dt.textContent = spec.key;
       const input = document.createElement("input");
       input.type = "text";
       input.dataset.prop = spec.key;
@@ -5569,6 +5677,15 @@
 
   function bindPropsEditors(meta) {
     meta.querySelectorAll("[data-prop]").forEach((el) => {
+      const key = el.getAttribute("data-prop");
+      if (el.type === "checkbox" && (key === "flip_ns" || key === "flip_we")) {
+        el.addEventListener("change", () => {
+          saveFlipPropsFromPanel().catch((err) =>
+            setStatus(String(err.message || err))
+          );
+        });
+        return;
+      }
       el.addEventListener("change", () => {
         scheduleSaveProps();
       });
@@ -5579,6 +5696,79 @@
         }
       });
     });
+  }
+
+  /** Apply flip flags to the in-memory graph for immediate canvas feedback. */
+  function applyFlipsLocally(fields) {
+    if (!graph || !propsTarget) return;
+    const ns = fields.flip_ns;
+    const we = fields.flip_we;
+    if (propsTarget.kind === "element") {
+      const elem = (graph.elements || []).find((e) => e.id === selectedId);
+      if (!elem) return;
+      if (ns != null) elem.flip_ns = Boolean(ns);
+      if (we != null) elem.flip_we = Boolean(we);
+      return;
+    }
+    const node = selectedId
+      ? (graph.nodes || []).find((n) => n.id === selectedId)
+      : null;
+    if (node) {
+      if (ns != null) node.flip_ns = Boolean(ns);
+      if (we != null) node.flip_we = Boolean(we);
+      return;
+    }
+    // Open canvas location (not a node in the graph).
+    const placeKey = resolvePlaceApiId(propsTarget.placeId);
+    if (placeKey === "." || placeKey === locationId) {
+      if (!graph.location) graph.location = { id: locationId };
+      if (ns != null) graph.location.flip_ns = Boolean(ns);
+      if (we != null) graph.location.flip_we = Boolean(we);
+    }
+  }
+
+  async function saveFlipPropsFromPanel() {
+    if (!propsTarget || !locationId) return;
+    const meta = document.getElementById("props-meta");
+    if (!meta) return;
+    /** @type {Record<string, boolean>} */
+    const fields = {};
+    meta.querySelectorAll('input[type="checkbox"][data-prop]').forEach((el) => {
+      const key = el.getAttribute("data-prop");
+      if (key === "flip_ns" || key === "flip_we") fields[key] = el.checked;
+    });
+    if (!Object.keys(fields).length) return;
+    applyFlipsLocally(fields);
+    render();
+    const body = {
+      location_id: locationId,
+      id: resolvePlaceApiId(propsTarget.placeId),
+      fields,
+      depth: depthLevel,
+    };
+    if (propsTarget.element) body.element = propsTarget.element;
+    const res = await api("/api/place/properties", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+    if (res.graph) {
+      graph = res.graph;
+      depthLevel = graph.depth || depthLevel;
+      maxDepth = graph.max_depth || maxDepth;
+      render();
+    }
+    applyEditFlags(res);
+    setStatus(
+      res.dirty ? "flip updated · unsaved" : "flip updated"
+    );
+    scheduleStatusRefresh();
+    if (propsTarget.kind === "element" && selectedId) {
+      const elem = (graph?.elements || []).find((e) => e.id === selectedId);
+      if (elem) fillElementInspector(elem);
+    } else if (propsTarget.kind === "place") {
+      const id = selectedId || propsTarget.placeId || ".";
+      await fillPlaceInspector(id, res.detail);
+    }
   }
 
   function scheduleSaveProps() {

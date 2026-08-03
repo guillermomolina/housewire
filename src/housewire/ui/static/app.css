@@ -1142,6 +1142,34 @@ button:hover {
   font-size: 0.85rem;
 }
 
+.props-meta input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  margin: 0.15rem 0.4rem 0 0;
+  vertical-align: middle;
+  accent-color: var(--accent, #3b82f6);
+}
+
+.props-meta .props-check,
+.props-meta .props-check-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 0.85rem;
+  text-transform: none;
+  font-weight: 500;
+}
+
+.props-meta .props-check-key {
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  padding-top: 0.15rem;
+}
+
 .props-meta textarea {
   resize: vertical;
   min-height: 3.2rem;
