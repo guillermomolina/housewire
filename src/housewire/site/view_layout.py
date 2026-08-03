@@ -61,6 +61,41 @@ def _set_xy(
         layer_map["rotation"] = rot
 
 
+def _get_wh(layer: dict[str, Any] | None) -> tuple[float, float] | None:
+    if layer is None:
+        return None
+    w, h = layer.get("w"), layer.get("h")
+    if isinstance(w, (int, float)) and isinstance(h, (int, float)):
+        fw, fh = float(w), float(h)
+        if fw <= 0 or fh <= 0:
+            return None
+        return fw, fh
+    return None
+
+
+def _set_wh(obj: dict[str, Any], layer: str, w: float, h: float) -> None:
+    layer_map = _ensure_view_layer(obj, layer)
+    fw, fh = float(w), float(h)
+    if fw <= 0 or fh <= 0:
+        raise ValueError(f"view.{layer} w and h must be > 0")
+    layer_map["w"] = fw
+    layer_map["h"] = fh
+
+
+def _clear_wh(obj: dict[str, Any], layer: str) -> None:
+    layer_map = _view_layer(obj, layer)
+    if layer_map is None:
+        return
+    layer_map.pop("w", None)
+    layer_map.pop("h", None)
+    if not layer_map:
+        view = obj.get("view")
+        if isinstance(view, dict):
+            view.pop(layer, None)
+            if not view:
+                obj.pop("view", None)
+
+
 def get_physical_view(place: dict[str, Any]) -> dict[str, Any] | None:
     """Return ``view.physical`` map or ``None``."""
     return _view_layer(place, "physical")
@@ -85,6 +120,21 @@ def set_physical_position(
     Coordinates must be ``>= 0`` (window layout uses parent-local origin).
     """
     _set_xy(place, "physical", x, y, rotation=rotation)
+
+
+def get_physical_size(place: dict[str, Any]) -> tuple[float, float] | None:
+    """Return ``view.physical`` ``(w, h)`` when both are positive, else ``None``."""
+    return _get_wh(get_physical_view(place))
+
+
+def set_physical_size(place: dict[str, Any], w: float, h: float) -> None:
+    """Write ``view.physical.w/h`` (canvas box size; must be ``> 0``)."""
+    _set_wh(place, "physical", w, h)
+
+
+def clear_physical_size(place: dict[str, Any]) -> None:
+    """Drop ``view.physical.w/h`` so the next graph build auto-sizes."""
+    _clear_wh(place, "physical")
 
 
 def get_electrical_view(element: dict[str, Any]) -> dict[str, Any] | None:
@@ -112,6 +162,21 @@ def set_electrical_position(
     ``>= 0``.
     """
     _set_xy(element, "electrical", x, y, rotation=rotation)
+
+
+def get_electrical_size(element: dict[str, Any]) -> tuple[float, float] | None:
+    """Return ``view.electrical`` ``(w, h)`` when both are positive, else ``None``."""
+    return _get_wh(get_electrical_view(element))
+
+
+def set_electrical_size(element: dict[str, Any], w: float, h: float) -> None:
+    """Write ``view.electrical.w/h`` (element box size; must be ``> 0``)."""
+    _set_wh(element, "electrical", w, h)
+
+
+def clear_electrical_size(element: dict[str, Any]) -> None:
+    """Drop ``view.electrical.w/h`` so the next graph build auto-sizes."""
+    _clear_wh(element, "electrical")
 
 
 def get_electrical_rotation(element: dict[str, Any]) -> int:

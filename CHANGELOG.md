@@ -7,6 +7,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.41.0] — 2026-08-03
+
+### Added
+
+- Persist optional ``view.physical.w/h`` and ``view.electrical.w/h`` (auto-size
+  when omitted). Canvas resize via edges/corners (hover cursors); sizes write
+  back through the positions PATCH.
+
+### Changed
+
+- Session defaults: electrical diagram off, depth 1. Without electrical, place
+  measure ignores elements and conduit tubes use a single-lane width.
+
 ## [0.40.0] — 2026-08-03
 
 ### Changed

@@ -1071,6 +1071,10 @@ button:hover {
   cursor: move;
 }
 
+#canvas.dragging.resizing {
+  cursor: inherit;
+}
+
 #canvas.dragging .node-box,
 #canvas.dragging .element-box {
   pointer-events: none;

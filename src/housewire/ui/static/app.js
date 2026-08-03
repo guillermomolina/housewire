@@ -10,14 +10,16 @@
   const PAD = 28;
   const HEADER = 36;
   const LABEL_CHAR_W = 6.6;
-  /** Requested depth when no saved view; server/client cap to max_depth. */
+  /** Default depth when opening a document with no saved view. */
+  const DEPTH_DEFAULT = 1;
+  /** Requested depth when entering a place / deepening without a cap. */
   const DEPTH_MAX_REQUEST = 999;
 
   let graph = null;
   let locationId = null;
   let selectedId = null;
   let selectedIds = new Set();
-  let depthLevel = DEPTH_MAX_REQUEST;
+  let depthLevel = DEPTH_DEFAULT;
   let maxDepth = 1;
   let scale = 1;
   let panX = 40;
@@ -48,7 +50,8 @@
   let canUndo = false;
   let canRedo = false;
   let canReset = false;
-  let showElectrical = true;
+  /** Session default: physical places/conduits only (no elements/cables). */
+  let showElectrical = false;
   let outlineNodes = [];
   let canvasLocations = [];
   let collapsedOutline = new Set();
@@ -61,6 +64,8 @@
   const DBLCLICK_MS = 400;
   const ELEM_W = 72;
   const ELEM_H = 28;
+  /** Hit margin for resize edges/corners in screen pixels. */
+  const RESIZE_HIT_PX = 7;
   /** Must stay in sync with housewire.ui.route_quality highway constants. */
   const STRAND_WIDTH = 2.5;
   const LANE_GAP = STRAND_WIDTH;
@@ -763,6 +768,172 @@
     return items;
   }
 
+  function resizeHitMargin() {
+    return RESIZE_HIT_PX / Math.max(scale, 0.05);
+  }
+
+  /**
+   * @param {number} lx local x in box
+   * @param {number} ly local y in box
+   * @param {number} w
+   * @param {number} h
+   * @returns {string|null} handle id: n|s|e|w|ne|nw|se|sw
+   */
+  function hitResizeHandle(lx, ly, w, h) {
+    const m = resizeHitMargin();
+    if (lx < -m || ly < -m || lx > w + m || ly > h + m) return null;
+    const nearW = lx <= m;
+    const nearE = lx >= w - m;
+    const nearN = ly <= m;
+    const nearS = ly >= h - m;
+    if (nearN && nearW) return "nw";
+    if (nearN && nearE) return "ne";
+    if (nearS && nearW) return "sw";
+    if (nearS && nearE) return "se";
+    if (nearN) return "n";
+    if (nearS) return "s";
+    if (nearW) return "w";
+    if (nearE) return "e";
+    return null;
+  }
+
+  function resizeCursorForHandle(handle) {
+    if (handle === "n" || handle === "s") return "ns-resize";
+    if (handle === "e" || handle === "w") return "ew-resize";
+    if (handle === "ne" || handle === "sw") return "nesw-resize";
+    if (handle === "nw" || handle === "se") return "nwse-resize";
+    return "";
+  }
+
+  function setResizeHoverCursor(handle) {
+    if (!viewport) return;
+    if (panDrag || marquee || (drag && drag.moved)) return;
+    const cur = resizeCursorForHandle(handle);
+    if (cur) {
+      viewport.style.cursor = cur;
+      svg.style.cursor = cur;
+    } else if (!isPanModifierHeld()) {
+      viewport.style.cursor = "";
+      svg.style.cursor = "";
+    }
+  }
+
+  function clearResizeHoverCursor() {
+    if (!viewport) return;
+    if (panDrag || marquee || drag) return;
+    viewport.style.cursor = "";
+    svg.style.cursor = "";
+  }
+
+  /**
+   * Apply resize from original box + world delta for a handle.
+   * @returns {{x:number,y:number,w:number,h:number}}
+   */
+  function computeResizedBox(orig, handle, dx, dy, minW, minH) {
+    let x = orig.x;
+    let y = orig.y;
+    let w = orig.w;
+    let h = orig.h;
+    if (handle.includes("e")) w = orig.w + dx;
+    if (handle.includes("s")) h = orig.h + dy;
+    if (handle.includes("w")) {
+      w = orig.w - dx;
+      x = orig.x + dx;
+    }
+    if (handle.includes("n")) {
+      h = orig.h - dy;
+      y = orig.y + dy;
+    }
+    if (w < minW) {
+      if (handle.includes("w")) x = orig.x + orig.w - minW;
+      w = minW;
+    }
+    if (h < minH) {
+      if (handle.includes("n")) y = orig.y + orig.h - minH;
+      h = minH;
+    }
+    x = Math.max(0, x);
+    y = Math.max(0, y);
+    return { x, y, w, h };
+  }
+
+  function beginResizeDrag(ev, targetKind, targetId, handle, orig) {
+    drag = {
+      kind: "resize",
+      handle,
+      targetKind,
+      targetId,
+      pointerId: ev.pointerId,
+      startClientX: ev.clientX,
+      startClientY: ev.clientY,
+      origX: orig.x,
+      origY: orig.y,
+      origW: orig.w,
+      origH: orig.h,
+      moved: false,
+      captured: false,
+      modClick: false,
+      anchorId: targetId,
+      anchorKind: targetKind,
+    };
+  }
+
+  function applyResizeDrag(ev) {
+    if (!drag || drag.kind !== "resize") return;
+    const dist = Math.hypot(
+      ev.clientX - drag.startClientX,
+      ev.clientY - drag.startClientY
+    );
+    if (!drag.moved && dist < DRAG_THRESHOLD) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      svg.classList.add("dragging", "resizing");
+      if (!drag.captured && drag.pointerId != null) {
+        try {
+          svg.setPointerCapture(drag.pointerId);
+          drag.captured = true;
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    const dx = (ev.clientX - drag.startClientX) / scale;
+    const dy = (ev.clientY - drag.startClientY) / scale;
+    const minW = drag.targetKind === "element" ? ELEM_W : LEAF_W;
+    const minH = drag.targetKind === "element" ? ELEM_H : LEAF_H;
+    const next = computeResizedBox(
+      {
+        x: drag.origX,
+        y: drag.origY,
+        w: drag.origW,
+        h: drag.origH,
+      },
+      drag.handle,
+      dx,
+      dy,
+      minW,
+      minH
+    );
+    if (drag.targetKind === "place") {
+      const node = graph?.nodes.find((n) => n.id === drag.targetId);
+      if (!node) return;
+      node.x = Math.round(next.x);
+      node.y = Math.round(next.y);
+      node.w = Math.round(next.w);
+      node.h = Math.round(next.h);
+      node.size_locked = true;
+    } else {
+      const elem = (graph?.elements || []).find((e) => e.id === drag.targetId);
+      if (!elem) return;
+      elem.x = Math.round(next.x);
+      elem.y = Math.round(next.y);
+      elem.w = Math.round(next.w);
+      elem.h = Math.round(next.h);
+      elem.size_locked = true;
+    }
+    updateNodeVisual(null, { refresh: false });
+  }
+
   function marqueeEl() {
     return document.getElementById("marquee");
   }
@@ -858,35 +1029,46 @@
   function measureVisibleSizes() {
     if (!graph) return;
     const elemsByParent = {};
-    for (const e of graph.elements || []) {
-      const key = e.parent || "";
-      (elemsByParent[key] ||= []).push(e);
+    if (showElectrical) {
+      for (const e of graph.elements || []) {
+        const key = e.parent || "";
+        (elemsByParent[key] ||= []).push(e);
+      }
     }
     function measure(node) {
       const kids = childrenOf(node.id);
       const elems = elemsByParent[node.id] || [];
       for (const kid of kids) measure(kid);
+      let autoW;
+      let autoH;
       if (!kids.length && !elems.length) {
         // Keep server size when no visible interior (depth / empty leaf).
-        if (node.w == null) {
-          node.w = leafWidthForLabel(node.display_name || node.name || node.id);
+        autoW =
+          node.w == null
+            ? leafWidthForLabel(node.display_name || node.name || node.id)
+            : node.w;
+        autoH = node.h == null ? LEAF_H : node.h;
+      } else {
+        let maxR = 0;
+        let maxB = 0;
+        for (const kid of kids) {
+          maxR = Math.max(maxR, (kid.x ?? 0) + nodeW(kid));
+          maxB = Math.max(maxB, (kid.y ?? 0) + nodeH(kid));
         }
-        if (node.h == null) node.h = LEAF_H;
-        return;
+        for (const e of elems) {
+          maxR = Math.max(maxR, (e.x ?? 0) + (e.w ?? ELEM_W));
+          maxB = Math.max(maxB, (e.y ?? 0) + (e.h ?? ELEM_H));
+        }
+        autoW = Math.max(LEAF_W, maxR + 2 * PAD);
+        autoH = Math.max(LEAF_H, HEADER + maxB + PAD);
       }
-      let maxR = 0;
-      let maxB = 0;
-      for (const kid of kids) {
-        maxR = Math.max(maxR, (kid.x ?? 0) + nodeW(kid));
-        maxB = Math.max(maxB, (kid.y ?? 0) + nodeH(kid));
+      if (node.size_locked) {
+        node.w = Math.max(Number(node.w) || 0, autoW);
+        node.h = Math.max(Number(node.h) || 0, autoH);
+      } else {
+        node.w = autoW;
+        node.h = autoH;
       }
-      // Elements always contribute (same idea as nested places beyond depth).
-      for (const e of elems) {
-        maxR = Math.max(maxR, (e.x ?? 0) + (e.w ?? ELEM_W));
-        maxB = Math.max(maxB, (e.y ?? 0) + (e.h ?? ELEM_H));
-      }
-      node.w = Math.max(LEAF_W, maxR + 2 * PAD);
-      node.h = Math.max(LEAF_H, HEADER + maxB + PAD);
     }
     for (const node of childrenOf(null)) measure(node);
   }
@@ -2948,6 +3130,12 @@
   /** @deprecated alias — road width from strand lanes */
   function conduitRoadWidth(_containsCount, laneCount) {
     return highwayRoadWidth(laneCount || _containsCount || 1);
+  }
+
+  /** Lane count for tube stroke; ignore cable packing when electrical is off. */
+  function tubeLaneCount(edge) {
+    if (!showElectrical) return 1;
+    return conduitLaneHint(edge, graph?.cable_edges || []);
   }
 
   /** Local (element-space) anchor for a terminal cell id. */
@@ -5627,7 +5815,7 @@
       const occupied = createOccupiedIndex();
       for (const item of edgePaths) {
         const n = (item.edge.contains || []).length;
-        const lanes = conduitLaneHint(item.edge, graph.cable_edges || []);
+        const lanes = tubeLaneCount(item.edge);
         const roadW = conduitRoadWidth(n, lanes);
         const half = roadW / 2;
         const routed = edgePathD(item.edge, byId, occupied, half);
@@ -5890,6 +6078,30 @@
         syncInspectorFromSelection();
         return;
       }
+      const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+      const abs = absXY(node, byId);
+      const world = clientToWorld(ev.clientX, ev.clientY);
+      const handle = hitResizeHandle(
+        world.x - abs.x,
+        world.y - abs.y,
+        nodeW(node),
+        nodeH(node)
+      );
+      if (handle) {
+        beginResizeDrag(
+          ev,
+          "place",
+          node.id,
+          handle,
+          {
+            x: node.x ?? 0,
+            y: node.y ?? 0,
+            w: nodeW(node),
+            h: nodeH(node),
+          }
+        );
+        return;
+      }
       // Defer capture until real drag — early capture kills dblclick.
       drag = {
         kind: "multi",
@@ -5903,6 +6115,22 @@
         captured: false,
         modClick: isModClick(ev),
       };
+    });
+    box.addEventListener("pointermove", (ev) => {
+      if (drag || panDrag || marquee) return;
+      const byId = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
+      const abs = absXY(node, byId);
+      const world = clientToWorld(ev.clientX, ev.clientY);
+      const handle = hitResizeHandle(
+        world.x - abs.x,
+        world.y - abs.y,
+        nodeW(node),
+        nodeH(node)
+      );
+      setResizeHoverCursor(handle);
+    });
+    box.addEventListener("pointerleave", () => {
+      clearResizeHoverCursor();
     });
 
     layerG.appendChild(g);
@@ -5996,6 +6224,21 @@
         syncInspectorFromSelection();
         return;
       }
+      const byId = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
+      const abs = elementAbsXY(elem, byId);
+      const world = clientToWorld(ev.clientX, ev.clientY);
+      const w = elem.w ?? ELEM_W;
+      const h = elem.h ?? ELEM_H;
+      const handle = hitResizeHandle(world.x - abs.x, world.y - abs.y, w, h);
+      if (handle) {
+        beginResizeDrag(ev, "element", elem.id, handle, {
+          x: elem.x ?? 0,
+          y: elem.y ?? 0,
+          w,
+          h,
+        });
+        return;
+      }
       drag = {
         kind: "multi",
         anchorId: elem.id,
@@ -6008,6 +6251,22 @@
         captured: false,
         modClick: isModClick(ev),
       };
+    });
+    box.addEventListener("pointermove", (ev) => {
+      if (drag || panDrag || marquee || !showElectrical) return;
+      const byId = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
+      const abs = elementAbsXY(elem, byId);
+      const world = clientToWorld(ev.clientX, ev.clientY);
+      const handle = hitResizeHandle(
+        world.x - abs.x,
+        world.y - abs.y,
+        elem.w ?? ELEM_W,
+        elem.h ?? ELEM_H
+      );
+      setResizeHoverCursor(handle);
+    });
+    box.addEventListener("pointerleave", () => {
+      clearResizeHoverCursor();
     });
     layerG.appendChild(g);
     elementsById[elem.id] = g;
@@ -6136,7 +6395,7 @@
       const occupied = createOccupiedIndex();
       for (const edge of graph.edges) {
         const n = (edge.contains || []).length;
-        const lanes = conduitLaneHint(edge, graph.cable_edges || []);
+        const lanes = tubeLaneCount(edge);
         const roadW = conduitRoadWidth(n, lanes);
         const half = roadW / 2;
         const routed = edgePathD(edge, byId, occupied, half);
@@ -6843,7 +7102,8 @@
   async function endDrag(ev) {
     if (!drag) return;
     if (ev && drag.pointerId != null && ev.pointerId !== drag.pointerId) return;
-    svg.classList.remove("dragging");
+    svg.classList.remove("dragging", "resizing");
+    clearResizeHoverCursor();
     try {
       if (
         drag.captured &&
@@ -6857,6 +7117,68 @@
     }
     const finished = drag;
     drag = null;
+    if (finished.kind === "resize") {
+      if (!finished.moved || !locationId) {
+        await syncInspectorFromSelection();
+        return;
+      }
+      updateNodeVisual(null);
+      await syncInspectorFromSelection();
+      try {
+        const payload = {};
+        if (finished.targetKind === "place") {
+          const node = graph?.nodes.find((n) => n.id === finished.targetId);
+          if (!node) return;
+          payload[finished.targetId] = {
+            x: node.x,
+            y: node.y,
+            w: node.w,
+            h: node.h,
+          };
+          const lastMeta = await api(`/api/physical/positions`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              location_id: locationId,
+              positions: payload,
+            }),
+          });
+          applyEditFlags(lastMeta);
+          setStatus(
+            lastMeta && lastMeta.dirty
+              ? "Resized place · unsaved"
+              : "Resized place"
+          );
+        } else {
+          const elem = (graph?.elements || []).find(
+            (e) => e.id === finished.targetId
+          );
+          if (!elem) return;
+          payload[finished.targetId] = {
+            x: elem.x,
+            y: elem.y,
+            w: elem.w,
+            h: elem.h,
+          };
+          const lastMeta = await api(`/api/electrical/positions`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              location_id: locationId,
+              positions: payload,
+            }),
+          });
+          applyEditFlags(lastMeta);
+          setStatus(
+            lastMeta && lastMeta.dirty
+              ? "Resized element · unsaved"
+              : "Resized element"
+          );
+        }
+        scheduleStatusRefresh();
+      } catch (err) {
+        setStatus(String(err.message || err));
+      }
+      return;
+    }
     if (!finished.moved) {
       const now = Date.now();
       const isDbl =
@@ -6889,10 +7211,22 @@
       for (const item of finished.items || []) {
         if (item.kind === "place") {
           const node = graph?.nodes.find((n) => n.id === item.id);
-          if (node) placePositions[item.id] = { x: node.x, y: node.y };
+          if (node) {
+            placePositions[item.id] = { x: node.x, y: node.y };
+            if (node.size_locked) {
+              placePositions[item.id].w = node.w;
+              placePositions[item.id].h = node.h;
+            }
+          }
         } else if (item.kind === "element") {
           const elem = (graph?.elements || []).find((e) => e.id === item.id);
-          if (elem) elemPositions[item.id] = { x: elem.x, y: elem.y };
+          if (elem) {
+            elemPositions[item.id] = { x: elem.x, y: elem.y };
+            if (elem.size_locked) {
+              elemPositions[item.id].w = elem.w;
+              elemPositions[item.id].h = elem.h;
+            }
+          }
         }
       }
       if (
@@ -7027,7 +7361,8 @@
 
   svg.addEventListener("pointermove", (ev) => {
     if (drag) {
-      applyMultiDrag(ev);
+      if (drag.kind === "resize") applyResizeDrag(ev);
+      else applyMultiDrag(ev);
       return;
     }
     if (marquee) {
@@ -7601,7 +7936,7 @@
       canvasLocations.find((r) => r.selectable !== false);
     if (target) {
       if (saved && saved.depthLevel) depthLevel = saved.depthLevel;
-      else depthLevel = DEPTH_MAX_REQUEST;
+      else depthLevel = DEPTH_DEFAULT;
       await setCanvasLocation(target.id, { resetDepth: !saved });
     } else {
       setStatus("No locations with children found");
@@ -7672,7 +8007,7 @@
 
   async function setCanvasLocation(id, { resetDepth = true } = {}) {
     if (!id) return;
-    if (resetDepth) depthLevel = DEPTH_MAX_REQUEST;
+    if (resetDepth) depthLevel = DEPTH_DEFAULT;
     locationId = id;
     if (activeDocId) {
       docViews[activeDocId] = { locationId: id, depthLevel };

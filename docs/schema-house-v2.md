@@ -418,12 +418,16 @@ views:
 
 - **`view.physical`**: canvas coordinates for that place under its parent canvas.
   ``x`` and ``y`` must be ``>= 0`` (parent-local origin at the content top-left).
-  Optional ``flip_ns`` / ``flip_we`` mirror the place and its nested content on
-  the canvas only (opening ids in YAML stay the same; mouths move with the
-  flip). Nested flips compose (XOR) with ancestors.
+  Optional ``w`` / ``h`` (``> 0``) lock the place box size on the canvas; when
+  omitted, the UI auto-sizes from nested places and (when the electrical layer
+  is on) elements. Optional ``flip_ns`` / ``flip_we`` mirror the place and its
+  nested content on the canvas only (opening ids in YAML stay the same; mouths
+  move with the flip). Nested flips compose (XOR) with ancestors.
 - **`view.electrical`**: coordinates of an **element** inside its hosting place
   box (parent-local, ``>= 0``). Used when the UI **Elements** layer is on.
-  Same optional ``flip_ns`` / ``flip_we`` for the element box and terminals.
+  Optional ``w`` / ``h`` lock the element box; when omitted, size follows the
+  terminal grid. Same optional ``flip_ns`` / ``flip_we`` for the element box
+  and terminals.
 - **`views.physical`**: page size and preferred conduit drawing mode for the
   canvas root location (often a `Floor` or `Room`, but any place type works).
 - Canvas zoom (pan/wheel) is independent of `representation` (legacy YAML;
@@ -431,9 +435,12 @@ views:
 - **Depth zoom** (`depth` query / toolbar) controls how many nested place
   levels are drawn inside parent boxes; it does not change representation.
 - **Electrical** toolbar toggle (session UI state; not persisted) shows or hides
-  elements and cables on the physical canvas. Element boxes enlarge their host
-  place (like nested locations); elements draw only when the place is a leaf in
-  the current depth view. Cables ride on conduit paths when visible.
+  elements and cables on the physical canvas. Default session start is **off**
+  (places and conduits only) at **depth 1**. Element boxes enlarge their host
+  place (like nested locations) only while the electrical layer is on; elements
+  draw only when the place is a leaf in the current depth view. Cables ride on
+  conduit paths when visible. With electrical off, conduit tube width ignores
+  cable packing (thin tubes).
 - Back openings (`B…`) are drawn at the symbol center, not as a fourth side.
 - Omitted when unused; the UI does not require these fields.
 

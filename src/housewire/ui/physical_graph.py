@@ -35,15 +35,21 @@ from housewire.site.tree import (
     site_yaml_path,
 )
 from housewire.site.view_layout import (
+    clear_electrical_size,
+    clear_physical_size,
     get_electrical_flips,
     get_electrical_position,
     get_electrical_rotation,
+    get_electrical_size,
     get_physical_flips,
     get_physical_page,
     get_physical_position,
+    get_physical_size,
     get_physical_view,
     set_electrical_position,
+    set_electrical_size,
     set_physical_position,
+    set_physical_size,
 )
 
 # Window-style nested layout (must match UI constants in static/app.js).
@@ -283,8 +289,14 @@ def _build_element_nodes(
             max_cols = 1
             for cols, _rows in tgrid.values():
                 max_cols = max(max_cols, int(cols))
-            ew = max(ELEM_W, 28 + max_cols * 14)
-            eh = ELEM_H
+            auto_w = max(ELEM_W, 28 + max_cols * 14)
+            auto_h = ELEM_H
+            stored_size = get_electrical_size(defn)
+            size_locked = stored_size is not None
+            if stored_size is not None:
+                ew, eh = stored_size
+            else:
+                ew, eh = auto_w, auto_h
             nodes.append(
                 {
                     "id": eid,
@@ -315,6 +327,7 @@ def _build_element_nodes(
                     "y": ey,
                     "w": ew,
                     "h": eh,
+                    "size_locked": size_locked,
                     "rotation": get_electrical_rotation(defn),
                     "flip_ns": get_electrical_flips(defn)[0],
                     "flip_we": get_electrical_flips(defn)[1],
@@ -964,7 +977,12 @@ def build_physical_graph(
                 ex, ey = _default_element_pos(index)
             else:
                 ex, ey = stored
-            element_boxes.setdefault(parts, []).append((ex, ey, ELEM_W, ELEM_H))
+            stored_sz = get_electrical_size(defn)
+            if stored_sz is not None:
+                ew, eh = stored_sz
+            else:
+                ew, eh = ELEM_W, ELEM_H
+            element_boxes.setdefault(parts, []).append((ex, ey, ew, eh))
     for parent, kids in children_map.items():
         nested = len(parent) > 0
         for index, kid in enumerate(kids):
@@ -1026,6 +1044,12 @@ def build_physical_graph(
             size_cache,
             element_boxes,
         )
+        stored_size = get_physical_size(doc)
+        size_locked = stored_size is not None
+        if stored_size is not None:
+            sw, sh = stored_size
+            width = max(width, sw)
+            height = max(height, sh)
         px, py = pos_map[parts]
         place_id = parts[-1]
         raw_name = meta.get("name")
@@ -1058,6 +1082,7 @@ def build_physical_graph(
                 "y": py,
                 "w": width,
                 "h": height,
+                "size_locked": size_locked,
                 "rotation": rotation,
                 "flip_ns": flip_ns,
                 "flip_we": flip_we,
@@ -1244,6 +1269,8 @@ def apply_auto_layout(
             x = ox + col * gx
             y = oy + row * gy
             set_physical_position(place, x, y)
+            if force:
+                clear_physical_size(place)
             updated.append(node["id"])
             index += 1
     return updated
@@ -1256,7 +1283,7 @@ def apply_positions(
     *,
     session_docs: dict[Path, dict[str, Any]],
 ) -> list[str]:
-    """Write positions ``{node_id: {x,y}}``. Return updated ids."""
+    """Write positions ``{node_id: {x,y,w?,h?}}``. Return updated ids."""
     yaml_path, site_doc = _load_site_doc(site_root, session_docs=session_docs)
     session_docs[yaml_path] = site_doc
     canvas_parts = logical_parts_from_id(location_id)
@@ -1270,6 +1297,8 @@ def apply_positions(
         except ValueError as exc:
             raise FileNotFoundError(f"Unknown node: {node_id}") from exc
         set_physical_position(place, float(pos["x"]), float(pos["y"]))
+        if "w" in pos and "h" in pos:
+            set_physical_size(place, float(pos["w"]), float(pos["h"]))
         updated.append(str(node_id))
     return updated
 
@@ -1281,7 +1310,7 @@ def apply_electrical_positions(
     *,
     session_docs: dict[Path, dict[str, Any]],
 ) -> list[str]:
-    """Write ``view.electrical`` for ``{place/element: {x,y}}``. Return ids."""
+    """Write ``view.electrical`` for ``{place/element: {x,y,w?,h?}}``. Return ids."""
     yaml_path, site_doc = _load_site_doc(site_root, session_docs=session_docs)
     session_docs[yaml_path] = site_doc
     canvas_parts = logical_parts_from_id(location_id)
@@ -1296,6 +1325,8 @@ def apply_electrical_positions(
         if not isinstance(elem, dict):
             raise ValueError(f"Element {node_id} is not a map")
         set_electrical_position(elem, float(pos["x"]), float(pos["y"]))
+        if "w" in pos and "h" in pos:
+            set_electrical_size(elem, float(pos["w"]), float(pos["h"]))
         updated.append(str(node_id))
     return updated
 
@@ -1337,6 +1368,8 @@ def apply_electrical_auto_layout(
                 continue
             x, y = _default_element_pos(index)
             set_electrical_position(defn, x, y)
+            if force:
+                clear_electrical_size(defn)
             updated.append(str(elem["id"]))
             index += 1
     return updated

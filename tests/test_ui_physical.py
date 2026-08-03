@@ -12,14 +12,18 @@ from housewire.site.tree import get_place_node
 from housewire.site.view_layout import (
     get_electrical_flips,
     get_electrical_position,
+    get_electrical_size,
     get_physical_flips,
     get_physical_page,
     get_physical_position,
+    get_physical_size,
     set_electrical_flips,
     set_electrical_position,
+    set_electrical_size,
     set_physical_flips,
     set_physical_page,
     set_physical_position,
+    set_physical_size,
 )
 from housewire.ui.physical_graph import (
     apply_auto_layout,
@@ -99,6 +103,23 @@ class TestViewLayout(unittest.TestCase):
         self.assertEqual(element["view"]["electrical"]["rotation"], 90)
         with self.assertRaises(ValueError):
             set_electrical_position(element, -1, 0)
+
+    def test_physical_and_electrical_sizes(self) -> None:
+        place: dict = {"schema": "house/v2", "type": "Room"}
+        self.assertIsNone(get_physical_size(place))
+        set_physical_position(place, 10, 20)
+        set_physical_size(place, 200, 120)
+        self.assertEqual(get_physical_size(place), (200.0, 120.0))
+        self.assertEqual(place["view"]["physical"]["x"], 10.0)
+        with self.assertRaises(ValueError):
+            set_physical_size(place, 0, 10)
+
+        element: dict = {"type": "Socket"}
+        set_electrical_position(element, 4, 8)
+        set_electrical_size(element, 90, 48)
+        self.assertEqual(get_electrical_size(element), (90.0, 48.0))
+        with self.assertRaises(ValueError):
+            set_electrical_size(element, -1, 10)
 
     def test_physical_and_electrical_flips(self) -> None:
         place: dict = {"schema": "house/v2", "type": "Room"}
@@ -240,13 +261,13 @@ class TestPhysicalGraph(unittest.TestCase):
             apply_positions(
                 root,
                 "Parking",
-                {"Caja_4": {"x": 42, "y": 99}},
+                {"Caja_4": {"x": 42, "y": 99, "w": 220, "h": 180}},
                 session_docs=session_docs,
             )
             apply_electrical_positions(
                 root,
                 "Parking",
-                {"Caja_4/Regleta": {"x": 12, "y": 34}},
+                {"Caja_4/Regleta": {"x": 12, "y": 34, "w": 96, "h": 52}},
                 session_docs=session_docs,
             )
             graph3 = build_physical_graph(
@@ -255,11 +276,18 @@ class TestPhysicalGraph(unittest.TestCase):
             caja = next(n for n in graph3["nodes"] if n["id"] == "Caja_4")
             self.assertEqual(caja["x"], 42.0)
             self.assertEqual(caja["y"], 99.0)
+            # Stored size wins when larger than auto content bounds.
+            self.assertEqual(caja["w"], 220.0)
+            self.assertEqual(caja["h"], 180.0)
+            self.assertTrue(caja["size_locked"])
             regleta = next(
                 e for e in graph3["elements"] if e["id"] == "Caja_4/Regleta"
             )
             self.assertEqual(regleta["x"], 12.0)
             self.assertEqual(regleta["y"], 34.0)
+            self.assertEqual(regleta["w"], 96.0)
+            self.assertEqual(regleta["h"], 52.0)
+            self.assertTrue(regleta["size_locked"])
 
             outline = list_site_outline(root)
             kinds = {(row["kind"], row["id"]) for row in outline}
