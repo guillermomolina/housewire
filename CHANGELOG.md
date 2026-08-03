@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.12] — 2026-08-03
+
+### Fixed
+
+- Shift+drag marquee selection works inside place floors (and on elements), not
+  only on empty canvas background.
+
 ## [0.35.11] — 2026-08-03
 
 ### Fixed

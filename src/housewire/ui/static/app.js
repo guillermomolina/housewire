@@ -452,6 +452,27 @@
     return !!(ev && (ev.ctrlKey || ev.metaKey));
   }
 
+  /** Shift+drag selection box (works on empty canvas and inside places). */
+  function beginMarquee(ev) {
+    if (!ev || ev.button !== 0 || !ev.shiftKey) return false;
+    if (drag || marquee || panDrag) return false;
+    marquee = {
+      pointerId: ev.pointerId,
+      startClientX: ev.clientX,
+      startClientY: ev.clientY,
+      additive: isModClick(ev),
+      moved: false,
+      captured: true,
+    };
+    viewport.classList.add("marqueeing");
+    try {
+      svg.setPointerCapture(ev.pointerId);
+    } catch {
+      /* ignore */
+    }
+    return true;
+  }
+
   function clearSelectionState() {
     selectedIds.clear();
     selectedId = null;
@@ -5040,6 +5061,8 @@
     box.addEventListener("pointerdown", (ev) => {
       if (ev.button !== 0) return;
       ev.stopPropagation();
+      // Shift+drag marquee must work on place floor (not only empty canvas).
+      if (beginMarquee(ev)) return;
       raiseNode(node.id);
       if (isModClick(ev)) {
         toggleSelectionId(node.id);
@@ -5137,6 +5160,8 @@
     box.addEventListener("pointerdown", (ev) => {
       if (ev.button !== 0) return;
       ev.stopPropagation();
+      // Allow Shift+drag marquee to start on an element hit target too.
+      if (beginMarquee(ev)) return;
       const gEl = elementsById[elem.id];
       if (gEl && gEl.parentNode) gEl.parentNode.appendChild(gEl);
       if (isModClick(ev)) {
@@ -7232,23 +7257,7 @@
   viewport.addEventListener("pointerdown", (ev) => {
     if (drag || marquee) return;
     if (ev.target !== svg && ev.target !== viewport) return;
-    if (ev.button === 0 && ev.shiftKey) {
-      marquee = {
-        pointerId: ev.pointerId,
-        startClientX: ev.clientX,
-        startClientY: ev.clientY,
-        additive: isModClick(ev),
-        moved: false,
-        captured: true,
-      };
-      viewport.classList.add("marqueeing");
-      try {
-        svg.setPointerCapture(ev.pointerId);
-      } catch {
-        /* ignore */
-      }
-      return;
-    }
+    if (beginMarquee(ev)) return;
     if (ev.button === 1 || ev.button === 0) {
       ev.preventDefault();
       panDrag = { x: ev.clientX, y: ev.clientY, panX, panY };
