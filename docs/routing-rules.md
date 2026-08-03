@@ -96,8 +96,10 @@ an inbox path from the boca to the pin. Intermediate `Cable` sheaths
     - **Inbox cables** go around **elements** in the place: mid-run segments
       must not pierce an element’s box. That includes the from/to element —
       enter only from the pin face (outward stub / V); never cut through the
-      body to reach a far-side pin. Quality checks still exempt short pin-edge
-      landings on the endpoint rect; a deep pierce of that same box is not OK.
+      body to reach a far-side pin. Lane-parallel offsets of a clear centerline
+      must keep the same clearance (do not shove one bipolar strand into the
+      box). Quality checks still exempt short pin-edge landings on the
+      endpoint rect; a deep pierce of that same box is not OK.
 
 ### Overlaps and diagonals
 

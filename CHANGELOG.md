@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.21] — 2026-08-03
+
+### Fixed
+
+- Same-box / free-space lane offsets no longer shove a strand through the
+  from/to element: endpoint boxes keep lane clearance, parallel paths that
+  still pierce are re-routed, and painted strands occupy later corridors.
+
 ## [0.35.20] — 2026-08-03
 
 ### Fixed

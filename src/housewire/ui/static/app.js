@@ -3501,6 +3501,38 @@
     return cleanOrthoPoly(out);
   }
 
+  /**
+   * Parallel offset that must not land inside ``obstacles`` (rule 17).
+   * Lane offset of a clear centerline can still shove a strand through an
+   * element; if so, re-route between the offset endpoints around the boxes.
+   */
+  function offsetOrthoPtsClear(pts, dist, obstacles, stayBounds, occupied) {
+    if (!pts || pts.length < 2) return pts ? pts.map((p) => [p[0], p[1]]) : [];
+    if (Math.abs(dist) < 1e-9) return pts.map((p) => [p[0], p[1]]);
+    const off = offsetOrthoPts(pts, dist);
+    if (!obstacles || !obstacles.length) return off;
+    if (pathObstacleCost(off, obstacles) <= 0) return off;
+    const a = off[0];
+    const b = off[off.length - 1];
+    if (!a || !b) return off;
+    return orthoRoute(
+      { x: a[0], y: a[1] },
+      { x: b[0], y: b[1] },
+      null,
+      null,
+      occupied || null,
+      obstacles,
+      stayBounds || null,
+      null
+    );
+  }
+
+  /** Expand a rect outward by ``pad`` on every side. */
+  function inflateObstacleRect(r, pad) {
+    const p = Math.max(0, pad || 0);
+    return { x: r.x - p, y: r.y - p, w: r.w + 2 * p, h: r.h + 2 * p };
+  }
+
   /** Replace any non-Manhattan segment with an L so paths never paint diagonals. */
   function ensureOrthoPoly(pts) {
     if (!pts || pts.length < 2) return pts ? pts.map((p) => [p[0], p[1]]) : [];
@@ -4339,9 +4371,12 @@
       return laneDistFallback;
     };
     /** Full parallel offset of a polyline (stays parallel to conduit walls). */
-    const parallel = (pts, dist = laneDistFallback) => {
+    const parallel = (pts, dist = laneDistFallback, obs = null) => {
       if (!pts || pts.length < 2 || Math.abs(dist) < 1e-9) {
         return pts ? pts.map((p) => [p[0], p[1]]) : [];
+      }
+      if (obs && obs.length) {
+        return offsetOrthoPtsClear(pts, dist, obs, null, occupied);
       }
       return offsetOrthoPts(pts, dist);
     };
@@ -4380,11 +4415,23 @@
       const f2 = p2.face || elementAttachFace(b, c1, placeById);
       const o1 = faceOutwardDelta(f1);
       const o2 = faceOutwardDelta(f2);
-      const s1 = stubPoint(p1, o1.x, o1.y, inboxStubDepth(fromSlot.count));
-      const s2 = stubPoint(p2, o2.x, o2.y, inboxStubDepth(toSlot.count));
+      // Keep centerline clear enough that ±laneDist parallel cannot shove a
+      // strand through the from/to body (common bipolar overlap on IGA/ID).
+      const laneClear =
+        Math.abs(laneDistFallback) + LANE_GAP + STRAND_WIDTH;
+      const stubDepth1 = Math.max(
+        inboxStubDepth(fromSlot.count),
+        laneClear + 6
+      );
+      const stubDepth2 = Math.max(
+        inboxStubDepth(toSlot.count),
+        laneClear + 6
+      );
+      const s1 = stubPoint(p1, o1.x, o1.y, stubDepth1);
+      const s2 = stubPoint(p2, o2.x, o2.y, stubDepth2);
       // Foreign boxes: inflate so lane-parallel offsets stay clear (rule 17).
-      // Endpoint boxes: include uninflated so the corridor cannot pierce the
-      // from/to body to reach a far-side pin (enter from the pin face only).
+      // Endpoint boxes: pad by laneClear so parallel of a skimming centerline
+      // cannot pierce the body; stubs sit beyond that pad.
       const foreignObs = elementObstacles(elemById, placeById, [a.id, b.id], 2);
       const endObs = [];
       for (const e of [a, b]) {
@@ -4394,7 +4441,9 @@
         const w = (e.w ?? ELEM_W) - 2 * pad;
         const h = (e.h ?? ELEM_H) - 2 * pad;
         if (w < 4 || h < 4) continue;
-        endObs.push({ x: ea.x + pad, y: ea.y + pad, w, h });
+        endObs.push(
+          inflateObstacleRect({ x: ea.x + pad, y: ea.y + pad, w, h }, laneClear)
+        );
       }
       const lanePad =
         laneCountHint * (STRAND_WIDTH + LANE_GAP) + LANE_GAP;
@@ -4412,13 +4461,17 @@
         s2,
         null,
         null,
-        null,
+        occupied,
         inflatedObs,
         stayBounds,
         null
       );
-      const corridorOff = parallel(
-        corridor.map((p) => [p[0], p[1]])
+      const corridorOff = offsetOrthoPtsClear(
+        corridor.map((p) => [p[0], p[1]]),
+        laneDistFallback,
+        inflatedObs,
+        stayBounds,
+        occupied
       );
       if (!corridorOff.length) return [];
       // Do not run stripOutAndBack on obstacle detours — it collapses the
@@ -4443,7 +4496,7 @@
           { x: toPt[0], y: toPt[1] },
           null,
           null,
-          null,
+          occupied,
           inflatedObs,
           stayBounds,
           null
@@ -4505,7 +4558,9 @@
       ) {
         const d = orthoPathD(c1, c2, null, null, occupied, freeObstacles);
         return d
-          ? pathDToSubpaths(d).map((sub) => ensureOrthoPoly(parallel(sub)))
+          ? pathDToSubpaths(d).map((sub) =>
+              ensureOrthoPoly(parallel(sub, laneDistFallback, freeObstacles))
+            )
           : [];
       }
 
@@ -4518,7 +4573,9 @@
         if (!pf || !pt || !hop.from_opening || !hop.to_opening) {
           const d = orthoPathD(c1, c2, null, null, occupied, freeObstacles);
           return d
-            ? pathDToSubpaths(d).map((sub) => ensureOrthoPoly(parallel(sub)))
+            ? pathDToSubpaths(d).map((sub) =>
+                ensureOrthoPoly(parallel(sub, laneDistFallback, freeObstacles))
+              )
             : [];
         }
         const tubeD = hopTubePathD(hop);
@@ -4658,7 +4715,9 @@
       if (!exteriorCtr || exteriorCtr.length < 2) {
         const d = orthoPathD(c1, c2, null, null, occupied, freeObstacles);
         return d
-          ? pathDToSubpaths(d).map((sub) => ensureOrthoPoly(parallel(sub)))
+          ? pathDToSubpaths(d).map((sub) =>
+              ensureOrthoPoly(parallel(sub, laneDistFallback, freeObstacles))
+            )
           : [];
       }
 
@@ -4875,8 +4934,20 @@
       const f2 = p2.face || elementAttachFace(b, c1, placeById);
       const o1 = faceOutwardDelta(f1);
       const o2 = faceOutwardDelta(f2);
-      const s1 = stubPoint(p1, o1.x, o1.y, inboxStubDepth(fromSlot.count));
-      const s2 = stubPoint(p2, o2.x, o2.y, inboxStubDepth(toSlot.count));
+      const laneClear =
+        Math.abs(laneDistFallback) + LANE_GAP + STRAND_WIDTH;
+      const s1 = stubPoint(
+        p1,
+        o1.x,
+        o1.y,
+        Math.max(inboxStubDepth(fromSlot.count), laneClear + 6)
+      );
+      const s2 = stubPoint(
+        p2,
+        o2.x,
+        o2.y,
+        Math.max(inboxStubDepth(toSlot.count), laneClear + 6)
+      );
       const corridor = orthoRoute(
         s1,
         s2,
@@ -4890,7 +4961,9 @@
       const corridorOff = parallel(
         (corridor || []).map((p) =>
           Array.isArray(p) ? [p[0], p[1]] : [p.x, p.y]
-        )
+        ),
+        laneDistFallback,
+        freeObstacles
       );
       if (!corridorOff.length) return [];
       const head = pinToLanePts(
@@ -5178,6 +5251,10 @@
           code,
           `${edgeName} · ${code}${edge.via ? ` (${edge.via})` : ""}`
         );
+        // Later same-box / free-space strands avoid stacking on this run.
+        for (const s of segsFromPoints(sub, STRAND_WIDTH / 2)) {
+          occupied.push(s);
+        }
       }
     }
     if (!paths.length) return null;
