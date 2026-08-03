@@ -614,24 +614,42 @@
 
   function idsInMarqueeWorld(worldRect, additive) {
     const byId = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
+    const elemById = Object.fromEntries(
+      (graph?.elements || []).map((e) => [e.id, e])
+    );
     const hit = additive ? new Set(selectedIds) : new Set();
+    /** @type {string[]} */
+    const placeHits = [];
     for (const node of graph?.nodes || []) {
       if (!nodesById[node.id]) continue;
-      // Containers always contain the marquee drawn on their floor; only
-      // select leaf places (and elements below), not parent boxes.
+      // Containers always contain the marquee drawn on their floor.
       if (childrenOf(node.id).length) continue;
       if (rectsIntersect(placeWorldRect(node, byId), worldRect)) {
-        hit.add(node.id);
+        placeHits.push(node.id);
       }
     }
+    /** @type {string[]} */
+    const elemHits = [];
     if (showElectrical) {
       for (const elem of graph?.elements || []) {
         if (!elementsById[elem.id]) continue;
         if (rectsIntersect(elementWorldRect(elem, byId), worldRect)) {
-          hit.add(elem.id);
+          elemHits.push(elem.id);
         }
       }
     }
+    // Leaf places still cover their elements' boxes; if any hosted element is
+    // in the marquee, keep the elements and drop the parent place.
+    const hostsWithHitElems = new Set();
+    for (const eid of elemHits) {
+      const p = elemById[eid]?.parent;
+      if (p) hostsWithHitElems.add(p);
+    }
+    for (const pid of placeHits) {
+      if (hostsWithHitElems.has(pid)) continue;
+      hit.add(pid);
+    }
+    for (const eid of elemHits) hit.add(eid);
     return hit;
   }
 

@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.17] — 2026-08-03
+
+### Fixed
+
+- Shift+drag marquee inside a leaf place no longer also selects that place when
+  it hits hosted elements (parent box always covers the element hit-test).
+
 ## [0.35.16] — 2026-08-03
 
 ### Fixed
