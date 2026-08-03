@@ -912,7 +912,7 @@ def list_site_outline(
                     "label": info["label"],
                     "display_name": info["display_name"],
                     "type": info["type"],
-                    "icon": info.get("icon") or "fa-circle",
+                    "icon": info.get("icon") or "circle",
                     "type_label": info.get("type_label")
                     or catalog_type_label(info["type"], catalog=catalog),
                     "depth": depth,

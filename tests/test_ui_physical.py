@@ -298,7 +298,7 @@ class TestPhysicalGraph(unittest.TestCase):
             socket = next(
                 r for r in outline if r["id"] == "Parking/Enchufe_1/Socket"
             )
-            self.assertEqual(socket.get("icon"), "fa-plug")
+            self.assertEqual(socket.get("icon"), "plug")
 
     def test_multi_hop_cable_follows_conduit_chain(self) -> None:
         """Cable listed in several conduits gets a hop path between hosts."""

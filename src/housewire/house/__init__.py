@@ -413,14 +413,87 @@ def load_catalog(
     return result
 
 
-def normalize_icon_class(raw: object, *, default: str = "fa-circle") -> str:
-    """Return a Font Awesome class token (``fa-plug`` or ``fa-solid fa-plug``)."""
+def normalize_icon_class(raw: object, *, default: str = "circle") -> str:
+    """Deprecated alias for :func:`normalize_icon_id`."""
+    return normalize_icon_id(raw, default=default)
+
+
+# Font Awesome glyph names → Lucide kebab ids (without ``fa-`` prefix on keys).
+_FA_TO_LUCIDE: dict[str, str] = {
+    "arrow-down-long": "arrow-down",
+    "arrow-right-arrow-left": "arrow-left-right",
+    "battery-full": "battery-full",
+    "bolt": "zap",
+    "box": "box",
+    "caret-down": "chevron-down",
+    "caret-right": "chevron-right",
+    "check": "check",
+    "chevron-right": "chevron-right",
+    "circle": "circle",
+    "circle-info": "info",
+    "clock-rotate-left": "history",
+    "cube": "box",
+    "diagram-project": "workflow",
+    "door-open": "door-open",
+    "earth-europe": "earth",
+    "expand": "maximize-2",
+    "file-export": "file-output",
+    "floppy-disk": "save",
+    "folder-open": "folder-open",
+    "grip-lines": "grip-horizontal",
+    "grip-lines-vertical": "grip-vertical",
+    "house": "house",
+    "info": "info",
+    "layer-group": "layers",
+    "lightbulb": "lightbulb",
+    "link": "link",
+    "location-dot": "map-pin",
+    "magnifying-glass-minus": "zoom-out",
+    "magnifying-glass-plus": "zoom-in",
+    "minus": "minus",
+    "moon": "moon",
+    "phone": "phone",
+    "plug": "plug",
+    "plug-circle-bolt": "plug-zap",
+    "plus": "plus",
+    "rotate-left": "undo-2",
+    "rotate-right": "redo-2",
+    "server": "server",
+    "shield-halved": "shield-half",
+    "stairs": "waves-ladder",
+    "sun": "sun",
+    "table-cells-large": "layout-grid",
+    "toggle-on": "toggle-right",
+    "xmark": "x",
+    "zap": "zap",
+}
+
+
+def normalize_icon_id(raw: object, *, default: str = "circle") -> str:
+    """Return a Lucide icon id (``plug``, ``zoom-in``).
+
+    Accepts legacy Font Awesome tokens (``fa-plug``, ``fa-solid fa-plug``) and
+    maps them when possible; unknown ids fall back to ``default``.
+    """
     if raw is None:
         return default
-    text = str(raw).strip()
+    text = str(raw).strip().lower()
     if not text:
         return default
-    return text
+    # Drop style prefixes / extra classes.
+    parts = [p for p in text.replace("_", "-").split() if p]
+    token = parts[-1] if parts else ""
+    if token.startswith("fa-"):
+        token = token[3:]
+    if token in {"solid", "regular", "brands", "light", "thin"}:
+        return default
+    if token in _FA_TO_LUCIDE:
+        return _FA_TO_LUCIDE[token]
+    # Already a Lucide-style id, or unknown FA name we pass through for sprite
+    # lookup (missing symbols render empty → UI still has text labels).
+    if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", token):
+        return token
+    return default
 
 
 def catalog_icon(
@@ -428,15 +501,15 @@ def catalog_icon(
     *,
     catalog: dict[str, dict[str, Any]] | None = None,
     instance: dict[str, Any] | None = None,
-    default: str = "fa-circle",
+    default: str = "circle",
 ) -> str:
     """Resolve UI icon: instance ``icon:`` → catalog ``icon:`` → default."""
     if isinstance(instance, dict) and instance.get("icon") is not None:
-        return normalize_icon_class(instance.get("icon"), default=default)
+        return normalize_icon_id(instance.get("icon"), default=default)
     cat = catalog if catalog is not None else load_catalog()
     type_def = cat.get(str(type_id or ""))
     if isinstance(type_def, dict) and type_def.get("icon") is not None:
-        return normalize_icon_class(type_def.get("icon"), default=default)
+        return normalize_icon_id(type_def.get("icon"), default=default)
     return default
 
 

@@ -13,13 +13,13 @@ installable as [`housewire-catalog`](https://github.com/guillermomolina/housewir
 
 ### Catalog icons (UI)
 
-Each catalog type may declare a Font Awesome glyph:
+Each catalog type may declare a Lucide icon id (kebab-case):
 
 ```yaml
 # types/Socket.yaml (in housewire-catalog)
 kind: element_type
 id: Socket
-icon: fa-plug
+icon: plug
 ```
 
 Resolution order for the outline / UI:
@@ -28,17 +28,19 @@ Resolution order for the outline / UI:
 2. Site overlay ``$SITE/catalog/<Type>.yaml`` (shallow merge over the base type).
 3. Base catalog ``icon:`` (from ``housewire-catalog``, ``HOUSEWIRE_CATALOG``, or
    ``catalogs/default``).
-4. Fallback ``fa-circle``.
+4. Fallback ``circle``.
 
 Site overlay example (only customize the icon):
 
 ```yaml
 # $SITE/catalog/Socket.yaml
 id: Socket
-icon: fa-outlet
+icon: plug-zap
 ```
 
-Values are Font Awesome class tokens (``fa-plug`` or full ``fa-solid fa-plug``).
+Values are Lucide icon ids shipped in the UI sprite (``plug``, ``zap``,
+``house``, …). Legacy Font Awesome tokens (``fa-plug`` or ``fa-solid fa-plug``)
+are still accepted and mapped to Lucide equivalents.
 
 ## Nodes vs links
 

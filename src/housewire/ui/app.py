@@ -266,7 +266,7 @@ def create_app(site_root: Path | None = None) -> Any:
                     or data.get("name")
                     or data.get("title")
                 ),
-                "icon": data.get("icon") or "fa-circle",
+                "icon": data.get("icon") or "circle",
             }
             for type_id, data in sorted(cat.items())
             if isinstance(data, dict)

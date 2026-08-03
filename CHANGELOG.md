@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.42.0] — 2026-08-03
+
+### Changed
+
+- UI icons use a local Lucide SVG sprite (no Font Awesome CDN). Catalog and
+  instance ``icon:`` values are Lucide ids; legacy ``fa-*`` tokens still map.
+
 ## [0.41.2] — 2026-08-03
 
 ### Fixed

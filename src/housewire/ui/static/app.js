@@ -125,13 +125,92 @@
     saveCollapsedOutline();
   }
 
-  function faClass(icon) {
-    const raw = String(icon || "fa-circle").trim() || "fa-circle";
-    if (raw.includes(" ")) return raw;
-    return `fa-solid ${raw}`;
+  function normalizeIconId(raw) {
+    const FA_TO_LUCIDE = {
+      "arrow-down-long": "arrow-down",
+      "arrow-right-arrow-left": "arrow-left-right",
+      "battery-full": "battery-full",
+      bolt: "zap",
+      box: "box",
+      "caret-down": "chevron-down",
+      "caret-right": "chevron-right",
+      check: "check",
+      "chevron-right": "chevron-right",
+      circle: "circle",
+      "circle-info": "info",
+      "clock-rotate-left": "history",
+      cube: "box",
+      "diagram-project": "workflow",
+      "door-open": "door-open",
+      "earth-europe": "earth",
+      expand: "maximize-2",
+      "file-export": "file-output",
+      "floppy-disk": "save",
+      "folder-open": "folder-open",
+      "grip-lines": "grip-horizontal",
+      "grip-lines-vertical": "grip-vertical",
+      house: "house",
+      info: "info",
+      "layer-group": "layers",
+      lightbulb: "lightbulb",
+      link: "link",
+      "location-dot": "map-pin",
+      "magnifying-glass-minus": "zoom-out",
+      "magnifying-glass-plus": "zoom-in",
+      minus: "minus",
+      moon: "moon",
+      phone: "phone",
+      plug: "plug",
+      "plug-circle-bolt": "plug-zap",
+      plus: "plus",
+      "rotate-left": "undo-2",
+      "rotate-right": "redo-2",
+      server: "server",
+      "shield-halved": "shield-half",
+      stairs: "waves-ladder",
+      sun: "sun",
+      "table-cells-large": "layout-grid",
+      "toggle-on": "toggle-right",
+      xmark: "x",
+      zap: "zap",
+    };
+    let text = String(raw == null ? "" : raw).trim().toLowerCase();
+    if (!text) return "circle";
+    text = text.replace(/_/g, "-");
+    const parts = text.split(/\s+/).filter(Boolean);
+    let token = parts[parts.length - 1] || "";
+    if (token.startsWith("fa-")) token = token.slice(3);
+    if (
+      token === "solid" ||
+      token === "regular" ||
+      token === "brands" ||
+      token === "light" ||
+      token === "thin"
+    ) {
+      return "circle";
+    }
+    if (FA_TO_LUCIDE[token]) return FA_TO_LUCIDE[token];
+    if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(token)) return token;
+    return "circle";
   }
 
-  /** Font Awesome icon + type label on a canvas box (place or element). */
+  /** HTML for a Lucide icon from the local sprite. */
+  function iconHtml(name, extraClass) {
+    const id = normalizeIconId(name);
+    const cls = extraClass ? `hw-icon ${extraClass}` : "hw-icon";
+    return (
+      `<svg class="${cls}" aria-hidden="true" focusable="false">` +
+      `<use href="#icon-${id}"></use></svg>`
+    );
+  }
+
+  function iconElement(name, extraClass) {
+    const wrap = document.createElement("span");
+    wrap.innerHTML = iconHtml(name, extraClass);
+    return wrap.firstElementChild;
+  }
+
+  /** Lucide icon + type label on a canvas box (place or element). */
   function appendTypeWithIcon(g, { icon, typeText, x, y, maxW, textClass }) {
     const iconSize = 10;
     const gap = 3;
@@ -141,10 +220,8 @@
     fo.setAttribute("y", String(y - iconSize));
     fo.setAttribute("width", String(iconSize + 2));
     fo.setAttribute("height", String(iconSize + 2));
-    const i = document.createElement("i");
-    i.className = `${faClass(icon)} type-icon`;
-    i.setAttribute("aria-hidden", "true");
-    fo.appendChild(i);
+    const svgIcon = iconElement(icon, "type-icon");
+    if (svgIcon) fo.appendChild(svgIcon);
     g.appendChild(fo);
     const textX = x + iconSize + gap;
     g.appendChild(
@@ -157,6 +234,27 @@
   }
 
   const ns = "http://www.w3.org/2000/svg";
+
+  /** Inject Lucide sprite once so <use href="#icon-…"> resolves in-document. */
+  function ensureIconSprite() {
+    if (document.getElementById("hw-icon-sprite")) return Promise.resolve();
+    return fetch("/static/icons.svg")
+      .then((r) => {
+        if (!r.ok) throw new Error(`icons.svg ${r.status}`);
+        return r.text();
+      })
+      .then((text) => {
+        const holder = document.createElement("div");
+        holder.id = "hw-icon-sprite";
+        holder.setAttribute("hidden", "");
+        holder.setAttribute("aria-hidden", "true");
+        holder.innerHTML = text;
+        document.body.prepend(holder);
+      })
+      .catch((err) => {
+        console.warn("HouseWire icon sprite failed to load", err);
+      });
+  }
 
   function setStatus(text) {
     statusEl.textContent = text || "";
@@ -8155,8 +8253,8 @@
       if (hasKids) {
         const open = !collapsedOutline.has(node.id);
         twist.innerHTML = open
-          ? '<i class="fa-solid fa-caret-down"></i>'
-          : '<i class="fa-solid fa-caret-right"></i>';
+          ? iconHtml("chevron-down")
+          : iconHtml("chevron-right");
         twist.addEventListener("click", (ev) => {
           ev.stopPropagation();
           if (collapsedOutline.has(node.id)) collapsedOutline.delete(node.id);
@@ -8170,10 +8268,8 @@
       }
       row.appendChild(twist);
 
-      const icon = document.createElement("i");
-      icon.className = `${faClass(node.icon)} outline-icon`;
-      icon.setAttribute("aria-hidden", "true");
-      row.appendChild(icon);
+      const icon = iconElement(node.icon, "outline-icon");
+      if (icon) row.appendChild(icon);
 
       const label = document.createElement("span");
       label.className = "outline-label";
@@ -8939,7 +9035,8 @@
     submitInsert("feed", ev.target);
   });
 
-  loadConductorColors()
+  ensureIconSprite()
+    .then(() => loadConductorColors())
     .then(() => loadLocations())
     .catch((err) => setStatus(String(err.message || err)));
 })();

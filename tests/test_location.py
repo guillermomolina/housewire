@@ -129,31 +129,45 @@ class TestDirectoryLocation(unittest.TestCase):
             self.assertIn(type_id, catalog)
             self.assertTrue(is_place_type(type_id))
             self.assertNotIn("wireviz_skip", catalog[type_id])
-            self.assertTrue(str(catalog[type_id].get("icon") or "").startswith("fa-"))
+            self.assertTrue(
+                str(catalog[type_id].get("icon") or "").strip()
+                and not str(catalog[type_id].get("icon")).startswith("fa-")
+            )
 
     def test_site_catalog_icon_overlay(self) -> None:
-        from housewire.house import catalog_icon
+        from housewire.house import catalog_icon, normalize_icon_id
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             cat = root / "catalog"
             cat.mkdir()
             (cat / "Socket.yaml").write_text(
-                "id: Socket\nicon: fa-outlet\n", encoding="utf-8"
+                "id: Socket\nicon: plug-zap\n", encoding="utf-8"
             )
             merged = load_catalog(root)
-            self.assertEqual(merged["Socket"]["icon"], "fa-outlet")
+            self.assertEqual(merged["Socket"]["icon"], "plug-zap")
             self.assertEqual(merged["Socket"]["kind"], "element_type")
             self.assertEqual(
-                catalog_icon("Socket", catalog=merged), "fa-outlet"
+                catalog_icon("Socket", catalog=merged), "plug-zap"
             )
+            self.assertEqual(
+                catalog_icon(
+                    "Socket",
+                    catalog=merged,
+                    instance={"type": "Socket", "icon": "phone"},
+                ),
+                "phone",
+            )
+            # Legacy Font Awesome tokens still resolve.
+            self.assertEqual(normalize_icon_id("fa-plug"), "plug")
+            self.assertEqual(normalize_icon_id("fa-solid fa-bolt"), "zap")
             self.assertEqual(
                 catalog_icon(
                     "Socket",
                     catalog=merged,
                     instance={"type": "Socket", "icon": "fa-star"},
                 ),
-                "fa-star",
+                "star",
             )
 
 

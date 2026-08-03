@@ -1383,14 +1383,58 @@ button:hover {
   pointer-events: none;
 }
 
-.type-icon {
-  font-size: 9px;
-  line-height: 1;
+.hw-icon {
+  width: 1em;
+  height: 1em;
+  display: inline-block;
+  vertical-align: -0.125em;
+  flex-shrink: 0;
+  stroke: currentColor;
+  fill: none;
+  overflow: visible;
+}
+
+.hw-icon-flip-y {
+  transform: scaleY(-1);
+}
+
+.menu-item-main .hw-icon,
+.toolbar .hw-icon,
+.menu-check .hw-icon,
+.menu-caret .hw-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  margin-right: 0.35rem;
+}
+
+.menu-check .hw-icon,
+.menu-caret .hw-icon {
+  margin-right: 0;
+}
+
+.outline-twist .hw-icon {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.outline-icon.hw-icon,
+.hw-icon.outline-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+  color: var(--muted);
+  margin-right: 0.35rem;
+}
+
+.type-icon.hw-icon,
+.hw-icon.type-icon {
+  width: 10px;
+  height: 10px;
   color: var(--muted);
   display: block;
 }
 
-.element-node .type-icon {
+.element-node .type-icon.hw-icon,
+.element-node .hw-icon.type-icon {
   color: var(--element);
 }
 
