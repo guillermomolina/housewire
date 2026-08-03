@@ -1048,6 +1048,31 @@ button:hover {
   cursor: crosshair;
 }
 
+/* Resize affordance must beat .node-box / .element-box { cursor: move }. */
+#viewport.resize-ns,
+#viewport.resize-ns .node-box,
+#viewport.resize-ns .element-box {
+  cursor: ns-resize !important;
+}
+
+#viewport.resize-ew,
+#viewport.resize-ew .node-box,
+#viewport.resize-ew .element-box {
+  cursor: ew-resize !important;
+}
+
+#viewport.resize-nesw,
+#viewport.resize-nesw .node-box,
+#viewport.resize-nesw .element-box {
+  cursor: nesw-resize !important;
+}
+
+#viewport.resize-nwse,
+#viewport.resize-nwse .node-box,
+#viewport.resize-nwse .element-box {
+  cursor: nwse-resize !important;
+}
+
 .marquee {
   position: absolute;
   border: 1px solid var(--accent);

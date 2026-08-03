@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.41.2] — 2026-08-03
+
+### Fixed
+
+- Resize hover cursors (ns/ew/diagonal) now override the box ``move`` cursor so
+  edges and corners clearly show a resize affordance.
+
 ## [0.41.1] — 2026-08-03
 
 ### Fixed

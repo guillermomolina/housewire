@@ -805,24 +805,45 @@
     return "";
   }
 
-  function setResizeHoverCursor(handle) {
+  function setResizeHoverCursor(handle, hitEl) {
     if (!viewport) return;
     if (panDrag || marquee || (drag && drag.moved)) return;
     const cur = resizeCursorForHandle(handle);
-    if (cur) {
-      viewport.style.cursor = cur;
-      svg.style.cursor = cur;
-    } else if (!isPanModifierHeld()) {
+    const classes = [
+      "resize-ns",
+      "resize-ew",
+      "resize-nesw",
+      "resize-nwse",
+    ];
+    for (const c of classes) viewport.classList.remove(c);
+    if (cur === "ns-resize") viewport.classList.add("resize-ns");
+    else if (cur === "ew-resize") viewport.classList.add("resize-ew");
+    else if (cur === "nesw-resize") viewport.classList.add("resize-nesw");
+    else if (cur === "nwse-resize") viewport.classList.add("resize-nwse");
+    if (hitEl) {
+      hitEl.style.cursor = cur || "";
+    }
+    if (!cur && !isPanModifierHeld()) {
       viewport.style.cursor = "";
       svg.style.cursor = "";
+    } else if (cur) {
+      viewport.style.cursor = cur;
+      svg.style.cursor = cur;
     }
   }
 
-  function clearResizeHoverCursor() {
+  function clearResizeHoverCursor(hitEl) {
     if (!viewport) return;
     if (panDrag || marquee || drag) return;
+    viewport.classList.remove(
+      "resize-ns",
+      "resize-ew",
+      "resize-nesw",
+      "resize-nwse"
+    );
     viewport.style.cursor = "";
     svg.style.cursor = "";
+    if (hitEl) hitEl.style.cursor = "";
   }
 
   /**
@@ -888,6 +909,11 @@
     if (!drag.moved) {
       drag.moved = true;
       svg.classList.add("dragging", "resizing");
+      const cur = resizeCursorForHandle(drag.handle);
+      if (cur) {
+        viewport.style.cursor = cur;
+        svg.style.cursor = cur;
+      }
       if (!drag.captured && drag.pointerId != null) {
         try {
           svg.setPointerCapture(drag.pointerId);
@@ -6160,10 +6186,10 @@
         nodeW(node),
         nodeH(node)
       );
-      setResizeHoverCursor(handle);
+      setResizeHoverCursor(handle, box);
     });
     box.addEventListener("pointerleave", () => {
-      clearResizeHoverCursor();
+      clearResizeHoverCursor(box);
     });
 
     layerG.appendChild(g);
@@ -6296,10 +6322,10 @@
         elem.w ?? ELEM_W,
         elem.h ?? ELEM_H
       );
-      setResizeHoverCursor(handle);
+      setResizeHoverCursor(handle, box);
     });
     box.addEventListener("pointerleave", () => {
-      clearResizeHoverCursor();
+      clearResizeHoverCursor(box);
     });
     layerG.appendChild(g);
     elementsById[elem.id] = g;
