@@ -925,6 +925,8 @@
 
   /**
    * Apply resize from original box + world delta for a handle.
+   * N/W keep the opposite edge fixed and stop at the origin (no negatives),
+   * so clamping x/y never inflates w/h past the E/S edge.
    * @returns {{x:number,y:number,w:number,h:number}}
    */
   function computeResizedBox(orig, handle, dx, dy, minW, minH) {
@@ -932,26 +934,22 @@
     let y = orig.y;
     let w = orig.w;
     let h = orig.h;
-    if (handle.includes("e")) w = orig.w + dx;
-    if (handle.includes("s")) h = orig.h + dy;
+    const right = orig.x + orig.w;
+    const bottom = orig.y + orig.h;
+    if (handle.includes("e")) {
+      w = Math.max(minW, orig.w + dx);
+    }
+    if (handle.includes("s")) {
+      h = Math.max(minH, orig.h + dy);
+    }
     if (handle.includes("w")) {
-      w = orig.w - dx;
-      x = orig.x + dx;
+      x = Math.min(right - minW, Math.max(0, orig.x + dx));
+      w = right - x;
     }
     if (handle.includes("n")) {
-      h = orig.h - dy;
-      y = orig.y + dy;
+      y = Math.min(bottom - minH, Math.max(0, orig.y + dy));
+      h = bottom - y;
     }
-    if (w < minW) {
-      if (handle.includes("w")) x = orig.x + orig.w - minW;
-      w = minW;
-    }
-    if (h < minH) {
-      if (handle.includes("n")) y = orig.y + orig.h - minH;
-      h = minH;
-    }
-    x = Math.max(0, x);
-    y = Math.max(0, y);
     return { x, y, w, h };
   }
 

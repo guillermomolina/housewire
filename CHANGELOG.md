@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.43.4] — 2026-08-03
+
+### Fixed
+
+- Resize from N/W stops at the origin without jumping: the E/S edge stays fixed
+  when ``x``/``y`` would go negative (previously ``Math.max(0, x)`` left ``w``/``h``
+  too large and the box grew the wrong way).
+
 ## [0.43.3] — 2026-08-03
 
 ### Fixed
