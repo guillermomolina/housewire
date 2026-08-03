@@ -6201,11 +6201,13 @@
           renderExpandPass < 1 &&
           expandPlacesForInboxCables(inboxCablePtsByParent, byId)
         ) {
-          measureVisibleSizes();
-          renderExpandPass += 1;
+          // Grow boxes in-place and re-route tubes/cables only — avoid a second
+          // full clearSvg + paint of every node (old recursive render()).
           inboxCablePtsByParent = null;
-          render();
+          renderExpandPass += 1;
+          updateNodeVisual(null);
           renderExpandPass = 0;
+          updateDepthLabel();
           return;
         }
         inboxCablePtsByParent = null;

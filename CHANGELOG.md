@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.40.0] — 2026-08-03
+
+### Changed
+
+- When inbox cables force a place to grow, update box sizes and re-route edges
+  in place instead of a second full SVG clear and repaint of every node.
+
 ## [0.39.0] — 2026-08-03
 
 ### Changed
