@@ -1549,6 +1549,93 @@
     return segs;
   }
 
+  /**
+   * Spatial grid over painted conduit/strand segments so stack/cross scoring
+   * queries nearby segs instead of the full occupied list.
+   * @param {number} [cellSize]
+   */
+  function createOccupiedIndex(cellSize) {
+    const cell = cellSize && cellSize > 0 ? cellSize : 80;
+    /** @type {{axis:string,x?:number,y?:number,a:number,b:number,half?:number}[]} */
+    const segs = [];
+    /** @type {Map<string, typeof segs>} */
+    const buckets = new Map();
+    const cellKey = (cx, cy) => `${cx},${cy}`;
+
+    function boundsOf(s, pad) {
+      const half = (Number(s.half) || 0) + (pad || 0);
+      if (s.axis === "H") {
+        return {
+          x0: s.a - half,
+          x1: s.b + half,
+          y0: s.y - half,
+          y1: s.y + half,
+        };
+      }
+      return {
+        x0: s.x - half,
+        x1: s.x + half,
+        y0: s.a - half,
+        y1: s.b + half,
+      };
+    }
+
+    function forEachCell(b, fn) {
+      const c0 = Math.floor(b.x0 / cell);
+      const c1 = Math.floor(b.x1 / cell);
+      const r0 = Math.floor(b.y0 / cell);
+      const r1 = Math.floor(b.y1 / cell);
+      for (let cx = c0; cx <= c1; cx++) {
+        for (let cy = r0; cy <= r1; cy++) {
+          fn(cellKey(cx, cy));
+        }
+      }
+    }
+
+    return {
+      push(s) {
+        segs.push(s);
+        forEachCell(boundsOf(s, 0), (k) => {
+          let bucket = buckets.get(k);
+          if (!bucket) {
+            bucket = [];
+            buckets.set(k, bucket);
+          }
+          bucket.push(s);
+        });
+      },
+      get length() {
+        return segs.length;
+      },
+      [Symbol.iterator]() {
+        return segs[Symbol.iterator]();
+      },
+      /**
+       * Segments that may conflict with ``s`` (padded AABB). Falls back to the
+       * full list when the index is still small.
+       * @param {{axis:string,x?:number,y?:number,a:number,b:number,half?:number}} s
+       * @param {number} [pad]
+       */
+      near(s, pad) {
+        if (segs.length < 16) return segs;
+        /** @type {Set<object>} */
+        const hit = new Set();
+        forEachCell(boundsOf(s, pad || 0), (k) => {
+          const bucket = buckets.get(k);
+          if (!bucket) return;
+          for (const o of bucket) hit.add(o);
+        });
+        return hit.size ? hit : segs;
+      },
+    };
+  }
+
+  function occupiedNear(occupied, s, pad) {
+    if (!occupied) return [];
+    if (typeof occupied.near === "function") return occupied.near(s, pad);
+    return occupied;
+  }
+
   function rangeOverlapLen(a1, a2, b1, b2) {
     return Math.max(0, Math.min(a2, b2) - Math.max(a1, b1));
   }
@@ -1599,8 +1686,9 @@
   function pathStackConflictCost(pts, occupied, eps, half) {
     if (!occupied || !occupied.length) return 0;
     let cost = 0;
+    const pad = Math.max(eps || 0, LANE_PITCH);
     for (const s of segsFromPoints(pts, half)) {
-      for (const o of occupied) {
+      for (const o of occupiedNear(occupied, s, pad)) {
         cost += segStackConflict(s, o, eps);
       }
     }
@@ -1610,8 +1698,9 @@
   function pathCrossConflictCost(pts, occupied, half) {
     if (!occupied || !occupied.length) return 0;
     let cost = 0;
+    const pad = Math.max(Number(half) || 0, LANE_GAP);
     for (const s of segsFromPoints(pts, half)) {
-      for (const o of occupied) {
+      for (const o of occupiedNear(occupied, s, pad)) {
         cost += segCrossConflict(s, o);
       }
     }
@@ -5534,8 +5623,8 @@
     );
     beginRouteGeomCache(byId, elemById);
     try {
-      /** @type {{axis:string,x?:number,y?:number,a:number,b:number}[]} */
-      const occupied = [];
+      /** @type {ReturnType<typeof createOccupiedIndex>} */
+      const occupied = createOccupiedIndex();
       for (const item of edgePaths) {
         const n = (item.edge.contains || []).length;
         const lanes = conduitLaneHint(item.edge, graph.cable_edges || []);
@@ -6043,8 +6132,8 @@
         if (childrenOf(node.id).length) paintNode(node, containersG, byId);
       }
 
-      /** @type {{axis:string,x?:number,y?:number,a:number,b:number,half?:number}[]} */
-      const occupied = [];
+      /** @type {ReturnType<typeof createOccupiedIndex>} */
+      const occupied = createOccupiedIndex();
       for (const edge of graph.edges) {
         const n = (edge.contains || []).length;
         const lanes = conduitLaneHint(edge, graph.cable_edges || []);

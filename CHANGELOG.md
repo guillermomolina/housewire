@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.39.0] — 2026-08-03
+
+### Changed
+
+- Stack/cross scoring against painted tubes and strands uses a spatial grid over
+  occupied segments, so each candidate path queries nearby segs instead of the
+  full O(n) list as the layout fills in.
+
 ## [0.38.0] — 2026-08-03
 
 ### Changed
