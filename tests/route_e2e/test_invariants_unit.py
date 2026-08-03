@@ -75,6 +75,55 @@ class TestLiveCanvasInvariantsUnit(unittest.TestCase):
         )
         self.assertTrue(any("missing terminal V" in x for x in issues), msg=issues)
 
+    def test_fat_tube_with_stacked_lanes_detected(self) -> None:
+        """Fat tube sized for many lanes while strands stack near the centerline."""
+        from housewire.ui.route_quality import highway_road_width, tube_packing_underfill
+
+        tube = [(100.0, 0.0), (100.0, 200.0)]
+        # Nine-lane road, but every strand rides near x=100 (lane 0 stacking).
+        half = highway_road_width(9) / 2.0
+        stacked = [
+            [(100.0 + (i % 3 - 1) * 2.5, 20.0), (100.0 + (i % 3 - 1) * 2.5, 180.0)]
+            for i in range(6)
+        ]
+        msg = tube_packing_underfill(tube, stacked, half_width=half)
+        self.assertIsNotNone(msg, msg=msg)
+        issues = assess_live_canvas(
+            [tube],
+            stacked,
+            tube_half_widths=[half],
+            bipolar_y_min=900.0,
+        )
+        self.assertTrue(any("underfilled" in x for x in issues), msg=issues)
+
+    def test_packed_highway_not_underfilled(self) -> None:
+        from housewire.ui.route_quality import (
+            highway_lane_offset,
+            highway_road_width,
+            tube_packing_underfill,
+        )
+
+        tube = [(100.0, 0.0), (100.0, 200.0)]
+        n = 6
+        half = highway_road_width(n) / 2.0
+        packed = [
+            [
+                (100.0 + highway_lane_offset(i, n), 20.0),
+                (100.0 + highway_lane_offset(i, n), 180.0),
+            ]
+            for i in range(n)
+        ]
+        self.assertIsNone(
+            tube_packing_underfill(tube, packed, half_width=half)
+        )
+        issues = assess_live_canvas(
+            [tube],
+            packed,
+            tube_half_widths=[half],
+            bipolar_y_min=900.0,
+        )
+        self.assertFalse(any("underfilled" in x for x in issues), msg=issues)
+
     def test_point_near_and_match_helpers(self) -> None:
         tube = [(0.0, 0.0), (100.0, 0.0), (100.0, 50.0)]
         self.assertTrue(point_near_polyline((100.0, 25.0), tube, tol=1.0))

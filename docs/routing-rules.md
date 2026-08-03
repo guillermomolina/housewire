@@ -125,6 +125,7 @@ site, dumps `path.edge-tube` and colored strands, then runs
 | Shared trunk | `shared inbox trunk at y≈…` |
 | Terminal V | `missing terminal V diagonal` |
 | Opening parallel | `multi-cable strands meet` / `meet at mouth` |
+| Tube packing | `tube underfilled` |
 | Out-and-back | `out-and-back` |
 
 Sites without conduits (same-box only, e.g. `Route_01`) skip tube

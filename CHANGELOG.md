@@ -7,6 +7,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.8] — 2026-08-03
+
+### Fixed
+
+- Highway lanes are packed **per conduit**, not per end-to-end route key, so
+  multi-hop cables that share a tube no longer all sit on lane 0 inside a
+  tube sized for every wire (fat empty conduits).
+
+### Added
+
+- Live/unit detector for underfilled tubes (``tube underfilled``) and E2E
+  coverage via ``tests/route_e2e/test_conduit_packing.py``.
+
 ## [0.35.7] — 2026-08-03
 
 ### Fixed

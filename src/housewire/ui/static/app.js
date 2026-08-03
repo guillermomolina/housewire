@@ -2854,16 +2854,22 @@
   }
 
   /**
-   * Global terminal slots (per pin cell, or face when no pin) and lane indices
-   * (per route). Fan along a face only when several strands share one terminal.
+   * Global terminal slots (per pin cell) and highway lane indices.
+   *
+   * Lanes are packed **per conduit** (wires that share that tube). End-to-end
+   * route keys left multi-hop cables with different hop sequences each on
+   * lane 0 while the tube width still counted every wire — fat empty tubes
+   * with strands stacked on the centerline.
    */
   function buildCableLayout(cableEdges, elemById, placeById) {
     /** @type {Map<string, {key:string, wi:number, end:string}[]>} */
     const byTerminal = new Map();
-    /** @type {Map<string, {key:string, wi:number}[]>} */
+    /** @type {Map<string, {key:string, wi:number, ax:number, ay:number, bx:number, by:number}[]>} */
+    const byConduit = new Map();
+    /** @type {Map<string, {key:string, wi:number, ax:number, ay:number, bx:number, by:number}[]>} */
     const byRoute = new Map();
     /** @type {Map<string, string[]>} */
-    const jacketsByRoute = new Map();
+    const jacketsByConduit = new Map();
 
     function towardForEnd(edge, end, a, b) {
       const hops = edge.conduit_hops;
@@ -2885,6 +2891,68 @@
       return elementCenter(end === "from" ? b : a, placeById);
     }
 
+    function conduitIdsForEdge(edge) {
+      const hops = edge.conduit_hops;
+      if (hops && hops.length) {
+        return [...new Set(hops.map((h) => h.conduit).filter(Boolean))];
+      }
+      if (edge.conduit) return [String(edge.conduit)];
+      return [];
+    }
+
+    /**
+     * @param {Map<string, {key:string, wi:number, ax:number, ay:number, bx:number, by:number}[]>} groups
+     * @param {(item: {key:string, wi:number}, index:number, count:number, groupKey:string) => void} assign
+     */
+    function packLaneGroups(groups, assign) {
+      for (const [groupKey, list] of groups) {
+        /** @type {Map<string, typeof list>} */
+        const byCable = new Map();
+        for (const it of list) {
+          if (!byCable.has(it.key)) byCable.set(it.key, []);
+          byCable.get(it.key).push(it);
+        }
+        const cableKeys = [...byCable.keys()];
+        const cableScore = (ck) => {
+          const members = byCable.get(ck) || [];
+          const xs = members.map((it) => (it.ax + it.bx) / 2);
+          const ys = members.map((it) => (it.ay + it.by) / 2);
+          return {
+            x: xs.reduce((s, v) => s + v, 0) / Math.max(1, xs.length),
+            y: ys.reduce((s, v) => s + v, 0) / Math.max(1, ys.length),
+          };
+        };
+        const scores = Object.fromEntries(
+          cableKeys.map((k) => [k, cableScore(k)])
+        );
+        const xs = cableKeys.map((k) => scores[k].x);
+        const ys = cableKeys.map((k) => scores[k].y);
+        const xSpan = Math.max(...xs) - Math.min(...xs);
+        const ySpan = Math.max(...ys) - Math.min(...ys);
+        cableKeys.sort((ka, kb) => {
+          const a = scores[ka];
+          const b = scores[kb];
+          if (xSpan >= ySpan) {
+            if (Math.abs(a.x - b.x) > 1e-3) return a.x - b.x;
+            if (Math.abs(a.y - b.y) > 1e-3) return a.y - b.y;
+          } else {
+            if (Math.abs(a.y - b.y) > 1e-3) return a.y - b.y;
+            if (Math.abs(a.x - b.x) > 1e-3) return a.x - b.x;
+          }
+          return ka < kb ? -1 : ka > kb ? 1 : 0;
+        });
+        /** @type {typeof list} */
+        const ordered = [];
+        for (const ck of cableKeys) {
+          const members = byCable.get(ck) || [];
+          members.sort((u, v) => u.wi - v.wi);
+          ordered.push(...members);
+        }
+        const count = ordered.length;
+        ordered.forEach((item, index) => assign(item, index, count, groupKey));
+      }
+    }
+
     for (const edge of cableEdges || []) {
       const a = elemById[edge.from];
       const b = elemById[edge.to];
@@ -2903,28 +2971,33 @@
           const toward = end === "from" ? towardFrom : towardTo;
           const pin = end === "from" ? fromPin : toPin;
           const cell = pickPinCell(elem, pin, toward, placeById);
-          // Slot-fan only within the same terminal cell (or mid-face when no pin).
           const tk = cell
             ? `${elem.id}|cell:${cell}`
             : `${elem.id}|face:${elementAttachFace(elem, toward, placeById)}`;
           if (!byTerminal.has(tk)) byTerminal.set(tk, []);
           byTerminal.get(tk).push({ key, wi, end });
         }
-        const rk = cableRouteKey(edge, elemById);
-        if (!byRoute.has(rk)) byRoute.set(rk, []);
-        byRoute.get(rk).push({
+        const entry = {
           key,
           wi,
           ax: attFrom.x,
           ay: attFrom.y,
           bx: attTo.x,
           by: attTo.y,
-        });
+        };
+        for (const cid of conduitIdsForEdge(edge)) {
+          if (!byConduit.has(cid)) byConduit.set(cid, []);
+          byConduit.get(cid).push({ ...entry });
+        }
+        const rk = cableRouteKey(edge, elemById);
+        if (!byRoute.has(rk)) byRoute.set(rk, []);
+        byRoute.get(rk).push(entry);
       }
-      const rk = cableRouteKey(edge, elemById);
-      if (!jacketsByRoute.has(rk)) jacketsByRoute.set(rk, []);
-      if (!jacketsByRoute.get(rk).includes(key)) {
-        jacketsByRoute.get(rk).push(key);
+      for (const cid of conduitIdsForEdge(edge)) {
+        if (!jacketsByConduit.has(cid)) jacketsByConduit.set(cid, []);
+        if (!jacketsByConduit.get(cid).includes(key)) {
+          jacketsByConduit.get(cid).push(key);
+        }
       }
     }
 
@@ -2935,7 +3008,6 @@
         u.key === v.key ? u.wi - v.wi : u.key < v.key ? -1 : 1
       );
       const count = list.length;
-      // One strand on this terminal → no Z fan (slotCount 1).
       list.forEach((item, slot) => {
         terminalMap.set(`${item.key}|${item.wi}|${item.end}`, {
           slot: count > 1 ? slot : 0,
@@ -2945,65 +3017,24 @@
     }
 
     /** @type {Map<string, {index:number, count:number}>} */
-    const laneMap = new Map();
-    for (const [, list] of byRoute) {
-      // Keep strands of the same cable consecutive, then order cables by
-      // pin geometry so jackets wrap a contiguous lane span.
-      /** @type {Map<string, typeof list>} */
-      const byCable = new Map();
-      for (const it of list) {
-        if (!byCable.has(it.key)) byCable.set(it.key, []);
-        byCable.get(it.key).push(it);
-      }
-      const cableKeys = [...byCable.keys()];
-      const cableScore = (key) => {
-        const members = byCable.get(key) || [];
-        const xs = members.map((it) => (it.ax + it.bx) / 2);
-        const ys = members.map((it) => (it.ay + it.by) / 2);
-        return {
-          x: xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length),
-          y: ys.reduce((a, b) => a + b, 0) / Math.max(1, ys.length),
-        };
-      };
-      const scores = Object.fromEntries(
-        cableKeys.map((k) => [k, cableScore(k)])
-      );
-      const xs = cableKeys.map((k) => scores[k].x);
-      const ys = cableKeys.map((k) => scores[k].y);
-      const xSpan = Math.max(...xs) - Math.min(...xs);
-      const ySpan = Math.max(...ys) - Math.min(...ys);
-      cableKeys.sort((ka, kb) => {
-        const a = scores[ka];
-        const b = scores[kb];
-        if (xSpan >= ySpan) {
-          if (Math.abs(a.x - b.x) > 1e-3) return a.x - b.x;
-          if (Math.abs(a.y - b.y) > 1e-3) return a.y - b.y;
-        } else {
-          if (Math.abs(a.y - b.y) > 1e-3) return a.y - b.y;
-          if (Math.abs(a.x - b.x) > 1e-3) return a.x - b.x;
-        }
-        return ka < kb ? -1 : ka > kb ? 1 : 0;
-      });
-      /** @type {typeof list} */
-      const ordered = [];
-      for (const key of cableKeys) {
-        const members = byCable.get(key) || [];
-        members.sort((u, v) => u.wi - v.wi);
-        ordered.push(...members);
-      }
-      const count = ordered.length;
-      ordered.forEach((item, index) => {
-        laneMap.set(`${item.key}|${item.wi}`, { index, count });
-      });
-    }
+    const conduitLaneMap = new Map();
+    packLaneGroups(byConduit, (item, index, count, cid) => {
+      conduitLaneMap.set(`${cid}|${item.key}|${item.wi}`, { index, count });
+    });
+
+    /** @type {Map<string, {index:number, count:number}>} */
+    const routeLaneMap = new Map();
+    packLaneGroups(byRoute, (item, index, count) => {
+      routeLaneMap.set(`${item.key}|${item.wi}`, { index, count });
+    });
 
     /** @type {Map<string, {index:number, count:number}>} */
     const jacketMap = new Map();
-    for (const [, keys] of jacketsByRoute) {
+    for (const [cid, keys] of jacketsByConduit) {
       keys.sort();
       const count = keys.length;
       keys.forEach((key, index) => {
-        jacketMap.set(key, { index, count });
+        jacketMap.set(`${cid}|${key}`, { index, count });
       });
     }
 
@@ -3016,13 +3047,38 @@
           }
         );
       },
+      /** Same-box / no-conduit fallback (route bucket). */
       lane(edge, wi) {
         return (
-          laneMap.get(`${cableEdgeKey(edge)}|${wi}`) || { index: 0, count: 1 }
+          routeLaneMap.get(`${cableEdgeKey(edge)}|${wi}`) || {
+            index: 0,
+            count: 1,
+          }
+        );
+      },
+      /** Highway lane among wires that share ``conduitId``. */
+      laneOnConduit(conduitId, edge, wi) {
+        if (!conduitId) return this.lane(edge, wi);
+        return (
+          conduitLaneMap.get(`${conduitId}|${cableEdgeKey(edge)}|${wi}`) || {
+            index: 0,
+            count: 1,
+          }
+        );
+      },
+      jacketOnConduit(conduitId, edge) {
+        if (!conduitId) return { index: 0, count: 1 };
+        return (
+          jacketMap.get(`${conduitId}|${cableEdgeKey(edge)}`) || {
+            index: 0,
+            count: 1,
+          }
         );
       },
       jacket(edge) {
-        return jacketMap.get(cableEdgeKey(edge)) || { index: 0, count: 1 };
+        const hops = edge.conduit_hops || [];
+        const cid = (hops[0] && hops[0].conduit) || edge.conduit || null;
+        return this.jacketOnConduit(cid, edge);
       },
     };
   }
@@ -3847,7 +3903,7 @@
 
   /**
    * Base polylines for a cable edge.
-   * @param {{fromSlot?:{slot:number,count:number}, toSlot?:{slot:number,count:number}, laneDist?:number, fromPin?:string|null, toPin?:string|null}|undefined} opts
+   * @param {{fromSlot?:{slot:number,count:number}, toSlot?:{slot:number,count:number}, laneDist?:number, laneDistForConduit?:(conduitId:string)=>number, fromPin?:string|null, toPin?:string|null}|undefined} opts
    * @returns {number[][][]}
    */
   function cableBaseSubpaths(edge, placeById, elemById, occupied, opts) {
@@ -3858,15 +3914,22 @@
     const c2 = elementCenter(b, placeById);
     const fromSlot = opts?.fromSlot || { slot: 0, count: 1 };
     const toSlot = opts?.toSlot || { slot: 0, count: 1 };
-    const laneDist = opts?.laneDist || 0;
+    const laneDistFallback = opts?.laneDist || 0;
+    const laneDistForConduit = opts?.laneDistForConduit;
     const fromPin = opts?.fromPin != null ? opts.fromPin : edge.from_pin;
     const toPin = opts?.toPin != null ? opts.toPin : edge.to_pin;
+    const laneDistFor = (conduitId) => {
+      if (conduitId && typeof laneDistForConduit === "function") {
+        return laneDistForConduit(conduitId) || 0;
+      }
+      return laneDistFallback;
+    };
     /** Full parallel offset of a polyline (stays parallel to conduit walls). */
-    const parallel = (pts) => {
-      if (!pts || pts.length < 2 || Math.abs(laneDist) < 1e-9) {
+    const parallel = (pts, dist = laneDistFallback) => {
+      if (!pts || pts.length < 2 || Math.abs(dist) < 1e-9) {
         return pts ? pts.map((p) => [p[0], p[1]]) : [];
       }
-      return offsetOrthoPts(pts, laneDist);
+      return offsetOrthoPts(pts, dist);
     };
 
     // Same box: parallel corridor between stubs; short leads to terminals.
@@ -4024,9 +4087,13 @@
           ext = exteriorPathD(pointsToPathD(routed), leafObstacles);
         }
         if (ext) {
-          // Centerline exterior only — lane offset applied to the full chain.
+          // Offset each hop with that conduit's local lane pack (not one
+          // end-to-end laneDist for the whole multi-hop chain).
+          const hopDist = laneDistFor(hop.conduit);
           for (const sub of pathDToSubpaths(ext)) {
-            if (sub.length >= 2) exteriors.push(sub.map((p) => [p[0], p[1]]));
+            if (sub.length >= 2) {
+              exteriors.push(parallel(sub.map((p) => [p[0], p[1]]), hopDist));
+            }
           }
         }
       }
@@ -4124,11 +4191,13 @@
         placeById
       );
 
-      let tube = parallel(exteriorCtr);
-      // Rule 13: multi-cable openings stay parallel through the boca — do not
-      // collapse every lane onto the center mouth (that is terminal-only).
-      // Single-cable: snap tube ends to the painted boca for clean transit.
-      const multiAtOpening = Math.abs(laneDist) >= 1e-9;
+      let tube = exteriorCtr.map((p) => [p[0], p[1]]);
+      // Per-hop exteriors are already lane-offset. Single-cable (no offset):
+      // snap tube ends to the painted boca for clean transit.
+      const startLaneDist = laneDistFor(first.conduit);
+      const endLaneDist = laneDistFor(last.conduit);
+      const multiAtOpening =
+        Math.abs(startLaneDist) >= 1e-9 || Math.abs(endLaneDist) >= 1e-9;
       if (!multiAtOpening) {
         tube = convergeLaneToMouth(tube, tubeStartOp, true);
         tube = convergeLaneToMouth(tube, tubeEndOp, false);
@@ -4321,16 +4390,8 @@
      * conduit centerline — that made every jacket look like a peer strand).
      */
     if (layout && wireIdx.length && edge.jacket_color) {
-      const laneInfos = wireIdx.map((wi) => layout.lane(edge, wi));
-      const count = laneInfos[0]?.count || wireIdx.length;
-      const indices = laneInfos.map((l) => l.index);
-      const i0 = Math.min(...indices);
-      const i1 = Math.max(...indices);
-      const midOff =
-        (highwayLaneOffset(i0, count) + highwayLaneOffset(i1, count)) / 2;
-      const jw = highwaySpanWidth(i1 - i0 + 1) + 1.2;
       const jacketCss = wireColorCss(edge.jacket_color);
-      const paintJacketD = (d) => {
+      const paintJacketD = (d, midOff, jw) => {
         if (!d) return;
         for (const piece of pathDToSubpaths(d)) {
           if (piece.length < 2) continue;
@@ -4379,25 +4440,45 @@
           paths.push(jacket);
         }
       };
+      const jacketMetrics = (cid) => {
+        const laneInfos = wireIdx.map((wi) =>
+          layout.laneOnConduit(cid, edge, wi)
+        );
+        const count = laneInfos[0]?.count || wireIdx.length;
+        const indices = laneInfos.map((l) => l.index);
+        const i0 = Math.min(...indices);
+        const i1 = Math.max(...indices);
+        return {
+          midOff:
+            (highwayLaneOffset(i0, count) + highwayLaneOffset(i1, count)) / 2,
+          jw: highwaySpanWidth(i1 - i0 + 1) + 1.2,
+        };
+      };
       const hops = edge.conduit_hops || [];
       if (hops.length) {
         for (const hop of hops) {
           const tubeD = hopTubePathD(hop);
-          if (!tubeD) continue;
+          if (!tubeD || !hop.conduit) continue;
           const fakeEdge = {
             from: hop.from,
             to: hop.to,
             from_opening: hop.from_opening,
             to_opening: hop.to_opening,
           };
-          paintJacketD(conduitDisplayD(tubeD, placeById, fakeEdge));
+          const { midOff, jw } = jacketMetrics(hop.conduit);
+          paintJacketD(conduitDisplayD(tubeD, placeById, fakeEdge), midOff, jw);
         }
       } else if (edge.conduit) {
         const item = edgePaths.find(
           (e) => e.edge && e.edge.id === edge.conduit
         );
         if (item && item.d) {
-          paintJacketD(conduitDisplayD(item.d, placeById, item.edge));
+          const { midOff, jw } = jacketMetrics(edge.conduit);
+          paintJacketD(
+            conduitDisplayD(item.d, placeById, item.edge),
+            midOff,
+            jw
+          );
         }
       }
     }
@@ -4479,6 +4560,12 @@
         fromSlot: fromT,
         toSlot: toT,
         laneDist: highwayLaneOffset(lane.index, lane.count),
+        laneDistForConduit: layout
+          ? (cid) => {
+              const L = layout.laneOnConduit(cid, edge, wi);
+              return highwayLaneOffset(L.index, L.count);
+            }
+          : undefined,
         fromPin: cableWirePin(edge, wi, "from"),
         toPin: cableWirePin(edge, wi, "to"),
       });

@@ -1313,6 +1313,85 @@ def highway_road_width(strand_count: int) -> float:
     return n * STRAND_WIDTH + (n + 1) * LANE_GAP
 
 
+def strand_lateral_offsets(
+    strands: Sequence[Poly],
+    tube: Poly,
+) -> list[float]:
+    """Signed lateral offsets of strand midpoints from the tube centerline."""
+    if len(tube) < 2:
+        return []
+    mid_t = tube[len(tube) // 2]
+    # Prefer a mid-run sample: point on each strand closest to tube midpoint.
+    out: list[float] = []
+    for poly in strands:
+        if len(poly) < 1:
+            continue
+        closest = min(
+            ((float(p[0]), float(p[1])) for p in poly),
+            key=lambda p: _dist(p, (float(mid_t[0]), float(mid_t[1]))),
+        )
+        # Project onto nearest tube segment and take perpendicular distance
+        # with sign from 2D cross of segment dir × (point - a).
+        best_d = float("inf")
+        signed = 0.0
+        for i in range(len(tube) - 1):
+            a = (float(tube[i][0]), float(tube[i][1]))
+            b = (float(tube[i + 1][0]), float(tube[i + 1][1]))
+            abx, aby = b[0] - a[0], b[1] - a[1]
+            lab2 = abx * abx + aby * aby
+            t = 0.0
+            if lab2 > 1e-12:
+                t = max(
+                    0.0,
+                    min(
+                        1.0,
+                        ((closest[0] - a[0]) * abx + (closest[1] - a[1]) * aby)
+                        / lab2,
+                    ),
+                )
+            px, py = a[0] + t * abx, a[1] + t * aby
+            d = _dist(closest, (px, py))
+            if d < best_d:
+                best_d = d
+                # Sign: left of ab is positive.
+                cross = abx * (closest[1] - a[1]) - aby * (closest[0] - a[0])
+                signed = d if cross >= 0 else -d
+        out.append(signed)
+    return out
+
+
+def tube_packing_underfill(
+    tube: Poly,
+    strands: Sequence[Poly],
+    *,
+    half_width: float,
+    min_strands: int = 3,
+    unused_pitch_factor: float = 2.5,
+) -> str | None:
+    """Flag a tube sized for many lanes while strands stack near the centerline.
+
+    Classic failure: highway width from conduitLaneHint(N) but each multi-hop
+    route bucket painted lane 0 — fat empty conduit, wires clustered.
+    """
+    if len(tube) < 2 or len(strands) < min_strands:
+        return None
+    offs = strand_lateral_offsets(strands, tube)
+    if len(offs) < min_strands:
+        return None
+    max_abs = max(abs(o) for o in offs)
+    unused = float(half_width) - max_abs - STRAND_WIDTH * 0.5
+    threshold = max(LANE_PITCH * unused_pitch_factor, float(half_width) * 0.35)
+    if unused <= threshold:
+        return None
+    span = max(offs) - min(offs)
+    expected = highway_road_width(len(offs))
+    return (
+        f"tube underfilled: unused≈{unused:.1f}px span≈{span:.1f}px "
+        f"for {len(offs)} strands (road half={half_width:.1f}, "
+        f"expected width≈{expected:.1f})"
+    )
+
+
 def converge_lane_to_mouth(
     pts: Poly, mouth: Point, *, at_start: bool = False
 ) -> list[Point]:
@@ -1963,6 +2042,11 @@ def assess_live_canvas(
                     f"tube[{ti}] mouth {mouth_i}: multi-cable strands meet "
                     "(want parallel opening; rule 13)"
                 )
+        under = tube_packing_underfill(
+            tube, polys, half_width=float(halves[ti])
+        )
+        if under:
+            issues.append(f"tube[{ti}]: {under}")
 
     trunks = shared_horizontal_trunk_length(
         unique_strands, y_min=trunk_y_min, y_max=trunk_y_max, min_len=40.0
