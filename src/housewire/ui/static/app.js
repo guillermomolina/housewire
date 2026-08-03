@@ -49,6 +49,10 @@
   let canvasLocations = [];
   let collapsedOutline = new Set();
   let outlineCollapseReady = false;
+  /** Re-render once after growing places around inbox cables. */
+  let renderExpandPass = 0;
+  /** @type {Record<string, number[][][]>|null} */
+  let inboxCablePtsByParent = null;
   const DRAG_THRESHOLD = 4;
   const DBLCLICK_MS = 400;
   const ELEM_W = 72;
@@ -724,6 +728,47 @@
     for (const node of childrenOf(null)) measure(node);
   }
 
+  /**
+   * Grow leaf places so inbox cable polylines stay inside the content box
+   * (absolute world points → parent-local). Returns true if any size changed.
+   */
+  function expandPlacesForInboxCables(ptsByParent, placeById) {
+    if (!ptsByParent || !placeById) return false;
+    let changed = false;
+    const margin = LANE_PITCH + 4;
+    for (const [parentId, polys] of Object.entries(ptsByParent)) {
+      if (!polys || !polys.length) continue;
+      const parent = placeById[parentId];
+      if (!parent) continue;
+      const pa = absXY(parent, placeById);
+      const ox = pa.x + PAD;
+      const oy = pa.y + HEADER;
+      let maxR = Math.max(0, nodeW(parent) - 2 * PAD);
+      let maxB = Math.max(0, nodeH(parent) - HEADER - PAD);
+      for (const pts of polys) {
+        if (!pts || pts.length < 1) continue;
+        for (const p of pts) {
+          if (!p || p.length < 2) continue;
+          const lx = p[0] - ox;
+          const ly = p[1] - oy;
+          // Only expand for content that sits past the current box (or
+          // slightly outside — ignore far outliers from free-space hops).
+          if (lx < -margin || ly < -margin) continue;
+          maxR = Math.max(maxR, lx + margin);
+          maxB = Math.max(maxB, ly + margin);
+        }
+      }
+      const newW = Math.max(LEAF_W, maxR + 2 * PAD);
+      const newH = Math.max(LEAF_H, HEADER + maxB + PAD);
+      if (newW > (parent.w ?? 0) + 0.5 || newH > (parent.h ?? 0) + 0.5) {
+        parent.w = newW;
+        parent.h = newH;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
   function absXY(node, byId) {
     const map = idMap(byId);
     if (!node.parent) {
@@ -1349,19 +1394,21 @@
    * Colinear tube stack (rule 15) vs perpendicular crossing.
    * Stacks are expensive and beat bend-count in scoring; crossings are a
    * tiny soft cost so a short X is preferred over a long C-detour.
+   * Separation floor is lane pitch (not a hard 6px) so legal parallel lanes
+   * at STRAND_WIDTH+LANE_GAP do not force huge detours.
    */
   function segStackConflict(s, o, eps) {
     const clear =
       (Number(s.half) || 0) + (Number(o.half) || 0) + LANE_GAP;
-    const need = Math.max(eps || 0, clear > LANE_GAP ? clear : 6);
+    const need = Math.max(eps || 0, clear > 0 ? clear : LANE_PITCH);
     if (s.axis === "H" && o.axis === "H") {
-      if (Math.abs(s.y - o.y) >= need) return 0;
+      if (Math.abs(s.y - o.y) >= need - 1e-6) return 0;
       const ov = rangeOverlapLen(s.a, s.b, o.a, o.b);
       if (ov <= 1) return 0;
       return 200 + ov + (need - Math.abs(s.y - o.y));
     }
     if (s.axis === "V" && o.axis === "V") {
-      if (Math.abs(s.x - o.x) >= need) return 0;
+      if (Math.abs(s.x - o.x) >= need - 1e-6) return 0;
       const ov = rangeOverlapLen(s.a, s.b, o.a, o.b);
       if (ov <= 1) return 0;
       return 200 + ov + (need - Math.abs(s.x - o.x));
@@ -1579,7 +1626,8 @@
     }
 
     const STUB = 20;
-    const DETOUR = 48;
+    // Tighter C rails inside a place; wide exterior detours for conduits.
+    const DETOUR = stayBounds ? 28 : 48;
     const half = halfWidth != null ? Number(halfWidth) : 0;
     let maxOccHalf = 0;
     for (const o of occupied || []) {
@@ -1591,11 +1639,11 @@
     }
     // Parallel rails must clear painted tube strokes and foreign boxes.
     const LANE = Math.max(
-      14,
+      LANE_PITCH,
       half + maxOccHalf + LANE_GAP,
-      maxObsClear > 0 ? maxObsClear / 2 + LANE_GAP : 0
+      maxObsClear > 0 ? Math.min(40, maxObsClear / 4 + LANE_GAP) : 0
     );
-    const OVERLAP_EPS = Math.max(6, half + LANE_GAP);
+    const OVERLAP_EPS = Math.max(LANE_GAP, half + LANE_GAP);
     const pts = [[x1, y1]];
     let ax = x1;
     let ay = y1;
@@ -2283,13 +2331,28 @@
     let bestObstacle = Infinity;
     let bestOutside = Infinity;
     let bestStack = Infinity;
+    let bestLen = Infinity;
     let bestBends = Infinity;
     let bestHug = Infinity;
     let bestEntry = Infinity;
     let bestCross = Infinity;
-    let bestLen = Infinity;
     const eps = overlapEps ?? 6;
     const half = halfWidth != null ? Number(halfWidth) : 0;
+    // Prefer staying inside the parent when any clear in-bounds path exists
+    // (otherwise inbox strands escape and force a later place grow).
+    let hasClearInside = false;
+    if (stayBounds) {
+      for (const pts of raw) {
+        const full = scorePoly(pts);
+        if (
+          pathObstacleCost(full, obstacles) <= 0 &&
+          pathOutsideBoundsCost(full, stayBounds) <= 0
+        ) {
+          hasClearInside = true;
+          break;
+        }
+      }
+    }
     for (const pts of raw) {
       // Include face stubs in bend count: exit-stub + horizontal-first L is
       // down→right→down (2 bends), while vertical-first merges into 1 bend.
@@ -2298,61 +2361,61 @@
       const stack = pathStackConflictCost(full, occupied, eps, half);
       const cross = pathCrossConflictCost(full, occupied, half);
       const obstacle = pathObstacleCost(full, obstacles);
-      const outside = pathOutsideBoundsCost(full, stayBounds);
+      let outside = pathOutsideBoundsCost(full, stayBounds);
+      if (hasClearInside && outside > 0) outside += 1e6;
       const hug = pathBorderHugCost(full, hugRects);
       const entry = pathEntryExcessCost(full, toFace);
       const len = polyLength(full);
-      // Lexicographic: clear boxes, stay in parent, avoid colinear tube
-      // stacks (rule 15) even with extra bends, then soft bend/hug/entry.
-      // Perpendicular crossings are cheap and ranked after bends so a short
-      // X beats a long C-detour around another conduit.
+      // Lexicographic: clear boxes, avoid colinear stacks (rule 15), stay in
+      // parent, then shorter runs (cut vueltones). Perpendicular crossings
+      // are cheap — prefer a short X over a long C around another strand.
       if (
         obstacle < bestObstacle - 1e-9 ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          outside < bestOutside - 1e-9) ||
-        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          Math.abs(outside - bestOutside) < 1e-9 &&
           stack < bestStack - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          Math.abs(outside - bestOutside) < 1e-9 &&
           Math.abs(stack - bestStack) < 1e-9 &&
+          outside < bestOutside - 1e-9) ||
+        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+          Math.abs(stack - bestStack) < 1e-9 &&
+          Math.abs(outside - bestOutside) < 1e-9 &&
+          len < bestLen - 1e-6) ||
+        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+          Math.abs(stack - bestStack) < 1e-9 &&
+          Math.abs(outside - bestOutside) < 1e-9 &&
+          Math.abs(len - bestLen) < 1e-6 &&
           bends < bestBends) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          Math.abs(outside - bestOutside) < 1e-9 &&
           Math.abs(stack - bestStack) < 1e-9 &&
+          Math.abs(outside - bestOutside) < 1e-9 &&
+          Math.abs(len - bestLen) < 1e-6 &&
           bends === bestBends &&
           hug < bestHug - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          Math.abs(outside - bestOutside) < 1e-9 &&
           Math.abs(stack - bestStack) < 1e-9 &&
+          Math.abs(outside - bestOutside) < 1e-9 &&
+          Math.abs(len - bestLen) < 1e-6 &&
           bends === bestBends &&
           Math.abs(hug - bestHug) < 1e-9 &&
           entry < bestEntry - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          Math.abs(outside - bestOutside) < 1e-9 &&
           Math.abs(stack - bestStack) < 1e-9 &&
+          Math.abs(outside - bestOutside) < 1e-9 &&
+          Math.abs(len - bestLen) < 1e-6 &&
           bends === bestBends &&
           Math.abs(hug - bestHug) < 1e-9 &&
           Math.abs(entry - bestEntry) < 1e-9 &&
-          cross < bestCross - 1e-9) ||
-        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
-          Math.abs(outside - bestOutside) < 1e-9 &&
-          Math.abs(stack - bestStack) < 1e-9 &&
-          bends === bestBends &&
-          Math.abs(hug - bestHug) < 1e-9 &&
-          Math.abs(entry - bestEntry) < 1e-9 &&
-          Math.abs(cross - bestCross) < 1e-9 &&
-          len < bestLen)
+          cross < bestCross - 1e-9)
       ) {
         best = pts;
         bestObstacle = obstacle;
         bestOutside = outside;
         bestStack = stack;
+        bestLen = len;
         bestBends = bends;
         bestHug = hug;
         bestEntry = entry;
         bestCross = cross;
-        bestLen = len;
       }
     }
     return best;
@@ -4445,13 +4508,12 @@
           inflateObstacleRect({ x: ea.x + pad, y: ea.y + pad, w, h }, laneClear)
         );
       }
-      const lanePad =
-        laneCountHint * (STRAND_WIDTH + LANE_GAP) + LANE_GAP;
+      const lanePad = LANE_GAP + STRAND_WIDTH;
       const inflatedObs = foreignObs
         .map((r) => ({
-          x: r.x,
+          x: r.x - lanePad,
           y: r.y - lanePad,
-          w: r.w,
+          w: r.w + 2 * lanePad,
           h: r.h + 2 * lanePad,
         }))
         .concat(endObs);
@@ -5255,6 +5317,21 @@
         for (const s of segsFromPoints(sub, STRAND_WIDTH / 2)) {
           occupied.push(s);
         }
+        const fromE = elemById[edge.from];
+        const toE = elemById[edge.to];
+        if (
+          inboxCablePtsByParent &&
+          fromE &&
+          toE &&
+          fromE.parent &&
+          fromE.parent === toE.parent &&
+          sub &&
+          sub.length >= 2
+        ) {
+          (inboxCablePtsByParent[fromE.parent] ||= []).push(
+            sub.map((p) => [p[0], p[1]])
+          );
+        }
       }
     }
     if (!paths.length) return null;
@@ -5805,6 +5882,7 @@
 
     // Cables: white jacket + colored strands (above tubes + elements).
     if (showElectrical && layout) {
+      inboxCablePtsByParent = {};
       for (const edge of graph.cable_edges || []) {
         const item = appendCableVisuals(
           cablesG,
@@ -5816,7 +5894,20 @@
         );
         if (item) cablePaths.push(item);
       }
+      if (
+        renderExpandPass < 1 &&
+        expandPlacesForInboxCables(inboxCablePtsByParent, byId)
+      ) {
+        measureVisibleSizes();
+        renderExpandPass += 1;
+        inboxCablePtsByParent = null;
+        render();
+        renderExpandPass = 0;
+        return;
+      }
+      inboxCablePtsByParent = null;
     }
+    renderExpandPass = 0;
     updateDepthLabel();
   }
 

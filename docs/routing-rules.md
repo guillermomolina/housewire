@@ -107,13 +107,17 @@ an inbox path from the boca to the pin. Intermediate `Cable` sheaths
     - **Strands in the same conduit** — Keep minimum lane separation except
       where they legally meet at shared **pins** (14). Multi-cable openings
       must not meet at the boca (13). Riding along the host tube centerline
-      (inside the stroke) is required (1), not an illegal overlap.
+      (inside the stroke) is required (1), not an illegal overlap. Parallel
+      strands may run close (lane pitch); they must not share a centerline.
     - **Distinct conduits** — Two tubes must not **colinear-stack** for a
       long mid-run: centerlines stay at least
       ``halfWidth_a + halfWidth_b + laneGap`` apart. Perpendicular crossings
       are allowed and **preferred** over a long C-detour around the other
       tube. Strands of conduit A sitting on conduit B’s stroke is wrong;
       strands of A on A’s own tube is correct.
+    - **Inbox** — Same-box cables stay inside the host place content box;
+      the place grows to fit the cable envelope when needed. Prefer short
+      runs (including crossings) over long outside loops.
 16. **No long diagonals** — Diagonals longer than the terminal-V budget are
     forbidden (especially boca→element shortcuts). Short diagonals are
     allowed only for multi-cable terminal V (11).

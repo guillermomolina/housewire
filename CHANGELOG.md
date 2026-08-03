@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.23] — 2026-08-03
+
+### Fixed
+
+- Inbox routing prefers short in-box runs (crossings OK) over long outside
+  loops; legal lane-pitch parallels no longer count as stacks. Host places
+  grow to fit inbox cable envelopes so strands do not sit outside the box.
+
 ## [0.35.22] — 2026-08-03
 
 ### Fixed
