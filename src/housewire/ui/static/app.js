@@ -6643,9 +6643,33 @@
     const conduits = document.getElementById("props-conduits-block");
     const cables = document.getElementById("props-cables-block");
     const placeMode = mode === "place";
-    if (elements) elements.classList.toggle("hidden", !placeMode);
+    if (elements) {
+      elements.classList.toggle(
+        "hidden",
+        !placeMode || !showElectrical || !propsShowElements
+      );
+    }
     if (conduits) conduits.classList.toggle("hidden", !placeMode);
     if (cables) cables.classList.toggle("hidden", placeMode);
+  }
+
+  /**
+   * True when this place's electrical elements are painted on the canvas
+   * (electrical on + leaf place in the current depth view).
+   */
+  let propsShowElements = false;
+
+  function placeShowsElementsInView(placeRelId) {
+    if (!showElectrical || !graph) return false;
+    // Canvas root elements use parent=null and stay visible even with children.
+    if (!placeRelId || placeRelId === ".") return true;
+    return childrenOf(placeRelId).length === 0;
+  }
+
+  /** Conduits drawn on the current canvas (same set as graph.edges). */
+  function filterConduitsToView(conduits) {
+    const visible = new Set((graph?.edges || []).map((e) => String(e.id)));
+    return (conduits || []).filter((c) => visible.has(String(c.id)));
   }
 
   function ensurePropertiesVisible() {
@@ -7162,9 +7186,16 @@
         checkbox: true,
       });
       bindPropsEditors(meta);
+      propsShowElements = placeShowsElementsInView(detail.id || placeKey);
+      const elementsBlock = document.getElementById("props-elements-block");
+      if (elementsBlock) {
+        elementsBlock.classList.toggle("hidden", !propsShowElements);
+      }
       const ul = document.getElementById("props-elements");
       ul.innerHTML = "";
-      if (!(detail.elements || []).length) {
+      if (!propsShowElements) {
+        /* Elements section hidden — not in the current view. */
+      } else if (!(detail.elements || []).length) {
         fillListEmpty(ul, "—");
       } else {
         for (const elItem of detail.elements || []) {
@@ -7176,7 +7207,7 @@
           ul.appendChild(li);
         }
       }
-      fillConduitsList(detail.conduits || []);
+      fillConduitsList(filterConduitsToView(detail.conduits || []));
       prefillInsertForms(detail);
     } catch (err) {
       setStatus(String(err.message || err));
@@ -7753,9 +7784,16 @@
   function setElectrical(on) {
     showElectrical = Boolean(on);
     syncElectricalUi();
+    if (!showElectrical && selectedId) {
+      const isElem = (graph?.elements || []).some((e) => e.id === selectedId);
+      if (isElem) clearSelectionState();
+    }
     render();
     renderOutline();
     rememberCurrentDocView();
+    syncInspectorFromSelection().catch((err) =>
+      setStatus(String(err.message || err))
+    );
   }
 
   function zoomIn() {

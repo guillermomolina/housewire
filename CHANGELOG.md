@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.43.1] — 2026-08-03
+
+### Fixed
+
+- Properties lists only what the canvas shows: elements when electrical view is
+  on (and the place is a leaf in the current depth), and conduits that appear
+  as edges in the current location view.
+
 ## [0.43.0] — 2026-08-03
 
 ### Added
