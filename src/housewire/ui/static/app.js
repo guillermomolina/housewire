@@ -31,8 +31,32 @@
   let activeDocId = null;
   /** @type {Record<string, FileSystemFileHandle>} */
   let fileHandles = {};
-  /** Per-document canvas location/depth when switching tabs. */
-  let docViews = {};
+  /** sessionStorage key for per-document camera/view (survives F5). */
+  const DOC_VIEWS_KEY = "housewire-doc-views-v1";
+
+  function loadPersistedDocViews() {
+    try {
+      const raw = sessionStorage.getItem(DOC_VIEWS_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed
+        : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function persistDocViews() {
+    try {
+      sessionStorage.setItem(DOC_VIEWS_KEY, JSON.stringify(docViews));
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }
+
+  /** Per-document canvas location/depth/camera (tabs + F5 restore). */
+  let docViews = loadPersistedDocViews();
   let drag = null;
   let panDrag = null;
   /** Space held for pan-anywhere (ignored while typing in inputs). */
@@ -657,9 +681,11 @@
   }
 
   function endPanDrag() {
+    const moved = Boolean(panDrag && panDrag.moved);
     panDrag = null;
     viewport.classList.remove("panning");
     syncPanReadyClass();
+    if (moved) rememberCurrentDocView();
   }
 
   /** True when this pointerdown should pan instead of select/move. */
@@ -1735,6 +1761,7 @@
     }
     scale = clamped;
     applyWorldTransform();
+    rememberCurrentDocView();
   }
 
   function applyWorldTransform() {
@@ -1778,6 +1805,7 @@
       panX = 40;
       panY = 40;
       applyWorldTransform();
+      rememberCurrentDocView();
       return;
     }
     const sx = (viewW - pad * 2) / bounds.w;
@@ -1786,6 +1814,7 @@
     panX = pad - bounds.minX * scale + (viewW - pad * 2 - bounds.w * scale) / 2;
     panY = pad - bounds.minY * scale + (viewH - pad * 2 - bounds.h * scale) / 2;
     applyWorldTransform();
+    rememberCurrentDocView();
   }
 
   function pointsToPathD(pts) {
@@ -7595,9 +7624,31 @@
   function rememberCurrentDocView() {
     if (!activeDocId) return;
     docViews[activeDocId] = {
-      locationId: locationId,
-      depthLevel: depthLevel,
+      locationId,
+      depthLevel,
+      showElectrical: Boolean(showElectrical),
+      panX,
+      panY,
+      scale,
     };
+    persistDocViews();
+  }
+
+  function applySavedCamera(saved) {
+    if (!saved) return false;
+    if (
+      !Number.isFinite(saved.panX) ||
+      !Number.isFinite(saved.panY) ||
+      !Number.isFinite(saved.scale)
+    ) {
+      return false;
+    }
+    panX = saved.panX;
+    panY = saved.panY;
+    scale = Math.min(3, Math.max(0.05, saved.scale));
+    applyWorldTransform();
+    rememberCurrentDocView();
+    return true;
   }
 
   function resetCanvasState() {
@@ -7630,6 +7681,7 @@
     resetCanvasState();
     fileHandles = {};
     docViews = {};
+    persistDocViews();
     activeDocId = null;
     hasDocument = false;
     updateFileMenuState({ dirty: false });
@@ -7703,6 +7755,7 @@
     syncElectricalUi();
     render();
     renderOutline();
+    rememberCurrentDocView();
   }
 
   function zoomIn() {
@@ -7953,6 +8006,7 @@
       });
       delete fileHandles[docId];
       delete docViews[docId];
+      persistDocViews();
       applyWorkspaceStatus(st);
       if (!hasDocument) {
         clearDocumentUi();
@@ -8063,9 +8117,22 @@
       canvasLocations.find((r) => r.selectable !== false && r.id === ".") ||
       canvasLocations.find((r) => r.selectable !== false);
     if (target) {
+      if (saved && typeof saved.showElectrical === "boolean") {
+        showElectrical = saved.showElectrical;
+        syncElectricalUi();
+      }
       if (saved && saved.depthLevel) depthLevel = saved.depthLevel;
       else depthLevel = DEPTH_DEFAULT;
-      await setCanvasLocation(target.id, { resetDepth: !saved });
+      const hasCamera =
+        saved &&
+        Number.isFinite(saved.panX) &&
+        Number.isFinite(saved.panY) &&
+        Number.isFinite(saved.scale);
+      await setCanvasLocation(target.id, {
+        resetDepth: !saved,
+        fit: !hasCamera,
+      });
+      if (hasCamera) applySavedCamera(saved);
     } else {
       setStatus("No locations with children found");
     }
@@ -8133,14 +8200,12 @@
     }
   }
 
-  async function setCanvasLocation(id, { resetDepth = true } = {}) {
+  async function setCanvasLocation(id, { resetDepth = true, fit = true } = {}) {
     if (!id) return;
     if (resetDepth) depthLevel = DEPTH_DEFAULT;
     locationId = id;
-    if (activeDocId) {
-      docViews[activeDocId] = { locationId: id, depthLevel };
-    }
-    await loadLocation();
+    rememberCurrentDocView();
+    await loadLocation({ fit });
   }
 
   async function loadOutline() {
@@ -8426,9 +8491,7 @@
     else applyWorldTransform();
     highlightOutline(locationId);
     await refreshStatus();
-    if (activeDocId) {
-      docViews[activeDocId] = { locationId, depthLevel };
-    }
+    rememberCurrentDocView();
     const bits = [];
     if (filled.length) {
       bits.push(`${filled.length} place(s)`);

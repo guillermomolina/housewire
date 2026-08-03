@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.43.0] — 2026-08-03
+
+### Added
+
+- F5 / reload keeps the open document's canvas view (location, depth, electrical
+  on/off, pan/zoom) via ``sessionStorage`` when the server still has the same
+  file open. Dirty state already survived in the server workspace.
+
 ## [0.42.2] — 2026-08-03
 
 ### Fixed
