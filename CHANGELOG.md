@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.19] — 2026-08-03
+
+### Fixed
+
+- Multi-cable terminal V no longer overshoots the inbox stub and climbs back
+  toward the pin (diamond / shared trunk / out-and-back). Stub depth grows
+  with the V, and tip/rail depths clamp to the lane target.
+
 ## [0.35.18] — 2026-08-03
 
 ### Fixed

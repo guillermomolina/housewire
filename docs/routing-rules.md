@@ -75,7 +75,8 @@ an inbox path from the boca to the pin. Intermediate `Cable` sheaths
     (strand width + gap) so fans stay compact but strands stay distinct.
     If fans of consecutive terminals on the same face would overlap, the
     element (and thus its host place) widens so slot spacing clears both
-    envelopes.
+    envelopes. The V must not overshoot the inbox corridor stub (no climb
+    back toward the pin / hollow diamond).
 12. **Single cable → Manhattan** *(terminals and openings)* — One conductor
     on a pin, or one cable at a mouth: orthogonal only (optional short stub
     + L). No decorative diagonal at either endpoint kind.

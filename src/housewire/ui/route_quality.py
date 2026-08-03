@@ -275,13 +275,27 @@ def terminal_v_lead(
     out_dir, lat = _face_axes(face)
     mid = (slot_count - 1) / 2.0
     fan_lat = (slot - mid) * FAN_LATERAL_PITCH
+    along = (lane_pt[0] - pin[0]) * out_dir[0] + (lane_pt[1] - pin[1]) * out_dir[
+        1
+    ]
+    tip_depth = TERMINAL_FAN_TIP
+    rail_depth = TERMINAL_FAN_RAIL
+    if along > 4.0:
+        max_depth = max(8.0, along - 2.0)
+        want = tip_depth + rail_depth
+        if want > max_depth:
+            scale = max_depth / want
+            tip_depth *= scale
+            rail_depth *= scale
+    tip_depth = max(6.0, tip_depth)
+    rail_depth = max(4.0, rail_depth)
     tip = (
-        pin[0] + out_dir[0] * TERMINAL_FAN_TIP + lat[0] * fan_lat,
-        pin[1] + out_dir[1] * TERMINAL_FAN_TIP + lat[1] * fan_lat,
+        pin[0] + out_dir[0] * tip_depth + lat[0] * fan_lat,
+        pin[1] + out_dir[1] * tip_depth + lat[1] * fan_lat,
     )
     rail = (
-        tip[0] + out_dir[0] * TERMINAL_FAN_RAIL,
-        tip[1] + out_dir[1] * TERMINAL_FAN_RAIL,
+        tip[0] + out_dir[0] * rail_depth,
+        tip[1] + out_dir[1] * rail_depth,
     )
     # pin → tip (V at the terminal), rail stays on tip lateral, then Manhattan.
     return manhattan_join_end([pin, tip, rail], lane_pt, face=face)

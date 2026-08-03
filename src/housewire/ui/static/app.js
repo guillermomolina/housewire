@@ -2763,6 +2763,16 @@
   /** Extra stroke beyond the tube fill for the high-contrast rim. */
   const OUTLINE_EXTRA = 0.8;
 
+  /** Stub depth past a pin so a multi-cable V fits without climbing back. */
+  function inboxStubDepth(slotCount) {
+    const n = Math.max(1, slotCount | 0);
+    if (n <= 1) return INBOX_STUB;
+    return Math.max(
+      INBOX_STUB,
+      TERMINAL_FAN_TIP + TERMINAL_FAN_RAIL + LANE_GAP * 2
+    );
+  }
+
   function faceOutwardDelta(face) {
     const f = String(face || "").toUpperCase();
     if (f === "N") return { x: 0, y: -1 };
@@ -3589,17 +3599,34 @@
       // fan to opposite laterals so both arms of the V are diagonal — never
       // one diagonal and one vertical. A short rail past the tip keeps the
       // strand on its lateral until the spine join (meet only at the pin).
+      // Never overshoot the lane target along the face normal — that forced
+      // an up-then-down join (diamond / out-and-back into the pin).
       const nx = -fo.y;
       const ny = fo.x;
       const mid = (nSlots - 1) / 2;
       const fanLat = (s - mid) * TERMINAL_FAN_PITCH;
+      const alongToLane =
+        (t.x - p.x) * fo.x + (t.y - p.y) * fo.y;
+      let tipDepth = TERMINAL_FAN_TIP;
+      let railDepth = TERMINAL_FAN_RAIL;
+      if (alongToLane > 4) {
+        const maxDepth = Math.max(8, alongToLane - 2);
+        const want = tipDepth + railDepth;
+        if (want > maxDepth) {
+          const scale = maxDepth / want;
+          tipDepth *= scale;
+          railDepth *= scale;
+        }
+      }
+      tipDepth = Math.max(6, tipDepth);
+      railDepth = Math.max(4, railDepth);
       const tip = {
-        x: p.x + fo.x * TERMINAL_FAN_TIP + nx * fanLat,
-        y: p.y + fo.y * TERMINAL_FAN_TIP + ny * fanLat,
+        x: p.x + fo.x * tipDepth + nx * fanLat,
+        y: p.y + fo.y * tipDepth + ny * fanLat,
       };
       const rail = {
-        x: tip.x + fo.x * TERMINAL_FAN_RAIL,
-        y: tip.y + fo.y * TERMINAL_FAN_RAIL,
+        x: tip.x + fo.x * railDepth,
+        y: tip.y + fo.y * railDepth,
       };
       return [
         [p.x, p.y],
@@ -4352,8 +4379,8 @@
       const f2 = p2.face || elementAttachFace(b, c1, placeById);
       const o1 = faceOutwardDelta(f1);
       const o2 = faceOutwardDelta(f2);
-      const s1 = stubPoint(p1, o1.x, o1.y, INBOX_STUB);
-      const s2 = stubPoint(p2, o2.x, o2.y, INBOX_STUB);
+      const s1 = stubPoint(p1, o1.x, o1.y, inboxStubDepth(fromSlot.count));
+      const s2 = stubPoint(p2, o2.x, o2.y, inboxStubDepth(toSlot.count));
       const elemObs = elementObstacles(elemById, placeById, [a.id, b.id], 2);
       // Inflate foreign boxes so lane-parallel offsets stay clear (rule 17).
       const lanePad =
@@ -4838,8 +4865,8 @@
       const f2 = p2.face || elementAttachFace(b, c1, placeById);
       const o1 = faceOutwardDelta(f1);
       const o2 = faceOutwardDelta(f2);
-      const s1 = stubPoint(p1, o1.x, o1.y, INBOX_STUB);
-      const s2 = stubPoint(p2, o2.x, o2.y, INBOX_STUB);
+      const s1 = stubPoint(p1, o1.x, o1.y, inboxStubDepth(fromSlot.count));
+      const s2 = stubPoint(p2, o2.x, o2.y, inboxStubDepth(toSlot.count));
       const corridor = orthoRoute(
         s1,
         s2,
