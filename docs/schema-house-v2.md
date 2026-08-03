@@ -632,10 +632,15 @@ Not allowed (lift the link to the common ancestor):
 - `../Salon/Caja_Luces.N1` (walks upward)
 - sibling paths declared inside the wrong place
 
-Contained Cable/Conductor ids referenced by a Conduit must be defined in the
-**same** place node’s `cables:` map. Cross-location runs (and the Conduits that
-carry them) are declared on the **common ancestor** so endpoints and
-`contains` never need `../` — only downward paths into nested places.
+Contained Cable/Conductor ids in a Conduit’s `contains` must be defined in the
+**same** place’s `cables:` map **or an ancestor’s** (typical when a run is
+lifted to the common ancestor so conductor endpoints never need `../`, while
+the physical tube stays on the floor/room for copy-paste). Sibling places are
+not allowed.
+
+Prefer **one Conduit per physical tube** on the place that owns the openings.
+Do not also declare a second Conduit on an ancestor for the same openings —
+list the ancestor cable ids on the local tube’s `contains` instead.
 
 ## Qualified name prefixes
 

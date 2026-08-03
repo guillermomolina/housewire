@@ -105,52 +105,10 @@ cables:
             ["Parking"],
         )
 
-    def test_cross_location_links_live_on_common_ancestor(self) -> None:
-        """Cable + hop conduits share the ancestor ``cables:`` map (no ../)."""
+    def test_cross_location_cable_on_ancestor_local_conduit_ok(self) -> None:
+        """Cable at LCA; local hop conduit may list it in contains (no ../)."""
         self._validate(
             """
-schema: house/v2
-type: House
-elements:
-  Parking:
-    type: Floor
-    elements:
-      Caja_A:
-        type: JunctionBox
-        openings: [E1]
-      Caja_B:
-        type: JunctionBox
-        openings: [W1]
-  Escalera:
-    type: Stair
-    openings: [N1]
-cables:
-  Linea_cross_1:
-    type: Conductor
-    section: 1.5 mm2
-    color: BN
-    from: Parking/Caja_A.N1
-    to: Escalera.N1
-  Linea_cross:
-    type: Cable
-    contains: [Linea_cross_1]
-    color: BK
-    subtype: power
-    section: 1.5 mm2
-  Conducto_hop:
-    type: Conduit
-    subtype: tube
-    from: Parking/Caja_A.E1
-    to: Parking/Caja_B.W1
-    contains: [Linea_cross]
-""",
-            [],
-        )
-
-    def test_conduit_contains_must_be_same_map(self) -> None:
-        with self.assertRaises(ValueError) as ctx:
-            self._validate(
-                """
 schema: house/v2
 type: House
 elements:
@@ -170,19 +128,64 @@ elements:
         from: Caja_A.E1
         to: Caja_B.W1
         contains: [Linea_cross]
+  Escalera:
+    type: Stair
+    openings: [N1]
 cables:
   Linea_cross_1:
     type: Conductor
     section: 1.5 mm2
     color: BN
     from: Parking/Caja_A.N1
-    to: Parking/Caja_B.N1
+    to: Escalera.N1
   Linea_cross:
     type: Cable
     contains: [Linea_cross_1]
     color: BK
     subtype: power
     section: 1.5 mm2
+""",
+            [],
+        )
+
+    def test_conduit_contains_sibling_cable_rejected(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            self._validate(
+                """
+schema: house/v2
+type: House
+elements:
+  Floor_A:
+    type: Floor
+    cables:
+      Linea_A_1:
+        type: Conductor
+        section: 1.5 mm2
+        color: BN
+        from: Box.N1
+        to: Box.N2
+      Linea_A:
+        type: Cable
+        contains: [Linea_A_1]
+        color: BK
+        subtype: power
+        section: 1.5 mm2
+    elements:
+      Box:
+        type: JunctionBox
+  Floor_B:
+    type: Floor
+    elements:
+      Box_B:
+        type: JunctionBox
+        openings: [N1, S1]
+    cables:
+      Conducto_B:
+        type: Conduit
+        subtype: tube
+        from: Box_B.N1
+        to: Box_B.S1
+        contains: [Linea_A]
 """,
                 [],
             )

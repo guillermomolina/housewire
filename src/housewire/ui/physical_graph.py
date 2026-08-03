@@ -1102,11 +1102,13 @@ def build_physical_graph(
         return None
 
     edges: list[dict[str, Any]] = []
+    # One drawn tube per opening pair (union contains). Avoids double tubes when
+    # a cross-location run was wrongly duplicated at an ancestor.
+    edge_by_geom: dict[tuple[tuple[str, str], tuple[str, str]], dict[str, Any]] = {}
     edge_sources: list[tuple[tuple[str, ...], dict[str, Any]]] = [
         (tuple(), loc_doc),
         *[(parts, doc) for parts, doc in places],
     ]
-    seen_edges: set[tuple[str, str, str, str, str]] = set()
     catalog = load_catalog()
     for current_parts, doc in edge_sources:
         cables = doc.get("cables") or {}
@@ -1138,12 +1140,11 @@ def build_physical_graph(
                 continue
             from_id = "/".join(from_vis)
             to_id = "/".join(to_vis)
-            key = (str(conduit_name), from_id, to_id, from_op or "", to_op or "")
-            if key in seen_edges:
-                continue
-            seen_edges.add(key)
+            a = (from_id, from_op or "")
+            b = (to_id, to_op or "")
+            geom_key = (a, b) if a <= b else (b, a)
             contains = [str(c) for c in (conduit.get("contains") or [])]
-            all_ids = sorted(contained_ids(cables, str(conduit_name)))
+            all_ids = set(contained_ids(cables, str(conduit_name)))
             cname = conduit.get("name")
             clabel = conduit.get("label")
             raw_color = conduit.get("color")
@@ -1152,8 +1153,9 @@ def build_physical_graph(
                 if raw_color is not None and str(raw_color).strip()
                 else None
             )
-            edges.append(
-                {
+            existing = edge_by_geom.get(geom_key)
+            if existing is None:
+                edge_by_geom[geom_key] = {
                     "id": str(conduit_name),
                     "name": (
                         str(cname).strip()
@@ -1169,12 +1171,22 @@ def build_physical_graph(
                     "to": to_id,
                     "from_opening": from_op,
                     "to_opening": to_op,
-                    "contains": contains,
-                    "contains_all": all_ids,
+                    "contains": list(contains),
+                    "contains_all": sorted(all_ids),
                     "subtype": conduit.get("subtype"),
                     "color": tube_color,
                 }
-            )
+            else:
+                merged = list(dict.fromkeys([*existing["contains"], *contains]))
+                existing["contains"] = merged
+                existing["contains_all"] = sorted(
+                    set(existing["contains_all"]) | all_ids | set(merged)
+                )
+                if existing.get("color") is None and tube_color is not None:
+                    existing["color"] = tube_color
+                if existing.get("subtype") is None and conduit.get("subtype") is not None:
+                    existing["subtype"] = conduit.get("subtype")
+    edges = list(edge_by_geom.values())
 
     elements = _build_element_nodes(
         places=places, loc_doc=loc_doc, catalog=catalog

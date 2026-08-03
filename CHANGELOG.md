@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.46.0] — 2026-08-03
+
+### Changed
+
+- Local conduits may list cables declared on an **ancestor** place in
+  ``contains``. Cross-location runs stay at the LCA (no ``../``); hop tubes
+  stay on the floor/room so rooms remain copy-paste friendly. Prefer one
+  Conduit per physical tube — do not duplicate the same openings at the root.
+- Physical graph merges conduits that share the same opening pair into one
+  edge (union of ``contains``), so accidental duplicates no longer double-draw.
+
 ## [0.45.1] — 2026-08-03
 
 ### Changed
