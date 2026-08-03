@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.43.2] — 2026-08-03
+
+### Fixed
+
+- Alt/Space pan cursor (grab) also shows over place and element boxes, not only
+  empty canvas.
+
 ## [0.43.1] — 2026-08-03
 
 ### Fixed

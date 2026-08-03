@@ -1036,40 +1036,45 @@ button:hover {
     radial-gradient(circle at 1px 1px, var(--canvas-dot) 1px, transparent 0) 0 0 / 24px 24px;
 }
 
-#viewport.pan-ready {
-  cursor: grab;
+#viewport.pan-ready,
+#viewport.pan-ready .node-box,
+#viewport.pan-ready .element-box {
+  cursor: grab !important;
 }
 
-#viewport.panning {
-  cursor: grabbing;
+#viewport.panning,
+#viewport.panning .node-box,
+#viewport.panning .element-box {
+  cursor: grabbing !important;
 }
 
 #viewport.marqueeing {
   cursor: crosshair;
 }
 
-/* Resize affordance must beat .node-box / .element-box { cursor: move }. */
-#viewport.resize-ns,
-#viewport.resize-ns .node-box,
-#viewport.resize-ns .element-box {
+/* Resize affordance must beat .node-box / .element-box { cursor: move }.
+   Pan-ready (Alt/Space) still wins over resize — see rules below. */
+#viewport.resize-ns:not(.pan-ready):not(.panning),
+#viewport.resize-ns:not(.pan-ready):not(.panning) .node-box,
+#viewport.resize-ns:not(.pan-ready):not(.panning) .element-box {
   cursor: ns-resize !important;
 }
 
-#viewport.resize-ew,
-#viewport.resize-ew .node-box,
-#viewport.resize-ew .element-box {
+#viewport.resize-ew:not(.pan-ready):not(.panning),
+#viewport.resize-ew:not(.pan-ready):not(.panning) .node-box,
+#viewport.resize-ew:not(.pan-ready):not(.panning) .element-box {
   cursor: ew-resize !important;
 }
 
-#viewport.resize-nesw,
-#viewport.resize-nesw .node-box,
-#viewport.resize-nesw .element-box {
+#viewport.resize-nesw:not(.pan-ready):not(.panning),
+#viewport.resize-nesw:not(.pan-ready):not(.panning) .node-box,
+#viewport.resize-nesw:not(.pan-ready):not(.panning) .element-box {
   cursor: nesw-resize !important;
 }
 
-#viewport.resize-nwse,
-#viewport.resize-nwse .node-box,
-#viewport.resize-nwse .element-box {
+#viewport.resize-nwse:not(.pan-ready):not(.panning),
+#viewport.resize-nwse:not(.pan-ready):not(.panning) .node-box,
+#viewport.resize-nwse:not(.pan-ready):not(.panning) .element-box {
   cursor: nwse-resize !important;
 }
 

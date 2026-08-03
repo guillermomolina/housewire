@@ -872,6 +872,19 @@
   function setResizeHoverCursor(handle, hitEl) {
     if (!viewport) return;
     if (panDrag || marquee || (drag && drag.moved)) return;
+    // Alt/Space pan takes the cursor; do not paint resize over grab.
+    if (isPanModifierHeld()) {
+      if (hitEl) hitEl.style.cursor = "";
+      viewport.style.cursor = "";
+      svg.style.cursor = "";
+      viewport.classList.remove(
+        "resize-ns",
+        "resize-ew",
+        "resize-nesw",
+        "resize-nwse"
+      );
+      return;
+    }
     const cur = resizeCursorForHandle(handle);
     const classes = [
       "resize-ns",
@@ -887,10 +900,10 @@
     if (hitEl) {
       hitEl.style.cursor = cur || "";
     }
-    if (!cur && !isPanModifierHeld()) {
+    if (!cur) {
       viewport.style.cursor = "";
       svg.style.cursor = "";
-    } else if (cur) {
+    } else {
       viewport.style.cursor = cur;
       svg.style.cursor = cur;
     }
