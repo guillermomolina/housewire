@@ -1,30 +1,24 @@
 ---
-description: Restart housewire serve on Route_21.yaml after each completed change
+description: Restart housewire serve on the active site YAML after each completed change
 alwaysApply: true
 ---
 
 # Restart UI serve after changes
 
-After finishing a user-requested change that affects the program UI, routing, API, or the Route_21 site fixture:
+After finishing a user-requested change that affects the program UI, routing,
+API, or the active installation site:
 
-1. Restart `housewire serve` with **Route_21.yaml** so the user can verify immediately.
+1. Restart `housewire serve` with the **active site YAML** so the user can
+   verify immediately.
 2. Preferred command (from the program repo, using the project venv):
 
 ```bash
-.venv/bin/python -m housewire serve "$(.venv/bin/python -c 'from housewire_examples import site_yaml; print(site_yaml())')"
+.venv/bin/python -m housewire serve "/home/gmolina/Fuentes/housewire/sites/Margalló 4A/housewire.yaml"
 ```
-
-   Fallback if examples is not installed but a local checkout exists:
-
-```bash
-.venv/bin/python -m housewire serve /home/guille/Red/Fuentes/housewire/sites/Tests/Route_21.yaml
-```
-
-   Equivalent if already in `sites/Tests` / `projects/Tests`: `make serve` or
-   `python -m housewire serve Route_21.yaml`.
 
 3. If something is already listening on **8765**, stop it first (SIGINT to that
    serve process, or kill the listener on that port), then start again.
 4. Run serve in the background; tell the user the URL (`http://127.0.0.1:8765/`).
 5. Skip only if the change cannot affect the running UI (e.g. docs-only with no
-   static/Python package change) **and** serve is already up on Route_21.
+   static/Python package change) **and** serve is already up on that same site
+   YAML.
