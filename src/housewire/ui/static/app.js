@@ -5949,6 +5949,45 @@
     }
   }
 
+  /** Read current flip flags for the props target from the in-memory graph. */
+  function flipsFromGraph() {
+    /** @type {{flip_ns:boolean, flip_we:boolean}} */
+    const out = { flip_ns: false, flip_we: false };
+    if (!graph || !propsTarget) return out;
+    if (propsTarget.kind === "element" && selectedId) {
+      const elem = (graph.elements || []).find((e) => e.id === selectedId);
+      if (elem) {
+        out.flip_ns = Boolean(elem.flip_ns);
+        out.flip_we = Boolean(elem.flip_we);
+      }
+      return out;
+    }
+    const node = selectedId
+      ? (graph.nodes || []).find((n) => n.id === selectedId)
+      : null;
+    if (node) {
+      out.flip_ns = Boolean(node.flip_ns);
+      out.flip_we = Boolean(node.flip_we);
+      return out;
+    }
+    const loc = graph.location || {};
+    out.flip_ns = Boolean(loc.flip_ns);
+    out.flip_we = Boolean(loc.flip_we);
+    return out;
+  }
+
+  /** Align flip checkboxes with graph (used after a failed PATCH). */
+  function syncFlipCheckboxesFromGraph() {
+    const meta = document.getElementById("props-meta");
+    if (!meta) return;
+    const cur = flipsFromGraph();
+    meta.querySelectorAll('input[type="checkbox"][data-prop]').forEach((el) => {
+      const key = el.getAttribute("data-prop");
+      if (key === "flip_ns") el.checked = cur.flip_ns;
+      if (key === "flip_we") el.checked = cur.flip_we;
+    });
+  }
+
   async function saveFlipPropsFromPanel() {
     if (!propsTarget || !locationId) return;
     const meta = document.getElementById("props-meta");
@@ -5960,6 +5999,9 @@
       if (key === "flip_ns" || key === "flip_we") fields[key] = el.checked;
     });
     if (!Object.keys(fields).length) return;
+    // Optimistic paint, but roll back if the server rejects (stale serve,
+    // unsupported fields, etc.) so Save/Undo cannot diverge from the buffer.
+    const before = flipsFromGraph();
     applyFlipsLocally(fields);
     render();
     const body = {
@@ -5969,10 +6011,18 @@
       depth: depthLevel,
     };
     if (propsTarget.element) body.element = propsTarget.element;
-    const res = await api("/api/place/properties", {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    });
+    let res;
+    try {
+      res = await api("/api/place/properties", {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      applyFlipsLocally(before);
+      syncFlipCheckboxesFromGraph();
+      render();
+      throw err;
+    }
     if (res.graph) {
       graph = res.graph;
       depthLevel = graph.depth || depthLevel;

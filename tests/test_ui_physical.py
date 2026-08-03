@@ -739,6 +739,79 @@ class TestServeApi(unittest.TestCase):
             dirty = client.get("/api/workspace").json()
             self.assertTrue(dirty.get("dirty"))
 
+    def test_flip_save_reload_and_undo(self) -> None:
+        """Flips must persist on Save and reverse with Undo before Save."""
+        try:
+            from fastapi.testclient import TestClient
+        except (ImportError, RuntimeError):
+            self.skipTest("fastapi/httpx not installed")
+
+        from housewire.site.io import load_yaml
+        from housewire.site.view_layout import get_physical_flips
+        from housewire.ui.app import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = init_site(root, type_id="House", label="Site")
+            add_place(doc, "Parking", type_id="Floor", label="Parking")
+            add_place(
+                doc, "Caja_4", under=("Parking",), type_id="JunctionBox", label="Caja 4"
+            )
+            save_site(root, doc)
+
+            client = TestClient(create_app(root))
+            client.get("/api/physical?location=Parking&depth=1")
+
+            flipped = client.patch(
+                "/api/place/properties",
+                json={
+                    "location_id": "Parking",
+                    "id": "Caja_4",
+                    "fields": {"flip_ns": True, "flip_we": False},
+                    "depth": 1,
+                },
+            )
+            self.assertEqual(flipped.status_code, 200, flipped.text)
+            self.assertTrue(flipped.json().get("can_undo"))
+            self.assertTrue(flipped.json().get("dirty"))
+
+            undone = client.post(
+                "/api/edit/undo",
+                json={"location_id": "Parking", "depth": 1},
+            )
+            self.assertEqual(undone.status_code, 200, undone.text)
+            self.assertTrue(undone.json().get("changed"))
+            node = next(
+                n for n in undone.json()["graph"]["nodes"] if n["id"] == "Caja_4"
+            )
+            self.assertFalse(node.get("flip_ns"))
+
+            redone = client.post(
+                "/api/edit/redo",
+                json={"location_id": "Parking", "depth": 1},
+            )
+            self.assertEqual(redone.status_code, 200, redone.text)
+            node = next(
+                n for n in redone.json()["graph"]["nodes"] if n["id"] == "Caja_4"
+            )
+            self.assertTrue(node.get("flip_ns"))
+
+            saved = client.post("/api/save", json={})
+            self.assertEqual(saved.status_code, 200, saved.text)
+            self.assertTrue(saved.json().get("saved"))
+
+            yaml_path = next(root.rglob("housewire.yaml"))
+            disk = load_yaml(yaml_path)
+            caja = disk["elements"]["Parking"]["elements"]["Caja_4"]
+            self.assertEqual(get_physical_flips(caja), (True, False))
+
+            # Fresh app process reads the same file — flips survive reload.
+            client2 = TestClient(create_app(root))
+            graph = client2.get("/api/physical?location=Parking&depth=1").json()
+            node = next(n for n in graph["nodes"] if n["id"] == "Caja_4")
+            self.assertTrue(node.get("flip_ns"))
+            self.assertFalse(node.get("flip_we"))
+
     def test_cable_edge_via_indices(self) -> None:
         from housewire.ui.physical_graph import _via_wire_indices
 

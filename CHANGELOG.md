@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.22] — 2026-08-03
+
+### Fixed
+
+- Flip checkboxes roll back the canvas and inspector when the properties
+  PATCH fails, so a stale serve cannot leave a local-only flip that Save and
+  Undo cannot see. Save→reload and undo/redo of flips are covered by a
+  regression test.
+
 ## [0.35.21] — 2026-08-03
 
 ### Fixed
