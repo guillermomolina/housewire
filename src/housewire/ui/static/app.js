@@ -33,6 +33,10 @@
   let docViews = {};
   let drag = null;
   let panDrag = null;
+  /** Space held for pan-anywhere (ignored while typing in inputs). */
+  let spacePanHeld = false;
+  /** Alt held for pan-anywhere (wheel+Alt still changes depth). */
+  let altPanHeld = false;
   let marquee = null;
   let saveTimer = null;
   let worldEl = null;
@@ -462,6 +466,67 @@
 
   function isModClick(ev) {
     return !!(ev && (ev.ctrlKey || ev.metaKey));
+  }
+
+  function isEditableFocus(target) {
+    const el = target || document.activeElement;
+    if (!el || el === document.body) return false;
+    const tag = String(el.tagName || "").toUpperCase();
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    if (el.isContentEditable) return true;
+    return Boolean(el.closest?.("input, textarea, select, [contenteditable='true']"));
+  }
+
+  function isPanModifierHeld() {
+    return spacePanHeld || altPanHeld;
+  }
+
+  function syncPanReadyClass() {
+    if (!viewport) return;
+    if (panDrag || marquee) {
+      viewport.classList.remove("pan-ready");
+      return;
+    }
+    viewport.classList.toggle("pan-ready", isPanModifierHeld());
+  }
+
+  /**
+   * Start a canvas pan. ``clearOnClick``: left-drag on empty canvas that never
+   * moves clears the selection on pointerup (click vs pan).
+   */
+  function beginPanDrag(ev, { clearOnClick = false } = {}) {
+    if (!ev || drag || marquee || panDrag) return false;
+    panDrag = {
+      x: ev.clientX,
+      y: ev.clientY,
+      panX,
+      panY,
+      pointerId: ev.pointerId,
+      clearOnClick: Boolean(clearOnClick),
+      moved: false,
+    };
+    viewport.classList.add("panning");
+    viewport.classList.remove("pan-ready");
+    try {
+      svg.setPointerCapture(ev.pointerId);
+    } catch {
+      /* ignore */
+    }
+    return true;
+  }
+
+  function endPanDrag() {
+    panDrag = null;
+    viewport.classList.remove("panning");
+    syncPanReadyClass();
+  }
+
+  /** True when this pointerdown should pan instead of select/move. */
+  function shouldPanPointer(ev) {
+    if (!ev) return false;
+    if (ev.button === 1) return true;
+    if (ev.button === 0 && isPanModifierHeld()) return true;
+    return false;
   }
 
   /** Shift+drag selection box (works on empty canvas and inside places). */
@@ -5580,6 +5645,12 @@
     }
 
     box.addEventListener("pointerdown", (ev) => {
+      if (shouldPanPointer(ev)) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        beginPanDrag(ev);
+        return;
+      }
       if (ev.button !== 0) return;
       ev.stopPropagation();
       // Shift+drag marquee must work on place floor (not only empty canvas).
@@ -5679,6 +5750,12 @@
       }
     }
     box.addEventListener("pointerdown", (ev) => {
+      if (shouldPanPointer(ev)) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        beginPanDrag(ev);
+        return;
+      }
       if (ev.button !== 0) return;
       ev.stopPropagation();
       // Allow Shift+drag marquee to start on an element hit target too.
@@ -6738,6 +6815,11 @@
       return;
     }
     if (panDrag) {
+      const dist = Math.hypot(ev.clientX - panDrag.x, ev.clientY - panDrag.y);
+      if (!panDrag.moved && dist >= DRAG_THRESHOLD) {
+        panDrag.moved = true;
+      }
+      if (!panDrag.moved) return;
       panX = panDrag.panX + (ev.clientX - panDrag.x);
       panY = panDrag.panY + (ev.clientY - panDrag.y);
       applyWorldTransform();
@@ -6754,16 +6836,23 @@
       return;
     }
     if (panDrag) {
-      panDrag = null;
-      viewport.classList.remove("panning");
+      const clearSel = panDrag.clearOnClick && !panDrag.moved;
+      endPanDrag();
+      if (clearSel) {
+        clearSelectionState();
+        setSelectedVisual();
+        fillPlaceInspector(null).catch((err) =>
+          setStatus(String(err.message || err))
+        );
+        highlightOutline(locationId);
+      }
     }
   });
 
   svg.addEventListener("pointercancel", (ev) => {
     if (drag) endDrag(ev);
     if (marquee) endMarquee(ev);
-    panDrag = null;
-    viewport.classList.remove("panning");
+    endPanDrag();
     hideMarquee();
   });
 
@@ -8050,12 +8139,58 @@
     if (drag || marquee) return;
     if (ev.target !== svg && ev.target !== viewport) return;
     if (beginMarquee(ev)) return;
-    if (ev.button === 1 || ev.button === 0) {
+    if (shouldPanPointer(ev)) {
       ev.preventDefault();
-      panDrag = { x: ev.clientX, y: ev.clientY, panX, panY };
-      viewport.classList.add("panning");
-      svg.setPointerCapture(ev.pointerId);
+      beginPanDrag(ev);
+      return;
     }
+    if (ev.button === 0) {
+      // Empty canvas: drag pans; click (no move) clears selection.
+      ev.preventDefault();
+      beginPanDrag(ev, { clearOnClick: true });
+    }
+  });
+
+  // Suppress middle-click autoscroll while panning the canvas.
+  viewport.addEventListener("auxclick", (ev) => {
+    if (ev.button === 1) ev.preventDefault();
+  });
+
+  window.addEventListener("keydown", (ev) => {
+    if (isEditableFocus(ev.target)) return;
+    if (ev.code === "Space") {
+      if (!spacePanHeld) {
+        spacePanHeld = true;
+        syncPanReadyClass();
+      }
+      // Keep Space from scrolling the page while using pan-ready.
+      if (!ev.repeat) ev.preventDefault();
+      return;
+    }
+    if (ev.key === "Alt") {
+      if (!altPanHeld) {
+        altPanHeld = true;
+        syncPanReadyClass();
+      }
+    }
+  });
+
+  window.addEventListener("keyup", (ev) => {
+    if (ev.code === "Space") {
+      spacePanHeld = false;
+      syncPanReadyClass();
+      return;
+    }
+    if (ev.key === "Alt") {
+      altPanHeld = false;
+      syncPanReadyClass();
+    }
+  });
+
+  window.addEventListener("blur", () => {
+    spacePanHeld = false;
+    altPanHeld = false;
+    syncPanReadyClass();
   });
 
   viewport.addEventListener(

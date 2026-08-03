@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.24] — 2026-08-03
+
+### Changed
+
+- Canvas pan vs drag: default arrow cursor; left-drag on empty canvas pans
+  (click clears selection); Space or Alt+drag and middle-click pan anywhere,
+  including over elements. Element/place drag still moves objects. Hint under
+  View → Fit.
+
 ## [0.35.23] — 2026-08-03
 
 ### Fixed
