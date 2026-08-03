@@ -5,6 +5,15 @@ Public, generic example sites for [HouseWire](https://github.com/guillermomolina
 This package is **not** a real installation. Private site YAML stays in a separate
 repository. Use these fixtures for demos, screenshots, and CI E2E.
 
+## License
+
+**Server Side Public License v1 (SSPL-1.0)** — see [LICENSE](LICENSE).
+Copyright (c) 2026 Guillermo Adrián Molina.
+
+Same terms as the HouseWire program: self-hosting and modification are fine;
+offering these examples (or a modified version) to third parties **as a service**
+triggers the SSPL Service Source Code obligations.
+
 ## Install
 
 From the HouseWire monorepo (editable):

@@ -7,6 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.45.1] — 2026-08-03
+
+### Changed
+
+- ``housewire-examples`` relicensed to **SSPL-1.0** and bumped to ``0.2.0``.
+
 ## [0.45.0] — 2026-08-03
 
 ### Changed

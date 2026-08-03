@@ -19,7 +19,7 @@ HouseWire (or a modified version) to third parties **as a service**, the SSPL
 requires you to make the complete Service Source Code available under the SSPL
 (not only the HouseWire program itself). Site/installation YAML you author
 remains your data; this license covers the HouseWire software in this
-repository.
+repository. The bundled ``housewire-examples`` package uses the same license.
 
 ## Requirements
 

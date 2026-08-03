@@ -7,7 +7,7 @@ import tempfile
 from importlib import resources
 from pathlib import Path
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 _SITES = resources.files("housewire_examples").joinpath("sites")
 
