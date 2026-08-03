@@ -1147,12 +1147,11 @@
   }
 
   /**
-   * Colinear stack is expensive; a proper crossing is a smaller penalty.
-   * When segments carry ``half`` (conduit road half-width), require centerline
-   * separation ≥ half_a + half_b + LANE_GAP so painted tubes do not sit on
-   * top of each other (rule: distinct conduits must not colinear-overlap).
+   * Colinear tube stack (rule 15) vs perpendicular crossing.
+   * Stacks are expensive and beat bend-count in scoring; crossings are a
+   * tiny soft cost so a short X is preferred over a long C-detour.
    */
-  function segConflict(s, o, eps) {
+  function segStackConflict(s, o, eps) {
     const clear =
       (Number(s.half) || 0) + (Number(o.half) || 0) + LANE_GAP;
     const need = Math.max(eps || 0, clear > LANE_GAP ? clear : 6);
@@ -1168,31 +1167,54 @@
       if (ov <= 1) return 0;
       return 200 + ov + (need - Math.abs(s.x - o.x));
     }
+    return 0;
+  }
+
+  function segCrossConflict(s, o) {
     if (s.axis === "H" && o.axis === "V") {
       const y = s.y;
       const x = o.x;
       if (x > s.a + 1 && x < s.b - 1 && y > o.a + 1 && y < o.b - 1) {
-        return 25;
+        return 1;
       }
     } else if (s.axis === "V" && o.axis === "H") {
       const x = s.x;
       const y = o.y;
       if (y > s.a + 1 && y < s.b - 1 && x > o.a + 1 && x < o.b - 1) {
-        return 25;
+        return 1;
       }
     }
     return 0;
   }
 
-  function pathConflictCost(pts, occupied, eps, half) {
+  function pathStackConflictCost(pts, occupied, eps, half) {
     if (!occupied || !occupied.length) return 0;
     let cost = 0;
     for (const s of segsFromPoints(pts, half)) {
       for (const o of occupied) {
-        cost += segConflict(s, o, eps);
+        cost += segStackConflict(s, o, eps);
       }
     }
     return cost;
+  }
+
+  function pathCrossConflictCost(pts, occupied, half) {
+    if (!occupied || !occupied.length) return 0;
+    let cost = 0;
+    for (const s of segsFromPoints(pts, half)) {
+      for (const o of occupied) {
+        cost += segCrossConflict(s, o);
+      }
+    }
+    return cost;
+  }
+
+  /** @deprecated combined cost — prefer stack/cross split for scoring. */
+  function pathConflictCost(pts, occupied, eps, half) {
+    return (
+      pathStackConflictCost(pts, occupied, eps, half) +
+      pathCrossConflictCost(pts, occupied, half) * 25
+    );
   }
 
   /** Shrunk leaf-place rects as routing obstacles (skip rooms/containers). */
@@ -2060,10 +2082,11 @@
     let best = raw[0];
     let bestObstacle = Infinity;
     let bestOutside = Infinity;
+    let bestStack = Infinity;
     let bestBends = Infinity;
     let bestHug = Infinity;
     let bestEntry = Infinity;
-    let bestConflict = Infinity;
+    let bestCross = Infinity;
     let bestLen = Infinity;
     const eps = overlapEps ?? 6;
     const half = halfWidth != null ? Number(halfWidth) : 0;
@@ -2072,52 +2095,63 @@
       // down→right→down (2 bends), while vertical-first merges into 1 bend.
       const full = scorePoly(pts);
       const bends = polyBends(full);
-      const conflict = pathConflictCost(full, occupied, eps, half);
+      const stack = pathStackConflictCost(full, occupied, eps, half);
+      const cross = pathCrossConflictCost(full, occupied, half);
       const obstacle = pathObstacleCost(full, obstacles);
       const outside = pathOutsideBoundsCost(full, stayBounds);
       const hug = pathBorderHugCost(full, hugRects);
       const entry = pathEntryExcessCost(full, toFace);
       const len = polyLength(full);
-      // Lexicographic: clear boxes, stay in parent, then avoid colinear
-      // tube stacks (rule 15) even if that costs an extra bend, then soft
-      // bend/hug/entry/length preferences.
+      // Lexicographic: clear boxes, stay in parent, avoid colinear tube
+      // stacks (rule 15) even with extra bends, then soft bend/hug/entry.
+      // Perpendicular crossings are cheap and ranked after bends so a short
+      // X beats a long C-detour around another conduit.
       if (
         obstacle < bestObstacle - 1e-9 ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           outside < bestOutside - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
-          conflict < bestConflict - 1e-9) ||
+          stack < bestStack - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
-          Math.abs(conflict - bestConflict) < 1e-9 &&
+          Math.abs(stack - bestStack) < 1e-9 &&
           bends < bestBends) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
-          Math.abs(conflict - bestConflict) < 1e-9 &&
+          Math.abs(stack - bestStack) < 1e-9 &&
           bends === bestBends &&
           hug < bestHug - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
-          Math.abs(conflict - bestConflict) < 1e-9 &&
+          Math.abs(stack - bestStack) < 1e-9 &&
           bends === bestBends &&
           Math.abs(hug - bestHug) < 1e-9 &&
           entry < bestEntry - 1e-9) ||
         (Math.abs(obstacle - bestObstacle) < 1e-9 &&
           Math.abs(outside - bestOutside) < 1e-9 &&
-          Math.abs(conflict - bestConflict) < 1e-9 &&
+          Math.abs(stack - bestStack) < 1e-9 &&
           bends === bestBends &&
           Math.abs(hug - bestHug) < 1e-9 &&
           Math.abs(entry - bestEntry) < 1e-9 &&
+          cross < bestCross - 1e-9) ||
+        (Math.abs(obstacle - bestObstacle) < 1e-9 &&
+          Math.abs(outside - bestOutside) < 1e-9 &&
+          Math.abs(stack - bestStack) < 1e-9 &&
+          bends === bestBends &&
+          Math.abs(hug - bestHug) < 1e-9 &&
+          Math.abs(entry - bestEntry) < 1e-9 &&
+          Math.abs(cross - bestCross) < 1e-9 &&
           len < bestLen)
       ) {
         best = pts;
         bestObstacle = obstacle;
         bestOutside = outside;
-        bestConflict = conflict;
+        bestStack = stack;
         bestBends = bends;
         bestHug = hug;
         bestEntry = entry;
+        bestCross = cross;
         bestLen = len;
       }
     }

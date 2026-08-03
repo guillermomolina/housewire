@@ -1,0 +1,88 @@
+schema: house/v2
+type: House
+label: 'Route 23 — prefer conduit cross over C-detour'
+notes: >
+  Two conduits cross in free space. A long C-detour around the other tube is
+  wrong (rule 15): prefer a short perpendicular crossing.
+elements:
+  West:
+    type: JunctionBox
+    label: West
+    openings: [E1]
+    opening_grid: {E: 1}
+    elements:
+      Strip:
+        type: TerminalStrip
+        view:
+          electrical: {x: 40.0, y: 40.0}
+    view:
+      physical: {x: 40.0, y: 160.0}
+  East:
+    type: JunctionBox
+    label: East
+    openings: [W1]
+    opening_grid: {W: 1}
+    elements:
+      Strip:
+        type: TerminalStrip
+        view:
+          electrical: {x: 40.0, y: 40.0}
+    view:
+      physical: {x: 420.0, y: 160.0}
+  North:
+    type: JunctionBox
+    label: North
+    openings: [S1]
+    opening_grid: {S: 1}
+    elements:
+      Strip:
+        type: TerminalStrip
+        view:
+          electrical: {x: 40.0, y: 40.0}
+    view:
+      physical: {x: 220.0, y: 40.0}
+  South:
+    type: JunctionBox
+    label: South
+    openings: [N1]
+    opening_grid: {N: 1}
+    elements:
+      Strip:
+        type: TerminalStrip
+        view:
+          electrical: {x: 40.0, y: 40.0}
+    view:
+      physical: {x: 220.0, y: 300.0}
+cables:
+  H1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: West/Strip.N1
+    to: East/Strip.N1
+  V1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    from: North/Strip.N1
+    to: South/Strip.N1
+  TubeH:
+    type: Conduit
+    subtype: tube
+    contains: [H1]
+    from: West.E1
+    to: East.W1
+  TubeV:
+    type: Conduit
+    subtype: tube
+    contains: [V1]
+    from: North.S1
+    to: South.N1
+
+view:
+  physical:
+    x: 0.0
+    y: 0.0
+    page:
+      width: 640
+      height: 480

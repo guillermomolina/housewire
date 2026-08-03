@@ -7,6 +7,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.11] — 2026-08-03
+
+### Fixed
+
+- Orthogonal conduit scoring treats **colinear stacks** and **perpendicular
+  crossings** separately: stacks still beat bend-count, but a short crossing
+  is preferred over a long C-detour around another tube (rule 15).
+
+### Added
+
+- Example ``Route_23`` and E2E ``test_conduit_cross`` for cross-over-detour.
+
 ## [0.35.10] — 2026-08-03
 
 ### Added

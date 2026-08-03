@@ -103,8 +103,9 @@ an inbox path from the boca to the pin. Intermediate `Cable` sheaths
     - **Distinct conduits** — Two tubes must not **colinear-stack** for a
       long mid-run: centerlines stay at least
       ``halfWidth_a + halfWidth_b + laneGap`` apart. Perpendicular crossings
-      are allowed (cheap). Strands of conduit A sitting on conduit B’s
-      stroke is wrong; strands of A on A’s own tube is correct.
+      are allowed and **preferred** over a long C-detour around the other
+      tube. Strands of conduit A sitting on conduit B’s stroke is wrong;
+      strands of A on A’s own tube is correct.
 16. **No long diagonals** — Diagonals longer than the terminal-V budget are
     forbidden (especially boca→element shortcuts). Short diagonals are
     allowed only for multi-cable terminal V (11).
@@ -159,3 +160,4 @@ mouth/envelope checks and still flag out-and-back / empty canvas problems.
 | `Route_14`–`Route_17` | Chains, rooms, dense strip, parallel fan-out |
 | `Route_18`–`Route_20` | Multi-cable / Route_21-class stress |
 | `Route_22` | Same-box cable must skirt foreign elements |
+| `Route_23` | Prefer conduit × over long C-detour |
