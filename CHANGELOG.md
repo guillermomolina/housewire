@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.10] — 2026-08-03
+
+### Added
+
+- Routing rule 17: inbox cables must skirt foreign **elements** (same idea as
+  conduits around leaf locations). Live detector ``through element``, example
+  ``Route_22``, and E2E ``test_element_avoidance``.
+
+### Fixed
+
+- Same-box corridors use element obstacles (inflated for highway lane pack)
+  and obstacle-aware joins so multi-cable feeds no longer cut through
+  intervening breakers.
+
 ## [0.35.9] — 2026-08-03
 
 ### Fixed

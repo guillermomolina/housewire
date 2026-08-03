@@ -53,6 +53,9 @@
   const DBLCLICK_MS = 400;
   const ELEM_W = 72;
   const ELEM_H = 28;
+  /** Must stay in sync with housewire.ui.route_quality highway constants. */
+  const STRAND_WIDTH = 2.5;
+  const LANE_GAP = STRAND_WIDTH;
 
   function loadCollapsedOutline() {
     try {
@@ -1210,6 +1213,26 @@
     return rects;
   }
 
+  /**
+   * Element box rects as inbox routing obstacles (rule 17).
+   * Exclude endpoint elements (pins on the cable ends).
+   */
+  function elementObstacles(elemById, placeById, excludeIds, inset) {
+    const ex = new Set(excludeIds || []);
+    const pad = inset == null ? 2 : inset;
+    /** @type {{x:number,y:number,w:number,h:number}[]} */
+    const rects = [];
+    for (const e of Object.values(elemById || {})) {
+      if (!e || ex.has(e.id)) continue;
+      const a = elementAbsXY(e, placeById);
+      const w = (e.w ?? ELEM_W) - 2 * pad;
+      const h = (e.h ?? ELEM_H) - 2 * pad;
+      if (w < 4 || h < 4) continue;
+      rects.push({ x: a.x + pad, y: a.y + pad, w, h });
+    }
+    return rects;
+  }
+
   function pathObstacleCost(pts, obstacles) {
     if (!obstacles || !obstacles.length) return 0;
     let cost = 0;
@@ -1340,8 +1363,16 @@
     for (const o of occupied || []) {
       maxOccHalf = Math.max(maxOccHalf, Number(o.half) || 0);
     }
-    // Parallel rails must clear painted tube strokes, not just 6px eps.
-    const LANE = Math.max(14, half + maxOccHalf + LANE_GAP);
+    let maxObsClear = 0;
+    for (const r of obstacles || []) {
+      maxObsClear = Math.max(maxObsClear, Number(r.h) || 0, Number(r.w) || 0);
+    }
+    // Parallel rails must clear painted tube strokes and foreign boxes.
+    const LANE = Math.max(
+      14,
+      half + maxOccHalf + LANE_GAP,
+      maxObsClear > 0 ? maxObsClear / 2 + LANE_GAP : 0
+    );
     const OVERLAP_EPS = Math.max(6, half + LANE_GAP);
     const pts = [[x1, y1]];
     let ax = x1;
@@ -1892,7 +1923,7 @@
     const my = (ay + by) / 2;
     const laneOffs = [0];
     if (needLanes) {
-      for (let k = 1; k <= 4; k++) {
+      for (let k = 1; k <= 8; k++) {
         laneOffs.push(k * lane, -k * lane);
       }
     }
@@ -2292,9 +2323,7 @@
    *   [gap][strand][gap][strand]…[gap][strand][gap]
    * gap == strand width so every transparent separator matches a wire.
    */
-  const STRAND_WIDTH = 2.5;
-  /** Clear gap between strand strokes (equal to stroke → one strand of air). */
-  const LANE_GAP = STRAND_WIDTH;
+  // STRAND_WIDTH / LANE_GAP declared near top (routing + highway share them).
   const JACKET_OPACITY_WIDTH_PAD = 1.2;
 
   /** Conduit road width from strand count (not a fixed stroke). */
@@ -3317,8 +3346,10 @@
    * Always travel on the pin-face column/row first (N/S → rail.x, E/W →
    * rail.y), then across at the fan-tip latitude — never pick the axis by
    * which delta is larger (that recreated the shared rail-Y crawl).
+   * When the simple join would pierce a foreign element (rule 17), detour
+   * with ``orthoRoute`` instead.
    */
-  function joinLeadToFanTip(lead, fanTip, face) {
+  function joinLeadToFanTip(lead, fanTip, face, obstacles) {
     if (!lead || lead.length < 1) {
       return fanTip ? [[fanTip[0], fanTip[1]]] : [];
     }
@@ -3352,7 +3383,30 @@
         bridge.push([fanTip[0], fanTip[1]]);
       }
     }
-    return mergeOrthoPolys(lead, bridge) || lead;
+    const simple = mergeOrthoPolys(lead, bridge) || lead;
+    if (obstacles && obstacles.length) {
+      const simpleCost = pathObstacleCost(simple, obstacles);
+      if (simpleCost > 0) {
+        const routed = orthoRoute(
+          { x: rail[0], y: rail[1] },
+          { x: fanTip[0], y: fanTip[1] },
+          null,
+          null,
+          null,
+          obstacles,
+          null,
+          null
+        );
+        if (routed && routed.length >= 2) {
+          const detour = mergeOrthoPolys(lead, routed) || lead;
+          const detourCost = pathObstacleCost(detour, obstacles);
+          if (detourCost < simpleCost) {
+            return detour;
+          }
+        }
+      }
+    }
+    return simple;
   }
 
   /**
@@ -3949,6 +4003,12 @@
     const fromSlot = opts?.fromSlot || { slot: 0, count: 1 };
     const toSlot = opts?.toSlot || { slot: 0, count: 1 };
     const laneDistFallback = opts?.laneDist || 0;
+    const laneCountHint = Math.max(
+      1,
+      fromSlot.count | 0,
+      toSlot.count | 0,
+      opts?.laneCount | 0
+    );
     const laneDistForConduit = opts?.laneDistForConduit;
     const fromPin = opts?.fromPin != null ? opts.fromPin : edge.from_pin;
     const toPin = opts?.toPin != null ? opts.toPin : edge.to_pin;
@@ -3966,7 +4026,7 @@
       return offsetOrthoPts(pts, dist);
     };
 
-    // Same box: parallel corridor between stubs; short leads to terminals.
+    // Same box: corridor between stubs, skirting foreign elements (rule 17).
     if (a.parent && b.parent && a.parent === b.parent) {
       const p1 = resolveElementAttach(
         a,
@@ -3985,12 +4045,15 @@
         toSlot.count
       );
       const parent = placeById[a.parent];
-      let prefer = { x: (c1.x + c2.x) / 2, y: (c1.y + c2.y) / 2 };
+      /** @type {{x:number,y:number,w:number,h:number}|null} */
+      let stayBounds = null;
       if (parent) {
         const pa = absXY(parent, placeById);
-        prefer = {
-          x: pa.x + nodeW(parent) / 2,
-          y: pa.y + nodeH(parent) / 2,
+        stayBounds = {
+          x: pa.x + PAD,
+          y: pa.y + HEADER,
+          w: Math.max(4, nodeW(parent) - 2 * PAD),
+          h: Math.max(4, nodeH(parent) - HEADER - PAD),
         };
       }
       const f1 = p1.face || elementAttachFace(a, c2, placeById);
@@ -3999,27 +4062,89 @@
       const o2 = faceOutwardDelta(f2);
       const s1 = stubPoint(p1, o1.x, o1.y, INBOX_STUB);
       const s2 = stubPoint(p2, o2.x, o2.y, INBOX_STUB);
-      const corridor = orthoPtsPrefer(s1, s2, prefer);
-      const corridorOff = parallel(corridor);
+      const elemObs = elementObstacles(elemById, placeById, [a.id, b.id], 2);
+      // Inflate foreign boxes so lane-parallel offsets stay clear (rule 17).
+      const lanePad =
+        laneCountHint * (STRAND_WIDTH + LANE_GAP) + LANE_GAP;
+      const inflatedObs = elemObs.map((r) => ({
+        x: r.x,
+        y: r.y - lanePad,
+        w: r.w,
+        h: r.h + 2 * lanePad,
+      }));
+      // Inbox element clearance (rule 17) outranks prior tube occupation.
+      const corridor = orthoRoute(
+        s1,
+        s2,
+        null,
+        null,
+        null,
+        inflatedObs,
+        stayBounds,
+        null
+      );
+      const corridorOff = parallel(
+        corridor.map((p) => [p[0], p[1]])
+      );
       if (!corridorOff.length) return [];
-      return [
-        rejoinLaneEndsOrtho(
-          [p1.x, p1.y],
-          f1,
-          corridorOff,
-          [p2.x, p2.y],
-          f2,
-          fromSlot.slot,
-          fromSlot.count,
-          toSlot.slot,
-          toSlot.count
-        ),
-      ];
+      // Do not run stripOutAndBack on obstacle detours — it collapses the
+      // C-around-element back into a straight pierce (rule 17).
+      const head = pinToLanePts(
+        [p1.x, p1.y],
+        f1,
+        corridorOff[0],
+        fromSlot.slot,
+        fromSlot.count
+      );
+      const tail = pinToLanePts(
+        [p2.x, p2.y],
+        f2,
+        corridorOff[corridorOff.length - 1],
+        toSlot.slot,
+        toSlot.count
+      );
+      const joinAvoid = (fromPt, toPt) =>
+        orthoRoute(
+          { x: fromPt[0], y: fromPt[1] },
+          { x: toPt[0], y: toPt[1] },
+          null,
+          null,
+          null,
+          inflatedObs,
+          stayBounds,
+          null
+        );
+      let chain = head.map((p) => [p[0], p[1]]);
+      const hEnd = chain[chain.length - 1];
+      const c0 = corridorOff[0];
+      if (
+        hEnd &&
+        c0 &&
+        Math.hypot(hEnd[0] - c0[0], hEnd[1] - c0[1]) > 1e-6
+      ) {
+        chain = mergeOrthoPolys(chain, joinAvoid(hEnd, c0)) || chain;
+      }
+      chain = mergeOrthoPolys(chain, corridorOff) || chain;
+      const c1pt = corridorOff[corridorOff.length - 1];
+      const tip = tail[tail.length - 1];
+      if (
+        c1pt &&
+        tip &&
+        Math.hypot(c1pt[0] - tip[0], c1pt[1] - tip[1]) > 1e-6
+      ) {
+        chain = mergeOrthoPolys(chain, joinAvoid(c1pt, tip)) || chain;
+      }
+      chain = mergeOrthoPolys(chain, tail.slice().reverse()) || chain;
+      return [cleanOrthoPoly(chain || [])];
     }
 
     const parentExclude = [a.parent, b.parent].filter(Boolean);
     const outsideObstacles = placeObstacles(placeById, parentExclude);
     const leafObstacles = placeObstacles(placeById, [], 2);
+    // Free-space legs skirt foreign elements as well as leaf places (rule 17).
+    const freeObstacles = outsideObstacles.concat(
+      elementObstacles(elemById, placeById, [a.id, b.id], 2)
+    );
 
     let hops = edge.conduit_hops;
     if ((!hops || !hops.length) && edge.conduit && edge.conduit_from && edge.conduit_to) {
@@ -4044,7 +4169,7 @@
         !first.from_opening ||
         !last.to_opening
       ) {
-        const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
+        const d = orthoPathD(c1, c2, null, null, occupied, freeObstacles);
         return d
           ? pathDToSubpaths(d).map((sub) => ensureOrthoPoly(parallel(sub)))
           : [];
@@ -4057,7 +4182,7 @@
         const pf = placeById[hop.from];
         const pt = placeById[hop.to];
         if (!pf || !pt || !hop.from_opening || !hop.to_opening) {
-          const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
+          const d = orthoPathD(c1, c2, null, null, occupied, freeObstacles);
           return d
             ? pathDToSubpaths(d).map((sub) => ensureOrthoPoly(parallel(sub)))
             : [];
@@ -4183,6 +4308,13 @@
       const startFace =
         startAtt.face || elementAttachFace(a, startOp, placeById);
       const endFace = endAtt.face || elementAttachFace(b, endOp, placeById);
+      const startElemObs = elementObstacles(
+        elemById,
+        placeById,
+        [a.id],
+        2
+      );
+      const endElemObs = elementObstacles(elemById, placeById, [b.id], 2);
 
       // Tube only gets highway parallel offset. Inbox uses a mouth fan so
       // lanes stay inside the conduit and only separate after the boca.
@@ -4195,7 +4327,7 @@
           : ext.map((p) => [p[0], p[1]]);
       }
       if (!exteriorCtr || exteriorCtr.length < 2) {
-        const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
+        const d = orthoPathD(c1, c2, null, null, occupied, freeObstacles);
         return d
           ? pathDToSubpaths(d).map((sub) => ensureOrthoPoly(parallel(sub)))
           : [];
@@ -4270,13 +4402,24 @@
         fromSlot.slot,
         fromSlot.count
       );
-      let head = joinLeadToFanTip(startLead, startFanRev[0], startFace);
+      let head = joinLeadToFanTip(startLead, startFanRev[0], startFace, startElemObs);
       if (startFanRev.length > 1) {
         head = mergeOrthoPolys(head, startFanRev.slice(1)) || head;
       }
-      head = stripShortZJogs(
-        stripOutAndBack(head, [startCrossing, startFanRev[0], ...startFan])
-      );
+      {
+        const before = head.map((p) => [p[0], p[1]]);
+        head = stripShortZJogs(
+          stripOutAndBack(head, [startCrossing, startFanRev[0], ...startFan])
+        );
+        // Do not let strip collapse an element-skirting detour (rule 17).
+        if (
+          startElemObs.length &&
+          pathObstacleCost(head, startElemObs) >
+            pathObstacleCost(before, startElemObs) + 1
+        ) {
+          head = before;
+        }
+      }
       // Phase contract: head ends on the start lane crossing.
       {
         const sx = startCrossing.x;
@@ -4308,15 +4451,25 @@
         toSlot.count
       );
       // pin → … → fan tip → stub → crossing, then reverse to crossing→…→pin.
-      let tailFromPin = joinLeadToFanTip(endLead, endFanTip, endFace);
+      let tailFromPin = joinLeadToFanTip(endLead, endFanTip, endFace, endElemObs);
       const fanToMouth = endFanFwd.slice().reverse(); // fan, stub, crossing
       if (fanToMouth.length > 1) {
         tailFromPin =
           mergeOrthoPolys(tailFromPin, fanToMouth.slice(1)) || tailFromPin;
       }
-      tailFromPin = stripShortZJogs(
-        stripOutAndBack(tailFromPin, [endCrossing, endFanTip, ...endFanFwd])
-      );
+      {
+        const before = tailFromPin.map((p) => [p[0], p[1]]);
+        tailFromPin = stripShortZJogs(
+          stripOutAndBack(tailFromPin, [endCrossing, endFanTip, ...endFanFwd])
+        );
+        if (
+          endElemObs.length &&
+          pathObstacleCost(tailFromPin, endElemObs) >
+            pathObstacleCost(before, endElemObs) + 1
+        ) {
+          tailFromPin = before;
+        }
+      }
       // Phase contract: pin-side path ends on the end crossing before reverse.
       // (mergeOrthoPolys ignores 1-point arrays — append explicitly.)
       {
@@ -4369,7 +4522,7 @@
       if (!chain || chain.length < 2) return [];
       return [chain];
     }
-    const d = orthoPathD(c1, c2, null, null, occupied, outsideObstacles);
+    const d = orthoPathD(c1, c2, null, null, occupied, freeObstacles);
     return d
       ? pathDToSubpaths(d).map((sub) => ensureOrthoPoly(parallel(sub)))
       : [];
@@ -4594,6 +4747,7 @@
         fromSlot: fromT,
         toSlot: toT,
         laneDist: highwayLaneOffset(lane.index, lane.count),
+        laneCount: lane.count,
         laneDistForConduit: layout
           ? (cid) => {
               const L = layout.laneOnConduit(cid, edge, wi);

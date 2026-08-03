@@ -44,12 +44,26 @@ _DUMP_JS = """() => {
     .filter(el=>parseFloat(el.getAttribute('stroke-width')||0)>=2
       && (el.getAttribute('stroke')||'').startsWith('#'))
     .map(el=>({stroke:el.getAttribute('stroke'), pts:parse(el.getAttribute('d'))}));
+  const elements=[...svg.querySelectorAll('g.elements > g.element-node')].map(g=>{
+    const r=g.querySelector(':scope > rect.element-box, :scope > rect');
+    if(!r) return null;
+    const m=g.transform&&g.transform.baseVal.consolidate();
+    const t=m?m.matrix:{e:0,f:0};
+    return {
+      x:Number(r.getAttribute('x')||0)+t.e,
+      y:Number(r.getAttribute('y')||0)+t.f,
+      w:Number(r.getAttribute('width')||0),
+      h:Number(r.getAttribute('height')||0),
+      id:g.getAttribute('data-id')||'',
+    };
+  }).filter(Boolean);
   return {
     ver: document.querySelector('script[src*="app.js"]')?.src || '',
     tubes: tubes.map(t=>t.pts),
     halves: tubes.map(t=>t.half),
     strands: strands.map(s=>s.pts),
     strokes: strands.map(s=>s.stroke),
+    elements,
   };
 }"""
 
@@ -214,6 +228,12 @@ def assert_site_routes_ok(
         data.get("strands") or [],
         tube_half_widths=halves or None,
         require_tubes=require_tubes,
+        element_rects=[
+            (float(e["x"]), float(e["y"]), float(e["w"]), float(e["h"]))
+            for e in (data.get("elements") or [])
+            if e.get("w") and e.get("h")
+        ]
+        or None,
     )
     test.assertEqual(
         issues,

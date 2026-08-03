@@ -10,7 +10,7 @@ When changing hop assembly, lane packing, mouth/terminal geometry, route
 quality detectors, or live route E2E:
 
 1. **Read** [`docs/routing-rules.md`](docs/routing-rules.md) before editing.
-   That file is the source of truth (rules 1–16, hop contract, E2E checks).
+   That file is the source of truth (rules 1–17, hop contract, E2E checks).
 2. **Do not** restate or fork the full rule list here — update the doc if
    behavior intentionally changes, then align code and tests.
 3. Keep **terminals vs openings** distinct: multi-cable terminals may V-meet
@@ -19,5 +19,7 @@ quality detectors, or live route E2E:
    fat empty tubes with strands stacked on the centerline).
 5. Distinct **conduits** must not colinear-stack; strands riding their **own**
    tube stroke is correct. See rule 15 in the doc.
-6. After routing changes, run relevant `tests/route_e2e` / `test_route_quality`
+6. Inbox cables must **route around foreign elements** (rule 17), just as
+   conduits route around leaf locations — do not pierce box interiors.
+7. After routing changes, run relevant `tests/route_e2e` / `test_route_quality`
    and fix failures against the documented invariants.

@@ -826,6 +826,64 @@ def polyline_hugs_rect_border(
     return False
 
 
+def _point_in_rect(p: Point, rect: Rect, *, pad: float = 0.0) -> bool:
+    rx, ry, rw, rh = rect
+    return (
+        rx - pad <= p[0] <= rx + rw + pad
+        and ry - pad <= p[1] <= ry + rh + pad
+    )
+
+
+def strands_through_elements(
+    strands: Sequence[Poly],
+    element_rects: Sequence[Rect],
+    *,
+    inset: float = 4.0,
+    min_overlap: float = 8.0,
+) -> list[str]:
+    """Flag mid-run strands that pierce foreign element box interiors (rule 17).
+
+    Rects that contain either strand endpoint (pins) are exempt so landing on
+    the from/to element is not treated as a pierce.
+    """
+    issues: list[str] = []
+    if not element_rects:
+        return issues
+    for si, raw in enumerate(strands):
+        pts = [(float(p[0]), float(p[1])) for p in raw]
+        if len(pts) < 2:
+            continue
+        ends = (pts[0], pts[-1])
+        for ri, rect in enumerate(element_rects):
+            rx, ry, rw, rh = (float(x) for x in rect)
+            if rw <= 2 * inset or rh <= 2 * inset:
+                continue
+            if any(_point_in_rect(e, (rx, ry, rw, rh), pad=2.0) for e in ends):
+                continue
+            ir = (rx + inset, ry + inset, rw - 2 * inset, rh - 2 * inset)
+            ix, iy, iw, ih = ir
+            total = 0.0
+            for i in range(len(pts) - 1):
+                ax, ay = pts[i]
+                bx, by = pts[i + 1]
+                if abs(ay - by) < 1e-6:
+                    if ay <= iy or ay >= iy + ih:
+                        continue
+                    ov = max(0.0, min(max(ax, bx), ix + iw) - max(min(ax, bx), ix))
+                    total += ov
+                elif abs(ax - bx) < 1e-6:
+                    if ax <= ix or ax >= ix + iw:
+                        continue
+                    ov = max(0.0, min(max(ay, by), iy + ih) - max(min(ay, by), iy))
+                    total += ov
+            if total >= min_overlap:
+                issues.append(
+                    f"strand {si}: through element[{ri}] "
+                    f"overlap≈{total:.0f}px (rule 17)"
+                )
+    return issues
+
+
 def assess_bundle(
     strands: Sequence[Poly],
     *,
@@ -2001,6 +2059,7 @@ def assess_live_canvas(
     trunk_y_min: float = 400.0,
     trunk_y_max: float = 440.0,
     bipolar_y_min: float = 430.0,
+    element_rects: Sequence[Rect] | None = None,
 ) -> list[str]:
     """Invariants for a live Test_01-style canvas (tubes + colored strands).
 
@@ -2111,6 +2170,9 @@ def assess_live_canvas(
     ):
         issues.append(msg)
 
+    for msg in strands_through_elements(unique_strands, element_rects or []):
+        issues.append(msg)
+
     trunks = shared_horizontal_trunk_length(
         unique_strands, y_min=trunk_y_min, y_max=trunk_y_max, min_len=40.0
     )
@@ -2133,6 +2195,7 @@ def assess_live_site(
     trunk_y_min: float = 400.0,
     trunk_y_max: float = 440.0,
     bipolar_y_min: float = 430.0,
+    element_rects: Sequence[Rect] | None = None,
 ) -> list[str]:
     """Live-canvas checks; sites without conduits skip tube mouth/envelope.
 
@@ -2146,11 +2209,14 @@ def assess_live_site(
         if len(strands) < 1:
             issues.append("no cable strands on canvas")
             return issues
-        for si, strand in enumerate(strands):
+        unique = dedupe_identical_polylines(strands)
+        for si, strand in enumerate(unique):
             pts = [(float(p[0]), float(p[1])) for p in strand]
             n_back = count_out_and_back(pts)
             if n_back:
                 issues.append(f"strand {si}: out-and-back ({n_back})")
+        for msg in strands_through_elements(unique, element_rects or []):
+            issues.append(msg)
         return issues
     return assess_live_canvas(
         tubes,
@@ -2161,4 +2227,5 @@ def assess_live_site(
         trunk_y_min=trunk_y_min,
         trunk_y_max=trunk_y_max,
         bipolar_y_min=bipolar_y_min,
+        element_rects=element_rects,
     )

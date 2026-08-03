@@ -84,6 +84,15 @@ an inbox path from the boca to the pin. Intermediate `Cable` sheaths
     not merge before the pin (no premature shared stub at the terminal).
     Does not apply to openings — see (13).
 
+### Obstacles (places and elements)
+
+17. **Route around foreign bodies** — Same idea for tubes and strands:
+    - **Conduits** go around leaf **locations** (not through place interiors).
+    - **Inbox cables** go around foreign **elements** in the place: mid-run
+      segments must not pierce another element’s box. Endpoint elements
+      (pins on the strand’s ends) are exempt. Perpendicular clearance past a
+      box edge is fine; cutting through the interior is not.
+
 ### Overlaps and diagonals
 
 15. **No illegal mid-run overlaps**
@@ -133,6 +142,7 @@ site, dumps `path.edge-tube` and colored strands, then runs
 | Opening parallel | `multi-cable strands meet` / `meet at mouth` |
 | Tube packing | `tube underfilled` |
 | Conduit stack | `tubes colinear-overlap` |
+| Through element | `through element` |
 | Out-and-back | `out-and-back` |
 
 Sites without conduits (same-box only, e.g. `Route_01`) skip tube
@@ -148,3 +158,4 @@ mouth/envelope checks and still flag out-and-back / empty canvas problems.
 | `Route_13` | Full Route_21 twin |
 | `Route_14`–`Route_17` | Chains, rooms, dense strip, parallel fan-out |
 | `Route_18`–`Route_20` | Multi-cable / Route_21-class stress |
+| `Route_22` | Same-box cable must skirt foreign elements |

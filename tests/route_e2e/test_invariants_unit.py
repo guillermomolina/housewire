@@ -172,6 +172,30 @@ class TestLiveCanvasInvariantsUnit(unittest.TestCase):
             [],
         )
 
+    def test_strand_through_foreign_element_flagged(self) -> None:
+        from housewire.ui.route_quality import strands_through_elements
+
+        # Ends land on Left/Right faces; mid boxes are pierced.
+        strand = [(92.0, 94.0), (320.0, 94.0)]
+        left = (20.0, 80.0, 72.0, 28.0)
+        mid = (120.0, 80.0, 72.0, 28.0)
+        mid_b = (220.0, 80.0, 72.0, 28.0)
+        right = (320.0, 80.0, 72.0, 28.0)
+        issues = strands_through_elements([strand], [left, mid, mid_b, right])
+        self.assertTrue(any("through element" in x for x in issues), msg=issues)
+        self.assertTrue(any("element[1]" in x for x in issues), msg=issues)
+        self.assertTrue(any("element[2]" in x for x in issues), msg=issues)
+        self.assertFalse(any("element[0]" in x for x in issues), msg=issues)
+        self.assertFalse(any("element[3]" in x for x in issues), msg=issues)
+
+    def test_strand_skirting_element_ok(self) -> None:
+        from housewire.ui.route_quality import strands_through_elements
+
+        # Corridor below the mid box.
+        strand = [(20.0, 130.0), (400.0, 130.0)]
+        mid = (120.0, 80.0, 72.0, 28.0)
+        self.assertEqual(strands_through_elements([strand], [mid]), [])
+
     def test_point_near_and_match_helpers(self) -> None:
         tube = [(0.0, 0.0), (100.0, 0.0), (100.0, 50.0)]
         self.assertTrue(point_near_polyline((100.0, 25.0), tube, tol=1.0))

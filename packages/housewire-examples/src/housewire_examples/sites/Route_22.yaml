@@ -1,0 +1,58 @@
+schema: house/v2
+type: House
+label: 'Route 22 — skirt foreign elements'
+notes: >
+  Same-box panel: a conductor from leftmost to rightmost E/W pins must route
+  around the middle MCB boxes (rule 17), not through their interiors.
+elements:
+  Panel:
+    type: Panel
+    label: Panel
+    openings: [S1]
+    opening_grid: {S: 1}
+    elements:
+      Left:
+        type: MCB
+        label: Left
+        terminal_grid: {WE: 1}
+        terminals:
+          E1: {label: '2', direction: out, role: phase}
+          W1: {label: '1', direction: in, role: phase}
+        view:
+          electrical: {x: 20.0, y: 80.0}
+      Mid_A:
+        type: MCB
+        label: Mid A
+        view:
+          electrical: {x: 120.0, y: 80.0}
+      Mid_B:
+        type: MCB
+        label: Mid B
+        view:
+          electrical: {x: 220.0, y: 80.0}
+      Right:
+        type: MCB
+        label: Right
+        terminal_grid: {WE: 1}
+        terminals:
+          E1: {label: '2', direction: out, role: phase}
+          W1: {label: '1', direction: in, role: phase}
+        view:
+          electrical: {x: 320.0, y: 80.0}
+    cables:
+      Link:
+        type: Conductor
+        section: 1.5 mm2
+        color: BN
+        from: Left.E1
+        to: Right.W1
+    view:
+      physical: {x: 40.0, y: 40.0, w: 520.0, h: 280.0}
+
+view:
+  physical:
+    x: 0.0
+    y: 0.0
+    page:
+      width: 640
+      height: 400
