@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.50.5] — 2026-08-04
+
+### Changed
+
+- Properties panel UX polish: ``type`` / ``subtype`` are now read-only, key
+  labels are localized, ``flip_ns`` / ``flip_we`` are shown as readable labels,
+  and ``install`` / ``mount`` use localized combo suggestions while preserving
+  canonical stored values.
+
 ## [0.50.4] — 2026-08-04
 
 ### Fixed

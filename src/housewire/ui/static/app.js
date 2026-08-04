@@ -7443,6 +7443,17 @@
   let propsFieldsBaseline = null;
   /** @type {Promise<void>|null} */
   let propsSavePromise = null;
+  let propsListSeq = 0;
+
+  function propsLabel(key) {
+    return t(`props.key.${key}`);
+  }
+
+  function propsValueLabel(group, value) {
+    const key = `props.${group}.${value}`;
+    const text = t(key);
+    return text === key ? String(value) : text;
+  }
 
   function readPropsFieldsFromPanel(meta) {
     /** @type {Record<string, string|boolean>} */
@@ -7488,8 +7499,9 @@
     const dt = document.createElement("dt");
     const dd = document.createElement("dd");
     const value = spec.value == null ? "" : String(spec.value);
+    const labelText = spec.label || propsLabel(spec.key);
     if (!spec.editable) {
-      dt.textContent = spec.key;
+      dt.textContent = labelText;
       const span = document.createElement("span");
       span.className = "props-readonly";
       span.textContent = value || "—";
@@ -7503,7 +7515,7 @@
       const dtLabel = document.createElement("label");
       dtLabel.className = "props-check-key";
       dtLabel.htmlFor = id;
-      dtLabel.textContent = spec.key;
+      dtLabel.textContent = labelText;
       dt.appendChild(dtLabel);
       const input = document.createElement("input");
       input.type = "checkbox";
@@ -7511,10 +7523,33 @@
       input.dataset.prop = spec.key;
       input.checked = Boolean(spec.value);
       label.appendChild(input);
-      label.appendChild(document.createTextNode(spec.checkLabel || "on"));
+      label.appendChild(document.createTextNode(spec.checkLabel || t("props.enabled")));
       dd.appendChild(label);
+    } else if (spec.combo) {
+      dt.textContent = labelText;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.dataset.prop = spec.key;
+      input.value = value;
+      input.spellcheck = false;
+      if (Array.isArray(spec.options) && spec.options.length) {
+        const listId = `prop-list-${spec.key}-${propsListSeq++}`;
+        const dl = document.createElement("datalist");
+        dl.id = listId;
+        for (const rawOpt of spec.options) {
+          const opt = String(rawOpt || "").trim();
+          if (!opt) continue;
+          const optionEl = document.createElement("option");
+          optionEl.value = opt;
+          optionEl.label = propsValueLabel(spec.combo, opt);
+          dl.appendChild(optionEl);
+        }
+        input.setAttribute("list", listId);
+        dd.appendChild(dl);
+      }
+      dd.appendChild(input);
     } else if (spec.multiline) {
-      dt.textContent = spec.key;
+      dt.textContent = labelText;
       const ta = document.createElement("textarea");
       ta.dataset.prop = spec.key;
       ta.value = value;
@@ -7522,7 +7557,7 @@
       ta.spellcheck = false;
       dd.appendChild(ta);
     } else {
-      dt.textContent = spec.key;
+      dt.textContent = labelText;
       const input = document.createElement("input");
       input.type = "text";
       input.dataset.prop = spec.key;
@@ -7786,12 +7821,12 @@
     appendPropsRow(meta, {
       key: "type",
       value: elem.type || "",
-      editable: true,
+      editable: false,
     });
     appendPropsRow(meta, {
       key: "subtype",
       value: elem.subtype || "",
-      editable: true,
+      editable: false,
     });
     appendPropsRow(meta, {
       key: "notes",
@@ -7804,12 +7839,14 @@
       value: Boolean(elem.flip_ns),
       editable: true,
       checkbox: true,
+      label: propsLabel("flipVertical"),
     });
     appendPropsRow(meta, {
       key: "flip_we",
       value: Boolean(elem.flip_we),
       editable: true,
       checkbox: true,
+      label: propsLabel("flipHorizontal"),
     });
     appendPropsRow(meta, {
       key: "terminals",
@@ -7956,22 +7993,26 @@
       appendPropsRow(meta, {
         key: "type",
         value: detail.type || "",
-        editable: true,
+        editable: false,
       });
       appendPropsRow(meta, {
         key: "subtype",
         value: detail.subtype || "",
-        editable: true,
+        editable: false,
       });
       appendPropsRow(meta, {
         key: "install",
         value: detail.install || "",
         editable: true,
+        combo: "install",
+        options: ["surface", "flush", "embedded"],
       });
       appendPropsRow(meta, {
         key: "mount",
         value: detail.mount || "",
         editable: true,
+        combo: "mount",
+        options: ["wall", "ceiling", "floor", "rail"],
       });
       appendPropsRow(meta, {
         key: "openings",
@@ -7994,12 +8035,14 @@
         value: Boolean(detail.flip_ns),
         editable: true,
         checkbox: true,
+        label: propsLabel("flipVertical"),
       });
       appendPropsRow(meta, {
         key: "flip_we",
         value: Boolean(detail.flip_we),
         editable: true,
         checkbox: true,
+        label: propsLabel("flipHorizontal"),
       });
       bindPropsEditors(meta);
       snapshotPropsBaseline(meta);
