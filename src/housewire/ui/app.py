@@ -315,7 +315,7 @@ def create_app(site_root: Path | None = None) -> Any:
         _set_request_locale(locale)
         types = {
             type_id: {
-                "id": type_id,
+                "type": type_id,
                 "kind": data.get("kind"),
                 "label": catalog_type_label(type_id, catalog=cat, locale=locale),
                 "description": catalog_type_description(
@@ -324,7 +324,7 @@ def create_app(site_root: Path | None = None) -> Any:
                 "subtypes": (
                     [
                         {
-                            "id": str(sub_id),
+                            "subtype": str(sub_id),
                             "label": catalog_type_label(
                                 type_id,
                                 catalog=cat,

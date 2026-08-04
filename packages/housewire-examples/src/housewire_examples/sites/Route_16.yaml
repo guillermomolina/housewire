@@ -85,13 +85,13 @@ cables:
     section: 1.5 mm2
   TubeE:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box.E1
     to: East.W1
     contains: [EastCable]
   TubeS:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box.S1
     to: South.N1
     contains: [SouthCable]

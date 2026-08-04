@@ -64,7 +64,7 @@ cables:
     section: 2.5 mm2
   Tube:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Panel.S1
     to: Box.N1
     contains: [Power, PE]

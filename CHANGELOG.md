@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.63.0] — 2026-08-04
+
+### Changed
+
+- Catalog type YAML field is ``type:`` (not ``id:``); ``/api/catalog`` returns
+  ``type`` / ``subtype`` keys. Loader still accepts legacy catalog ``id:``.
+- Closed subtypes use PascalCase keys (``IP40``, ``OneGang``, ``Power``,
+  ``Tube``, ``DC``, …); acronyms stay uppercase.
+
 ## [0.62.0] — 2026-08-04
 
 ### Added

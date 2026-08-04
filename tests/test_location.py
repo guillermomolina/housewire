@@ -21,7 +21,7 @@ class TestDirectoryLocation(unittest.TestCase):
         doc = _yaml.safe_load(
             "schema: house/v2\n"
             "type: JunctionBox\n"
-            "subtype: ip40\n"
+            "subtype: IP40\n"
             "notes: '100x100; mount: ceiling'\n"
             "elements:\n"
             "  Regleta:\n"
@@ -44,7 +44,7 @@ class TestDirectoryLocation(unittest.TestCase):
                 under=("Parking",),
                 type_id="JunctionBox",
                 label="Caja derivacion 1",
-                subtype="ip40",
+                subtype="IP40",
                 notes="100x100; mount: ceiling",
             )
             caja = get_place_node(doc, ("Parking", "Caja_derivacion_1"))
@@ -138,7 +138,7 @@ class TestDirectoryLocation(unittest.TestCase):
             cat = root / "catalog"
             cat.mkdir()
             (cat / "Socket.yaml").write_text(
-                "id: Socket\nicon: plug-zap\n", encoding="utf-8"
+                "type: Socket\nicon: plug-zap\n", encoding="utf-8"
             )
             merged = load_catalog(root)
             self.assertEqual(merged["Socket"]["icon"], "plug-zap")
@@ -187,7 +187,7 @@ schema: house/v2
 elements:
   Caja_1:
     type: JunctionBox
-    subtype: ip40
+    subtype: IP40
     notes: "mount: ceiling"
     elements:
       Regleta:
@@ -209,7 +209,7 @@ elements:
             doc,
             "MiCaja",
             type_id="JunctionBox",
-            subtype="ip40",
+            subtype="IP40",
             notes="mount: ceiling",
         )
         self.assertEqual(doc["elements"]["MiCaja"]["type"], "JunctionBox")

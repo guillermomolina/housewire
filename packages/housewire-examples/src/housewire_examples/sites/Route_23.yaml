@@ -68,13 +68,13 @@ cables:
     to: South/Strip.N1
   TubeH:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     contains: [H1]
     from: West.E1
     to: East.W1
   TubeV:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     contains: [V1]
     from: North.S1
     to: South.N1

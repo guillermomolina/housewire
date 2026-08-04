@@ -63,12 +63,12 @@ class TestNamingConvention(unittest.TestCase):
             "cables:\n"
             "  Linea_test_1:\n"
             "    type: Conductor\n"
-            "    subtype: power\n"
+            "    subtype: Power\n"
             "    section: '1.5 mm2'\n"
             "    color: BN\n"
             "  Linea_test:\n"
             "    type: Cable\n"
-            "    subtype: power\n"
+            "    subtype: Power\n"
             "    contains: [Linea_test_1]\n"
         )
         validate_house_tree(

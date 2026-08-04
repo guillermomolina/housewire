@@ -32,7 +32,7 @@ elements:
         elements:
           Switch:
             type: Switch
-            subtype: unipolar
+            subtype: Unipolar
             view:
               electrical: {x: 80.0, y: 20.0}
         cables: {}
@@ -58,7 +58,7 @@ elements:
         section: 1.5 mm2
       Tube:
         type: Conduit
-        subtype: tube
+        subtype: Tube
         from: JBox.E1
         to: SwitchBox.W1
         contains: [SwCable]

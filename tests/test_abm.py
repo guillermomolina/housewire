@@ -133,7 +133,7 @@ class TestABMCables(unittest.TestCase):
         doc = abm.load_editable(self.yaml, self.root)
         abm.add_cable(doc, "L_def")
         self.assertEqual(doc["cables"]["L_def"]["type"], "Conductor")
-        self.assertEqual(doc["cables"]["L_def"]["subtype"], "power")
+        self.assertEqual(doc["cables"]["L_def"]["subtype"], "Power")
         self.assertEqual(doc["cables"]["L_def"]["section"], "1.5 mm2")
         self.assertEqual(doc["cables"]["L_def"]["color"], "BN")
 

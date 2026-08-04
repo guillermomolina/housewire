@@ -124,7 +124,7 @@ elements:
     cables:
       Conducto_local:
         type: Conduit
-        subtype: tube
+        subtype: Tube
         from: Caja_A.E1
         to: Caja_B.W1
         contains: [Linea_cross]
@@ -142,7 +142,7 @@ cables:
     type: Cable
     contains: [Linea_cross_1]
     color: BK
-    subtype: power
+    subtype: Power
     section: 1.5 mm2
 """,
             [],
@@ -168,7 +168,7 @@ elements:
         type: Cable
         contains: [Linea_A_1]
         color: BK
-        subtype: power
+        subtype: Power
         section: 1.5 mm2
     elements:
       Box:
@@ -182,7 +182,7 @@ elements:
     cables:
       Conducto_B:
         type: Conduit
-        subtype: tube
+        subtype: Tube
         from: Box_B.N1
         to: Box_B.S1
         contains: [Linea_A]

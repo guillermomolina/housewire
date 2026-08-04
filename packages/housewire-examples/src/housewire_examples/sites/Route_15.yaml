@@ -71,7 +71,7 @@ cables:
     section: 1.5 mm2
   Tube:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Room_A/JBox.E1
     to: Room_B/JBox.W1
     contains: [Cable]

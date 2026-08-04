@@ -105,7 +105,7 @@ cables:
     to: Box_B/Socket.N1
   Tube_1:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box_A.E1
     to: Box_B.W1
     contains: [Run_1]
@@ -166,7 +166,7 @@ cables:
     section: 1.5 mm2
   Tube:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box_A.E1
     to: Box_B.W1
     contains: [Cable]
@@ -237,13 +237,13 @@ cables:
     to: Box_C/Socket.N1
   Tube_AB:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box_A.E1
     to: Box_B.W1
     contains: [AB]
   Tube_BC:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box_B.S1
     to: Box_C.N1
     contains: [BC]
@@ -284,7 +284,7 @@ def route_05() -> str:
         elements:
           Switch:
             type: Switch
-            subtype: unipolar
+            subtype: Unipolar
             view:
               electrical: {x: 80.0, y: 20.0}
         cables: {}
@@ -310,7 +310,7 @@ def route_05() -> str:
         section: 1.5 mm2
       Tube:
         type: Conduit
-        subtype: tube
+        subtype: Tube
         from: JBox.E1
         to: SwitchBox.W1
         contains: [SwCable]
@@ -390,7 +390,7 @@ def route_06() -> str:
         section: 1.5 mm2
       Tube:
         type: Conduit
-        subtype: tube
+        subtype: Tube
         from: JBox.N1
         to: Lamp.B1-1
         contains: [Cable, Pe]
@@ -461,13 +461,13 @@ cables:
     to: Box_C/Socket.N1
   Tube_B:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box_A.E1
     to: Box_B.W1
     contains: [To_B]
   Tube_C:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box_A.S1
     to: Box_C.N1
     contains: [To_C]
@@ -529,7 +529,7 @@ cables:
     section: 2.5 mm2
   Tube:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Panel.S1
     to: Box.N1
     contains: [Cable]
@@ -608,7 +608,7 @@ cables:
     section: 2.5 mm2
   Tube:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Panel.S1
     to: Box.N1
     contains: [Power, EarthCable]
@@ -682,7 +682,7 @@ cables:
     section: 2.5 mm2
   Tube:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Panel.S1
     to: Box.N1
     contains: [Power, PE]
@@ -752,13 +752,13 @@ cables:
     to: Box_C/Socket.N1
   T1:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box_A.E1
     to: Box_B.W1
     contains: [R1]
   T2:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box_A.E2
     to: Box_C.W1
     contains: [R2]
@@ -801,7 +801,7 @@ def route_12() -> str:
         elements:
           Switch:
             type: Switch
-            subtype: unipolar
+            subtype: Unipolar
             view:
               electrical: {x: 90.0, y: 20.0}
         cables: {}
@@ -868,13 +868,13 @@ def route_12() -> str:
         section: 1.5 mm2
       TubeSw:
         type: Conduit
-        subtype: tube
+        subtype: Tube
         from: JBox.E1
         to: SwitchBox.W1
         contains: [SwCable]
       TubeLp:
         type: Conduit
-        subtype: tube
+        subtype: Tube
         from: JBox.N1
         to: Lamp.B1-1
         contains: [LampCable, Lpe]
@@ -993,19 +993,19 @@ cables:
     to: End/Socket.N1
   Tube0:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Panel.S1
     to: JBox.N1
     contains: [Feed]
   Tube1:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: JBox.E1
     to: Mid.W1
     contains: [M1]
   Tube2:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Mid.E1
     to: End.W1
     contains: [M2]
@@ -1085,7 +1085,7 @@ cables:
     section: 1.5 mm2
   Tube:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Room_A/JBox.E1
     to: Room_B/JBox.W1
     contains: [Cable]
@@ -1179,13 +1179,13 @@ cables:
     section: 1.5 mm2
   TubeE:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box.E1
     to: East.W1
     contains: [EastCable]
   TubeS:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box.S1
     to: South.N1
     contains: [SouthCable]
@@ -1256,13 +1256,13 @@ cables:
     to: Box_C/Socket.N1
   Tube_B:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box_A.E1
     to: Box_B.W1
     contains: [Run_B]
   Tube_C:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box_A.E2
     to: Box_C.W1
     contains: [Run_C]
@@ -1368,19 +1368,19 @@ cables:
     to: Bot/Socket.N1
   T1:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Hub.E1
     to: Top.W1
     contains: [C1]
   T2:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Hub.E1
     to: Mid.W1
     contains: [C2]
   T3:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Hub.E1
     to: Bot.W1
     contains: [C3]

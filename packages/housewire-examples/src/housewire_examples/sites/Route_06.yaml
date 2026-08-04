@@ -69,7 +69,7 @@ elements:
         section: 1.5 mm2
       Tube:
         type: Conduit
-        subtype: tube
+        subtype: Tube
         from: JBox.N1
         to: Lamp.B1-1
         contains: [Cable, Pe]

@@ -65,6 +65,8 @@ def _normalize_install(raw: Any, *, context: str) -> str | None:
 def _catalog_defaults_for_subtype(
     type_def: dict[str, Any] | None, subtype: str | None
 ) -> dict[str, Any]:
+    from housewire.house import resolve_catalog_subtype_key
+
     defaults: dict[str, Any] = {}
     if not isinstance(type_def, dict):
         return defaults
@@ -73,9 +75,10 @@ def _catalog_defaults_for_subtype(
         defaults.update(copy.deepcopy(base))
     if subtype is None:
         return defaults
+    key = resolve_catalog_subtype_key(type_def, subtype)
     subtypes = type_def.get("subtypes")
-    if isinstance(subtypes, dict):
-        sub = subtypes.get(str(subtype))
+    if isinstance(subtypes, dict) and key is not None:
+        sub = subtypes.get(str(key))
         if isinstance(sub, dict):
             sub_defaults = sub.get("defaults")
             if isinstance(sub_defaults, dict):
@@ -147,9 +150,12 @@ def expand_conduit(
             f"(catalog kind={type_def.get('kind')!r})"
         )
 
-    defaults = _catalog_defaults_for_subtype(
+    from housewire.house import resolve_catalog_subtype_key
+
+    subtype = resolve_catalog_subtype_key(
         type_def, str(subtype) if subtype is not None else None
     )
+    defaults = _catalog_defaults_for_subtype(type_def, subtype)
     out: dict[str, Any] = {"type": resolved_type}
     if subtype is not None:
         out["subtype"] = str(subtype)
@@ -193,9 +199,12 @@ def expand_cable(
     if type_def is None and type_id != DEFAULT_CABLE_TYPE:
         raise ValueError(f"Unknown cable type in catalog: {type_id}")
 
-    defaults = _catalog_defaults_for_subtype(
+    from housewire.house import resolve_catalog_subtype_key
+
+    subtype = resolve_catalog_subtype_key(
         type_def, str(subtype) if subtype is not None else None
     )
+    defaults = _catalog_defaults_for_subtype(type_def, subtype)
     out: dict[str, Any] = {"type": type_id}
     if subtype is not None:
         out["subtype"] = str(subtype)
@@ -253,9 +262,12 @@ def expand_conductor(
     if type_def is None and type_id != DEFAULT_CONDUCTOR_TYPE:
         raise ValueError(f"Unknown conductor type in catalog: {type_id}")
 
-    defaults = _catalog_defaults_for_subtype(
+    from housewire.house import resolve_catalog_subtype_key
+
+    subtype = resolve_catalog_subtype_key(
         type_def, str(subtype) if subtype is not None else None
     )
+    defaults = _catalog_defaults_for_subtype(type_def, subtype)
     out: dict[str, Any] = {"type": type_id}
     if subtype is not None:
         out["subtype"] = str(subtype)

@@ -18,7 +18,7 @@ Each catalog type may declare a Lucide icon id (kebab-case):
 ```yaml
 # types/Socket.yaml (in housewire-catalog)
 kind: element_type
-id: Socket
+type: Socket
 icon: plug
 ```
 
@@ -34,7 +34,7 @@ Site overlay example (only customize the icon):
 
 ```yaml
 # $SITE/catalog/Socket.yaml
-id: Socket
+type: Socket
 icon: plug-zap
 ```
 
@@ -52,7 +52,7 @@ Values are Lucide icon ids shipped in the UI sprite (``plug``, ``zap``,
 cables:
   Conducto_a_Enchufe_1:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Caja_derivacion_4.W2
     to: Enchufe_1.N1
     contains: [Funda_a_Enchufe_1]
@@ -117,17 +117,19 @@ conduits. Canvas and outline prefer ``name`` → id; inspector shows all three.
 
 | Field | Role | Form | Example |
 |-------|------|------|---------|
-| **`type`** | Catalog family (product class) | PascalCase catalog id | `JunctionBox`, `Cable`, `Conduit` |
-| **`subtype`** | Catalog variant of that family | Closed key from that type’s `subtypes:` map | `ip40`, `1-gang`, `power`, `M20` |
+| **`type`** | Catalog family (product class) | PascalCase | `JunctionBox`, `Cable`, `Conduit` |
+| **`subtype`** | Catalog variant of that family | PascalCase key from that type’s `subtypes:` map (acronyms stay uppercase: `IP40`, `DC`, `M20`) | `IP40`, `OneGang`, `Power` |
 
 - **Not free text.** Prose belongs in `name` / `label` / `notes` (e.g. «Cuadro
   General», box size «100×100»).
-- Do **not** capitalize subtype like type; keep kebab-case / technical tokens.
+- Catalog type YAML uses field ``type:`` (not ``id:``) for the family name;
+  instance ``type:`` points at that same token. Loader still accepts legacy
+  catalog ``id:`` in site overlays.
 - If the catalog type declares `subtypes:`, `subtype` must be one of those keys
   (omitted → `defaults.subtype` when set). Unknown values are rejected.
 - If the type has **no** `subtypes:` map, `subtype` must be omitted.
-- Subtype rows may set `defaults:` (e.g. JunctionBox `ip65` → `install: surface`,
-  `ip40` → `install: flush`). Instance `install` / `mount` still override.
+- Subtype rows may set `defaults:` (e.g. JunctionBox `IP65` → `install: surface`,
+  `IP40` → `install: flush`). Instance `install` / `mount` still override.
 
 - **Id**: e.g. `Caja_derivacion_4`. No spaces. Used in refs.
 - **`name`**: e.g. `CD4` (canvas).
@@ -148,7 +150,7 @@ elements:
         type: JunctionBox
         name: JB1
         label: "Junction box 1"
-        subtype: ip40
+        subtype: IP40
         notes: "100x100"
         mount: ceiling
         opening_grid: { NS: 2, WE: 2, B: 1 }
@@ -232,7 +234,7 @@ It does not change the local opening frame.
 
 ```yaml
 type: DeviceBox
-subtype: 1-gang          # 1-gang | 2-gang | 3-gang
+subtype: OneGang          # OneGang | TwoGang | ThreeGang
 install: flush
 mount: wall
 facing: S
@@ -247,11 +249,11 @@ Several mechanisms in one box (same entry opening):
 
 ```yaml
 type: DeviceBox
-subtype: 2-gang
+subtype: TwoGang
 openings: [N1]
 elements:
   Socket: { type: Socket, subtype: Schuko }
-  Switch: { type: Switch, subtype: unipolar }
+  Switch: { type: Switch, subtype: Unipolar }
 ```
 
 Shell (no hand-editing required):
@@ -260,7 +262,7 @@ Shell (no hand-editing required):
 set install flush
 set openings=[N1]
 set opening_grid.N=1
-add location Interruptor_1 --type DeviceBox --subtype 1-gang \
+add location Interruptor_1 --type DeviceBox --subtype OneGang \
   --set install=flush --set mount=wall --set openings=[N1]
 set --element Switch notes "…"
 ```
@@ -274,7 +276,7 @@ Typical opening: `B1-1` (back toward the slab) or a contour face if the tube arr
 
 ```yaml
 type: LightPoint
-subtype: ceiling-hole
+subtype: CeilingHole
 install: surface
 mount: ceiling
 opening_grid:
@@ -358,7 +360,7 @@ Regleta_1:
 | `Intercom` | Door phone / video door phone (`N1`/`N2`, labels +/−) |
 | `TerminalStrip` | Strip; pins `N1`…`Nn` with `NS` grid |
 | `Socket` | Schuko (`N1`/`N2`/`N3`, labels L/PE/N) |
-| `Switch` | Switch mechanism; subtypes `unipolar`, `crossover`, `intermediate` |
+| `Switch` | Switch mechanism; subtypes `Unipolar`, `Crossover`, `Intermediate` |
 | `Luminaire` | Lamp / pendant (default `N1`–`N3`) |
 | `Relay` | Smart relay; face-cell pins (see catalog subtypes) |
 
@@ -366,9 +368,9 @@ Regleta_1:
 
 | subtype | Terminals |
 |---------|-----------|
-| `unipolar` (default) | `N1`, `S1` (labels 1, 2) |
-| `crossover` (3-way) | `N1`/`N2`/`N3` (labels C, 1, 2) |
-| `intermediate` | `N1`/`S1`/`N2`/`S2` |
+| `Unipolar` (default) | `N1`, `S1` (labels 1, 2) |
+| `Crossover` (3-way) | `N1`/`N2`/`N3` (labels C, 1, 2) |
+| `Intermediate` | `N1`/`S1`/`N2`/`S2` |
 
 ## Openings (`JunctionBox`, `DeviceBox`, `LightPoint`, `Panel`)
 
@@ -395,7 +397,7 @@ in the box frame, not geographic north.
 
 ```yaml
 type: JunctionBox
-subtype: ip40
+subtype: IP40
 notes: "100x100"
 mount: ceiling          # ceiling | wall | floor
 # facing: N             # wall: direction F faces (into the room)
@@ -497,7 +499,7 @@ pend N1 S1
 cables:
   Conducto_a_Caja_2:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: .N1
     to: Caja_derivacion_2.S1
     contains: [Linea_a_Caja_derivacion_2]
@@ -521,13 +523,13 @@ One dictionary. Kind is distinguished by `type`:
 
 Shared fields: `name`, `label`, `notes`, optional `section`, `color` (singular),
 optional `install` (`surface` | `flush`) on Conduit and Cable.
-Catalog subtypes remain (`tube`, `power`, …).
+Catalog subtypes remain (`Tube`, `Power`, …).
 
 ```yaml
 cables:
   Conducto_1:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Caja_A.E1
     to: Caja_B.N1
     contains: [Funda_BK, PE]

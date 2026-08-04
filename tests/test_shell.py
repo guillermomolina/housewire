@@ -164,7 +164,7 @@ class TestShellDispatcher(unittest.TestCase):
         self.assertEqual(cd["from"], ".N1")
         self.assertEqual(cd["to"], "Caja_derivacion_2.S1")
         self.assertEqual(cd["contains"], ["Linea_Z"])
-        self.assertEqual(cd["subtype"], "tube")
+        self.assertEqual(cd["subtype"], "Tube")
         self.assertEqual(cd["notes"], "paso")
 
     def test_pend_via_shell(self) -> None:
@@ -248,7 +248,7 @@ class TestShellDispatcher(unittest.TestCase):
         s = self._session()
         code = self._run(
             s,
-            'add location "Caja X" --type JunctionBox --subtype ip40 --notes "mount: wall"',
+            'add location "Caja X" --type JunctionBox --subtype IP40 --notes "mount: wall"',
         )
         self.assertEqual(code, 0)
         self.assertTrue(s.is_dirty())
@@ -258,7 +258,7 @@ class TestShellDispatcher(unittest.TestCase):
         disk = abm.load_editable(s.active_path(), self.root)
         caja = get_place_node(disk, ("Caja_X",))
         self.assertEqual(caja["type"], "JunctionBox")
-        self.assertEqual(caja["subtype"], "ip40")
+        self.assertEqual(caja["subtype"], "IP40")
         self.assertEqual(caja["label"], "Caja X")
 
     def test_show_includes_location(self) -> None:

@@ -7765,6 +7765,16 @@
     return text === key ? String(value) : text;
   }
 
+  /** Catalog type key from ``/api/catalog`` row (``type``; legacy ``id``). */
+  function catalogTypeKey(row) {
+    return String((row && (row.type || row.id)) || "").trim();
+  }
+
+  /** Catalog subtype key from subtype row (``subtype``; legacy ``id``). */
+  function catalogSubtypeKey(sub) {
+    return String((sub && (sub.subtype || sub.id)) || "").trim();
+  }
+
   /** Closed subtype keys + localized labels from ``/api/catalog``. */
   function catalogSubtypeSelect(typeId) {
     const row = (paletteCatalog && typeId && paletteCatalog[typeId]) || null;
@@ -7776,7 +7786,7 @@
     const optionLabels = {};
     const options = [];
     for (const sub of subs) {
-      const id = String((sub && sub.id) || "").trim();
+      const id = catalogSubtypeKey(sub);
       if (!id) continue;
       options.push(id);
       optionLabels[id] = String((sub && sub.label) || id);
@@ -10980,11 +10990,11 @@
         sel.innerHTML = "";
         for (const r of rows) {
           const opt = document.createElement("option");
-          opt.value = r.id || "";
-          opt.textContent = r.label || r.id || "";
+          opt.value = catalogTypeKey(r);
+          opt.textContent = r.label || catalogTypeKey(r);
           sel.appendChild(opt);
         }
-        if (prev && rows.some((r) => r.id === prev)) sel.value = prev;
+        if (prev && rows.some((r) => catalogTypeKey(r) === prev)) sel.value = prev;
       }
       const typeId = sel ? sel.value : prev;
       const subSel = document.getElementById("insert-subtype-id");
@@ -11001,13 +11011,13 @@
       const typeEl = document.getElementById("catalog-type-label");
       const subEl = document.getElementById("catalog-subtype-label");
       const descEl = document.getElementById("catalog-description");
-      if (typeEl) typeEl.value = String(row.label || row.id || "").trim();
+      if (typeEl) typeEl.value = String(row.label || catalogTypeKey(row) || "").trim();
       if (descEl) descEl.value = row.description || "";
       const subtypeId = pendingCatalogInsert.subtype || "";
       let subtypeLabel = "—";
       if (subtypeId) {
-        const hit = subtypeRows(typeId).find((x) => String(x.id) === String(subtypeId));
-        subtypeLabel = (hit && (hit.label || hit.id)) || String(subtypeId);
+        const hit = subtypeRows(typeId).find((x) => catalogSubtypeKey(x) === String(subtypeId));
+        subtypeLabel = (hit && (hit.label || catalogSubtypeKey(hit))) || String(subtypeId);
       }
       if (subEl) subEl.value = subtypeLabel;
     }
@@ -11019,11 +11029,11 @@
       if (typeClass && row.kind !== typeClass) return false;
       const needle = String(q || "").trim().toLowerCase();
       if (!needle) return true;
-      const hay = `${row.id || ""} ${row.label || ""} ${row.description || ""}`.toLowerCase();
+      const hay = `${catalogTypeKey(row)} ${row.label || ""} ${row.description || ""}`.toLowerCase();
       return hay.includes(needle);
     });
     rows.sort((a, b) =>
-      String(a.label || a.id || "").localeCompare(String(b.label || b.id || ""))
+      String(a.label || catalogTypeKey(a) || "").localeCompare(String(b.label || catalogTypeKey(b) || ""))
     );
     return rows;
   }
@@ -11049,8 +11059,8 @@
     }
     for (const row of rows) {
       const opt = document.createElement("option");
-      opt.value = row.id || "";
-      opt.textContent = row.label || row.id || "";
+      opt.value = catalogSubtypeKey(row);
+      opt.textContent = row.label || catalogSubtypeKey(row);
       sel.appendChild(opt);
     }
     sel.disabled = false;
@@ -11354,12 +11364,12 @@
     const tokenEl = document.getElementById("catalog-id-token");
     const nameEl = document.getElementById("catalog-name");
     const labelEl = document.getElementById("catalog-label");
-    const localized = String(row.label || row.id || "").trim() || "NewItem";
+    const localized = String(row.label || catalogTypeKey(row) || "").trim() || "NewItem";
     if (typeEl) typeEl.value = localized;
     if (descEl) descEl.value = row.description || "";
     let subtypeLabel = "—";
     if (subtypeId) {
-      const hit = subtypeRows(row.id || "").find((x) => String(x.id) === String(subtypeId));
+      const hit = subtypeRows(catalogTypeKey(row)).find((x) => catalogSubtypeKey(x) === String(subtypeId));
       subtypeLabel = (hit && (hit.label || hit.id)) || String(subtypeId);
     }
     if (subEl) subEl.value = subtypeLabel;
@@ -11501,16 +11511,16 @@
         if (icon) btn.appendChild(icon);
         const label = document.createElement("span");
         label.className = "palette-item-label";
-        label.textContent = row.label || row.id || "";
+        label.textContent = row.label || catalogTypeKey(row);
         btn.appendChild(label);
         const idEl = document.createElement("span");
         idEl.className = "palette-item-id";
-        idEl.textContent = row.id || "";
+        idEl.textContent = catalogTypeKey(row);
         btn.appendChild(idEl);
-        btn.title = [row.label || row.id, row.id].filter(Boolean).join(" · ");
+        btn.title = [row.label || catalogTypeKey(row), catalogTypeKey(row)].filter(Boolean).join(" · ");
         btn.addEventListener("click", () => {
           pendingCatalogInsert = {
-            type_id: row.id || "",
+            type_id: catalogTypeKey(row),
             subtype: "",
             source_kind: row.kind || "",
           };
@@ -11671,11 +11681,11 @@
     sel.innerHTML = "";
     for (const row of rows) {
       const opt = document.createElement("option");
-      opt.value = row.id || "";
-      opt.textContent = row.label || row.id || "";
+      opt.value = catalogTypeKey(row);
+      opt.textContent = row.label || catalogTypeKey(row);
       sel.appendChild(opt);
     }
-    const first = rows[0] && rows[0].id;
+    const first = rows[0] && catalogTypeKey(rows[0]);
     if (first) {
       sel.value = first;
       renderSubtypeSelect(first, "");

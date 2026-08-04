@@ -182,7 +182,7 @@ class TestShellDirtyBuffer(unittest.TestCase):
         self._run(s, "cd zona_a")
         code = self._run(
             s,
-            "add location Mech --type DeviceBox --subtype 1-gang "
+            "add location Mech --type DeviceBox --subtype OneGang "
             "--set install=surface --set mount=wall "
             "--set openings=[N1] --set opening_grid.N=1",
         )
@@ -206,7 +206,7 @@ class TestShellDirtyBuffer(unittest.TestCase):
     def test_set_element_field(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
-        self._run(s, "add element SW --type Switch --subtype unipolar")
+        self._run(s, "add element SW --type Switch --subtype Unipolar")
         code = self._run(s, "set --element SW notes cableado")
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()

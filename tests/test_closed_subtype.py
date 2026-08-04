@@ -16,7 +16,7 @@ class TestClosedCatalogSubtype(unittest.TestCase):
         doc = _yaml.safe_load(
             "schema: house/v2\n"
             "type: JunctionBox\n"
-            "subtype: ip40\n"
+            "subtype: IP40\n"
             "elements: {}\n"
         )
         validate_house_tree(
@@ -58,11 +58,11 @@ class TestClosedCatalogSubtype(unittest.TestCase):
             "elements:\n"
             "  A:\n"
             "    type: JunctionBox\n"
-            "    subtype: ip40\n"
+            "    subtype: IP40\n"
             "    openings: [N1]\n"
             "  B:\n"
             "    type: JunctionBox\n"
-            "    subtype: ip40\n"
+            "    subtype: IP40\n"
             "    openings: [N1]\n"
             "cables:\n"
             "  T1:\n"

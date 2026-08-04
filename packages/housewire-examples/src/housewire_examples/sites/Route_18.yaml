@@ -18,8 +18,7 @@ elements:
     elements:
       Acometida:
         type: Supply
-        subtype: Entrada red
-        name: Acometida
+                name: Acometida
         label: Acometida
         notes: Entrada de red (fase + neutro)
         view:
@@ -28,8 +27,7 @@ elements:
             y: 20.0
       Jabalina:
         type: EarthElectrode
-        subtype: Jabalina
-        name: Jabalina
+                name: Jabalina
         label: Jabalina
         notes: Toma de tierra / jabalina
         view:
@@ -49,7 +47,7 @@ elements:
     elements:
       Caja_derivacion:
         type: JunctionBox
-        subtype: 100x100 IP40
+        subtype: IP40
         label: Caja derivacion
         install: surface
         mount: wall
@@ -99,7 +97,7 @@ elements:
         name: Caja derivacion
       Interruptor:
         type: DeviceBox
-        subtype: 1-gang
+        subtype: OneGang
         label: Interruptor
         install: surface
         mount: wall
@@ -111,7 +109,7 @@ elements:
         elements:
           Switch:
             type: Switch
-            subtype: unipolar
+            subtype: Unipolar
             name: Switch
             label: Interruptor
             notes: 1 ← fase permanente; 2 → fase conmutada
@@ -127,7 +125,7 @@ elements:
         name: Interruptor
       Lampara:
         type: LightPoint
-        subtype: ceiling-hole
+        subtype: CeilingHole
         label: Lampara
         install: surface
         mount: ceiling
@@ -172,7 +170,7 @@ elements:
         type: Conductor
         section: 1.5 mm2
         color: BN
-        subtype: power
+        subtype: Power
         notes: Fase permanente + fase conmutada al interruptor
         from: Caja_derivacion/Regleta.N1
         to: Interruptor/Switch.N1
@@ -180,7 +178,7 @@ elements:
         type: Conductor
         section: 1.5 mm2
         color: BK
-        subtype: power
+        subtype: Power
         notes: Fase permanente + fase conmutada al interruptor
         from: Interruptor/Switch.S1
         to: Caja_derivacion/Regleta.N2
@@ -190,7 +188,7 @@ elements:
         - Linea_interruptor_1
         - Linea_interruptor_2
         color: BK
-        subtype: power
+        subtype: Power
         section: 1.5 mm2
         name: Linea interruptor
         notes: Fase permanente + fase conmutada al interruptor
@@ -198,7 +196,7 @@ elements:
         type: Conductor
         section: 1.5 mm2
         color: BK
-        subtype: power
+        subtype: Power
         notes: Fase conmutada + neutro a la lampara
         from: Caja_derivacion/Regleta.N2
         to: Lampara/Luminaire.N1
@@ -206,7 +204,7 @@ elements:
         type: Conductor
         section: 1.5 mm2
         color: BU
-        subtype: power
+        subtype: Power
         notes: Fase conmutada + neutro a la lampara
         from: Caja_derivacion/Regleta.N3
         to: Lampara/Luminaire.N3
@@ -214,7 +212,7 @@ elements:
         type: Conductor
         section: 1.5 mm2
         color: GNYE
-        subtype: power
+        subtype: Power
         notes: Fase conmutada + neutro a la lampara
         from: Caja_derivacion/Regleta.N4
         to: Lampara/Luminaire.N2
@@ -224,13 +222,13 @@ elements:
         - Linea_lampara_1
         - Linea_lampara_2
         color: WH
-        subtype: power
+        subtype: Power
         section: 1.5 mm2
         name: Linea lampara
         notes: Fase conmutada + neutro a la lampara
       Conducto_interruptor:
         type: Conduit
-        subtype: tube
+        subtype: Tube
         name: Conducto interruptor
         from: Caja_derivacion.E1
         to: Interruptor.N1
@@ -239,7 +237,7 @@ elements:
         color: BK
       Conducto_lampara:
         type: Conduit
-        subtype: tube
+        subtype: Tube
         name: Conducto lampara
         from: Caja_derivacion.N1
         to: Lampara.B1-1
@@ -260,7 +258,7 @@ cables:
     type: Conductor
     section: 2.5 mm2
     color: BN
-    subtype: power
+    subtype: Power
     notes: Fase + neutro desde acometida a regleta
     from: Cuadro_General/Acometida.S1
     to: Habitacion/Caja_derivacion/Regleta.N1
@@ -268,7 +266,7 @@ cables:
     type: Conductor
     section: 2.5 mm2
     color: BU
-    subtype: power
+    subtype: Power
     notes: Fase + neutro desde acometida a regleta
     from: Cuadro_General/Acometida.S2
     to: Habitacion/Caja_derivacion/Regleta.N3
@@ -278,7 +276,7 @@ cables:
     - Linea_acometida_1
     - Linea_acometida_2
     color: BK
-    subtype: power
+    subtype: Power
     section: 2.5 mm2
     name: Linea acometida
     notes: Fase + neutro desde acometida a regleta
@@ -286,7 +284,7 @@ cables:
     type: Conductor
     section: 2.5 mm2
     color: GNYE
-    subtype: earth
+    subtype: Earth
     notes: Tierra jabalina a regleta PE
     from: Cuadro_General/Jabalina.S1
     to: Habitacion/Caja_derivacion/Regleta.N4
@@ -295,13 +293,13 @@ cables:
     contains:
     - Linea_tierra_1
     color: BK
-    subtype: earth
+    subtype: Earth
     section: 2.5 mm2
     name: Linea tierra
     notes: Tierra jabalina a regleta PE
   Conducto_cuadro_a_caja:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     name: Conducto cuadro a caja
     notes: Alimentacion y tierra del cuadro a la caja de derivacion
     from: Cuadro_General.S1

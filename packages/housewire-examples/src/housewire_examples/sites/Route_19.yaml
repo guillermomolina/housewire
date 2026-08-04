@@ -81,19 +81,19 @@ cables:
     to: Bot/Socket.N1
   T1:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Hub.E1
     to: Top.W1
     contains: [C1]
   T2:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Hub.E1
     to: Mid.W1
     contains: [C2]
   T3:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Hub.E1
     to: Bot.W1
     contains: [C3]

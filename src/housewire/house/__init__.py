@@ -368,7 +368,10 @@ def _load_catalog_dir(root: Path) -> dict[str, dict[str, Any]]:
             data = yaml.safe_load(handle) or {}
         if not isinstance(data, dict):
             raise ValueError(f"Invalid catalog (not a map): {path}")
-        type_id = str(data.get("id") or path.stem)
+        type_id = str(data.get("type") or data.get("id") or path.stem)
+        # Prefer catalog field ``type`` (``id`` remains accepted for overlays).
+        if "type" not in data and data.get("id") is not None:
+            data = {**data, "type": type_id}
         catalog[type_id] = data
     return catalog
 
@@ -391,7 +394,8 @@ def load_catalog(
 
     Base catalog comes from ``HOUSEWIRE_CATALOG``, a named tree under
     ``catalogs/<name>``, the site document ``catalog:`` field, or the installed
-    ``housewire-catalog`` package. Site files overlay base entries by ``id``
+    ``housewire-catalog`` package. Site files overlay base entries by ``type``
+    (legacy catalog ``id`` still accepted when loading).
     (shallow key merge).
     """
     types_dir = resolve_catalog_types_dir(catalog, site_root=site_root)
@@ -523,7 +527,8 @@ def _catalog_type_localized_text(
     if subtype is not None:
         subtypes = type_def.get("subtypes")
         if isinstance(subtypes, dict):
-            sub = subtypes.get(str(subtype))
+            key = resolve_catalog_subtype_key(type_def, subtype)
+            sub = subtypes.get(str(key)) if key is not None else None
             if isinstance(sub, dict):
                 picked = _pick(sub)
                 if picked:
@@ -546,9 +551,10 @@ def _catalog_defaults_for_subtype(
         defaults.update(copy.deepcopy(base))
     if subtype is None:
         return defaults
+    key = resolve_catalog_subtype_key(type_def, subtype)
     subtypes = type_def.get("subtypes")
-    if isinstance(subtypes, dict):
-        sub = subtypes.get(str(subtype))
+    if isinstance(subtypes, dict) and key is not None:
+        sub = subtypes.get(str(key))
         if isinstance(sub, dict):
             sub_defaults = sub.get("defaults")
             if isinstance(sub_defaults, dict):
@@ -613,6 +619,34 @@ def _pin_id(pin: object) -> object:
     return text
 
 
+
+def resolve_catalog_subtype_key(
+    type_def: dict[str, Any] | None, subtype: object | None
+) -> str | None:
+    """Return the canonical subtype key, or None if empty.
+
+    Exact match wins; otherwise a case-insensitive match against the type's
+    ``subtypes:`` map (helps legacy ``dc`` → ``DC``).
+    """
+    if subtype is None:
+        return None
+    text = str(subtype).strip()
+    if not text:
+        return None
+    if not isinstance(type_def, dict):
+        return text
+    subtypes = type_def.get("subtypes")
+    if not isinstance(subtypes, dict) or not subtypes:
+        return text
+    if text in subtypes:
+        return text
+    lower = text.lower()
+    for key in subtypes:
+        if str(key).lower() == lower:
+            return str(key)
+    return text
+
+
 def validate_catalog_subtype(
     type_id: str,
     entry: dict[str, Any],
@@ -633,7 +667,9 @@ def validate_catalog_subtype(
         default = str(defaults.get("subtype")).strip() or None
 
     if isinstance(subtypes, dict) and subtypes:
-        effective = str(raw).strip() if has_raw else default
+        effective = resolve_catalog_subtype_key(
+            type_def, str(raw).strip() if has_raw else default
+        )
         allowed = ", ".join(sorted(str(k) for k in subtypes.keys()))
         if not effective:
             raise ValueError(
@@ -685,6 +721,7 @@ def _validate_element(
     subtype = element.get("subtype")
     if subtype is None and isinstance(type_def.get("defaults"), dict):
         subtype = type_def["defaults"].get("subtype")
+    subtype = resolve_catalog_subtype_key(type_def, subtype)
     type_terminals = type_def.get("terminals") or {}
     subtypes = type_def.get("subtypes") if isinstance(type_def, dict) else None
     if isinstance(subtypes, dict) and subtype is not None:

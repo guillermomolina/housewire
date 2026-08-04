@@ -22,20 +22,20 @@ class TestCableCatalog(unittest.TestCase):
         self.assertEqual(self.catalog["Conductor"]["kind"], "conductor_type")
 
     def test_expand_cable_sheath_defaults(self) -> None:
-        out = expand_cable({"type": "Cable", "subtype": "earth"}, self.catalog)
+        out = expand_cable({"type": "Cable", "subtype": "Earth"}, self.catalog)
         self.assertEqual(out["type"], "Cable")
-        self.assertEqual(out["subtype"], "earth")
+        self.assertEqual(out["subtype"], "Earth")
         self.assertEqual(out["color"], "GNYE")
 
     def test_expand_cable_legacy_kind(self) -> None:
-        out = expand_cable({"kind": "dc"}, self.catalog)
+        out = expand_cable({"kind": "DC"}, self.catalog)
         self.assertEqual(out["type"], "Cable")
-        self.assertEqual(out["subtype"], "dc")
+        self.assertEqual(out["subtype"], "DC")
         self.assertEqual(out["color"], "BK")
 
     def test_expand_conductor_defaults(self) -> None:
         out = expand_conductor(
-            {"type": "Conductor", "subtype": "earth"}, self.catalog
+            {"type": "Conductor", "subtype": "Earth"}, self.catalog
         )
         self.assertEqual(out["color"], "GNYE")
         self.assertEqual(out["section"], "1.5 mm2")
@@ -53,7 +53,7 @@ class TestCableCatalog(unittest.TestCase):
         conduit = expand_conduit(
             {
                 "type": "Conduit",
-                "subtype": "tube",
+                "subtype": "Tube",
                 "from": "A.N1",
                 "to": "B.S1",
                 "contains": ["L1"],
@@ -92,7 +92,7 @@ class TestCableCatalog(unittest.TestCase):
             "cables": {
                 "L1_1": {
                     "type": "Conductor",
-                    "subtype": "power",
+                    "subtype": "Power",
                     "section": "1.5 mm2",
                     "color": "BN",
                     "from": "A.N1",
@@ -100,7 +100,7 @@ class TestCableCatalog(unittest.TestCase):
                 },
                 "L1": {
                     "type": "Cable",
-                    "subtype": "power",
+                    "subtype": "Power",
                     "contains": ["L1_1"],
                     "label": "Feed",
                 },
@@ -113,7 +113,7 @@ class TestCableCatalog(unittest.TestCase):
     def test_cable_type_rejected_as_element(self) -> None:
         doc = {
             "schema": "house/v2",
-            "elements": {"Bad": {"type": "Cable", "subtype": "power"}},
+            "elements": {"Bad": {"type": "Cable", "subtype": "Power"}},
         }
         with self.assertRaises(ValueError) as ctx:
             validate_house_tree(

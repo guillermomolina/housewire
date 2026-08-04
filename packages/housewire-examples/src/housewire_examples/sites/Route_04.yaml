@@ -61,13 +61,13 @@ cables:
     to: Box_C/Socket.N1
   Tube_AB:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box_A.E1
     to: Box_B.W1
     contains: [AB]
   Tube_BC:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box_B.S1
     to: Box_C.N1
     contains: [BC]

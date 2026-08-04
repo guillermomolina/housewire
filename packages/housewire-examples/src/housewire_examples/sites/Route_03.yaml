@@ -51,7 +51,7 @@ cables:
     section: 1.5 mm2
   Tube:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Box_A.E1
     to: Box_B.W1
     contains: [Cable]

@@ -91,19 +91,19 @@ cables:
     to: End/Socket.N1
   Tube0:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Panel.S1
     to: JBox.N1
     contains: [Feed]
   Tube1:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: JBox.E1
     to: Mid.W1
     contains: [M1]
   Tube2:
     type: Conduit
-    subtype: tube
+    subtype: Tube
     from: Mid.E1
     to: End.W1
     contains: [M2]

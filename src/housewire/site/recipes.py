@@ -20,7 +20,7 @@ SOCKET_TERMINALS = ["N1", "N2", "N3"]
 SOCKET_ELEMENT = "Socket"
 SOCKET_DEFAULT_TO_OPENING = "N1"
 SOCKET_PLACE_TYPE = "DeviceBox"
-SOCKET_PLACE_SUBTYPE = "1-gang"
+SOCKET_PLACE_SUBTYPE = "OneGang"
 SOCKET_ELEMENT_SUBTYPE = "Schuko"
 
 # --- Lamp (LightPoint + Luminaire) ----------------------------------------------
@@ -31,7 +31,7 @@ LAMP_DEFAULT_SECTION = "1.5 mm2"
 LAMP_DEFAULT_TO_OPENING = "B1-1"
 LAMP_ELEMENT = "Luminaire"
 LAMP_PLACE_TYPE = "LightPoint"
-LAMP_PLACE_SUBTYPE = "ceiling-hole"
+LAMP_PLACE_SUBTYPE = "CeilingHole"
 LAMP_DEFAULT_TO_PINS_3 = ["N1", "N2", "N3"]
 LAMP_DEFAULT_TO_PINS_2 = ["N1", "N3"]
 

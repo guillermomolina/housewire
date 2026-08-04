@@ -31,8 +31,8 @@ _PEND_CABLE_RE = re.compile(r"^PEND_Linea_(\d+)$")
 
 DEFAULT_CABLE_SECTION = "1.5 mm2"
 DEFAULT_CONDUCTOR_COLOR = "BN"
-DEFAULT_CABLE_SUBTYPE = "power"
-DEFAULT_CONDUIT_SUBTYPE = "tube"
+DEFAULT_CABLE_SUBTYPE = "Power"
+DEFAULT_CONDUIT_SUBTYPE = "Tube"
 DEFAULT_SHEATH_COLOR = "BK"
 
 # Structural keys — use add/rm instead of set.
