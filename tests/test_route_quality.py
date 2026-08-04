@@ -562,6 +562,9 @@ class TestConductorPaletteContrast(unittest.TestCase):
         self.assertFalse(
             needs_nested_contrast_rim(bk, wh, inner_code="BK", outer_code="WH")
         )
+        # Black tube vs light canvas → no rim; vs dark canvas → rim.
+        self.assertFalse(needs_nested_contrast_rim(bk, "#f6f8fa"))
+        self.assertTrue(needs_nested_contrast_rim(bk, "#1a1d21"))
 
     def test_similar_luminance_nesting_needs_rim_without_matching_codes(
         self,

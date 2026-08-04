@@ -541,9 +541,12 @@ uppercase in YAML (`BN`, not `bn`). The UI loads the same table from
 A Cable sheath’s own `color:` (e.g. `WH`) is the **jacket** tint on the canvas
 (`jacket_color` on the physical cable edge). A Conduit’s own `color:` (e.g.
 `BK`) is painted on the **tube**. Conductor `color:` values are the individual
-strand strokes. Dark tubes get a thin light high-contrast rim (and light tubes
-a dark rim). The sheath jacket follows the continuous tube path, slightly
-narrower, so the conduit color remains visible.
+strand strokes. A thin high-contrast rim is drawn **only** when a stroke would
+blend into its container (same IEC code or similar luminance) — e.g. a black
+jacket in a black conduit, or a black tube on a dark canvas. A black tube on a
+light canvas, or a black jacket in a white conduit, needs no rim. The sheath
+jacket follows the continuous tube path, slightly narrower, so the conduit
+color remains visible.
 
 | Code | Color | Typical use |
 |------|-------|-------------|

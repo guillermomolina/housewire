@@ -4225,9 +4225,32 @@
   }
 
   /** Lane count for tube stroke; ignore cable packing when electrical is off. */
-  function tubeLaneCount(edge) {
+  function tubeLaneCount(edge, layout) {
     if (!showElectrical) return 1;
+    if (layout && typeof layout.conduitStrandCount === "function") {
+      const packed = layout.conduitStrandCount(edge.id);
+      if (packed > 0) return packed;
+    }
     return conduitLaneHint(edge, graph?.cable_edges || []);
+  }
+
+  /** How many strand lanes ride a conduit edge (for road width). */
+  function conduitLaneHint(edge, cableEdges) {
+    const cid = edge.id;
+    const contains = edge.contains || [];
+    let strands = 0;
+    for (const ce of cableEdges || []) {
+      const hops = ce.conduit_hops || [];
+      const on =
+        (ce.conduit && ce.conduit === cid) ||
+        hops.some((h) => h.conduit === cid) ||
+        (ce.id && contains.includes(ce.id));
+      if (!on) continue;
+      strands += cableWireIndices(ce).length;
+    }
+    // Do not use contains.length: after loose-conductor modeling it can exceed
+    // packed lanes (or include ids not painted), which fattened empty tubes.
+    return Math.max(strands, 1);
   }
 
   /** Local (element-space) anchor for a terminal cell id. */
@@ -4655,17 +4678,52 @@
   }
 
   /**
-   * Nested content in a same-color (or similar-luminance) container needs the
-   * thin high-contrast rim — e.g. BK jacket inside a BK conduit.
+   * Nested content needs the thin high-contrast rim only when it would vanish
+   * into its container — e.g. BK jacket inside a BK conduit, or BK strand on a
+   * dark canvas when there is no jacket/conduit color. Distinct IEC codes (BK
+   * in WH) or a dark tube on a light canvas do not need the rim.
    */
   function needsNestedContrastRim(innerCode, outerCode, innerCss, outerCss) {
     const ic = String(innerCode || "").trim().toUpperCase();
     const oc = String(outerCode || "").trim().toUpperCase();
-    // Distinct IEC codes are already separable; only same-code nesting
-    // (or unknown codes with similar luminance) needs the rim.
     if (ic && oc) return ic === oc;
     if (!innerCss || !outerCss) return false;
     return Math.abs(relativeLuminance(innerCss) - relativeLuminance(outerCss)) < 0.28;
+  }
+
+  /** Canvas / viewport background (theme ``--bg``) for rim decisions. */
+  function canvasBackgroundCss() {
+    try {
+      const raw = getComputedStyle(document.documentElement)
+        .getPropertyValue("--bg")
+        .trim();
+      if (raw && /^#([0-9a-fA-F]{6})$/.test(raw)) return raw;
+    } catch {
+      /* ignore */
+    }
+    const theme = document.documentElement.getAttribute("data-theme");
+    return theme === "light" ? "#f6f8fa" : "#1a1d21";
+  }
+
+  /**
+   * Immediate visual container for a cable stroke: jacket, else conduit color,
+   * else the canvas background (loose wire with no sheath / uncolored tube).
+   */
+  function strokeContainerForCableEdge(edge) {
+    if (edge && edge.jacket_color) {
+      const code = String(edge.jacket_color).trim().toUpperCase();
+      return { code, css: wireColorCss(code) };
+    }
+    const conduitCode = conduitColorForCableEdge(edge);
+    if (conduitCode) {
+      return { code: conduitCode, css: wireColorCss(conduitCode) };
+    }
+    return { code: null, css: canvasBackgroundCss() };
+  }
+
+  /** Conduit tube rim only when the tube would blend into the canvas. */
+  function needsTubeContrastRim(tubeCss) {
+    return needsNestedContrastRim(null, null, tubeCss, canvasBackgroundCss());
   }
 
   /** Conduit color code for a cable edge (first hop / single conduit). */
@@ -4691,6 +4749,19 @@
     rim.style.strokeLinejoin = "round";
     parent.appendChild(rim);
     return rim;
+  }
+
+  function applyTubeOutlineVisibility(outlineEl, tubeCss, roadW) {
+    if (!outlineEl) return;
+    if (needsTubeContrastRim(tubeCss)) {
+      outlineEl.style.stroke = contrastOutlineCss(tubeCss);
+      outlineEl.style.strokeWidth = String(roadW + OUTLINE_EXTRA);
+      outlineEl.style.strokeOpacity = "0.95";
+      outlineEl.style.display = "";
+    } else {
+      outlineEl.style.strokeOpacity = "0";
+      outlineEl.style.display = "none";
+    }
   }
 
   function cableWireIndices(edge) {
@@ -4997,8 +5068,11 @@
 
     /** @type {Map<string, {index:number, count:number}>} */
     const conduitLaneMap = new Map();
+    /** @type {Map<string, number>} */
+    const conduitStrandCounts = new Map();
     packLaneGroups(byConduit, (item, index, count, cid) => {
       conduitLaneMap.set(`${cid}|${item.key}|${item.wi}`, { index, count });
+      conduitStrandCounts.set(cid, count);
     });
 
     /** @type {Map<string, {index:number, count:number}>} */
@@ -5025,6 +5099,11 @@
             count: 1,
           }
         );
+      },
+      /** Packed strand count for a conduit highway (0 if nothing rides it). */
+      conduitStrandCount(conduitId) {
+        if (!conduitId) return 0;
+        return conduitStrandCounts.get(String(conduitId)) || 0;
       },
       /** Cables attached to one face-cell (``elemId|cell:N1``) or face bucket. */
       cellCableCount(elemId, cellId) {
@@ -6657,23 +6736,6 @@
     return exteriorPathD(fullD, leafObs) || "";
   }
 
-  /** How many strand lanes ride a conduit edge (for road width). */
-  function conduitLaneHint(edge, cableEdges) {
-    const cid = edge.id;
-    const contains = edge.contains || [];
-    let strands = 0;
-    for (const ce of cableEdges || []) {
-      const hops = ce.conduit_hops || [];
-      const on =
-        (ce.conduit && ce.conduit === cid) ||
-        hops.some((h) => h.conduit === cid) ||
-        (ce.id && contains.includes(ce.id));
-      if (!on) continue;
-      strands += cableWireIndices(ce).length;
-    }
-    return Math.max(strands, contains.length, 1);
-  }
-
   function appendCableVisuals(cablesG, edge, placeById, elemById, occupied, layout) {
     const colors = edge.colors || [];
     const wireIdx = cableWireIndices(edge);
@@ -6698,14 +6760,16 @@
           if (off.length < 2) continue;
           const jd = pointsToPathD(off);
           const jwStroke = Math.max(3, jw);
-          const conduitCode = conduitColorForCableEdge(edge);
-          const conduitCss = conduitCode ? wireColorCss(conduitCode) : null;
+          const container = strokeContainerForCableEdge({
+            ...edge,
+            jacket_color: null,
+          });
           if (
             needsNestedContrastRim(
               edge.jacket_color,
-              conduitCode,
+              container.code,
               jacketCss,
-              conduitCss
+              container.css
             )
           ) {
             const rim = appendContrastRim(
@@ -6782,15 +6846,13 @@
     const paintStrand = (d, code, title) => {
       if (!d) return;
       const key = String(code || "").toUpperCase();
-      // Immediate container: jacket if present, else the conduit tube.
-      const containerCode =
-        edge.jacket_color || conduitColorForCableEdge(edge) || null;
-      const containerCss = containerCode ? wireColorCss(containerCode) : null;
+      // Immediate container: jacket if present, else conduit, else canvas.
+      const container = strokeContainerForCableEdge(edge);
       if (key === "GNYE") {
         // Green-yellow PE: green base + yellow dashes (IEC look).
         const gnCss = wireColorCss("GN");
         if (
-          needsNestedContrastRim("GN", containerCode, gnCss, containerCss)
+          needsNestedContrastRim("GN", container.code, gnCss, container.css)
         ) {
           const rim = appendContrastRim(
             cablesG,
@@ -6819,7 +6881,7 @@
       }
       const fillCss = wireColorCss(code);
       if (
-        needsNestedContrastRim(key, containerCode, fillCss, containerCss)
+        needsNestedContrastRim(key, container.code, fillCss, container.css)
       ) {
         const rim = appendContrastRim(
           cablesG,
@@ -6913,10 +6975,13 @@
     try {
       /** @type {ReturnType<typeof createOccupiedIndex>} */
       const occupied = createOccupiedIndex();
+      const layoutForTubes = showElectrical
+        ? buildCableLayout(graph.cable_edges || [], elemById, byId)
+        : null;
       if (!skipConduits) {
         for (const item of edgePaths) {
           const n = (item.edge.contains || []).length;
-          const lanes = tubeLaneCount(item.edge);
+          const lanes = tubeLaneCount(item.edge, layoutForTubes);
           const roadW = conduitRoadWidth(n, lanes);
           const half = roadW / 2;
           const routed = edgePathD(item.edge, byId, occupied, half);
@@ -6928,10 +6993,8 @@
             const outline = item.paths[0];
             const tube = item.paths[1] || item.paths[0];
             const tubeCss = wireColorCss(item.edge.color || "GY");
-            const outlineCss = contrastOutlineCss(tubeCss);
             if (outline && item.paths.length > 1) {
-              outline.style.strokeWidth = String(roadW + OUTLINE_EXTRA);
-              outline.style.stroke = outlineCss;
+              applyTubeOutlineVisibility(outline, tubeCss, roadW);
             }
             if (tube) {
               tube.style.strokeWidth = String(roadW);
@@ -6945,7 +7008,7 @@
         for (const item of edgePaths) {
           if (!item.d) continue;
           const n = (item.edge.contains || []).length;
-          const lanes = tubeLaneCount(item.edge);
+          const lanes = tubeLaneCount(item.edge, layoutForTubes);
           const roadW = conduitRoadWidth(n, lanes);
           const half = roadW / 2;
           for (const sub of pathDToSubpaths(item.d)) {
@@ -6958,7 +7021,9 @@
       if (cablesG && showElectrical) {
         cablesG.innerHTML = "";
         cablePaths = [];
-        const layout = buildCableLayout(graph.cable_edges || [], elemById, byId);
+        const layout =
+          layoutForTubes ||
+          buildCableLayout(graph.cable_edges || [], elemById, byId);
         for (const edge of graph.cable_edges || []) {
           const item = appendCableVisuals(
             cablesG,
@@ -7555,7 +7620,7 @@
       const occupied = createOccupiedIndex();
       for (const edge of graph.edges) {
         const n = (edge.contains || []).length;
-        const lanes = tubeLaneCount(edge);
+        const lanes = tubeLaneCount(edge, layout);
         const roadW = conduitRoadWidth(n, lanes);
         const half = roadW / 2;
         const routed = edgePathD(edge, byId, occupied, half);
@@ -7569,15 +7634,12 @@
           : String(edgeName || "");
         const displayD = conduitDisplayD(d, byId, edge);
         const tubeCss = wireColorCss(edge.color || "GY");
-        const outlineCss = contrastOutlineCss(tubeCss);
-        // High-contrast rim around the conduit (esp. black tubes on dark UI).
+        // Rim only when the tube would blend into the canvas background.
         const tubeOutline = el("path", {
           class: "edge-tube-outline",
           d: displayD,
         });
-        tubeOutline.style.stroke = outlineCss;
-        tubeOutline.style.strokeWidth = String(roadW + OUTLINE_EXTRA);
-        tubeOutline.style.strokeOpacity = "0.95";
+        applyTubeOutlineVisibility(tubeOutline, tubeCss, roadW);
         const tube = el("path", { class: "edge-tube", d: displayD });
         tube.style.stroke = tubeCss;
         tube.style.strokeWidth = String(roadW);
@@ -10466,6 +10528,8 @@
       /* ignore quota / private mode */
     }
     syncThemeMenu();
+    // Tube/strand contrast rims depend on canvas ``--bg``.
+    if (graph) render();
   }
 
   const menuView = document.getElementById("menu-view");

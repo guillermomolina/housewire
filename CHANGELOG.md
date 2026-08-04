@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.60.1] — 2026-08-04
+
+### Fixed
+
+- High-contrast rims only when a stroke blends into its container or the
+  canvas (e.g. BK in BK tube / dark bg); not for BK tubes on light theme or
+  BK jackets in WH conduits.
+- Conduit road width uses packed strand lanes, not ``contains.length`` (which
+  fattened tubes after loose-conductor modeling).
+
 ## [0.60.0] — 2026-08-04
 
 ### Added
