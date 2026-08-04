@@ -7443,8 +7443,6 @@
   let propsFieldsBaseline = null;
   /** @type {Promise<void>|null} */
   let propsSavePromise = null;
-  let propsListSeq = 0;
-
   function propsLabel(key) {
     return t(`props.key.${key}`);
   }
@@ -7499,7 +7497,9 @@
     const dt = document.createElement("dt");
     const dd = document.createElement("dd");
     const value = spec.value == null ? "" : String(spec.value);
-    const labelText = spec.label || propsLabel(spec.key);
+    const labelKey = spec.labelKey || spec.key;
+    const labelText = spec.label || propsLabel(labelKey);
+    dt.dataset.labelKey = labelKey;
     if (!spec.editable) {
       dt.textContent = labelText;
       const span = document.createElement("span");
@@ -7527,25 +7527,28 @@
       dd.appendChild(label);
     } else if (spec.combo) {
       dt.textContent = labelText;
-      const input = document.createElement("input");
-      input.type = "text";
+      const input = document.createElement("select");
       input.dataset.prop = spec.key;
-      input.value = value;
-      input.spellcheck = false;
       if (Array.isArray(spec.options) && spec.options.length) {
-        const listId = `prop-list-${spec.key}-${propsListSeq++}`;
-        const dl = document.createElement("datalist");
-        dl.id = listId;
+        let known = false;
         for (const rawOpt of spec.options) {
           const opt = String(rawOpt || "").trim();
           if (!opt) continue;
           const optionEl = document.createElement("option");
           optionEl.value = opt;
-          optionEl.label = propsValueLabel(spec.combo, opt);
-          dl.appendChild(optionEl);
+          optionEl.textContent = propsValueLabel(spec.combo, opt);
+          if (opt === value) known = true;
+          input.appendChild(optionEl);
         }
-        input.setAttribute("list", listId);
-        dd.appendChild(dl);
+        if (value && !known) {
+          const optionEl = document.createElement("option");
+          optionEl.value = value;
+          optionEl.textContent = value;
+          input.appendChild(optionEl);
+        }
+      }
+      if (value) {
+        input.value = value;
       }
       dd.appendChild(input);
     } else if (spec.multiline) {
@@ -7599,6 +7602,27 @@
           ev.preventDefault();
           el.blur();
         }
+      });
+    });
+  }
+
+  function relabelPropertyPanel() {
+    const meta = document.getElementById("props-meta");
+    if (!meta) return;
+    meta.querySelectorAll("dt[data-label-key]").forEach((el) => {
+      const key = el.getAttribute("data-label-key");
+      if (!key) return;
+      const checkLabel = el.querySelector(".props-check-key");
+      if (checkLabel) checkLabel.textContent = propsLabel(key);
+      else el.textContent = propsLabel(key);
+    });
+    meta.querySelectorAll("select[data-prop]").forEach((el) => {
+      const key = el.getAttribute("data-prop");
+      if (!key) return;
+      const group = key === "install" ? "install" : key === "mount" ? "mount" : null;
+      if (!group) return;
+      [...el.options].forEach((opt) => {
+        opt.textContent = propsValueLabel(group, opt.value);
       });
     });
   }
@@ -7839,14 +7863,14 @@
       value: Boolean(elem.flip_ns),
       editable: true,
       checkbox: true,
-      label: propsLabel("flipVertical"),
+      labelKey: "flipVertical",
     });
     appendPropsRow(meta, {
       key: "flip_we",
       value: Boolean(elem.flip_we),
       editable: true,
       checkbox: true,
-      label: propsLabel("flipHorizontal"),
+      labelKey: "flipHorizontal",
     });
     appendPropsRow(meta, {
       key: "terminals",
@@ -8005,14 +8029,14 @@
         value: detail.install || "",
         editable: true,
         combo: "install",
-        options: ["surface", "flush", "embedded"],
+        options: ["surface", "in_wall"],
       });
       appendPropsRow(meta, {
         key: "mount",
         value: detail.mount || "",
         editable: true,
         combo: "mount",
-        options: ["wall", "ceiling", "floor", "rail"],
+        options: ["wall", "ceiling", "floor"],
       });
       appendPropsRow(meta, {
         key: "openings",
@@ -8035,14 +8059,14 @@
         value: Boolean(detail.flip_ns),
         editable: true,
         checkbox: true,
-        label: propsLabel("flipVertical"),
+        labelKey: "flipVertical",
       });
       appendPropsRow(meta, {
         key: "flip_we",
         value: Boolean(detail.flip_we),
         editable: true,
         checkbox: true,
-        label: propsLabel("flipHorizontal"),
+        labelKey: "flipHorizontal",
       });
       bindPropsEditors(meta);
       snapshotPropsBaseline(meta);
@@ -9862,6 +9886,7 @@
   async function setUiLocale(next) {
     I18n.setLocale(next);
     syncLanguageMenu();
+    relabelPropertyPanel();
     const aboutModal = document.getElementById("about-modal");
     if (aboutModal && !aboutModal.classList.contains("hidden")) {
       openAboutModal().catch((err) => setStatus(String(err.message || err)));

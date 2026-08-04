@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.50.6] — 2026-08-04
+
+### Changed
+
+- Properties labels now switch language immediately in the panel when toggling
+  UI locale.
+- ``install`` is now a closed select with canonical values ``surface`` and
+  ``in_wall`` (localized labels in UI).
+- ``mount`` is now a closed select with canonical values ``wall``,
+  ``ceiling``, and ``floor`` (localized labels in UI).
+
 ## [0.50.5] — 2026-08-04
 
 ### Changed
