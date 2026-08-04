@@ -9736,6 +9736,93 @@
     }
   });
 
+  const PANEL_MIN_W = 180;
+  const PANEL_MAX_FRAC = 0.45;
+  const PANEL_DEFAULT_OUTLINE_W = 260;
+  const PANEL_DEFAULT_INSPECTOR_W = 320;
+
+  function workspaceBounds() {
+    const ws = document.querySelector(".workspace");
+    return ws ? ws.getBoundingClientRect() : null;
+  }
+
+  function clampPanelWidth(raw) {
+    const bounds = workspaceBounds();
+    const maxW = bounds ? Math.max(PANEL_MIN_W, bounds.width * PANEL_MAX_FRAC) : 420;
+    return Math.min(maxW, Math.max(PANEL_MIN_W, Number(raw) || PANEL_MIN_W));
+  }
+
+  function applyPanelWidths() {
+    const tree = document.getElementById("nav-tree");
+    const side = document.getElementById("side-panel");
+    if (!tree || !side) return;
+    try {
+      const ow = Number(sessionStorage.getItem("housewire-outline-width")) || 0;
+      const sw = Number(sessionStorage.getItem("housewire-inspector-width")) || 0;
+      tree.style.width = `${clampPanelWidth(ow || PANEL_DEFAULT_OUTLINE_W)}px`;
+      side.style.width = `${clampPanelWidth(sw || PANEL_DEFAULT_INSPECTOR_W)}px`;
+    } catch {
+      tree.style.width = `${PANEL_DEFAULT_OUTLINE_W}px`;
+      side.style.width = `${PANEL_DEFAULT_INSPECTOR_W}px`;
+    }
+  }
+
+  function setPanelWidth(which, widthPx) {
+    const tree = document.getElementById("nav-tree");
+    const side = document.getElementById("side-panel");
+    const w = clampPanelWidth(widthPx);
+    if (which === "outline" && tree) {
+      tree.style.width = `${w}px`;
+      try {
+        sessionStorage.setItem("housewire-outline-width", String(Math.round(w)));
+      } catch {
+        /* ignore */
+      }
+    }
+    if (which === "inspector" && side) {
+      side.style.width = `${w}px`;
+      try {
+        sessionStorage.setItem("housewire-inspector-width", String(Math.round(w)));
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  function syncPanelResizers() {
+    const tree = document.getElementById("nav-tree");
+    const side = document.getElementById("side-panel");
+    const ro = document.getElementById("resizer-outline");
+    const rs = document.getElementById("resizer-inspector");
+    if (ro && tree) ro.classList.toggle("hidden", tree.classList.contains("collapsed"));
+    if (rs && side) rs.classList.toggle("hidden", side.classList.contains("collapsed"));
+  }
+
+  function bindPanelResizeDrag() {
+    const ro = document.getElementById("resizer-outline");
+    const rs = document.getElementById("resizer-inspector");
+    const onStart = (which, ev) => {
+      ev.preventDefault();
+      const bounds = workspaceBounds();
+      if (!bounds) return;
+      const move = (mev) => {
+        const x = mev.clientX;
+        if (which === "outline") setPanelWidth("outline", x - bounds.left);
+        else setPanelWidth("inspector", bounds.right - x);
+      };
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        document.body.style.cursor = "";
+      };
+      document.body.style.cursor = "ew-resize";
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up, { once: true });
+    };
+    ro?.addEventListener("pointerdown", (ev) => onStart("outline", ev));
+    rs?.addEventListener("pointerdown", (ev) => onStart("inspector", ev));
+  }
+
   function setSidePanelCollapsed(which, collapsed) {
     const tree = document.getElementById("nav-tree");
     const side = document.getElementById("side-panel");
@@ -9765,6 +9852,7 @@
         /* ignore */
       }
     }
+    syncPanelResizers();
   }
 
   document.getElementById("btn-collapse-outline")?.addEventListener("click", () => {
@@ -9790,6 +9878,12 @@
   } catch {
     /* ignore */
   }
+  applyPanelWidths();
+  bindPanelResizeDrag();
+  syncPanelResizers();
+  window.addEventListener("resize", () => {
+    applyPanelWidths();
+  });
 
   document.querySelectorAll(".menu-btn").forEach((btn) => {
     btn.addEventListener("click", (ev) => {

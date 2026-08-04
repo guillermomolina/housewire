@@ -956,6 +956,30 @@ button:hover {
   display: none;
 }
 
+.panel-resizer {
+  width: 8px;
+  flex: 0 0 8px;
+  cursor: ew-resize;
+  background: transparent;
+  position: relative;
+}
+
+.panel-resizer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+
+.panel-resizer:hover::after {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.panel-resizer.hidden {
+  display: none;
+}
+
 .outline-tree {
   display: flex;
   flex-direction: column;

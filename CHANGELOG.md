@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.51.0] — 2026-08-04
+
+### Added
+
+- Draggable splitters to resize the Outline and Properties side panels, with
+  widths persisted in session storage.
+
 ## [0.50.10] — 2026-08-04
 
 ### Changed
