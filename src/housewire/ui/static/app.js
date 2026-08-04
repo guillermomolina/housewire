@@ -547,11 +547,58 @@
   }
 
   /**
-   * Paste target place: siblings of the selection (same as elements), or the
-   * current canvas when nothing is selected (paste into the open location).
+   * Shared parent site id from clipboard item paths (full site paths).
+   * Used when pasting elements with an empty selection so they return to their
+   * box while the canvas is a selectable ancestor (e.g. floor).
+   */
+  function clipboardSharedParentSiteId(payload) {
+    const items = (payload && payload.items) || [];
+    if (!items.length) return null;
+    const parents = [];
+    for (const it of items) {
+      const path = it.path;
+      if (!Array.isArray(path) || !path.length) {
+        parents.push(".");
+        continue;
+      }
+      parents.push(path.length === 1 ? "." : path.slice(0, -1).join("/"));
+    }
+    const uniq = [...new Set(parents)];
+    return uniq.length === 1 ? uniq[0] : null;
+  }
+
+  function siteIdUnderCanvas(siteId, canvasId) {
+    if (!siteId) return false;
+    if (!canvasId || canvasId === ".") return true;
+    return siteId === canvasId || siteId.startsWith(`${canvasId}/`);
+  }
+
+  function clipboardHasOnlyElements(payload) {
+    const items = (payload && payload.items) || [];
+    return items.length > 0 && items.every((it) => it && it.kind === "element");
+  }
+
+  /**
+   * Paste target place, or null if selection is ambiguous.
+   *
+   * - Selected place(s) + element clipboard → paste *into* that place
+   * - Selected place(s) + place clipboard → paste as *siblings* (common parent)
+   * - Selected element(s) → common parent (siblings)
+   * - Empty selection → canvas, or original element parent when still under canvas
    */
   function resolvePasteParentSiteId() {
-    if (!selectedIds.size) return locationId || ".";
+    const onlyElems = clipboardHasOnlyElements(editClipboard);
+
+    if (!selectedIds.size) {
+      if (onlyElems) {
+        const fromClip = clipboardSharedParentSiteId(editClipboard);
+        if (fromClip && siteIdUnderCanvas(fromClip, locationId)) {
+          return fromClip;
+        }
+      }
+      return locationId || ".";
+    }
+
     const placeSites = [];
     const elemParents = [];
     const placeById = Object.fromEntries(
@@ -576,11 +623,20 @@
       }
     }
     if (placeSites.length && elemParents.length) return null;
+
     if (placeSites.length) {
+      if (onlyElems) {
+        // Drop elements into the selected container(s).
+        const uniq = [...new Set(placeSites)];
+        if (uniq.length !== 1) return null;
+        return uniq[0];
+      }
+      // Places: paste as siblings of the selection.
       const parents = [...new Set(placeSites.map(parentSiteIdOf))];
       if (parents.length !== 1) return null;
       return parents[0];
     }
+
     if (elemParents.length) {
       const uniq = [...new Set(elemParents)];
       if (uniq.length !== 1) return null;

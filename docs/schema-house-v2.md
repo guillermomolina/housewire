@@ -635,9 +635,13 @@ selection scope as Delete (places/elements). Clipboard is in-browser memory.
   conductors become open-run stubs on the selected side; broken conduits are
   omitted.
 - **Cut** packs then cascade-deletes in one undo step.
-- **Paste** inserts as a **sibling** of the selection (under the common parent
-  of selected places/elements). With nothing selected, pastes into the current
-  canvas location. Colliding sibling ids rename
+- **Paste** destinations:
+  - **Places** on the clipboard: as siblings of the selection (or into the
+    current canvas when nothing is selected).
+  - **Elements** on the clipboard: into a selected place, or back into their
+    original parent when pasting with an empty selection under that canvas;
+    as siblings when another element is selected.
+  Colliding sibling ids rename
   (`Interruptor` → `Interruptor_1`, `Interruptor_1` → `Interruptor_2`).
 - Outline siblings use **natural sort** (`Interruptor_2` before `Interruptor_10`).
 

@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.48.4] — 2026-08-04
+
+### Fixed
+
+- Paste **elements** into a selected container (and back into their box when
+  pasting with an empty selection on a parent canvas). Place clipboard items
+  still paste as siblings.
+
 ## [0.48.3] — 2026-08-04
 
 ### Fixed
