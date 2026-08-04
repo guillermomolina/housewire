@@ -7989,6 +7989,49 @@
     return occ;
   }
 
+  function applyFaceCellTitle(btn) {
+    const id = btn.dataset.cellId || "";
+    const key = btn.dataset.titleKey || "props.face.free";
+    btn.title = id ? `${id} — ${t(key)}` : t(key);
+  }
+
+  function applyFaceEditorSummary(el) {
+    const faces = el.dataset.faces || "";
+    if (!faces) {
+      el.textContent = t("props.face.summaryEmpty");
+      return;
+    }
+    el.textContent = t("props.face.summary", {
+      faces,
+      used: el.dataset.used || "0",
+      total: el.dataset.total || "0",
+    });
+  }
+
+  function applyFaceUsedOf(el) {
+    const used = el.dataset.used;
+    const total = el.dataset.total;
+    if (!used || !total) {
+      el.textContent = "";
+      return;
+    }
+    el.textContent = t("props.face.usedOf", { used, total });
+  }
+
+  function relabelFaceEditor(meta) {
+    const editor = meta.querySelector(".props-face-editor");
+    if (!editor) return;
+    const summary = editor.querySelector(".props-face-summary");
+    if (summary) applyFaceEditorSummary(summary);
+    editor.querySelectorAll(".props-face-count[data-used]").forEach((el) => {
+      applyFaceUsedOf(el);
+    });
+    editor.querySelectorAll(".props-face-chip[data-title-key]").forEach((el) => {
+      applyFaceCellTitle(el);
+    });
+    // Number inputs use data-i18n-title / data-i18n-aria (applyDomTranslations).
+  }
+
   /**
    * Props block: compact face summary + accordion editors.
    * Side faces use a 1-row strip; F/B use a row×col matrix (id = Face{row}-{col}).
@@ -8058,7 +8101,7 @@
       return { used: n, total: ids.length };
     }
 
-    function overallSummaryText() {
+    function overallSummaryParts() {
       const parts = [];
       let usedTotal = 0;
       let capTotal = 0;
@@ -8070,12 +8113,21 @@
         capTotal += total;
         parts.push(`${face}:${faceSizeLabel(face, cur)}`);
       }
-      if (!parts.length) return t("props.face.summaryEmpty");
-      return t("props.face.summary", {
-        faces: parts.join(" · "),
-        used: String(usedTotal),
-        total: String(capTotal),
-      });
+      return { faces: parts.join(" · "), used: usedTotal, total: capTotal };
+    }
+
+    function syncSummaryEl() {
+      const parts = overallSummaryParts();
+      if (!parts.faces) {
+        delete summary.dataset.faces;
+        delete summary.dataset.used;
+        delete summary.dataset.total;
+      } else {
+        summary.dataset.faces = parts.faces;
+        summary.dataset.used = String(parts.used);
+        summary.dataset.total = String(parts.total);
+      }
+      applyFaceEditorSummary(summary);
     }
 
     function toggleCell(id) {
@@ -8094,21 +8146,22 @@
       scheduleSaveProps();
     }
 
+    function cellTitleKey(id) {
+      if (occupied.has(id)) return "props.face.occupied";
+      if (used.has(id)) return "props.face.used";
+      return "props.face.free";
+    }
+
     function makeCellButton(id, label) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "props-face-chip";
       btn.textContent = label;
       btn.dataset.cellId = id;
+      btn.dataset.titleKey = cellTitleKey(id);
       if (used.has(id)) btn.classList.add("is-used");
       if (occupied.has(id)) btn.classList.add("is-occupied");
-      btn.title = `${id} — ${
-        occupied.has(id)
-          ? t("props.face.occupied")
-          : used.has(id)
-            ? t("props.face.used")
-            : t("props.face.free")
-      }`;
+      applyFaceCellTitle(btn);
       btn.addEventListener("click", () => toggleCell(id));
       return btn;
     }
@@ -8130,7 +8183,7 @@
     facesHost.className = "props-face-list";
 
     function renderFaces() {
-      summary.textContent = overallSummaryText();
+      syncSummaryEl();
       facesHost.innerHTML = "";
       for (const face of FACE_ORDER) {
         const isPlane = face === "F" || face === "B";
@@ -8156,8 +8209,11 @@
         size.textContent = faceSizeLabel(face, cur);
         const count = document.createElement("span");
         count.className = "props-face-count";
-        count.textContent =
-          total > 0 ? t("props.face.usedOf", { used: String(u), total: String(total) }) : "";
+        if (total > 0) {
+          count.dataset.used = String(u);
+          count.dataset.total = String(total);
+          applyFaceUsedOf(count);
+        }
         sum.appendChild(name);
         sum.appendChild(size);
         sum.appendChild(count);
@@ -8174,9 +8230,12 @@
         colsInput.min = "0";
         colsInput.max = "24";
         colsInput.value = String(cur[0] || 0);
-        colsInput.title = isPlane ? t("props.face.cols") : t("props.face.count");
+        const colsKey = isPlane ? "props.face.cols" : "props.face.count";
         colsInput.className = "props-face-num";
-        colsInput.setAttribute("aria-label", colsInput.title);
+        colsInput.setAttribute("data-i18n-title", colsKey);
+        colsInput.setAttribute("data-i18n-aria", colsKey);
+        colsInput.title = t(colsKey);
+        colsInput.setAttribute("aria-label", t(colsKey));
 
         /** @type {HTMLInputElement|null} */
         let rowsInput = null;
@@ -8211,9 +8270,11 @@
           rowsInput.min = "0";
           rowsInput.max = "24";
           rowsInput.value = String(cur[1] || 0);
-          rowsInput.title = t("props.face.rows");
           rowsInput.className = "props-face-num";
-          rowsInput.setAttribute("aria-label", rowsInput.title);
+          rowsInput.setAttribute("data-i18n-title", "props.face.rows");
+          rowsInput.setAttribute("data-i18n-aria", "props.face.rows");
+          rowsInput.title = t("props.face.rows");
+          rowsInput.setAttribute("aria-label", t("props.face.rows"));
           rowsInput.addEventListener("change", () => {
             colsInput.dispatchEvent(new Event("change"));
           });
@@ -8417,6 +8478,7 @@
         opt.textContent = propsValueLabel(group, opt.value);
       });
     });
+    relabelFaceEditor(meta);
   }
 
   /** Apply flip flags to the in-memory graph for immediate canvas feedback. */

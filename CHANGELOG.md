@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.66.1] — 2026-08-04
+
+### Fixed
+
+- Openings/terminals cell hover titles and face summaries relabel when the UI
+  language changes.
+
 ## [0.66.0] — 2026-08-04
 
 ### Changed
