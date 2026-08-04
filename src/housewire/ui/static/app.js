@@ -7990,7 +7990,8 @@
   }
 
   /**
-   * Props block: per-face capacity + cell chips for openings or terminals.
+   * Props block: compact face summary + accordion editors.
+   * Side faces use a 1-row strip; F/B use a row×col matrix (id = Face{row}-{col}).
    * @param {HTMLElement} meta
    * @param {{
    *   mode: "openings"|"terminals",
@@ -8015,6 +8016,8 @@
     /** @type {Record<string, object>} */
     const usedMeta = { ...(opts.usedMap || {}) };
     const occupied = opts.occupied || new Set();
+    /** @type {Set<string>} */
+    const openFaces = new Set();
 
     const dt = document.createElement("dt");
     dt.dataset.labelKey = labelKey;
@@ -8043,6 +8046,73 @@
       }
     }
 
+    function faceSizeLabel(face, cur) {
+      if (!cur || cur[0] < 1 || cur[1] < 1) return "—";
+      return face === "F" || face === "B" ? `${cur[0]}×${cur[1]}` : String(cur[0]);
+    }
+
+    function faceUsedCount(face, cur) {
+      const ids = listFaceCellIds(face, cur?.[0] || 0, cur?.[1] || 0);
+      let n = 0;
+      for (const id of ids) if (used.has(id)) n += 1;
+      return { used: n, total: ids.length };
+    }
+
+    function overallSummaryText() {
+      const parts = [];
+      let usedTotal = 0;
+      let capTotal = 0;
+      for (const face of FACE_ORDER) {
+        const cur = expanded[face];
+        if (!cur || cur[0] < 1 || cur[1] < 1) continue;
+        const { used: u, total } = faceUsedCount(face, cur);
+        usedTotal += u;
+        capTotal += total;
+        parts.push(`${face}:${faceSizeLabel(face, cur)}`);
+      }
+      if (!parts.length) return t("props.face.summaryEmpty");
+      return t("props.face.summary", {
+        faces: parts.join(" · "),
+        used: String(usedTotal),
+        total: String(capTotal),
+      });
+    }
+
+    function toggleCell(id) {
+      if (used.has(id)) {
+        if (occupied.has(id)) {
+          if (!window.confirm(t("props.face.confirmRemoveOccupied"))) return;
+        }
+        used.delete(id);
+        delete usedMeta[id];
+      } else {
+        used.add(id);
+        if (mode === "terminals" && !usedMeta[id]) usedMeta[id] = {};
+      }
+      syncHidden();
+      renderFaces();
+      scheduleSaveProps();
+    }
+
+    function makeCellButton(id, label) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "props-face-chip";
+      btn.textContent = label;
+      btn.dataset.cellId = id;
+      if (used.has(id)) btn.classList.add("is-used");
+      if (occupied.has(id)) btn.classList.add("is-occupied");
+      btn.title = `${id} — ${
+        occupied.has(id)
+          ? t("props.face.occupied")
+          : used.has(id)
+            ? t("props.face.used")
+            : t("props.face.free")
+      }`;
+      btn.addEventListener("click", () => toggleCell(id));
+      return btn;
+    }
+
     const diagram = document.createElement("div");
     diagram.className = "props-face-diagram";
     diagram.innerHTML =
@@ -8053,23 +8123,51 @@
       '<span class="props-face-tag s">S</span>' +
       '<span class="props-face-tag b">B</span>';
 
+    const summary = document.createElement("div");
+    summary.className = "props-face-summary";
+
     const facesHost = document.createElement("div");
     facesHost.className = "props-face-list";
 
     function renderFaces() {
+      summary.textContent = overallSummaryText();
       facesHost.innerHTML = "";
       for (const face of FACE_ORDER) {
-        const row = document.createElement("div");
-        row.className = "props-face-row";
-        const title = document.createElement("div");
-        title.className = "props-face-name";
-        title.textContent = face;
-        row.appendChild(title);
+        const isPlane = face === "F" || face === "B";
+        const cur = expanded[face] || [0, 0];
+        const { used: u, total } = faceUsedCount(face, cur);
+
+        const details = document.createElement("details");
+        details.className = "props-face-acc";
+        details.dataset.face = face;
+        if (openFaces.has(face)) details.open = true;
+        details.addEventListener("toggle", () => {
+          if (details.open) openFaces.add(face);
+          else openFaces.delete(face);
+        });
+
+        const sum = document.createElement("summary");
+        sum.className = "props-face-acc-summary";
+        const name = document.createElement("span");
+        name.className = "props-face-name";
+        name.textContent = face;
+        const size = document.createElement("span");
+        size.className = "props-face-size";
+        size.textContent = faceSizeLabel(face, cur);
+        const count = document.createElement("span");
+        count.className = "props-face-count";
+        count.textContent =
+          total > 0 ? t("props.face.usedOf", { used: String(u), total: String(total) }) : "";
+        sum.appendChild(name);
+        sum.appendChild(size);
+        sum.appendChild(count);
+        details.appendChild(sum);
+
+        const body = document.createElement("div");
+        body.className = "props-face-acc-body";
 
         const controls = document.createElement("div");
         controls.className = "props-face-controls";
-        const isPlane = face === "F" || face === "B";
-        const cur = expanded[face] || [0, 0];
 
         const colsInput = document.createElement("input");
         colsInput.type = "number";
@@ -8078,16 +8176,19 @@
         colsInput.value = String(cur[0] || 0);
         colsInput.title = isPlane ? t("props.face.cols") : t("props.face.count");
         colsInput.className = "props-face-num";
+        colsInput.setAttribute("aria-label", colsInput.title);
+
+        /** @type {HTMLInputElement|null} */
+        let rowsInput = null;
         colsInput.addEventListener("change", () => {
           const cols = Math.max(0, parseInt(colsInput.value, 10) || 0);
           const rows = isPlane
-            ? Math.max(0, parseInt(rowsInput.value, 10) || 0)
+            ? Math.max(0, parseInt(rowsInput?.value || "0", 10) || 0)
             : cols > 0
               ? 1
               : 0;
           if (cols < 1 || rows < 1) delete expanded[face];
           else expanded[face] = [cols, rows || 1];
-          // Drop used cells that no longer fit.
           const allowed = new Set(
             listFaceCellIds(face, expanded[face]?.[0] || 0, expanded[face]?.[1] || 0)
           );
@@ -8097,13 +8198,13 @@
               delete usedMeta[id];
             }
           }
+          openFaces.add(face);
           syncHidden();
           renderFaces();
           scheduleSaveProps();
         });
         controls.appendChild(colsInput);
 
-        let rowsInput = null;
         if (isPlane) {
           rowsInput = document.createElement("input");
           rowsInput.type = "number";
@@ -8112,60 +8213,54 @@
           rowsInput.value = String(cur[1] || 0);
           rowsInput.title = t("props.face.rows");
           rowsInput.className = "props-face-num";
+          rowsInput.setAttribute("aria-label", rowsInput.title);
           rowsInput.addEventListener("change", () => {
             colsInput.dispatchEvent(new Event("change"));
           });
           controls.appendChild(document.createTextNode("×"));
           controls.appendChild(rowsInput);
         }
-        row.appendChild(controls);
+        body.appendChild(controls);
 
-        const chips = document.createElement("div");
-        chips.className = "props-face-chips";
-        const ids = listFaceCellIds(face, cur[0] || 0, cur[1] || 0);
-        if (!ids.length) {
+        const cols = cur[0] || 0;
+        const rows = cur[1] || 0;
+        if (cols < 1 || rows < 1) {
           const empty = document.createElement("span");
           empty.className = "props-face-empty";
           empty.textContent = "—";
-          chips.appendChild(empty);
-        }
-        for (const id of ids) {
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "props-face-chip";
-          btn.textContent = id;
-          if (used.has(id)) btn.classList.add("is-used");
-          if (occupied.has(id)) btn.classList.add("is-occupied");
-          btn.title = occupied.has(id)
-            ? t("props.face.occupied")
-            : used.has(id)
-              ? t("props.face.used")
-              : t("props.face.free");
-          btn.addEventListener("click", () => {
-            if (used.has(id)) {
-              if (occupied.has(id)) {
-                if (!window.confirm(t("props.face.confirmRemoveOccupied"))) return;
-              }
-              used.delete(id);
-              delete usedMeta[id];
-            } else {
-              used.add(id);
-              if (mode === "terminals" && !usedMeta[id]) usedMeta[id] = {};
+          body.appendChild(empty);
+        } else if (isPlane) {
+          const matrix = document.createElement("div");
+          matrix.className = "props-face-matrix";
+          matrix.style.gridTemplateColumns = `repeat(${cols}, minmax(1.55rem, 1.8rem))`;
+          matrix.setAttribute("role", "grid");
+          matrix.setAttribute("aria-label", `${face} ${cols}×${rows}`);
+          for (let row = 1; row <= rows; row += 1) {
+            for (let col = 1; col <= cols; col += 1) {
+              const id = `${face}${row}-${col}`;
+              matrix.appendChild(makeCellButton(id, `${row}-${col}`));
             }
-            syncHidden();
-            renderFaces();
-            scheduleSaveProps();
-          });
-          chips.appendChild(btn);
+          }
+          body.appendChild(matrix);
+        } else {
+          const strip = document.createElement("div");
+          strip.className = "props-face-strip";
+          const ids = listFaceCellIds(face, cols, rows);
+          for (let i = 0; i < ids.length; i += 1) {
+            strip.appendChild(makeCellButton(ids[i], String(i + 1)));
+          }
+          body.appendChild(strip);
         }
-        row.appendChild(chips);
-        facesHost.appendChild(row);
+
+        details.appendChild(body);
+        facesHost.appendChild(details);
       }
     }
 
     syncHidden();
     renderFaces();
     dd.appendChild(diagram);
+    dd.appendChild(summary);
     dd.appendChild(facesHost);
     dd.appendChild(gridInput);
     dd.appendChild(usedInput);

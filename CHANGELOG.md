@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.66.0] — 2026-08-04
+
+### Changed
+
+- Openings/terminals props editor: compact summary + per-face accordion;
+  front/back cells render as a row×column matrix (``B{row}-{col}``).
+
 ## [0.65.0] — 2026-08-04
 
 ### Changed
