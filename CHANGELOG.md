@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.50.1] — 2026-08-04
+
+### Added
+
+- Catalog type ``description`` follows the UI locale via ``description_es``
+  (``catalog_type_description`` and ``/api/catalog``).
+
 ## [0.50.0] — 2026-08-04
 
 ### Added

@@ -460,21 +460,61 @@ def catalog_type_label(
     When ``locale`` is ``es`` and ``label_es`` is set, that wins. Falls back to
     the type id when the catalog has no display string.
     """
+    return _catalog_type_localized_text(
+        type_id,
+        catalog=catalog,
+        subtype=subtype,
+        locale=locale,
+        en_keys=("label", "name", "title"),
+        es_key="label_es",
+        fallback_to_id=True,
+    )
+
+
+def catalog_type_description(
+    type_id: object,
+    *,
+    catalog: dict[str, dict[str, Any]] | None = None,
+    subtype: str | None = None,
+    locale: str | None = None,
+) -> str:
+    """Catalog ``description`` for UI; ``description_es`` when locale is ``es``."""
+    return _catalog_type_localized_text(
+        type_id,
+        catalog=catalog,
+        subtype=subtype,
+        locale=locale,
+        en_keys=("description",),
+        es_key="description_es",
+        fallback_to_id=False,
+    )
+
+
+def _catalog_type_localized_text(
+    type_id: object,
+    *,
+    catalog: dict[str, dict[str, Any]] | None,
+    subtype: str | None,
+    locale: str | None,
+    en_keys: tuple[str, ...],
+    es_key: str,
+    fallback_to_id: bool,
+) -> str:
     from housewire.i18n import normalize_locale
 
     tid = str(type_id or "").strip()
     cat = catalog if catalog is not None else load_catalog()
     type_def = cat.get(tid)
     if not isinstance(type_def, dict):
-        return tid or "?"
+        return (tid or "?") if fallback_to_id else ""
     loc = normalize_locale(locale) if locale is not None else "en"
 
     def _pick(row: dict[str, Any]) -> str | None:
         if loc == "es":
-            raw_es = row.get("label_es")
+            raw_es = row.get(es_key)
             if raw_es is not None and str(raw_es).strip():
                 return str(raw_es).strip()
-        for key in ("label", "name", "title"):
+        for key in en_keys:
             raw = row.get(key)
             if raw is not None and str(raw).strip():
                 return str(raw).strip()
@@ -488,7 +528,10 @@ def catalog_type_label(
                 picked = _pick(sub)
                 if picked:
                     return picked
-    return _pick(type_def) or tid or "?"
+    picked = _pick(type_def)
+    if picked:
+        return picked
+    return (tid or "?") if fallback_to_id else ""
 
 
 def _catalog_defaults_for_subtype(

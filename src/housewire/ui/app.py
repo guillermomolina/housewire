@@ -300,7 +300,11 @@ def create_app(site_root: Path | None = None) -> Any:
 
     @app.get("/api/catalog")
     def api_catalog(request: Request) -> dict[str, Any]:
-        from housewire.house import catalog_type_label, load_catalog
+        from housewire.house import (
+            catalog_type_description,
+            catalog_type_label,
+            load_catalog,
+        )
 
         root = _root()
         cat = load_catalog(root)
@@ -311,6 +315,9 @@ def create_app(site_root: Path | None = None) -> Any:
                 "id": type_id,
                 "kind": data.get("kind"),
                 "label": catalog_type_label(type_id, catalog=cat, locale=locale),
+                "description": catalog_type_description(
+                    type_id, catalog=cat, locale=locale
+                ),
                 "icon": data.get("icon") or "circle",
             }
             for type_id, data in sorted(cat.items())

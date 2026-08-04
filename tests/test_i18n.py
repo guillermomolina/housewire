@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 
 from fixtures import add_place
-from housewire.house import catalog_type_label
+from housewire.house import catalog_type_description, catalog_type_label
 from housewire.i18n import normalize_locale, unlabeled_for, unnamed_for
 from housewire.site import abm
 from housewire.site.clipboard import pack_selection, paste_payload
@@ -40,6 +40,13 @@ class TestCatalogTypeLabelLocale(unittest.TestCase):
         es = catalog_type_label("Room", locale="es")
         self.assertEqual(en, "Room")
         self.assertEqual(es, "Habitación")
+
+    def test_spanish_description_es(self) -> None:
+        en = catalog_type_description("MCB", locale="en")
+        es = catalog_type_description("MCB", locale="es")
+        self.assertIn("Miniature circuit breaker", en)
+        self.assertIn("Magnetotérmico", es)
+        self.assertIn("diferencial", es)
 
 
 class TestClipboardLocale(unittest.TestCase):
