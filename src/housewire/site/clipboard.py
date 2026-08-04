@@ -61,6 +61,8 @@ _ORIGIN_Y = 40.0
 _ELEM_ORIGIN_X = 28.0
 _ELEM_ORIGIN_Y = 8.0
 CLIPBOARD_VERSION = 1
+UNNAMED = "Unnamed"
+UNLABELED = "Unlabeled"
 
 
 @dataclass
@@ -159,36 +161,33 @@ def _sibling_working_fields(
 def uniquify_working_names(
     node: dict[str, Any],
     *,
-    old_id: str,
-    new_id: str,
     taken_names: set[str],
     taken_labels: set[str],
+    force: bool,
 ) -> None:
     """Uniquify ``name`` / ``label`` independently of the technical id.
 
-    Same collision rule as ids, but with a spaced number. Empty ``name`` after an
-    id rename gets the spaced form of the new id. Empty ``label`` is left alone.
+    Empty fields become ``Unnamed`` / ``Unlabeled``. When ``force`` is true
+    (copy paste, or id renamed on collision), always take the next spaced
+    variant even if the preferred text is free in the destination.
     """
     raw_name = node.get("name")
     name_s = "" if raw_name is None else str(raw_name).strip()
-    if name_s:
-        preferred = name_s
-    elif old_id != new_id:
-        preferred = display_name_from_id(new_id)
-    else:
-        preferred = ""
-    if preferred:
-        new_name = next_available_display_name(taken_names, preferred)
-        node["name"] = new_name
-        taken_names.add(new_name)
+    preferred_name = name_s if name_s else UNNAMED
+    name_taken = set(taken_names)
+    if force:
+        name_taken.add(preferred_name)
+    new_name = next_available_display_name(name_taken, preferred_name)
+    node["name"] = new_name
+    taken_names.add(new_name)
 
     raw_label = node.get("label")
-    if raw_label is None:
-        return
-    label_s = str(raw_label).strip()
-    if not label_s:
-        return
-    new_label = next_available_display_name(taken_labels, label_s)
+    label_s = "" if raw_label is None else str(raw_label).strip()
+    preferred_label = label_s if label_s else UNLABELED
+    label_taken = set(taken_labels)
+    if force:
+        label_taken.add(preferred_label)
+    new_label = next_available_display_name(label_taken, preferred_label)
     node["label"] = new_label
     taken_labels.add(new_label)
 
@@ -892,13 +891,19 @@ def paste_payload(
     *,
     parent_id: str,
     payload: dict[str, Any],
+    mode: str | None = None,
 ) -> PasteResult:
-    """Insert clipboard payload under ``parent_id``. Mutates ``doc``."""
+    """Insert clipboard payload under ``parent_id``. Mutates ``doc``.
+
+    ``mode`` is ``\"copy\"`` or ``\"cut\"``. Copy always numbers ``name`` /
+    ``label``; cut only bumps on collisions (and fills empty fields).
+    """
     if not isinstance(payload, dict):
         raise ValueError("payload must be an object")
     items = payload.get("items") or []
     if not isinstance(items, list) or not items:
         raise ValueError("clipboard is empty")
+    copy_mode = str(mode or "").strip().lower() == "copy"
     parent_parts = logical_parts_from_id(parent_id)
     parent = _node_at(doc, parent_parts)
     elements = parent.get("elements")
@@ -929,10 +934,9 @@ def paste_payload(
         blob = copy.deepcopy(node)
         uniquify_working_names(
             blob,
-            old_id=old_id,
-            new_id=new_id,
             taken_names=taken_names,
             taken_labels=taken_labels,
+            force=copy_mode or (old_id != new_id),
         )
         if kind == "place":
             rect = _place_without_overlap(blob, obstacles=place_obstacles)

@@ -84,12 +84,13 @@ class TestClipboard(unittest.TestCase):
         add_place(self.doc, "Box", under=("Room",), type_id="JunctionBox")
         payload = pack_selection(self.doc, ["Room/Box"])
         self.assertEqual(len(payload["items"]), 1)
-        paste_payload(self.doc, parent_id="Room", payload=payload)
+        paste_payload(self.doc, parent_id="Room", payload=payload, mode="copy")
         room = get_place_node(self.doc, ("Room",))
         elements = room.get("elements") or {}
         self.assertIn("Box", elements)
         self.assertIn("Box_1", elements)
-        self.assertEqual(elements["Box_1"].get("name"), "Box 1")
+        self.assertEqual(elements["Box_1"].get("name"), "Unnamed 1")
+        self.assertEqual(elements["Box_1"].get("label"), "Unlabeled 1")
 
     def test_paste_syncs_name_and_label(self) -> None:
         add_place(self.doc, "Room", type_id="Room")
@@ -98,7 +99,7 @@ class TestClipboard(unittest.TestCase):
         sw["name"] = "Interruptor"
         sw["label"] = "Interruptor"
         payload = pack_selection(self.doc, ["Room/Interruptor"])
-        paste_payload(self.doc, parent_id="Room", payload=payload)
+        paste_payload(self.doc, parent_id="Room", payload=payload, mode="copy")
         copy_node = get_place_node(self.doc, ("Room", "Interruptor_1"))
         self.assertEqual(copy_node.get("name"), "Interruptor 1")
         self.assertEqual(copy_node.get("label"), "Interruptor 1")
@@ -110,7 +111,7 @@ class TestClipboard(unittest.TestCase):
         sw["name"] = "Interruptor"
         sw["label"] = "Luz cocina"
         payload = pack_selection(self.doc, ["Room/Interruptor"])
-        paste_payload(self.doc, parent_id="Room", payload=payload)
+        paste_payload(self.doc, parent_id="Room", payload=payload, mode="copy")
         copy_node = get_place_node(self.doc, ("Room", "Interruptor_1"))
         self.assertEqual(copy_node.get("name"), "Interruptor 1")
         self.assertEqual(copy_node.get("label"), "Luz cocina 1")
@@ -122,20 +123,47 @@ class TestClipboard(unittest.TestCase):
         sw["name"] = "SW"
         sw["label"] = "Luz cocina 1"
         payload = pack_selection(self.doc, ["Room/SW"])
-        paste_payload(self.doc, parent_id="Room", payload=payload)
+        paste_payload(self.doc, parent_id="Room", payload=payload, mode="copy")
         copy_node = get_place_node(self.doc, ("Room", "SW_1"))
         self.assertEqual(copy_node.get("label"), "Luz cocina 2")
+
+    def test_paste_forces_bump_when_id_renamed(self) -> None:
+        """Copy into an empty parent still numbers name/label."""
+        add_place(self.doc, "Room", type_id="Room")
+        add_place(self.doc, "Other", type_id="Room")
+        add_place(self.doc, "SW", under=("Room",), type_id="JunctionBox")
+        sw = get_place_node(self.doc, ("Room", "SW"))
+        sw["name"] = "Interruptor"
+        sw["label"] = "Luz cocina"
+        payload = pack_selection(self.doc, ["Room/SW"])
+        paste_payload(self.doc, parent_id="Other", payload=payload, mode="copy")
+        copy_node = get_place_node(self.doc, ("Other", "SW"))
+        # Id free in Other, but copy still forces a spaced variant.
+        self.assertEqual(copy_node.get("name"), "Interruptor 1")
+        self.assertEqual(copy_node.get("label"), "Luz cocina 1")
 
     def test_cut_paste_keeps_free_label(self) -> None:
         add_place(self.doc, "Room", type_id="Room")
         add_place(self.doc, "SW", under=("Room",), type_id="JunctionBox")
         sw = get_place_node(self.doc, ("Room", "SW"))
+        sw["name"] = "SW"
         sw["label"] = "Luz cocina"
         payload = pack_selection(self.doc, ["Room/SW"])
         delete_selection(self.doc, ["Room/SW"])
-        paste_payload(self.doc, parent_id="Room", payload=payload)
+        paste_payload(self.doc, parent_id="Room", payload=payload, mode="cut")
         restored = get_place_node(self.doc, ("Room", "SW"))
+        self.assertEqual(restored.get("name"), "SW")
         self.assertEqual(restored.get("label"), "Luz cocina")
+
+    def test_cut_paste_fills_empty_with_unnamed(self) -> None:
+        add_place(self.doc, "Room", type_id="Room")
+        add_place(self.doc, "SW", under=("Room",), type_id="JunctionBox")
+        payload = pack_selection(self.doc, ["Room/SW"])
+        delete_selection(self.doc, ["Room/SW"])
+        paste_payload(self.doc, parent_id="Room", payload=payload, mode="cut")
+        restored = get_place_node(self.doc, ("Room", "SW"))
+        self.assertEqual(restored.get("name"), "Unnamed")
+        self.assertEqual(restored.get("label"), "Unlabeled")
 
     def test_pack_cross_becomes_open_stub(self) -> None:
         add_place(self.doc, "Room", type_id="Room")
@@ -209,7 +237,7 @@ class TestClipboard(unittest.TestCase):
         delete_selection(self.doc, ["Room/Box"])
         room = get_place_node(self.doc, ("Room",))
         self.assertNotIn("Box", room.get("elements") or {})
-        paste_payload(self.doc, parent_id="Room", payload=payload)
+        paste_payload(self.doc, parent_id="Room", payload=payload, mode="cut")
         self.assertIn("Box", (room.get("elements") or {}))
 
     def test_paste_avoids_overlap_and_grows_parent(self) -> None:
@@ -228,7 +256,7 @@ class TestClipboard(unittest.TestCase):
         set_physical_size(box, 120.0, 56.0)
         set_physical_size(room, 200.0, 120.0)
         payload = pack_selection(self.doc, ["Room/Box"])
-        paste_payload(self.doc, parent_id="Room", payload=payload)
+        paste_payload(self.doc, parent_id="Room", payload=payload, mode="copy")
         box2 = get_place_node(self.doc, ("Room", "Box_1"))
         pos1 = get_physical_position(box)
         pos2 = get_physical_position(box2)

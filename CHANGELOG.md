@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.49.2] — 2026-08-04
+
+### Changed
+
+- Paste fills empty ``name`` / ``label`` with ``Unnamed`` / ``Unlabeled``.
+  Copy paste always takes the next spaced variant (even if free in the
+  destination); cut paste only bumps on collisions.
+
 ## [0.49.1] — 2026-08-04
 
 ### Changed

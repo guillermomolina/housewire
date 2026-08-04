@@ -500,7 +500,13 @@ def create_app(site_root: Path | None = None) -> Any:
             _preload_location(location_id)
             _begin_edit()
             _path, doc = session.ensure_doc(_site_yaml())
-            result = paste_payload(doc, parent_id=parent_id, payload=clip)
+            mode = body.get("mode")
+            result = paste_payload(
+                doc,
+                parent_id=parent_id,
+                payload=clip,
+                mode=str(mode) if mode is not None else None,
+            )
             session.mark_dirty(_site_yaml())
             meta = _end_edit()
         except ValueError as exc:

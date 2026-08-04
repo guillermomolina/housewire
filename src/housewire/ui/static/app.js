@@ -742,6 +742,7 @@
       body: JSON.stringify({
         parent_id: parentId,
         payload: editClipboard,
+        mode: mode || "copy",
         location_id: locationId,
         depth: depthLevel,
       }),
