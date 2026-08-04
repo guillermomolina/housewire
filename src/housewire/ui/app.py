@@ -417,6 +417,312 @@ def create_app(site_root: Path | None = None) -> Any:
             **meta,
         }
 
+    @app.get("/api/cable")
+    def api_cable(id: str) -> dict[str, Any]:
+        from housewire.site.cable_actions import cable_detail
+
+        cable_id = str(id or "").strip()
+        if not cable_id:
+            raise HTTPException(400, "id is required")
+        try:
+            session = _session()
+            session.ensure_doc(_site_yaml())
+            return cable_detail(session, cable_id=cable_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.patch("/api/cable/properties")
+    async def api_cable_properties(request: Request) -> dict[str, Any]:
+        from housewire.site.cable_actions import update_cable_properties
+
+        payload = await _json_body(request)
+        cable_id = str(payload.get("id") or "").strip()
+        location_id = str(payload.get("location_id") or ".").strip() or "."
+        if not cable_id:
+            raise HTTPException(400, "id is required")
+        fields = payload.get("fields")
+        if not isinstance(fields, dict):
+            raise HTTPException(400, "fields must be an object")
+        depth = _depth_from(payload)
+        try:
+            _preload_location(location_id)
+            _begin_edit()
+            detail = update_cable_properties(
+                _session(), cable_id=cable_id, fields=fields
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        meta = _end_edit()
+        return {
+            "detail": detail,
+            "graph": _graph(location_id, depth),
+            **meta,
+        }
+
+    @app.post("/api/cable/conduit")
+    async def api_cable_conduit(request: Request) -> dict[str, Any]:
+        from housewire.site.cable_actions import insert_conduit
+
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or ".").strip() or "."
+        from_ref = str(payload.get("from") or "").strip()
+        to_ref = str(payload.get("to") or "").strip()
+        if not from_ref or not to_ref:
+            raise HTTPException(400, "from and to openings are required")
+        depth = _depth_from(payload)
+        contains = payload.get("contains")
+        try:
+            _preload_location(location_id)
+            _begin_edit()
+            detail = insert_conduit(
+                _session(),
+                from_ref=from_ref,
+                to_ref=to_ref,
+                owner_id=str(payload.get("owner_id") or location_id).strip()
+                or location_id,
+                name=(str(payload["name"]).strip() if payload.get("name") else None),
+                subtype=(
+                    str(payload["subtype"]).strip()
+                    if payload.get("subtype")
+                    else None
+                ),
+                label=(str(payload["label"]).strip() if payload.get("label") else None),
+                notes=(str(payload["notes"]).strip() if payload.get("notes") else None),
+                contains=list(contains) if isinstance(contains, list) else None,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        meta = _end_edit()
+        return {
+            "detail": detail,
+            "graph": _graph(location_id, depth),
+            **meta,
+        }
+
+    @app.post("/api/cable/conductor")
+    async def api_cable_conductor(request: Request) -> dict[str, Any]:
+        from housewire.site.cable_actions import insert_conductor
+
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or ".").strip() or "."
+        from_ref = str(payload.get("from") or "").strip()
+        to_ref = str(payload.get("to") or "").strip()
+        if not from_ref or not to_ref:
+            raise HTTPException(400, "from and to terminals are required")
+        depth = _depth_from(payload)
+        try:
+            _preload_location(location_id)
+            _begin_edit()
+            detail = insert_conductor(
+                _session(),
+                from_ref=from_ref,
+                to_ref=to_ref,
+                owner_id=str(payload.get("owner_id") or location_id).strip()
+                or location_id,
+                name=(str(payload["name"]).strip() if payload.get("name") else None),
+                color=(str(payload["color"]).strip() if payload.get("color") else None),
+                section=(
+                    str(payload["section"]).strip() if payload.get("section") else None
+                ),
+                subtype=(
+                    str(payload["subtype"]).strip()
+                    if payload.get("subtype")
+                    else None
+                ),
+                label=(str(payload["label"]).strip() if payload.get("label") else None),
+                notes=(str(payload["notes"]).strip() if payload.get("notes") else None),
+                conduit_id=(
+                    str(payload["conduit_id"]).strip()
+                    if payload.get("conduit_id")
+                    else None
+                ),
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        meta = _end_edit()
+        return {
+            "detail": detail,
+            "graph": _graph(location_id, depth),
+            **meta,
+        }
+
+    @app.post("/api/cable/sheath")
+    async def api_cable_sheath(request: Request) -> dict[str, Any]:
+        from housewire.site.cable_actions import insert_sheath
+
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or ".").strip() or "."
+        contains = payload.get("contains")
+        if not isinstance(contains, list) or not contains:
+            raise HTTPException(400, "contains must be a non-empty list")
+        depth = _depth_from(payload)
+        try:
+            _preload_location(location_id)
+            _begin_edit()
+            detail = insert_sheath(
+                _session(),
+                contains=[str(x) for x in contains],
+                owner_id=str(payload.get("owner_id") or location_id).strip()
+                or location_id,
+                name=(str(payload["name"]).strip() if payload.get("name") else None),
+                color=(str(payload["color"]).strip() if payload.get("color") else None),
+                subtype=(
+                    str(payload["subtype"]).strip()
+                    if payload.get("subtype")
+                    else None
+                ),
+                section=(
+                    str(payload["section"]).strip() if payload.get("section") else None
+                ),
+                label=(str(payload["label"]).strip() if payload.get("label") else None),
+                notes=(str(payload["notes"]).strip() if payload.get("notes") else None),
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        meta = _end_edit()
+        return {
+            "detail": detail,
+            "graph": _graph(location_id, depth),
+            **meta,
+        }
+
+    @app.get("/api/cable/open-runs")
+    def api_cable_open_runs(owner_id: str | None = None) -> dict[str, Any]:
+        from housewire.site.cable_actions import list_open_runs
+
+        try:
+            session = _session()
+            session.ensure_doc(_site_yaml())
+            return {"open_runs": list_open_runs(session, owner_id=owner_id)}
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.post("/api/cable/open")
+    async def api_cable_open(request: Request) -> dict[str, Any]:
+        from housewire.site.cable_actions import open_run
+
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or ".").strip() or "."
+        leaves = str(payload.get("leaves") or "").strip()
+        if not leaves:
+            raise HTTPException(400, "leaves opening is required")
+        depth = _depth_from(payload)
+        colors = payload.get("colors")
+        try:
+            _preload_location(location_id)
+            _begin_edit()
+            detail = open_run(
+                _session(),
+                leaves=leaves,
+                owner_id=str(payload.get("owner_id") or location_id).strip()
+                or location_id,
+                colors=list(colors) if isinstance(colors, list) else None,
+                section=(
+                    str(payload["section"]).strip() if payload.get("section") else None
+                ),
+                subtype=(
+                    str(payload["subtype"]).strip()
+                    if payload.get("subtype")
+                    else None
+                ),
+                label=(str(payload["label"]).strip() if payload.get("label") else None),
+                notes=(str(payload["notes"]).strip() if payload.get("notes") else None),
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        meta = _end_edit()
+        return {
+            "detail": detail,
+            "graph": _graph(location_id, depth),
+            **meta,
+        }
+
+    @app.post("/api/cable/claim")
+    async def api_cable_claim(request: Request) -> dict[str, Any]:
+        from housewire.site.cable_actions import claim_run
+
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or ".").strip() or "."
+        cable_id = str(payload.get("id") or "").strip()
+        enter = str(payload.get("enter") or "").strip()
+        if not cable_id or not enter:
+            raise HTTPException(400, "id and enter are required")
+        depth = _depth_from(payload)
+        try:
+            _preload_location(location_id)
+            _begin_edit()
+            detail = claim_run(
+                _session(),
+                cable_id=cable_id,
+                enter=enter,
+                exit=(str(payload["exit"]).strip() if payload.get("exit") else None),
+                conduit_name=(
+                    str(payload["conduit_name"]).strip()
+                    if payload.get("conduit_name")
+                    else None
+                ),
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        meta = _end_edit()
+        return {
+            "detail": detail,
+            "graph": _graph(location_id, depth),
+            **meta,
+        }
+
+    @app.post("/api/cable/land")
+    async def api_cable_land(request: Request) -> dict[str, Any]:
+        from housewire.site.cable_actions import land_run
+
+        payload = await _json_body(request)
+        location_id = str(payload.get("location_id") or ".").strip() or "."
+        cable_id = str(payload.get("id") or "").strip()
+        from_ref = str(payload.get("from") or "").strip()
+        to_ref = str(payload.get("to") or "").strip()
+        if not cable_id or not from_ref or not to_ref:
+            raise HTTPException(400, "id, from, and to are required")
+        depth = _depth_from(payload)
+        try:
+            _preload_location(location_id)
+            _begin_edit()
+            detail = land_run(
+                _session(),
+                cable_id=cable_id,
+                from_ref=from_ref,
+                to_ref=to_ref,
+                as_name=(
+                    str(payload["as_name"]).strip() if payload.get("as_name") else None
+                ),
+                notes=(str(payload["notes"]).strip() if payload.get("notes") else None),
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        meta = _end_edit()
+        return {
+            "detail": detail,
+            "graph": _graph(location_id, depth),
+            **meta,
+        }
+
     @app.post("/api/edit/undo")
     async def api_edit_undo(request: Request) -> dict[str, Any]:
         payload = await _json_body(request)

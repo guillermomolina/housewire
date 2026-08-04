@@ -26,6 +26,15 @@
   let locationId = null;
   let selectedId = null;
   let selectedIds = new Set();
+  /** @type {string|null} Selected conduit/cable/conductor id (cables: map). */
+  let selectedLinkId = null;
+  /** @type {"conduit"|"cable"|"conductor"|null} */
+  let selectedLinkKind = null;
+  /**
+   * Active wiring gesture.
+   * @type {null|{kind:"conduit"|"conductor", from:string|null}}
+   */
+  let wiringMode = null;
   let depthLevel = DEPTH_DEFAULT;
   let maxDepth = 1;
   let scale = 1;
@@ -563,10 +572,15 @@
   }
 
   function updateDeleteButtons() {
-    const hasSel = hasDocument && selectedIds.size >= 1;
+    const hasSel = hasDocument && (selectedIds.size >= 1 || Boolean(selectedLinkId));
     for (const id of ["btn-delete", "menu-delete", "btn-cut", "menu-cut", "btn-copy", "menu-copy"]) {
       const el = document.getElementById(id);
-      if (el) el.disabled = !hasSel;
+      // Cut/copy only for places/elements; delete also for links.
+      if (id === "btn-delete" || id === "menu-delete") {
+        if (el) el.disabled = !hasSel;
+        continue;
+      }
+      if (el) el.disabled = !(hasDocument && selectedIds.size >= 1);
     }
     const canPaste = hasDocument && Boolean(editClipboard);
     for (const id of ["btn-paste", "menu-paste"]) {
@@ -808,7 +822,39 @@
   }
 
   async function deleteSelection() {
-    if (!hasDocument || !locationId || selectedIds.size < 1) return;
+    if (!hasDocument || !locationId) return;
+    if (selectedLinkId) {
+      const choice = await appDialog({
+        title: t("props.link.deleteTitle"),
+        message: t("props.link.deleteMessage", { id: selectedLinkId }),
+        buttons: [
+          { id: "cancel", label: t("modal.cancel") },
+          { id: "delete", label: t("menu.edit.delete"), danger: true, primary: true },
+        ],
+      });
+      if (choice !== "delete") return;
+      const res = await api("/api/edit/delete", {
+        method: "POST",
+        body: JSON.stringify({
+          location_id: locationId,
+          ids: [selectedLinkId],
+          depth: depthLevel,
+        }),
+      });
+      clearLinkSelection();
+      clearSelectionSilent();
+      if (res.graph) {
+        graph = res.graph;
+        if (res.location) locationId = res.location;
+        render();
+      }
+      applyEditFlags(res);
+      await syncInspectorFromSelection();
+      setStatus(t("status.linkDeleted"));
+      scheduleStatusRefresh();
+      return;
+    }
+    if (selectedIds.size < 1) return;
     const siteIds = [...selectedIds]
       .map((id) => canvasToSiteId(id))
       .filter((id) => id && id !== ".");
@@ -1214,6 +1260,7 @@
   function clearSelectionState() {
     selectedIds.clear();
     selectedId = null;
+    clearLinkSelection();
     updateDeleteButtons();
   }
 
@@ -1228,6 +1275,10 @@
       if (!box) continue;
       box.classList.toggle("selected", selectedIds.has(eid));
     }
+    document.querySelectorAll("[data-link-id]").forEach((el) => {
+      const on = selectedLinkId && el.getAttribute("data-link-id") === selectedLinkId;
+      el.classList.toggle("selected", Boolean(on));
+    });
   }
 
   /**
@@ -1280,6 +1331,7 @@
 
   function commitSelection(ids, primaryId, { ensureVisible = true } = {}) {
     const normalized = normalizeSelectionSet(ids);
+    clearLinkSelection();
     selectedIds = normalized;
     if (primaryId != null && normalized.has(primaryId)) {
       selectedId = primaryId;
@@ -1305,6 +1357,189 @@
     stripAncestorsFromSet(next, id);
     next.add(id);
     commitSelection(next, id);
+  }
+
+  
+  function clearLinkSelection() {
+    selectedLinkId = null;
+    selectedLinkKind = null;
+  }
+
+  function setWiringMode(mode) {
+    wiringMode = mode;
+    if (viewport) {
+      viewport.classList.toggle("wiring-conduit", mode?.kind === "conduit");
+      viewport.classList.toggle("wiring-conductor", mode?.kind === "conductor");
+    }
+  }
+
+  function cancelWiringMode() {
+    if (!wiringMode) return;
+    setWiringMode(null);
+    setStatus(t("status.wiringCancelled"));
+  }
+
+  function beginWiringGesture(kind) {
+    if (!hasDocument || !locationId) {
+      setStatus(t("status.needDocument"));
+      return;
+    }
+    if (kind === "conductor" && !showElectrical) {
+      setElectrical(true);
+    }
+    setWiringMode({ kind, from: null });
+    setStatus(
+      kind === "conduit"
+        ? t("status.wiringConduitFrom")
+        : t("status.wiringConductorFrom")
+    );
+  }
+
+  async function beginSheathFromSelection() {
+    if (!hasDocument || !locationId) {
+      setStatus(t("status.needDocument"));
+      return;
+    }
+    const seed = selectedLinkId
+      ? selectedLinkId
+      : window.prompt(t("props.link.groupContains"), "");
+    if (!seed) return;
+    const extra = window.prompt(t("props.link.groupMore"), "");
+    const contains = [
+      String(seed).trim(),
+      ...String(extra || "")
+        .split(/[,\s]+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ];
+    const res = await api("/api/cable/sheath", {
+      method: "POST",
+      body: JSON.stringify({
+        location_id: locationId,
+        owner_id: locationId,
+        contains,
+        depth: depthLevel,
+      }),
+    });
+    if (res.graph) {
+      graph = res.graph;
+      render();
+    }
+    applyEditFlags(res);
+    await selectLink(res.detail.id, "cable");
+    setStatus(t("status.linkGrouped"));
+  }
+
+  function openingRefForNode(nodeId, openingId) {
+    const sitePlace = canvasToSiteId(nodeId);
+    if (!sitePlace || sitePlace === ".") return `.${openingId}`;
+    const rel = siteToCanvasRelative(sitePlace) || nodeId;
+    return `${rel}.${openingId}`;
+  }
+
+  function terminalRefForElem(elem, terminalId) {
+    const leaf = elem.leaf_id || String(elem.id).split("/").pop();
+    const parent = elem.parent;
+    if (parent && parent !== ".") return `${parent}/${leaf}.${terminalId}`;
+    return `${leaf}.${terminalId}`;
+  }
+
+  async function completeWiringConduit(toRef) {
+    const fromRef = wiringMode?.from;
+    setWiringMode(null);
+    if (!fromRef) return;
+    const res = await api("/api/cable/conduit", {
+      method: "POST",
+      body: JSON.stringify({
+        location_id: locationId,
+        owner_id: locationId,
+        from: fromRef,
+        to: toRef,
+        depth: depthLevel,
+      }),
+    });
+    if (res.graph) {
+      graph = res.graph;
+      render();
+    }
+    applyEditFlags(res);
+    await selectLink(res.detail.id, "conduit");
+    setStatus(t("status.conduitCreated"));
+  }
+
+  async function completeWiringConductor(toRef) {
+    const fromRef = wiringMode?.from;
+    setWiringMode(null);
+    if (!fromRef) return;
+    const res = await api("/api/cable/conductor", {
+      method: "POST",
+      body: JSON.stringify({
+        location_id: locationId,
+        owner_id: locationId,
+        from: fromRef,
+        to: toRef,
+        depth: depthLevel,
+      }),
+    });
+    if (res.graph) {
+      graph = res.graph;
+      render();
+    }
+    applyEditFlags(res);
+    await selectLink(res.detail.id, "conductor");
+    setStatus(t("status.conductorCreated"));
+  }
+
+  function onWiringOpeningClick(nodeId, openingId, ev) {
+    if (!wiringMode || wiringMode.kind !== "conduit") return false;
+    ev.stopPropagation();
+    ev.preventDefault();
+    const ref = openingRefForNode(nodeId, openingId);
+    if (!wiringMode.from) {
+      wiringMode = { kind: "conduit", from: ref };
+      setStatus(t("status.wiringConduitTo", { from: ref }));
+      return true;
+    }
+    if (wiringMode.from === ref) {
+      setStatus(t("status.wiringSameEnd"));
+      return true;
+    }
+    completeWiringConduit(ref).catch((err) => setStatus(String(err.message || err)));
+    return true;
+  }
+
+  function onWiringTerminalClick(elem, terminalId, ev) {
+    if (!wiringMode || wiringMode.kind !== "conductor") return false;
+    ev.stopPropagation();
+    ev.preventDefault();
+    const ref = terminalRefForElem(elem, terminalId);
+    if (!wiringMode.from) {
+      wiringMode = { kind: "conductor", from: ref };
+      setStatus(t("status.wiringConductorTo", { from: ref }));
+      return true;
+    }
+    if (wiringMode.from === ref) {
+      setStatus(t("status.wiringSameEnd"));
+      return true;
+    }
+    completeWiringConductor(ref).catch((err) =>
+      setStatus(String(err.message || err))
+    );
+    return true;
+  }
+
+  async function selectLink(linkId, kindHint) {
+    clearSelectionSilent();
+    selectedLinkId = linkId;
+    selectedLinkKind = kindHint || null;
+    setSelectedVisual();
+    highlightOutlineSelection();
+    await fillLinkInspector(linkId);
+  }
+
+  function clearSelectionSilent() {
+    selectedIds.clear();
+    selectedId = null;
   }
 
   function replaceSelection(id) {
@@ -6872,7 +7107,20 @@
         ye.setAttribute("stroke-width", String(STRAND_WIDTH));
         ye.setAttribute("stroke-dasharray", "5 5");
         ye.style.strokeOpacity = "0.95";
-        const hit = el("path", { class: "cable-strand-hit", d });
+        const hit = el("path", {
+          class: "cable-strand-hit",
+          d,
+          "data-link-id": edge.id,
+          "data-link-kind": "cable",
+        });
+        hit.addEventListener("pointerdown", (ev) => {
+          if (ev.button !== 0 || shouldPanPointer(ev)) return;
+          ev.stopPropagation();
+          ev.preventDefault();
+          selectLink(edge.id, "cable").catch((err) =>
+            setStatus(String(err.message || err))
+          );
+        });
         cablesG.appendChild(hit);
         cablesG.appendChild(gn);
         cablesG.appendChild(ye);
@@ -6896,7 +7144,20 @@
       strand.setAttribute("stroke", fillCss);
       strand.setAttribute("stroke-width", String(STRAND_WIDTH));
       strand.appendChild(el("title", null, title));
-      const hit = el("path", { class: "cable-strand-hit", d });
+      const hit = el("path", {
+        class: "cable-strand-hit",
+        d,
+        "data-link-id": edge.id,
+        "data-link-kind": "cable",
+      });
+      hit.addEventListener("pointerdown", (ev) => {
+        if (ev.button !== 0 || shouldPanPointer(ev)) return;
+        ev.stopPropagation();
+        ev.preventDefault();
+        selectLink(edge.id, "cable").catch((err) =>
+          setStatus(String(err.message || err))
+        );
+      });
       cablesG.appendChild(hit);
       cablesG.appendChild(strand);
       paths.push(hit, strand);
@@ -7267,6 +7528,12 @@
           )
         );
       }
+      g.querySelectorAll("[data-opening]").forEach((elOp) => {
+        elOp.addEventListener("pointerdown", (ev) => {
+          const oid = elOp.getAttribute("data-opening");
+          if (oid && onWiringOpeningClick(node.id, oid, ev)) return;
+        });
+      });
     }
 
     box.addEventListener("pointerdown", (ev) => {
@@ -7416,6 +7683,9 @@
             "data-terminal": cellId,
           });
           mark.appendChild(el("title", null, cellId));
+          mark.addEventListener("pointerdown", (ev) => {
+            if (onWiringTerminalClick(elem, cellId, ev)) return;
+          });
           g.appendChild(mark);
         }
       }
@@ -7640,15 +7910,36 @@
           d: displayD,
         });
         applyTubeOutlineVisibility(tubeOutline, tubeCss, roadW);
-        const tube = el("path", { class: "edge-tube", d: displayD });
+        const tubeHit = el("path", {
+          class: "edge-tube-hit",
+          d: displayD,
+          "data-link-id": edge.id,
+          "data-link-kind": "conduit",
+        });
+        tubeHit.style.strokeWidth = String(Math.max(roadW + 6, 10));
+        tubeHit.addEventListener("pointerdown", (ev) => {
+          if (ev.button !== 0 || shouldPanPointer(ev)) return;
+          ev.stopPropagation();
+          ev.preventDefault();
+          selectLink(edge.id, "conduit").catch((err) =>
+            setStatus(String(err.message || err))
+          );
+        });
+        const tube = el("path", {
+          class: "edge-tube",
+          d: displayD,
+          "data-link-id": edge.id,
+          "data-link-kind": "conduit",
+        });
         tube.style.stroke = tubeCss;
         tube.style.strokeWidth = String(roadW);
         tube.style.strokeOpacity = edge.color ? "0.85" : "0.25";
         tube.appendChild(el("title", null, title));
         edgesG.appendChild(tubeOutline);
+        edgesG.appendChild(tubeHit);
         edgesG.appendChild(tube);
         // Keep full ``d`` for cable hop overlays; display uses clipped geometry.
-        edgePaths.push({ edge, paths: [tubeOutline, tube], d });
+        edgePaths.push({ edge, paths: [tubeOutline, tubeHit, tube], d });
       }
       indexEdgePaths();
 
@@ -7712,14 +8003,15 @@
     const conduits = document.getElementById("props-conduits-block");
     const cables = document.getElementById("props-cables-block");
     const placeMode = mode === "place";
+    const linkMode = mode === "link";
     if (elements) {
       elements.classList.toggle(
         "hidden",
-        !placeMode || !showElectrical || !propsShowElements
+        linkMode || !placeMode || !showElectrical || !propsShowElements
       );
     }
-    if (conduits) conduits.classList.toggle("hidden", !placeMode);
-    if (cables) cables.classList.toggle("hidden", placeMode);
+    if (conduits) conduits.classList.toggle("hidden", linkMode || !placeMode);
+    if (cables) cables.classList.toggle("hidden", linkMode || placeMode);
   }
 
   /**
@@ -8577,6 +8869,10 @@
   async function savePropsFromPanel(opts = {}) {
     const reload = opts.reload !== false;
     if (!propsTarget || !locationId) return;
+    if (propsTarget.kind === "link") {
+      await saveLinkPropsFromPanel();
+      return;
+    }
     const meta = document.getElementById("props-meta");
     if (!meta) return;
     /** @type {Record<string, string|boolean>} */
@@ -8619,6 +8915,7 @@
 
   async function fillElementInspector(elem) {
     await flushPendingPropsSave();
+    hideLinkActionBar();
     const empty = document.getElementById("panel-empty");
     const panel = document.getElementById("panel-props");
     if (!empty || !panel) {
@@ -8751,6 +9048,7 @@
     }
     for (const c of conduits) {
       const li = document.createElement("li");
+      li.className = "props-list-clickable";
       const ends = [c.from, c.to].filter(Boolean).join(" → ");
       const title = c.name || c.id;
       const head = [title, c.subtype].filter(Boolean).join(" · ");
@@ -8762,6 +9060,11 @@
       appendSub(li, contains ? `contains: ${contains}` : "");
       appendSub(li, c.label && c.label !== c.name ? String(c.label).trim() : "");
       appendSub(li, c.notes ? String(c.notes).trim() : "");
+      li.addEventListener("click", () => {
+        selectLink(c.id, "conduit").catch((err) =>
+          setStatus(String(err.message || err))
+        );
+      });
       ul.appendChild(li);
     }
   }
@@ -8778,6 +9081,7 @@
     ul.innerHTML = "";
     for (const e of edges) {
       const li = document.createElement("li");
+      li.className = "props-list-clickable";
       const other = e.from === elem.id ? e.to : e.from;
       const title = e.name || e.id || "cable";
       const bits = [title, `↔ ${other}`];
@@ -8787,6 +9091,11 @@
       if (e.name && e.id && e.name !== e.id) {
         appendSub(li, `id: ${e.id}`);
       }
+      li.addEventListener("click", () => {
+        selectLink(e.id, "cable").catch((err) =>
+          setStatus(String(err.message || err))
+        );
+      });
       ul.appendChild(li);
     }
   }
@@ -8902,6 +9211,7 @@
 
   async function fillPlaceInspector(id, detailOpt) {
     await flushPendingPropsSave();
+    hideLinkActionBar();
     const empty = document.getElementById("panel-empty");
     const panel = document.getElementById("panel-props");
     if (!empty || !panel) {
@@ -9069,6 +9379,11 @@
     await flushPendingPropsSave();
     await loadPaletteCatalog().catch(() => null);
     setSelectedVisual();
+    if (selectedLinkId) {
+      highlightOutlineSelection();
+      await fillLinkInspector(selectedLinkId);
+      return;
+    }
     if (selectedIds.size === 0) {
       highlightOutlineSelection();
       await fillPlaceInspector(null);
@@ -9084,6 +9399,251 @@
     const elem = (graph?.elements || []).find((e) => e.id === selectedId);
     if (elem) await fillElementInspector(elem);
     else await fillPlaceInspector(selectedId);
+  }
+
+  function hideLinkActionBar() {
+    const bar = document.getElementById("props-link-actions");
+    if (bar) {
+      bar.classList.add("hidden");
+      bar.innerHTML = "";
+    }
+  }
+
+  function appendLinkAction(bar, label, onClick) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = label;
+    btn.addEventListener("click", () => {
+      onClick().catch((err) => setStatus(String(err.message || err)));
+    });
+    bar.appendChild(btn);
+  }
+
+  async function fillLinkInspector(linkId) {
+    const empty = document.getElementById("panel-empty");
+    const props = document.getElementById("panel-props");
+    const meta = document.getElementById("props-meta");
+    if (!empty || !props || !meta) return;
+    empty.classList.add("hidden");
+    props.classList.remove("hidden");
+    setInspectorMode("link");
+    hideLinkActionBar();
+    meta.innerHTML = "";
+    propsTarget = { kind: "link", linkId };
+    let detail;
+    try {
+      detail = await api(`/api/cable?id=${encodeURIComponent(linkId)}`);
+    } catch (err) {
+      setStatus(String(err.message || err));
+      appendPropsRow(meta, {
+        key: "id",
+        value: linkId,
+        editable: false,
+      });
+      bindPropsEditors(meta);
+      snapshotPropsBaseline(meta);
+      return;
+    }
+    selectedLinkKind = detail.kind || selectedLinkKind;
+    appendPropsRow(meta, {
+      key: "id",
+      value: detail.id,
+      editable: false,
+    });
+    appendPropsRow(meta, {
+      key: "kind",
+      value: detail.kind || "",
+      editable: false,
+      labelKey: "type",
+    });
+    appendPropsRow(meta, {
+      key: "type",
+      value: detail.type || "",
+      editable: false,
+    });
+    appendPropsRow(meta, {
+      key: "subtype",
+      value: detail.subtype || "",
+      editable: true,
+    });
+    appendPropsRow(meta, {
+      key: "name",
+      value: detail.name || "",
+      editable: true,
+    });
+    appendPropsRow(meta, {
+      key: "label",
+      value: detail.label || "",
+      editable: true,
+    });
+    if (detail.kind !== "conduit") {
+      appendPropsRow(meta, {
+        key: "color",
+        value: detail.color || "",
+        editable: true,
+      });
+      appendPropsRow(meta, {
+        key: "section",
+        value: detail.section || "",
+        editable: true,
+      });
+    }
+    if (detail.kind === "conduit" || detail.kind === "cable") {
+      appendPropsRow(meta, {
+        key: "install",
+        value: detail.install || "",
+        editable: true,
+        combo: "install",
+        options: ["Surface", "Flush"],
+      });
+    }
+    appendPropsRow(meta, {
+      key: "from",
+      value: detail.from || "",
+      editable: detail.kind !== "cable",
+    });
+    appendPropsRow(meta, {
+      key: "to",
+      value: detail.to || "",
+      editable: detail.kind !== "cable",
+    });
+    appendPropsRow(meta, {
+      key: "contains",
+      value: (detail.contains || []).join(", "),
+      editable: detail.kind !== "conductor",
+    });
+    appendPropsRow(meta, {
+      key: "notes",
+      value: detail.notes || "",
+      editable: true,
+      multiline: true,
+    });
+    bindPropsEditors(meta);
+    snapshotPropsBaseline(meta);
+    // Hide place/element lists when inspecting a link.
+    document.getElementById("props-elements-block")?.classList.add("hidden");
+    document.getElementById("props-conduits-block")?.classList.add("hidden");
+    document.getElementById("props-cables-block")?.classList.add("hidden");
+
+    const bar = document.getElementById("props-link-actions");
+    if (bar) {
+      bar.classList.remove("hidden");
+      bar.innerHTML = "";
+      if (detail.is_open_run) {
+        appendLinkAction(bar, t("props.link.claim"), async () => {
+          const enter = window.prompt(t("props.link.claimEnter"));
+          if (!enter) return;
+          const res = await api("/api/cable/claim", {
+            method: "POST",
+            body: JSON.stringify({
+              location_id: locationId,
+              id: detail.id,
+              enter: enter.trim(),
+              depth: depthLevel,
+            }),
+          });
+          if (res.graph) {
+            graph = res.graph;
+            render();
+          }
+          applyEditFlags(res);
+          await selectLink(detail.id, detail.kind);
+          setStatus(t("status.linkClaimed"));
+        });
+        appendLinkAction(bar, t("props.link.land"), async () => {
+          const fromRef = window.prompt(t("props.link.landFrom"), detail.from || "");
+          if (fromRef == null) return;
+          const toRef = window.prompt(t("props.link.landTo"), detail.to || "");
+          if (toRef == null) return;
+          const asName = window.prompt(t("props.link.landAs"), detail.id);
+          const res = await api("/api/cable/land", {
+            method: "POST",
+            body: JSON.stringify({
+              location_id: locationId,
+              id: detail.id,
+              from: fromRef.trim(),
+              to: toRef.trim(),
+              as_name: asName && asName.trim() ? asName.trim() : null,
+              depth: depthLevel,
+            }),
+          });
+          if (res.graph) {
+            graph = res.graph;
+            render();
+          }
+          applyEditFlags(res);
+          const nextId = res.detail?.id || detail.id;
+          await selectLink(nextId, "cable");
+          setStatus(t("status.linkLanded"));
+        });
+      }
+      if (detail.kind === "conductor" || detail.kind === "cable") {
+        appendLinkAction(bar, t("props.link.groupSheath"), async () => {
+          const extra = window.prompt(t("props.link.groupContains"), detail.id);
+          if (extra == null) return;
+          const contains = [
+            detail.id,
+            ...String(extra)
+              .split(/[,\s]+/)
+              .map((s) => s.trim())
+              .filter(Boolean),
+          ];
+          const res = await api("/api/cable/sheath", {
+            method: "POST",
+            body: JSON.stringify({
+              location_id: locationId,
+              owner_id: locationId,
+              contains,
+              depth: depthLevel,
+            }),
+          });
+          if (res.graph) {
+            graph = res.graph;
+            render();
+          }
+          applyEditFlags(res);
+          await selectLink(res.detail.id, "cable");
+          setStatus(t("status.linkGrouped"));
+        });
+      }
+    }
+  }
+
+  async function saveLinkPropsFromPanel() {
+    if (!propsTarget || propsTarget.kind !== "link" || !locationId) return;
+    const meta = document.getElementById("props-meta");
+    if (!meta) return;
+    /** @type {Record<string, any>} */
+    const fields = {};
+    meta.querySelectorAll("[data-prop]").forEach((el) => {
+      const key = el.getAttribute("data-prop");
+      if (!key || key === "id" || key === "kind" || key === "type") return;
+      if (el.type === "checkbox") fields[key] = el.checked;
+      else fields[key] = el.value;
+    });
+    if (fields.contains != null && typeof fields.contains === "string") {
+      fields.contains = fields.contains
+        .split(/[,\s]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    const res = await api("/api/cable/properties", {
+      method: "PATCH",
+      body: JSON.stringify({
+        location_id: locationId,
+        id: propsTarget.linkId,
+        fields,
+        depth: depthLevel,
+      }),
+    });
+    if (res.graph) {
+      graph = res.graph;
+      render();
+    }
+    applyEditFlags(res);
+    if (res.detail?.id) selectedLinkId = res.detail.id;
+    await fillLinkInspector(selectedLinkId);
+    setStatus(res.dirty ? t("status.linkSavedUnsaved") : t("status.linkSaved"));
   }
 
   function prefillInsertForms(detail) {
@@ -10922,6 +11482,14 @@
         const action = insertItem.getAttribute("data-insert-action");
         if (action === "element" || action === "container") {
           openTypePickerFromInsert(action).catch((err) => insertMsg(String(err.message || err), true));
+        } else if (action === "conduit") {
+          beginWiringGesture("conduit");
+        } else if (action === "conductor") {
+          beginWiringGesture("conductor");
+        } else if (action === "cable") {
+          beginSheathFromSelection().catch((err) =>
+            setStatus(String(err.message || err))
+          );
         } else {
           openInsertModal(action);
         }
@@ -11342,6 +11910,11 @@
       ev.preventDefault();
       endCatalogPlacementMode();
       setStatus(t("modal.cancel"));
+      return;
+    }
+    if (ev.key === "Escape" && wiringMode) {
+      ev.preventDefault();
+      cancelWiringMode();
       return;
     }
     if (ev.code === "Space") {

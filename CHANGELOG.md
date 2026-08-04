@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.67.0] — 2026-08-04
+
+### Added
+
+- Cable/conduit/conductor management in the UI: select tubes and strands,
+  editable link properties, delete links, Insert → Conduit/Conductor wiring
+  gestures (opening→opening / terminal→terminal), Cable sheath grouping, and
+  open→claim→land actions for open runs.
+- API: ``GET/PATCH /api/cable``, ``POST /api/cable/{conduit,conductor,sheath,open,claim,land}``,
+  ``GET /api/cable/open-runs``.
+
 ## [0.66.4] — 2026-08-04
 
 ### Changed

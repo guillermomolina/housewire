@@ -137,10 +137,13 @@ def _element_deleted(
 
 def _expand_deletion_sets(
     doc: dict[str, Any], ids: list[str]
-) -> tuple[set[tuple[str, ...]], set[tuple[str, ...]], list[str]]:
+) -> tuple[set[tuple[str, ...]], set[tuple[str, ...]], list[str], list[str]]:
     deleted_places: set[tuple[str, ...]] = set()
     deleted_elements: set[tuple[str, ...]] = set()
+    deleted_cables: list[str] = []
     deleted_ids: list[str] = []
+
+    from housewire.site.cable_actions import find_cable_owner
 
     for raw in ids:
         text = str(raw).strip()
@@ -171,31 +174,43 @@ def _expand_deletion_sets(
         parent, name = parts[:-1], parts[-1]
         try:
             parent_node = get_place_node(doc, parent)
+        except ValueError:
+            parent_node = None
+        elements = (
+            parent_node.get("elements") or {}
+            if isinstance(parent_node, dict)
+            else {}
+        )
+        if isinstance(elements, dict) and name in elements and isinstance(
+            elements.get(name), dict
+        ):
+            child = elements[name]
+            if is_place_type(child.get("type")):
+                deleted_places.add(parts)
+                deleted_ids.append(_id_of(parts))
+                for rel, _child in iter_places(doc, under=parts):
+                    full = tuple([*parts, *rel])
+                    deleted_places.add(full)
+                    deleted_ids.append(_id_of(full))
+            elif parts not in deleted_elements:
+                deleted_elements.add(parts)
+                deleted_ids.append(_id_of(parts))
+            continue
+
+        try:
+            find_cable_owner(doc, text)
         except ValueError as exc:
             raise ValueError(f"Unknown id: {text}") from exc
-        elements = parent_node.get("elements") or {}
-        if not isinstance(elements, dict) or name not in elements:
-            raise ValueError(f"Unknown id: {text}")
-        child = elements[name]
-        if not isinstance(child, dict):
-            raise ValueError(f"Unknown id: {text}")
-        if is_place_type(child.get("type")):
-            deleted_places.add(parts)
-            deleted_ids.append(_id_of(parts))
-            for rel, _child in iter_places(doc, under=parts):
-                full = tuple([*parts, *rel])
-                deleted_places.add(full)
-                deleted_ids.append(_id_of(full))
-        elif parts not in deleted_elements:
-            deleted_elements.add(parts)
-            deleted_ids.append(_id_of(parts))
+        if text not in deleted_cables:
+            deleted_cables.append(text)
+            deleted_ids.append(text)
 
     deleted_elements = {
         e
         for e in deleted_elements
         if not _place_deleted(e[:-1], deleted_places=deleted_places)
     }
-    return deleted_places, deleted_elements, deleted_ids
+    return deleted_places, deleted_elements, deleted_ids, deleted_cables
 
 
 def _iter_cable_owners(
@@ -263,14 +278,28 @@ def delete_selection(doc: dict[str, Any], ids: list[str]) -> DeleteResult:
         raise ValueError("ids must not be empty")
 
     catalog = load_catalog()
-    deleted_places, deleted_elements, deleted_ids = _expand_deletion_sets(doc, ids)
-    if not deleted_places and not deleted_elements:
+    deleted_places, deleted_elements, deleted_ids, deleted_cables = (
+        _expand_deletion_sets(doc, ids)
+    )
+    if not deleted_places and not deleted_elements and not deleted_cables:
         raise ValueError("Nothing to delete")
+
+    # Pure cable deletions (no place/element cascade).
+    if deleted_cables and not deleted_places and not deleted_elements:
+        from housewire.site.cable_actions import delete_cables
+
+        delete_cables(doc, deleted_cables)
+        return DeleteResult(deleted=list(deleted_ids), deleted_places=set())
 
     known = _known_place_paths(doc)
     result = DeleteResult(
         deleted=list(deleted_ids), deleted_places=set(deleted_places)
     )
+
+    if deleted_cables:
+        from housewire.site.cable_actions import delete_cables
+
+        delete_cables(doc, deleted_cables)
 
     delete_keys: set[tuple[tuple[str, ...], str]] = set()
     # (owner, conductor_name, survivor_element_path, clear_from)

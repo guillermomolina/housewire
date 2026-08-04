@@ -1698,6 +1698,14 @@ button:hover {
   line-height: 1.35;
 }
 
+.props-list .props-list-clickable {
+  cursor: pointer;
+}
+
+.props-list .props-list-clickable:hover {
+  color: var(--text);
+}
+
 .props-list .props-sub,
 .props-list .show-sub {
   display: block;
@@ -1898,7 +1906,24 @@ button:hover {
   stroke-opacity: 0.25;
   stroke-linecap: round;
   stroke-linejoin: round;
-  pointer-events: none;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.edge-tube.selected,
+.cable-strand-hit.selected + .cable-strand,
+.cable-jacket.selected {
+  stroke: var(--selection) !important;
+  stroke-opacity: 1 !important;
+}
+
+.edge-tube-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: stroke;
+  cursor: pointer;
 }
 
 /* Thin high-contrast rim around the conduit (theme default; JS may override). */
@@ -1945,6 +1970,59 @@ button:hover {
   stroke-linejoin: round;
   stroke-linecap: round;
   pointer-events: stroke;
+  cursor: pointer;
+}
+
+.cable-strand-hit.selected {
+  stroke: color-mix(in srgb, var(--selection) 35%, transparent);
+}
+
+.props-link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.props-link-actions.hidden {
+  display: none;
+}
+
+.props-link-actions button {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.props-link-actions button:hover {
+  border-color: var(--accent, #3b82f6);
+}
+
+.opening-side,
+.opening-front,
+.opening-back,
+.opening-front-mark,
+.opening-back-mark,
+.element-terminal {
+  cursor: pointer;
+}
+
+#viewport.wiring-conduit .opening-side,
+#viewport.wiring-conduit .opening-front,
+#viewport.wiring-conduit .opening-back,
+#viewport.wiring-conduit .opening-front-mark,
+#viewport.wiring-conduit .opening-back-mark {
+  stroke: var(--accent, #3b82f6);
+}
+
+#viewport.wiring-conductor .element-terminal {
+  stroke: var(--accent, #3b82f6);
+  fill: color-mix(in srgb, var(--accent, #3b82f6) 35%, var(--node));
 }
 
 .cable-edge {
