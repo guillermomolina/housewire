@@ -69,7 +69,15 @@
   let nodesById = {};
   let elementsById = {};
   let edgePaths = [];
+  /** @type {Map<string, (typeof edgePaths)[number]>} */
+  let edgePathsByConduitId = new Map();
   let cablePaths = [];
+  /**
+   * Memo for ``minBendOrtho`` within one render/refresh when ``occupied`` is
+   * empty (hop fallbacks / interior legs). Cleared with routeGeomCache.
+   * @type {Map<string, number[][]>|null}
+   */
+  let routeOrthoMemo = null;
   let lastTap = { id: null, t: 0 };
   let canUndo = false;
   let canRedo = false;
@@ -974,10 +982,30 @@
       placeLeaves,
       elements,
     };
+    routeOrthoMemo = new Map();
   }
 
   function endRouteGeomCache() {
     routeGeomCache = null;
+    routeOrthoMemo = null;
+  }
+
+  function indexEdgePaths() {
+    edgePathsByConduitId.clear();
+    for (const item of edgePaths) {
+      const id = item?.edge?.id;
+      if (id) edgePathsByConduitId.set(id, item);
+    }
+  }
+
+  /** Compact obstacle list for route memo keys (integer px). */
+  function obstaclesMemoKey(obstacles) {
+    if (!obstacles || !obstacles.length) return "";
+    let s = "";
+    for (const r of obstacles) {
+      s += `${r.x | 0},${r.y | 0},${r.w | 0},${r.h | 0};`;
+    }
+    return s;
   }
 
   function filterCachedIdRects(all, excludeIds) {
@@ -2191,6 +2219,7 @@
     nodesById = {};
     elementsById = {};
     edgePaths = [];
+    edgePathsByConduitId.clear();
     cablePaths = [];
   }
 
@@ -2393,13 +2422,13 @@
         return segs[Symbol.iterator]();
       },
       /**
-       * Segments that may conflict with ``s`` (padded AABB). Falls back to the
-       * full list when the index is still small.
+       * Segments that may conflict with ``s`` (padded AABB). Always uses the
+       * spatial grid (even for the first painted segs) so early routes stay O(near).
        * @param {{axis:string,x?:number,y?:number,a:number,b:number,half?:number}} s
        * @param {number} [pad]
        */
       near(s, pad) {
-        if (segs.length < 16) return segs;
+        if (!segs.length) return segs;
         /** @type {Set<object>} */
         const hit = new Set();
         forEachCell(boundsOf(s, pad || 0), (k) => {
@@ -2407,7 +2436,7 @@
           if (!bucket) return;
           for (const o of bucket) hit.add(o);
         });
-        return hit.size ? hit : segs;
+        return hit.size ? [...hit] : segs;
       },
     };
   }
@@ -3201,6 +3230,23 @@
       ((occupied && occupied.length) || (obstacles && obstacles.length));
     const eps = overlapEps ?? 6;
     const half = halfWidth != null ? Number(halfWidth) : 0;
+    const occupiedEmpty = !occupied || !occupied.length;
+    /** @type {string|null} */
+    let memoKey = null;
+    if (occupiedEmpty && routeOrthoMemo) {
+      const sb = stayBounds
+        ? `${stayBounds.x | 0},${stayBounds.y | 0},${stayBounds.w | 0},${stayBounds.h | 0}`
+        : "";
+      const pre = prePoint ? `${prePoint[0] | 0},${prePoint[1] | 0}` : "";
+      const post = postPoint ? `${postPoint[0] | 0},${postPoint[1] | 0}` : "";
+      memoKey =
+        `${ax | 0},${ay | 0},${bx | 0},${by | 0},` +
+        `${fromFace || ""},${toFace || ""},${detour | 0},${lane | 0},${half | 0},` +
+        `${obstaclesMemoKey(obstacles)},${sb},${(hugRects && hugRects.length) | 0},` +
+        `${pre},${post}`;
+      const hit = routeOrthoMemo.get(memoKey);
+      if (hit) return hit.map((p) => [p[0], p[1]]);
+    }
 
     /** Score bends on the full opening→stub→…→stub→opening path. */
     const scorePoly = (midThroughEnd) => {
@@ -3464,20 +3510,61 @@
     // Narrow pass: few lanes, rails only around boxes (no per-obstacle C).
     let raw = emitCandidates(needLanes ? 2 : 0, needLanes ? 1 : 0, false, false);
     if (!raw.length) {
-      return [
+      /** @type {number[][]} */
+      const fallback = [
         [ax + detour, ay],
         [ax + detour, by],
         [bx, by],
       ];
+      if (memoKey && routeOrthoMemo) {
+        routeOrthoMemo.set(
+          memoKey,
+          fallback.map((p) => [p[0], p[1]])
+        );
+      }
+      return fallback;
     }
     let picked = pickBest(raw);
     if (picked.obstacle <= 0 && picked.stack <= 0 && picked.outside <= 0) {
+      if (memoKey && routeOrthoMemo) {
+        routeOrthoMemo.set(
+          memoKey,
+          picked.pts.map((p) => [p[0], p[1]])
+        );
+      }
       return picked.pts;
     }
-    // Wide pass: full lane set + obstacle C patterns + 2×detour loops.
+    // Stack-only: medium pass (more lanes, still no C / 2×detour).
+    if (picked.obstacle <= 0 && picked.outside <= 0) {
+      raw = emitCandidates(needLanes ? 4 : 0, needLanes ? 1 : 0, false, false);
+      if (raw.length) picked = pickBest(raw);
+      if (memoKey && routeOrthoMemo) {
+        routeOrthoMemo.set(
+          memoKey,
+          picked.pts.map((p) => [p[0], p[1]])
+        );
+      }
+      return picked.pts;
+    }
+    // Hard obstacle / out-of-bounds: full wide pass.
     raw = emitCandidates(needLanes ? 8 : 0, needLanes ? 2 : 0, true, true);
-    if (!raw.length) return picked.pts;
-    return pickBest(raw).pts;
+    if (!raw.length) {
+      if (memoKey && routeOrthoMemo) {
+        routeOrthoMemo.set(
+          memoKey,
+          picked.pts.map((p) => [p[0], p[1]])
+        );
+      }
+      return picked.pts;
+    }
+    const wide = pickBest(raw).pts;
+    if (memoKey && routeOrthoMemo) {
+      routeOrthoMemo.set(
+        memoKey,
+        wide.map((p) => [p[0], p[1]])
+      );
+    }
+    return wide;
   }
 
   function edgePathD(edge, byId, occupied, halfWidth) {
@@ -5461,7 +5548,9 @@
 
   /** Exact tube geometry for a hop (same path as the conduit edge). */
   function hopTubePathD(hop) {
-    const item = edgePaths.find((e) => e.edge && e.edge.id === hop.conduit);
+    const item =
+      (hop.conduit && edgePathsByConduitId.get(hop.conduit)) ||
+      edgePaths.find((e) => e.edge && e.edge.id === hop.conduit);
     if (!item || !item.d) return null;
     const e = item.edge;
     if (e.from === hop.from && e.to === hop.to) return item.d;
@@ -6271,9 +6360,9 @@
           paintJacketD(conduitDisplayD(tubeD, placeById, fakeEdge), midOff, jw);
         }
       } else if (edge.conduit) {
-        const item = edgePaths.find(
-          (e) => e.edge && e.edge.id === edge.conduit
-        );
+        const item =
+          edgePathsByConduitId.get(edge.conduit) ||
+          edgePaths.find((e) => e.edge && e.edge.id === edge.conduit);
         if (item && item.d) {
           const { midOff, jw } = jacketMetrics(edge.conduit);
           paintJacketD(
@@ -6403,8 +6492,14 @@
     return { edge, paths, subs: [], wireIdx };
   }
 
-  function refreshEdges() {
+  /**
+   * Re-route conduits and/or rebuild cable SVG.
+   * @param {{ skipConduits?: boolean }} [opts] When skipConduits, reuse existing
+   *   tube ``d`` (element-only drag) and only rebuild cable layers.
+   */
+  function refreshEdges(opts) {
     if (!graph) return;
+    const skipConduits = !!(opts && opts.skipConduits);
     const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
     const elemById = Object.fromEntries(
       (graph.elements || []).map((e) => [e.id, e])
@@ -6413,29 +6508,43 @@
     try {
       /** @type {ReturnType<typeof createOccupiedIndex>} */
       const occupied = createOccupiedIndex();
-      for (const item of edgePaths) {
-        const n = (item.edge.contains || []).length;
-        const lanes = tubeLaneCount(item.edge);
-        const roadW = conduitRoadWidth(n, lanes);
-        const half = roadW / 2;
-        const routed = edgePathD(item.edge, byId, occupied, half);
-        if (routed) {
-          item.d = routed.d;
-          const displayD = conduitDisplayD(routed.d, byId, item.edge);
-          for (const path of item.paths) path.setAttribute("d", displayD);
-          for (const s of routed.segs) occupied.push(s);
-          const outline = item.paths[0];
-          const tube = item.paths[1] || item.paths[0];
-          const tubeCss = wireColorCss(item.edge.color || "GY");
-          const outlineCss = contrastOutlineCss(tubeCss);
-          if (outline && item.paths.length > 1) {
-            outline.style.strokeWidth = String(roadW + OUTLINE_EXTRA);
-            outline.style.stroke = outlineCss;
+      if (!skipConduits) {
+        for (const item of edgePaths) {
+          const n = (item.edge.contains || []).length;
+          const lanes = tubeLaneCount(item.edge);
+          const roadW = conduitRoadWidth(n, lanes);
+          const half = roadW / 2;
+          const routed = edgePathD(item.edge, byId, occupied, half);
+          if (routed) {
+            item.d = routed.d;
+            const displayD = conduitDisplayD(routed.d, byId, item.edge);
+            for (const path of item.paths) path.setAttribute("d", displayD);
+            for (const s of routed.segs) occupied.push(s);
+            const outline = item.paths[0];
+            const tube = item.paths[1] || item.paths[0];
+            const tubeCss = wireColorCss(item.edge.color || "GY");
+            const outlineCss = contrastOutlineCss(tubeCss);
+            if (outline && item.paths.length > 1) {
+              outline.style.strokeWidth = String(roadW + OUTLINE_EXTRA);
+              outline.style.stroke = outlineCss;
+            }
+            if (tube) {
+              tube.style.strokeWidth = String(roadW);
+              tube.style.stroke = tubeCss;
+              tube.style.strokeOpacity = item.edge.color ? "0.85" : "0.25";
+            }
           }
-          if (tube) {
-            tube.style.strokeWidth = String(roadW);
-            tube.style.stroke = tubeCss;
-            tube.style.strokeOpacity = item.edge.color ? "0.85" : "0.25";
+        }
+        indexEdgePaths();
+      } else {
+        for (const item of edgePaths) {
+          if (!item.d) continue;
+          const n = (item.edge.contains || []).length;
+          const lanes = tubeLaneCount(item.edge);
+          const roadW = conduitRoadWidth(n, lanes);
+          const half = roadW / 2;
+          for (const sub of pathDToSubpaths(item.d)) {
+            for (const s of segsFromPoints(sub, half)) occupied.push(s);
           }
         }
       }
@@ -6539,8 +6648,9 @@
   /**
    * Update place/element transforms (and optional sizes/labels).
    * @param {unknown} [_node]
-   * @param {{ refresh?: boolean }} [opts] When refresh is false, skip conduit/
-   *   cable re-route (use during pointermove drag; call again on pointerup).
+   * @param {{ refresh?: boolean, skipConduits?: boolean }} [opts] When refresh
+   *   is false, skip conduit/cable re-route (use during pointermove drag; call
+   *   again on pointerup). skipConduits reuses tube geometry (element-only drag).
    */
   function updateNodeVisual(_node, opts) {
     const refresh = !opts || opts.refresh !== false;
@@ -6577,7 +6687,11 @@
     for (const e of graph.elements || []) {
       updateElementVisual(e, byId);
     }
-    if (refresh) refreshEdges();
+    if (refresh) {
+      refreshEdges(
+        opts && opts.skipConduits ? { skipConduits: true } : undefined
+      );
+    }
   }
 
   function paintNode(node, layerG, byId) {
@@ -7066,6 +7180,7 @@
         // Keep full ``d`` for cable hop overlays; display uses clipped geometry.
         edgePaths.push({ edge, paths: [tubeOutline, tube], d });
       }
+      indexEdgePaths();
 
       for (const node of graph.nodes) {
         if (!childrenOf(node.id).length) paintNode(node, leavesG, byId);
@@ -7878,7 +7993,14 @@
     lastTap = { id: null, t: 0 };
     if (!locationId) return;
     // Re-route tubes/cables once after the drag, not on every pointermove.
-    updateNodeVisual(null);
+    // Element-only moves leave place boxes fixed → reuse conduit geometry.
+    const items = finished.items || [];
+    const onlyElements =
+      items.length > 0 && items.every((it) => it.kind === "element");
+    updateNodeVisual(
+      null,
+      onlyElements ? { skipConduits: true } : undefined
+    );
     await syncInspectorFromSelection();
     try {
       const placePositions = {};

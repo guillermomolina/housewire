@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.49.0] — 2026-08-04
+
+### Changed
+
+- Faster physical canvas routing: spatial occupied queries from the first
+  segment, memoized empty-``occupied`` ortho routes, medium pass instead of
+  full wide pass for stack-only conflicts, O(1) conduit lookup for cable hops,
+  and element-only drags skip re-routing fixed tubes.
+
 ## [0.48.6] — 2026-08-04
 
 ### Changed
