@@ -7,7 +7,6 @@ from typing import Any
 from housewire import (
     __author__,
     __copyright__,
-    __description__,
     __license__,
     __repository__,
     __title__,
@@ -164,16 +163,20 @@ def create_app(site_root: Path | None = None) -> Any:
         )
 
     @app.get("/api/about")
-    def api_about() -> dict[str, Any]:
+    def api_about(request: Request) -> dict[str, Any]:
         """Program identity for Help → About (and CLI/docs consumers)."""
+        from housewire.i18n import about_description_for
+
+        locale = _locale_from_request(request)
         return {
             "title": __title__,
             "version": __version__,
             "author": __author__,
-            "description": __description__,
+            "description": about_description_for(locale),
             "license": __license__,
             "copyright": __copyright__,
             "repository": __repository__,
+            "lang": locale,
         }
 
     @app.get("/api/wire-colors")

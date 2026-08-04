@@ -540,6 +540,11 @@ class TestServeApi(unittest.TestCase):
             self.assertIn("github.com/guillermomolina/housewire", about["repository"])
             self.assertTrue(about["version"])
             self.assertTrue(about["description"])
+            self.assertIn("YAML", about["description"])
+
+            about_es = client.get("/api/about", params={"lang": "es"}).json()
+            self.assertEqual(about_es["lang"], "es")
+            self.assertIn("lienzo", about_es["description"])
 
             house = client.get(
                 "/api/physical", params={"location": ".", "depth": 2}

@@ -9758,6 +9758,10 @@
   async function setUiLocale(next) {
     I18n.setLocale(next);
     syncLanguageMenu();
+    const aboutModal = document.getElementById("about-modal");
+    if (aboutModal && !aboutModal.classList.contains("hidden")) {
+      openAboutModal().catch((err) => setStatus(String(err.message || err)));
+    }
     if (hasDocument && locationId) {
       try {
         await loadGraph();
@@ -9859,18 +9863,21 @@
       const copyrightEl = document.getElementById("about-copyright");
       if (titleEl) titleEl.textContent = about.title || "HouseWire";
       if (versionEl) {
-        versionEl.textContent = about.version ? `Version ${about.version}` : "";
+        versionEl.textContent = about.version
+          ? t("about.version", { v: about.version })
+          : "";
       }
       if (descEl) descEl.textContent = about.description || "";
       if (authorEl) authorEl.textContent = about.author || "";
       if (repoEl) {
         const url = about.repository || "";
         repoEl.href = url || "#";
-        repoEl.textContent = url;
+        repoEl.textContent = url.replace(/^https?:\/\//, "") || url;
         if (!url) repoEl.removeAttribute("href");
       }
       if (licenseEl) licenseEl.textContent = about.license || "";
       if (copyrightEl) copyrightEl.textContent = about.copyright || "";
+      I18n.applyDomTranslations(modal);
     } catch (err) {
       setStatus(String(err.message || err));
       return;

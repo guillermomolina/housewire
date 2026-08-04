@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.50.2] — 2026-08-04
+
+### Added
+
+- Help **About** dialog and ``/api/about`` description follow the UI locale
+  (English / Spanish labels and program description).
+
 ## [0.50.1] — 2026-08-04
 
 ### Added

@@ -6,7 +6,7 @@ import unittest
 
 from fixtures import add_place
 from housewire.house import catalog_type_description, catalog_type_label
-from housewire.i18n import normalize_locale, unlabeled_for, unnamed_for
+from housewire.i18n import about_description_for, normalize_locale, unlabeled_for, unnamed_for
 from housewire.site import abm
 from housewire.site.clipboard import pack_selection, paste_payload
 from housewire.site.tree import get_place_node
@@ -32,6 +32,14 @@ class TestPastePlaceholders(unittest.TestCase):
         self.assertEqual(unlabeled_for("en"), "Unlabeled")
         self.assertEqual(unnamed_for("es"), "Sin nombre")
         self.assertEqual(unlabeled_for("es"), "Sin etiqueta")
+
+    def test_about_description(self) -> None:
+        en = about_description_for("en")
+        es = about_description_for("es")
+        self.assertIn("YAML", en)
+        self.assertIn("house/v2", en)
+        self.assertIn("YAML", es)
+        self.assertIn("lienzo", es)
 
 
 class TestCatalogTypeLabelLocale(unittest.TestCase):
