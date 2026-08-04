@@ -539,7 +539,17 @@
       .filter((id) => id && id !== ".");
   }
 
-  /** Paste parent site id, or null if selection is ambiguous. */
+  /** Parent site id for paste destination, or null if selection is ambiguous. */
+  function parentSiteIdOf(siteId) {
+    if (!siteId || siteId === ".") return ".";
+    if (!siteId.includes("/")) return ".";
+    return siteId.slice(0, siteId.lastIndexOf("/"));
+  }
+
+  /**
+   * Paste target place: siblings of the selection (same as elements), or the
+   * current canvas when nothing is selected (paste into the open location).
+   */
   function resolvePasteParentSiteId() {
     if (!selectedIds.size) return locationId || ".";
     const placeSites = [];
@@ -566,8 +576,11 @@
       }
     }
     if (placeSites.length && elemParents.length) return null;
-    if (placeSites.length > 1) return null;
-    if (placeSites.length === 1) return placeSites[0];
+    if (placeSites.length) {
+      const parents = [...new Set(placeSites.map(parentSiteIdOf))];
+      if (parents.length !== 1) return null;
+      return parents[0];
+    }
     if (elemParents.length) {
       const uniq = [...new Set(elemParents)];
       if (uniq.length !== 1) return null;

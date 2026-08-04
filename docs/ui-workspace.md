@@ -24,7 +24,7 @@ tabs. The last location/depth per open file is remembered while switching tabs.
 | Save as… | Browser/OS save picker; opens the copy as another tab |
 | Close / tab × | Close that document (prompt if dirty) |
 | Edit → Delete | Cascade-delete selected places/elements (`Del` / Backspace); cross-boundary cables become open runs |
-| Edit → Cut / Copy / Paste | Clipboard pack of selection (`Ctrl+X`/`C`/`V`); paste under selected place with id rename |
+| Edit → Cut / Copy / Paste | Clipboard pack of selection (`Ctrl+X`/`C`/`V`); paste as sibling (or into canvas if nothing selected) with id rename |
 
 ```text
 Workspace

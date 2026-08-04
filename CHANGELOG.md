@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.48.3] — 2026-08-04
+
+### Fixed
+
+- Paste places as **siblings** of the selection (same rule as elements). With a
+  place selected, paste no longer nests inside it; clear selection or open the
+  target location to paste as a child of the canvas.
+
 ## [0.48.2] — 2026-08-04
 
 ### Fixed
