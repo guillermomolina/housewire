@@ -7,6 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.66.3] — 2026-08-04
+
+### Fixed
+
+- Toolbar button hover titles and aria-labels follow the UI language.
+
 ## [0.66.2] — 2026-08-04
 
 ### Changed
