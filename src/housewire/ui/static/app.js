@@ -8153,16 +8153,6 @@
       return btn;
     }
 
-    const diagram = document.createElement("div");
-    diagram.className = "props-face-diagram";
-    diagram.innerHTML =
-      '<span class="props-face-tag n">N</span>' +
-      '<span class="props-face-tag w">W</span>' +
-      '<span class="props-face-core">F</span>' +
-      '<span class="props-face-tag e">E</span>' +
-      '<span class="props-face-tag s">S</span>' +
-      '<span class="props-face-tag b">B</span>';
-
     const facesHost = document.createElement("div");
     facesHost.className = "props-face-list";
 
@@ -8284,7 +8274,6 @@
 
     syncHidden();
     renderFaces();
-    body.appendChild(diagram);
     body.appendChild(facesHost);
     details.appendChild(summary);
     details.appendChild(body);

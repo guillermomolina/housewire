@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.66.4] — 2026-08-04
+
+### Changed
+
+- Drop the openings/terminals face compass diagram (face letters in each row
+  are enough).
+- Properties panel styling aligned with the sidebar (type size, padding,
+  openings summary as a bordered control).
+
 ## [0.66.3] — 2026-08-04
 
 ### Fixed
