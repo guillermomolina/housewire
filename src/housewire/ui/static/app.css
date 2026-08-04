@@ -874,8 +874,8 @@ button:hover {
   margin: 0;
   font-size: 0.85rem;
   font-weight: 600;
-  text-transform: none;
-  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--muted);
   line-height: 1.2;
 }
@@ -1045,10 +1045,6 @@ button:hover {
   border-color: transparent;
 }
 
-.palette-item.element {
-  color: var(--element);
-}
-
 .palette-item .palette-item-icon {
   width: 0.85rem;
   height: 0.85rem;
@@ -1056,10 +1052,6 @@ button:hover {
   flex-shrink: 0;
   display: block;
   margin: 0;
-}
-
-.palette-item.element .palette-item-icon {
-  color: var(--element);
 }
 
 .palette-item-label {

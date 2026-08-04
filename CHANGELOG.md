@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.67.1] — 2026-08-04
+
+### Changed
+
+- Palette: containers and elements share the same row color (section headers
+  still separate the two groups).
+- Sidebar / Properties panel titles use the same uppercase styling when the
+  panel is open and when it is collapsed to the edge tab.
+
 ## [0.67.0] — 2026-08-04
 
 ### Added
