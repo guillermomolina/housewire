@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.50.3] — 2026-08-04
+
+### Fixed
+
+- Properties panel text fields are saved on blur and before changing
+  selection, so edits are not lost when clicking another box or element
+  (checkbox flips already saved immediately).
+
 ## [0.50.2] — 2026-08-04
 
 ### Added

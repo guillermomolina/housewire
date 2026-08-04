@@ -7389,10 +7389,10 @@
     }
   }
 
-  function selectElement(elem) {
+  async function selectElement(elem) {
     replaceSelection(elem.id);
     highlightOutlineSelection();
-    fillElementInspector(elem);
+    await fillElementInspector(elem);
   }
 
   function setInspectorMode(mode) {
@@ -7439,6 +7439,50 @@
   /** @type {{kind:"place"|"element", placeId:string, element?:string}|null} */
   let propsTarget = null;
   let propsSaveTimer = null;
+  /** JSON snapshot of editable props when the panel was built (skip no-op saves). */
+  let propsFieldsBaseline = null;
+  /** @type {Promise<void>|null} */
+  let propsSavePromise = null;
+
+  function readPropsFieldsFromPanel(meta) {
+    /** @type {Record<string, string|boolean>} */
+    const fields = {};
+    if (!meta) return fields;
+    meta.querySelectorAll("[data-prop]").forEach((el) => {
+      const key = el.getAttribute("data-prop");
+      if (!key) return;
+      if (el.type === "checkbox") fields[key] = el.checked;
+      else fields[key] = el.value;
+    });
+    return fields;
+  }
+
+  function snapshotPropsBaseline(meta) {
+    propsFieldsBaseline = JSON.stringify(readPropsFieldsFromPanel(meta));
+  }
+
+  function propsPanelDirty(meta) {
+    if (!meta || !propsFieldsBaseline) return false;
+    return JSON.stringify(readPropsFieldsFromPanel(meta)) !== propsFieldsBaseline;
+  }
+
+  async function flushPendingPropsSave() {
+    if (propsSaveTimer) {
+      clearTimeout(propsSaveTimer);
+      propsSaveTimer = null;
+    }
+    if (propsSavePromise) {
+      await propsSavePromise;
+    }
+    if (!propsTarget || !locationId) return;
+    const meta = document.getElementById("props-meta");
+    if (!meta || !meta.querySelector("[data-prop]")) return;
+    if (!propsPanelDirty(meta)) return;
+    propsSavePromise = savePropsFromPanel({ reload: false }).finally(() => {
+      propsSavePromise = null;
+    });
+    await propsSavePromise;
+  }
 
   function appendPropsRow(meta, spec) {
     const dt = document.createElement("dt");
@@ -7504,6 +7548,17 @@
       el.addEventListener("change", () => {
         scheduleSaveProps();
       });
+      if (el.type !== "checkbox") {
+        el.addEventListener("blur", () => {
+          if (propsSaveTimer) {
+            clearTimeout(propsSaveTimer);
+            propsSaveTimer = null;
+          }
+          flushPendingPropsSave().catch((err) =>
+            setStatus(String(err.message || err))
+          );
+        });
+      }
       el.addEventListener("keydown", (ev) => {
         if (ev.key === "Enter" && el.tagName === "INPUT" && el.type !== "checkbox") {
           ev.preventDefault();
@@ -7629,7 +7684,7 @@
     scheduleStatusRefresh();
     if (propsTarget.kind === "element" && selectedId) {
       const elem = (graph?.elements || []).find((e) => e.id === selectedId);
-      if (elem) fillElementInspector(elem);
+      if (elem) await fillElementInspector(elem);
     } else if (propsTarget.kind === "place") {
       const id = selectedId || propsTarget.placeId || ".";
       await fillPlaceInspector(id, res.detail);
@@ -7644,19 +7699,15 @@
     }, 350);
   }
 
-  async function savePropsFromPanel() {
+  async function savePropsFromPanel(opts = {}) {
+    const reload = opts.reload !== false;
     if (!propsTarget || !locationId) return;
     const meta = document.getElementById("props-meta");
     if (!meta) return;
     /** @type {Record<string, string|boolean>} */
-    const fields = {};
-    meta.querySelectorAll("[data-prop]").forEach((el) => {
-      const key = el.getAttribute("data-prop");
-      if (!key) return;
-      if (el.type === "checkbox") fields[key] = el.checked;
-      else fields[key] = el.value;
-    });
+    const fields = readPropsFieldsFromPanel(meta);
     if (!Object.keys(fields).length) return;
+    if (!propsPanelDirty(meta)) return;
     const body = {
       location_id: locationId,
       id: resolvePlaceApiId(propsTarget.placeId),
@@ -7668,6 +7719,7 @@
       method: "PATCH",
       body: JSON.stringify(body),
     });
+    snapshotPropsBaseline(meta);
     if (res.graph) {
       graph = res.graph;
       depthLevel = graph.depth || depthLevel;
@@ -7679,15 +7731,17 @@
       res.dirty ? "properties updated · unsaved" : "properties updated"
     );
     scheduleStatusRefresh();
+    if (!reload) return;
     if (propsTarget.kind === "element" && selectedId) {
       const elem = (graph?.elements || []).find((e) => e.id === selectedId);
-      if (elem) fillElementInspector(elem);
+      if (elem) await fillElementInspector(elem);
     } else if (propsTarget.kind === "place" && selectedId) {
       await fillPlaceInspector(selectedId, res.detail);
     }
   }
 
-  function fillElementInspector(elem) {
+  async function fillElementInspector(elem) {
+    await flushPendingPropsSave();
     const empty = document.getElementById("panel-empty");
     const panel = document.getElementById("panel-props");
     if (!empty || !panel) {
@@ -7761,6 +7815,7 @@
       editable: false,
     });
     bindPropsEditors(meta);
+    snapshotPropsBaseline(meta);
     fillCablesForElement(elem);
   }
 
@@ -7856,6 +7911,7 @@
   }
 
   async function fillPlaceInspector(id, detailOpt) {
+    await flushPendingPropsSave();
     const empty = document.getElementById("panel-empty");
     const panel = document.getElementById("panel-props");
     if (!empty || !panel) {
@@ -7864,6 +7920,7 @@
     }
     if (!id || !locationId) {
       propsTarget = null;
+      propsFieldsBaseline = null;
       empty.classList.remove("hidden");
       panel.classList.add("hidden");
       return;
@@ -7943,6 +8000,7 @@
         checkbox: true,
       });
       bindPropsEditors(meta);
+      snapshotPropsBaseline(meta);
       propsShowElements = placeShowsElementsInView(detail.id || placeKey);
       const elementsBlock = document.getElementById("props-elements-block");
       if (elementsBlock) {
@@ -7974,7 +8032,7 @@
   async function selectNode(id) {
     const elem = (graph?.elements || []).find((e) => e.id === id);
     if (elem) {
-      selectElement(elem);
+      await selectElement(elem);
       return;
     }
     replaceSelection(id);
@@ -7983,6 +8041,7 @@
   }
 
   async function syncInspectorFromSelection() {
+    await flushPendingPropsSave();
     setSelectedVisual();
     if (selectedIds.size === 0) {
       highlightOutlineSelection();
@@ -7997,7 +8056,7 @@
     }
     highlightOutlineSelection();
     const elem = (graph?.elements || []).find((e) => e.id === selectedId);
-    if (elem) fillElementInspector(elem);
+    if (elem) await fillElementInspector(elem);
     else await fillPlaceInspector(selectedId);
   }
 
