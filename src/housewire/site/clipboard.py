@@ -90,6 +90,72 @@ def next_available_id(existing: set[str] | dict[str, Any], preferred: str) -> st
     return f"{name}_{n}"
 
 
+def display_name_from_id(yaml_id: str) -> str:
+    """Human working name from technical id: ``Interruptor_2`` → ``Interruptor 2``."""
+    s = str(yaml_id).strip()
+    if not s:
+        return s
+    match = _TRAILING_NUM.match(s)
+    if not match:
+        return s
+    stem, num = match.group(1), match.group(2)
+    stem = stem.rstrip("_")
+    if not stem:
+        return s
+    return f"{stem} {int(num)}"
+
+
+def _id_stem(yaml_id: str) -> str:
+    s = str(yaml_id).strip()
+    match = _TRAILING_NUM.match(s)
+    if not match:
+        return s
+    stem = match.group(1).rstrip("_")
+    return stem or s
+
+
+def _looks_like_id_derived(text: str, yaml_id: str) -> bool:
+    """True when ``text`` is empty or mirrors ``yaml_id`` / its display / stem."""
+    t = str(text).strip()
+    if not t:
+        return True
+    if t == yaml_id or t == display_name_from_id(yaml_id):
+        return True
+    if t.replace(" ", "_") == yaml_id:
+        return True
+    stem = _id_stem(yaml_id)
+    if t == stem or t.replace(" ", "_") == stem:
+        return True
+    return False
+
+
+def sync_working_names_after_rename(
+    node: dict[str, Any], *, old_id: str, new_id: str
+) -> None:
+    """When paste renames an id, keep ``name`` / ``label`` in sync as human text.
+
+    Custom labels/names are left alone. Auto-like values become
+    ``Interruptor 2`` (space), not ``Interruptor_2``.
+    """
+    if old_id == new_id:
+        return
+    new_display = display_name_from_id(new_id)
+    raw_name = node.get("name")
+    name_s = "" if raw_name is None else str(raw_name).strip()
+    if _looks_like_id_derived(name_s, old_id):
+        node["name"] = new_display
+    raw_label = node.get("label")
+    if raw_label is None:
+        return
+    label_s = str(raw_label).strip()
+    if not label_s:
+        return
+    if _looks_like_id_derived(label_s, old_id) or (
+        name_s and label_s == name_s
+    ):
+        node["label"] = new_display
+
+
 def _roots(
     deleted_places: set[tuple[str, ...]], deleted_elements: set[tuple[str, ...]]
 ) -> tuple[list[tuple[str, ...]], list[tuple[str, ...]]]:
@@ -823,6 +889,7 @@ def paste_payload(
         root_rename[old_id] = new_id
         result.renamed[old_id] = new_id
         blob = copy.deepcopy(node)
+        sync_working_names_after_rename(blob, old_id=old_id, new_id=new_id)
         if kind == "place":
             rect = _place_without_overlap(blob, obstacles=place_obstacles)
             fitted_rects.append(rect)

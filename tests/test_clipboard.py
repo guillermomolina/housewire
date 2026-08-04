@@ -5,7 +5,12 @@ import unittest
 
 from fixtures import add_place
 from housewire.site import abm
-from housewire.site.clipboard import next_available_id, pack_selection, paste_payload
+from housewire.site.clipboard import (
+    display_name_from_id,
+    next_available_id,
+    pack_selection,
+    paste_payload,
+)
 from housewire.site.delete_selection import delete_selection
 from housewire.site.natural_sort import natural_sort_key
 from housewire.site.tree import get_place_node
@@ -34,6 +39,15 @@ class TestNextAvailableId(unittest.TestCase):
         )
 
 
+class TestDisplayNameFromId(unittest.TestCase):
+    def test_spaced_number(self) -> None:
+        self.assertEqual(display_name_from_id("Interruptor_2"), "Interruptor 2")
+        self.assertEqual(display_name_from_id("Interruptor_1"), "Interruptor 1")
+
+    def test_no_trailing_number(self) -> None:
+        self.assertEqual(display_name_from_id("Interruptor"), "Interruptor")
+
+
 class TestClipboard(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp, self.root, self.yaml = make_site()
@@ -52,6 +66,31 @@ class TestClipboard(unittest.TestCase):
         elements = room.get("elements") or {}
         self.assertIn("Box", elements)
         self.assertIn("Box_1", elements)
+        self.assertEqual(elements["Box_1"].get("name"), "Box 1")
+
+    def test_paste_syncs_name_and_label(self) -> None:
+        add_place(self.doc, "Room", type_id="Room")
+        add_place(self.doc, "Interruptor", under=("Room",), type_id="JunctionBox")
+        sw = get_place_node(self.doc, ("Room", "Interruptor"))
+        sw["name"] = "Interruptor"
+        sw["label"] = "Interruptor"
+        payload = pack_selection(self.doc, ["Room/Interruptor"])
+        paste_payload(self.doc, parent_id="Room", payload=payload)
+        copy_node = get_place_node(self.doc, ("Room", "Interruptor_1"))
+        self.assertEqual(copy_node.get("name"), "Interruptor 1")
+        self.assertEqual(copy_node.get("label"), "Interruptor 1")
+
+    def test_paste_preserves_custom_label(self) -> None:
+        add_place(self.doc, "Room", type_id="Room")
+        add_place(self.doc, "Interruptor", under=("Room",), type_id="JunctionBox")
+        sw = get_place_node(self.doc, ("Room", "Interruptor"))
+        sw["name"] = "Interruptor"
+        sw["label"] = "Luz cocina"
+        payload = pack_selection(self.doc, ["Room/Interruptor"])
+        paste_payload(self.doc, parent_id="Room", payload=payload)
+        copy_node = get_place_node(self.doc, ("Room", "Interruptor_1"))
+        self.assertEqual(copy_node.get("name"), "Interruptor 1")
+        self.assertEqual(copy_node.get("label"), "Luz cocina")
 
     def test_pack_cross_becomes_open_stub(self) -> None:
         add_place(self.doc, "Room", type_id="Room")

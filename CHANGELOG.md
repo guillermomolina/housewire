@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.48.6] — 2026-08-04
+
+### Changed
+
+- Paste collision rename also updates auto-like ``name`` / ``label`` to a spaced
+  form (``Interruptor 2``), not the technical id (``Interruptor_2``). Custom
+  labels are preserved.
+
 ## [0.48.5] — 2026-08-04
 
 ### Changed
