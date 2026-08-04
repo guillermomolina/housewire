@@ -10439,6 +10439,13 @@
     if (aboutModal && !aboutModal.classList.contains("hidden")) {
       openAboutModal().catch((err) => setStatus(String(err.message || err)));
     }
+    try {
+      await loadPaletteCatalog(true);
+      renderPaletteSideList();
+      refreshOpenCatalogInsertLabels();
+    } catch (err) {
+      setStatus(String(err.message || err));
+    }
     if (hasDocument && locationId) {
       try {
         await loadGraph();
@@ -10835,11 +10842,61 @@
     return ".";
   }
 
-  async function loadPaletteCatalog() {
-    if (paletteCatalog) return paletteCatalog;
+  async function loadPaletteCatalog(force) {
+    if (paletteCatalog && !force) return paletteCatalog;
     const data = await api("/api/catalog");
     paletteCatalog = data.types || {};
     return paletteCatalog;
+  }
+
+  /** Refresh localized catalog labels after a locale change (open UIs + cache). */
+  function refreshOpenCatalogInsertLabels() {
+    const modal = document.getElementById("insert-modal");
+    const modalOpen = modal && !modal.classList.contains("hidden");
+    if (!modalOpen) return;
+
+    const typePick = document.getElementById("form-type-pick");
+    if (typePick && !typePick.classList.contains("hidden")) {
+      const sel = document.getElementById("insert-type-id");
+      const prev = sel ? sel.value : "";
+      const row = (paletteCatalog && paletteCatalog[prev]) || null;
+      const typeClass = row && row.kind === "place_type" ? "place_type" : "element_type";
+      const rows = paletteRows(typeClass, "");
+      if (sel) {
+        sel.innerHTML = "";
+        for (const r of rows) {
+          const opt = document.createElement("option");
+          opt.value = r.id || "";
+          opt.textContent = r.label || r.id || "";
+          sel.appendChild(opt);
+        }
+        if (prev && rows.some((r) => r.id === prev)) sel.value = prev;
+      }
+      const typeId = sel ? sel.value : prev;
+      const subSel = document.getElementById("insert-subtype-id");
+      const prevSub = subSel ? subSel.value : "";
+      if (typeId) renderSubtypeSelect(typeId, prevSub);
+      return;
+    }
+
+    const catalogForm = document.getElementById("form-catalog-item");
+    if (catalogForm && !catalogForm.classList.contains("hidden") && pendingCatalogInsert) {
+      const typeId = pendingCatalogInsert.type_id || "";
+      const row = (paletteCatalog && paletteCatalog[typeId]) || null;
+      if (!row) return;
+      const typeEl = document.getElementById("catalog-type-label");
+      const subEl = document.getElementById("catalog-subtype-label");
+      const descEl = document.getElementById("catalog-description");
+      if (typeEl) typeEl.value = String(row.label || row.id || "").trim();
+      if (descEl) descEl.value = row.description || "";
+      const subtypeId = pendingCatalogInsert.subtype || "";
+      let subtypeLabel = "—";
+      if (subtypeId) {
+        const hit = subtypeRows(typeId).find((x) => String(x.id) === String(subtypeId));
+        subtypeLabel = (hit && (hit.label || hit.id)) || String(subtypeId);
+      }
+      if (subEl) subEl.value = subtypeLabel;
+    }
   }
 
   function paletteRows(typeClass, q) {

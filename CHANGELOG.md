@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.59.3] — 2026-08-04
+
+### Fixed
+
+- Changing UI language reloads the catalog and refreshes Palette (and open
+  insert dialogs) so type labels follow the new locale.
+
 ## [0.59.2] — 2026-08-04
 
 ### Changed
