@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.48.2] — 2026-08-04
+
+### Fixed
+
+- Outline and locations APIs read the in-memory edit buffer, so paste/cut/delete
+  refresh the Outline before Save.
+
 ## [0.48.1] — 2026-08-04
 
 ### Fixed

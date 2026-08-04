@@ -664,6 +664,7 @@ def list_canvas_locations(
     site_root: Path,
     *,
     site_yaml: Path | None = None,
+    session_docs: dict[Path, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Place tree (preorder), only nodes useful as canvas roots.
 
@@ -673,7 +674,9 @@ def list_canvas_locations(
     """
     root = site_root.resolve()
     try:
-        _path, site_doc = _load_site_doc(root, site_yaml=site_yaml)
+        _path, site_doc = _load_site_doc(
+            root, site_yaml=site_yaml, session_docs=session_docs
+        )
     except FileNotFoundError:
         return []
 
@@ -791,12 +794,15 @@ def list_site_outline(
     site_root: Path,
     *,
     site_yaml: Path | None = None,
+    session_docs: dict[Path, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Full site outline: every place + electrical elements (preorder flat)."""
     root = site_root.resolve()
     catalog = load_catalog(root)
     try:
-        _path, site_doc = _load_site_doc(root, site_yaml=site_yaml)
+        _path, site_doc = _load_site_doc(
+            root, site_yaml=site_yaml, session_docs=session_docs
+        )
     except FileNotFoundError:
         return []
 

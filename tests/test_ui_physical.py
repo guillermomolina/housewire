@@ -1137,6 +1137,24 @@ class TestServeApi(unittest.TestCase):
             node_ids = {n["id"] for n in cut.json()["graph"]["nodes"]}
             self.assertNotIn("Box_1", node_ids)
 
+            # Outline must reflect unsaved paste (session buffer, not disk).
+            pasted2 = client.post(
+                "/api/edit/paste",
+                json={
+                    "parent_id": "Room",
+                    "payload": payload,
+                    "location_id": "Room",
+                    "depth": 1,
+                },
+            )
+            self.assertEqual(pasted2.status_code, 200, pasted2.text)
+            outline = client.get("/api/outline").json()
+            oids = {n["id"] for n in outline["nodes"]}
+            self.assertTrue(
+                any(oid.endswith("/Box_1") or oid == "Room/Box_1" for oid in oids),
+                oids,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
