@@ -12,30 +12,26 @@ DEFAULT_CABLE_TYPE = "Cable"
 DEFAULT_CONDUIT_TYPE = "Conduit"
 DEFAULT_CONDUCTOR_TYPE = "Conductor"
 
-CABLE_CATALOG_KIND = "cable_type"
-CONDUIT_CATALOG_KIND = "conduit_type"
-CONDUCTOR_CATALOG_KIND = "conductor_type"
+CABLE_CATALOG_KIND = "CableType"
+CONDUIT_CATALOG_KIND = "ConduitType"
+CONDUCTOR_CATALOG_KIND = "ConductorType"
+PLACE_CATALOG_KIND = "PlaceType"
+ELEMENT_CATALOG_KIND = "ElementType"
 
-# Same closed set as place ``install`` (UI: surface | flush).
-INSTALL_VALUES = frozenset({"surface", "flush"})
-DEFAULT_INSTALL = "flush"
-DEFAULT_MOUNT = "wall"
-MOUNT_VALUES = frozenset({"wall", "ceiling", "floor"})
+# Same closed set as place ``install`` (UI: Surface | Flush).
+INSTALL_VALUES = frozenset({"Surface", "Flush"})
+DEFAULT_INSTALL = "Flush"
+DEFAULT_MOUNT = "Wall"
+MOUNT_VALUES = frozenset({"Wall", "Ceiling", "Floor"})
 
 
 def normalize_install(raw: Any, *, context: str = "install") -> str | None:
-    """Canonicalize ``install`` to ``surface`` | ``flush`` (or None if empty).
-
-    Legacy ``in_wall`` is accepted and rewritten to ``flush`` (``in_wall``
-    collided with ``mount: wall``).
-    """
+    """Canonicalize ``install`` to ``Surface`` | ``Flush`` (or None if empty)."""
     if raw is None:
         return None
     value = str(raw).strip()
     if not value:
         return None
-    if value == "in_wall":
-        value = "flush"
     if value not in INSTALL_VALUES:
         raise ValueError(
             f"{context}: install must be one of "
@@ -45,7 +41,7 @@ def normalize_install(raw: Any, *, context: str = "install") -> str | None:
 
 
 def normalize_mount(raw: Any, *, context: str = "mount") -> str | None:
-    """Canonicalize ``mount`` to ``wall`` | ``ceiling`` | ``floor``."""
+    """Canonicalize ``mount`` to ``Wall`` | ``Ceiling`` | ``Floor``."""
     if raw is None:
         return None
     value = str(raw).strip()

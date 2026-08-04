@@ -78,10 +78,10 @@ class TestABMElements(unittest.TestCase):
 
     def test_set_field_place_and_nested(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
-        abm.set_field(doc, "install", "surface", target="place")
+        abm.set_field(doc, "install", "Surface", target="place")
         abm.set_field(doc, "opening_grid.N", 1, target="place")
         abm.set_field(doc, "openings", ["N1"], target="place")
-        self.assertEqual(doc["install"], "surface")
+        self.assertEqual(doc["install"], "Surface")
         self.assertEqual(doc["opening_grid"], {"N": 1})
         self.assertEqual(doc["openings"], ["N1"])
 
@@ -94,10 +94,10 @@ class TestABMElements(unittest.TestCase):
         doc = abm.load_editable(self.yaml, self.root)
         abm.apply_set_specs(
             doc,
-            ["install=surface", "notes=hola", "opening_grid.N=1"],
+            ["install=Surface", "notes=hola", "opening_grid.N=1"],
             target="place",
         )
-        self.assertEqual(doc["install"], "surface")
+        self.assertEqual(doc["install"], "Surface")
         abm.apply_set_specs(doc, ["notes"], target="place")
         self.assertNotIn("notes", doc)
         abm.unset_field(doc, "install")
@@ -333,7 +333,7 @@ class TestFormatShow(unittest.TestCase):
         doc = abm.load_editable(self.yaml, self.root)
         doc.update({
             "type": "JunctionBox",
-            "mount": "ceiling",
+            "mount": "Ceiling",
             "opening_grid": {"NS": 2, "B": 1},
             "openings": ["B1-1", "W1"],
         })

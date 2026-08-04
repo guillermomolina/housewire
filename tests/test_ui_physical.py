@@ -137,11 +137,11 @@ class TestViewLayout(unittest.TestCase):
     def test_page_defaults_and_set(self) -> None:
         place: dict = {"schema": "house/v2", "type": "Room"}
         page = get_physical_page(place)
-        self.assertEqual(page["representation"], "tube")
+        self.assertEqual(page["representation"], "Tube")
         self.assertEqual(page["width"], 2000.0)
-        set_physical_page(place, representation="tube", width=1200)
+        set_physical_page(place, representation="Tube", width=1200)
         page2 = get_physical_page(place)
-        self.assertEqual(page2["representation"], "tube")
+        self.assertEqual(page2["representation"], "Tube")
         self.assertEqual(page2["width"], 1200.0)
         with self.assertRaises(ValueError):
             set_physical_page(place, representation="blob")
@@ -601,9 +601,9 @@ class TestServeApi(unittest.TestCase):
 
             page = client.patch(
                 "/api/physical/page",
-                json={"location_id": "Parking", "representation": "tube"},
+                json={"location_id": "Parking", "representation": "Tube"},
             ).json()
-            self.assertEqual(page["page"]["representation"], "tube")
+            self.assertEqual(page["page"]["representation"], "Tube")
 
             status = client.get("/api/status").json()
             self.assertTrue(status["dirty"])
@@ -639,7 +639,7 @@ class TestServeApi(unittest.TestCase):
             loc_doc = abm.load_editable(parking_yaml, root)
             parking_place = get_place_node(loc_doc, ("Parking",))
             self.assertEqual(
-                parking_place["views"]["physical"]["representation"], "tube"
+                parking_place["views"]["physical"]["representation"], "Tube"
             )
 
     def test_place_detail_and_socket_recipe(self) -> None:

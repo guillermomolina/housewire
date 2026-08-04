@@ -202,8 +202,8 @@ def route_04() -> str:
         type: TerminalStrip
         terminal_grid: {NS: 2}
         terminals:
-          N1: {label: '1', direction: inout, role: phase}
-          N2: {label: '2', direction: inout, role: neutral}
+          N1: {label: '1', direction: InOut, role: Phase}
+          N2: {label: '2', direction: InOut, role: Neutral}
         view:
           electrical: {x: 60.0, y: 50.0}
     cables: {}
@@ -269,8 +269,8 @@ def route_05() -> str:
             type: TerminalStrip
             terminal_grid: {NS: 2}
             terminals:
-              N1: {label: L, direction: inout, role: phase}
-              N2: {label: Lsw, direction: inout, role: phase}
+              N1: {label: L, direction: InOut, role: Phase}
+              N2: {label: Lsw, direction: InOut, role: Phase}
             view:
               electrical: {x: 70.0, y: 60.0}
         cables: {}
@@ -338,9 +338,9 @@ def route_06() -> str:
             type: TerminalStrip
             terminal_grid: {NS: 3}
             terminals:
-              N1: {label: L, direction: inout, role: phase}
-              N2: {label: N, direction: inout, role: neutral}
-              N3: {label: PE, direction: inout, role: pe}
+              N1: {label: L, direction: InOut, role: Phase}
+              N2: {label: N, direction: InOut, role: Neutral}
+              N3: {label: PE, direction: InOut, role: PE}
             view:
               electrical: {x: 70.0, y: 70.0}
         cables: {}
@@ -356,9 +356,9 @@ def route_06() -> str:
             type: Luminaire
             terminal_grid: {N: 3}
             terminals:
-              N1: {label: '1', direction: in, role: phase}
-              N2: {label: '2', direction: in, role: earth}
-              N3: {label: '3', direction: in, role: neutral}
+              N1: {label: '1', direction: In, role: Phase}
+              N2: {label: '2', direction: In, role: Earth}
+              N3: {label: '3', direction: In, role: Neutral}
             view:
               electrical: {x: 100.0, y: 80.0}
         cables: {}
@@ -414,7 +414,7 @@ def route_07() -> str:
         type: TerminalStrip
         terminal_grid: {NS: 1}
         terminals:
-          N1: {label: L, direction: inout, role: phase}
+          N1: {label: L, direction: InOut, role: Phase}
         view:
           electrical: {x: 80.0, y: 60.0}
     cables: {}
@@ -502,8 +502,8 @@ def route_08() -> str:
         type: TerminalStrip
         terminal_grid: {NS: 2}
         terminals:
-          N1: {label: L, direction: inout, role: phase}
-          N2: {label: N, direction: inout, role: neutral}
+          N1: {label: L, direction: InOut, role: Phase}
+          N2: {label: N, direction: InOut, role: Neutral}
         view:
           electrical: {x: 70.0, y: 70.0}
     cables: {}
@@ -568,10 +568,10 @@ def route_09() -> str:
         type: TerminalStrip
         terminal_grid: {NS: 4}
         terminals:
-          N1: {label: L, direction: inout, role: phase}
-          N2: {label: Lsw, direction: inout, role: phase}
-          N3: {label: N, direction: inout, role: neutral}
-          N4: {label: PE, direction: inout, role: pe}
+          N1: {label: L, direction: InOut, role: Phase}
+          N2: {label: Lsw, direction: InOut, role: Phase}
+          N3: {label: N, direction: InOut, role: Neutral}
+          N4: {label: PE, direction: InOut, role: PE}
         view:
           electrical: {x: 70.0, y: 80.0}
     cables: {}
@@ -648,9 +648,9 @@ def route_10() -> str:
         type: TerminalStrip
         terminal_grid: {NS: 3}
         terminals:
-          N1: {label: L, direction: inout, role: phase}
-          N2: {label: N, direction: inout, role: neutral}
-          N3: {label: PE, direction: inout, role: pe}
+          N1: {label: L, direction: InOut, role: Phase}
+          N2: {label: N, direction: InOut, role: Neutral}
+          N3: {label: PE, direction: InOut, role: PE}
         view:
           electrical: {x: 70.0, y: 70.0}
     cables: {}
@@ -704,8 +704,8 @@ def route_11() -> str:
         type: TerminalStrip
         terminal_grid: {NS: 2}
         terminals:
-          N1: {label: '1', direction: inout, role: phase}
-          N2: {label: '2', direction: inout, role: phase}
+          N1: {label: '1', direction: InOut, role: Phase}
+          N2: {label: '2', direction: InOut, role: Phase}
         view:
           electrical: {x: 60.0, y: 50.0}
     cables: {}
@@ -784,10 +784,10 @@ def route_12() -> str:
             type: TerminalStrip
             terminal_grid: {NS: 4}
             terminals:
-              N1: {label: L, direction: inout, role: phase}
-              N2: {label: Lsw, direction: inout, role: phase}
-              N3: {label: N, direction: inout, role: neutral}
-              N4: {label: PE, direction: inout, role: pe}
+              N1: {label: L, direction: InOut, role: Phase}
+              N2: {label: Lsw, direction: InOut, role: Phase}
+              N3: {label: N, direction: InOut, role: Neutral}
+              N4: {label: PE, direction: InOut, role: PE}
             view:
               electrical: {x: 70.0, y: 80.0}
         cables: {}
@@ -817,9 +817,9 @@ def route_12() -> str:
             type: Luminaire
             terminal_grid: {N: 3}
             terminals:
-              N1: {label: '1', direction: in, role: phase}
-              N2: {label: '2', direction: in, role: earth}
-              N3: {label: '3', direction: in, role: neutral}
+              N1: {label: '1', direction: In, role: Phase}
+              N2: {label: '2', direction: In, role: Earth}
+              N3: {label: '3', direction: In, role: Neutral}
             view:
               electrical: {x: 100.0, y: 80.0}
         cables: {}
@@ -928,8 +928,8 @@ def route_14() -> str:
         type: TerminalStrip
         terminal_grid: {NS: 2}
         terminals:
-          N1: {label: L, direction: inout, role: phase}
-          N2: {label: N, direction: inout, role: neutral}
+          N1: {label: L, direction: InOut, role: Phase}
+          N2: {label: N, direction: InOut, role: Neutral}
         view:
           electrical: {x: 60.0, y: 60.0}
     cables: {}
@@ -1031,8 +1031,8 @@ def route_15() -> str:
             type: TerminalStrip
             terminal_grid: {NS: 2}
             terminals:
-              N1: {label: L, direction: inout, role: phase}
-              N2: {label: N, direction: inout, role: neutral}
+              N1: {label: L, direction: InOut, role: Phase}
+              N2: {label: N, direction: InOut, role: Neutral}
             view:
               electrical: {x: 60.0, y: 50.0}
         cables: {}
@@ -1055,8 +1055,8 @@ def route_15() -> str:
             type: TerminalStrip
             terminal_grid: {NS: 2}
             terminals:
-              N1: {label: L, direction: inout, role: phase}
-              N2: {label: N, direction: inout, role: neutral}
+              N1: {label: L, direction: InOut, role: Phase}
+              N2: {label: N, direction: InOut, role: Neutral}
             view:
               electrical: {x: 60.0, y: 50.0}
         cables: {}
@@ -1107,10 +1107,10 @@ def route_16() -> str:
         type: TerminalStrip
         terminal_grid: {NS: 4}
         terminals:
-          N1: {label: '1', direction: inout, role: phase}
-          N2: {label: '2', direction: inout, role: phase}
-          N3: {label: '3', direction: inout, role: neutral}
-          N4: {label: '4', direction: inout, role: pe}
+          N1: {label: '1', direction: InOut, role: Phase}
+          N2: {label: '2', direction: InOut, role: Phase}
+          N3: {label: '3', direction: InOut, role: Neutral}
+          N4: {label: '4', direction: InOut, role: PE}
         view:
           electrical: {x: 70.0, y: 80.0}
     cables: {}
@@ -1208,8 +1208,8 @@ def route_17() -> str:
         type: TerminalStrip
         terminal_grid: {NS: 2}
         terminals:
-          N1: {label: '1', direction: inout, role: phase}
-          N2: {label: '2', direction: inout, role: phase}
+          N1: {label: '1', direction: InOut, role: Phase}
+          N2: {label: '2', direction: InOut, role: Phase}
         view:
           electrical: {x: 70.0, y: 60.0}
     cables: {}
@@ -1300,9 +1300,9 @@ def route_19() -> str:
         type: TerminalStrip
         terminal_grid: {NS: 3}
         terminals:
-          N1: {label: '1', direction: inout, role: phase}
-          N2: {label: '2', direction: inout, role: phase}
-          N3: {label: '3', direction: inout, role: phase}
+          N1: {label: '1', direction: InOut, role: Phase}
+          N2: {label: '2', direction: InOut, role: Phase}
+          N3: {label: '3', direction: InOut, role: Phase}
         view:
           electrical: {x: 60.0, y: 70.0}
     cables: {}

@@ -38,9 +38,9 @@ class TestTerminalGrid(unittest.TestCase):
 
     def test_strip_inout_adds_opposite_face(self) -> None:
         terminals = {
-            "N1": {"direction": "inout"},
-            "N2": {"direction": "inout"},
-            "N3": {"direction": "inout"},
+            "N1": {"direction": "InOut"},
+            "N2": {"direction": "InOut"},
+            "N3": {"direction": "InOut"},
         }
         grid = expand_terminal_grid({"NS": 3})
         cells = pin_to_cells(terminals, grid)
@@ -104,9 +104,9 @@ class TestTerminalGrid(unittest.TestCase):
             "TerminalStrip": {
                 "terminal_grid": {"NS": 3},
                 "terminals": {
-                    "N1": {"direction": "inout"},
-                    "N2": {"direction": "inout"},
-                    "N3": {"direction": "inout"},
+                    "N1": {"direction": "InOut"},
+                    "N2": {"direction": "InOut"},
+                    "N3": {"direction": "InOut"},
                 },
             }
         }
@@ -115,7 +115,7 @@ class TestTerminalGrid(unittest.TestCase):
                 "type": "TerminalStrip",
                 "terminal_grid": {"NS": 6},
                 "terminals": {
-                    f"N{i}": {"direction": "inout"} for i in range(1, 7)
+                    f"N{i}": {"direction": "InOut"} for i in range(1, 7)
                 },
             },
             catalog,

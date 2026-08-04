@@ -22,7 +22,7 @@ class TestDirectoryLocation(unittest.TestCase):
             "schema: house/v2\n"
             "type: JunctionBox\n"
             "subtype: IP40\n"
-            "notes: '100x100; mount: ceiling'\n"
+            "notes: '100x100; mount: Ceiling'\n"
             "elements:\n"
             "  Regleta:\n"
             "    type: TerminalStrip\n"
@@ -45,7 +45,7 @@ class TestDirectoryLocation(unittest.TestCase):
                 type_id="JunctionBox",
                 label="Caja derivacion 1",
                 subtype="IP40",
-                notes="100x100; mount: ceiling",
+                notes="100x100; mount: Ceiling",
             )
             caja = get_place_node(doc, ("Parking", "Caja_derivacion_1"))
             caja.setdefault("elements", {})["Regleta"] = {"type": "TerminalStrip"}
@@ -57,7 +57,7 @@ class TestDirectoryLocation(unittest.TestCase):
             labels = {n.display_label for n in model.nodes.values()}
             self.assertTrue(any("JunctionBox" in s for s in subtitles), subtitles)
             self.assertTrue(any("100x100" in s for s in subtitles), subtitles)
-            self.assertTrue(any("ceiling" in s for s in subtitles), subtitles)
+            self.assertTrue(any("Ceiling" in s for s in subtitles), subtitles)
             self.assertIn("Caja_derivacion_1", labels)
             self.assertTrue(
                 any("Caja derivacion 1" in s for s in subtitles),
@@ -142,7 +142,7 @@ class TestDirectoryLocation(unittest.TestCase):
             )
             merged = load_catalog(root)
             self.assertEqual(merged["Socket"]["icon"], "plug-zap")
-            self.assertEqual(merged["Socket"]["kind"], "element_type")
+            self.assertEqual(merged["Socket"]["kind"], "ElementType")
             self.assertEqual(
                 catalog_icon("Socket", catalog=merged), "plug-zap"
             )
@@ -188,7 +188,7 @@ elements:
   Caja_1:
     type: JunctionBox
     subtype: IP40
-    notes: "mount: ceiling"
+    notes: "mount: Ceiling"
     elements:
       Regleta:
         type: TerminalStrip
@@ -210,7 +210,7 @@ elements:
             "MiCaja",
             type_id="JunctionBox",
             subtype="IP40",
-            notes="mount: ceiling",
+            notes="mount: Ceiling",
         )
         self.assertEqual(doc["elements"]["MiCaja"]["type"], "JunctionBox")
         tmp.cleanup()

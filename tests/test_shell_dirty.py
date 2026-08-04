@@ -183,15 +183,15 @@ class TestShellDirtyBuffer(unittest.TestCase):
         code = self._run(
             s,
             "add location Mech --type DeviceBox --subtype OneGang "
-            "--set install=surface --set mount=wall "
+            "--set install=Surface --set mount=Wall "
             "--set openings=[N1] --set opening_grid.N=1",
         )
         self.assertEqual(code, 0)
         self.assertTrue(s.is_dirty())
         _path, doc = s.ensure_doc()
         mech = get_place_node(doc, ("zona_a", "Mech"))
-        self.assertEqual(mech["install"], "surface")
-        self.assertEqual(mech["mount"], "wall")
+        self.assertEqual(mech["install"], "Surface")
+        self.assertEqual(mech["mount"], "Wall")
         self.assertEqual(mech["openings"], ["N1"])
         self.assertEqual(mech["opening_grid"], {"N": 1})
         code = self._run(s, "set notes 'desde shell'")

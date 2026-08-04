@@ -8861,14 +8861,14 @@
         value: detail.install || "",
         editable: true,
         combo: "install",
-        options: ["surface", "flush"],
+        options: ["Surface", "Flush"],
       });
       appendPropsRow(meta, {
         key: "mount",
         value: detail.mount || "",
         editable: true,
         combo: "mount",
-        options: ["wall", "ceiling", "floor"],
+        options: ["Wall", "Ceiling", "Floor"],
       });
       {
         const typeId = String(detail.type || "");
@@ -11115,7 +11115,7 @@
         ev.stopPropagation();
         const startWorld = clientToWorld(ev.clientX, ev.clientY);
         const defs = catalogInsertDefaults(pendingCatalogPlacement.kind);
-        const isPlace = pendingCatalogPlacement.kind === "place_type";
+        const isPlace = pendingCatalogPlacement.kind === "PlaceType";
         placementDrag = {
           pointerId: ev.pointerId,
           startClientX: ev.clientX,
@@ -11180,7 +11180,7 @@
     const start = placementDrag.startWorld;
     const defs = catalogInsertDefaults(pendingCatalogPlacement.kind);
     // Elements never size by drag — keep default box at the press point.
-    if (pendingCatalogPlacement.kind !== "place_type") {
+    if (pendingCatalogPlacement.kind !== "PlaceType") {
       placementDrag.sized = false;
       placementDrag.box = { x: start.x, y: start.y, w: defs.w, h: defs.h };
       updatePlacementGhost(start.x, start.y, defs.w, defs.h, pendingCatalogPlacement);
@@ -11327,7 +11327,7 @@
       const sel = document.getElementById("insert-type-id");
       const prev = sel ? sel.value : "";
       const row = (paletteCatalog && paletteCatalog[prev]) || null;
-      const typeClass = row && row.kind === "place_type" ? "place_type" : "element_type";
+      const typeClass = row && row.kind === "PlaceType" ? "PlaceType" : "ElementType";
       const rows = paletteRows(typeClass, "");
       if (sel) {
         sel.innerHTML = "";
@@ -11436,7 +11436,7 @@
   }
 
   function catalogInsertDefaults(kind) {
-    if (kind === "place_type") {
+    if (kind === "PlaceType") {
       return { w: PLACE_INSERT_W, h: PLACE_INSERT_H };
     }
     return { w: ELEM_W, h: ELEM_H };
@@ -11471,7 +11471,7 @@
 
   function updatePlacementGhost(x, y, w, h, draft) {
     if (!worldEl || !draft) return;
-    const isElem = draft.kind === "element_type";
+    const isElem = draft.kind === "ElementType";
     let g = document.getElementById("placement-ghost");
     if (!g) {
       g = el("g", {
@@ -11547,7 +11547,7 @@
     const start = p ? p.startWorld : end;
     const defs = catalogInsertDefaults(d.kind);
     let box = (p && p.box) || { x: start.x, y: start.y, w: defs.w, h: defs.h };
-    if (d.kind === "element_type") {
+    if (d.kind === "ElementType") {
       // Click place: NW at press point, default element size.
       box = { x: start.x, y: start.y, w: defs.w, h: defs.h };
     } else if (p && p.sized) {
@@ -11628,7 +11628,7 @@
   function siblingIdsUnder(parentId, kind) {
     const used = new Set();
     const pid = parentId || ".";
-    if (kind === "place_type") {
+    if (kind === "PlaceType") {
       for (const n of graph?.nodes || []) {
         if ((n.parent || ".") === pid || (n.parent == null && pid === ".")) {
           const leaf = String(n.id || "").split("/").pop();
@@ -11657,7 +11657,7 @@
       const rawL = node?.label;
       if (rawL != null && String(rawL).trim()) labels.add(String(rawL).trim());
     };
-    if (kind === "place_type") {
+    if (kind === "PlaceType") {
       for (const n of graph?.nodes || []) {
         if ((n.parent || ".") === pid || (n.parent == null && pid === ".")) {
           consider(n);
@@ -11820,7 +11820,7 @@
       return;
     }
     beginCatalogPlacement({
-      kind: (pendingCatalogInsert && pendingCatalogInsert.source_kind) || "element_type",
+      kind: (pendingCatalogInsert && pendingCatalogInsert.source_kind) || "ElementType",
       type_id: typeId,
       subtype: (pendingCatalogInsert && pendingCatalogInsert.subtype) || "",
       id: token,
@@ -11835,8 +11835,8 @@
   function renderPaletteSideList() {
     const qEl = document.getElementById("palette-search-side");
     const q = qEl ? qEl.value : "";
-    const containers = paletteRows("place_type", q);
-    const elements = paletteRows("element_type", q);
+    const containers = paletteRows("PlaceType", q);
+    const elements = paletteRows("ElementType", q);
     const render = (hostId, rows) => {
       const host = document.getElementById(hostId);
       if (!host) return;
@@ -11844,7 +11844,7 @@
       for (const row of rows) {
         const btn = document.createElement("button");
         btn.type = "button";
-        const isElem = row.kind === "element_type";
+        const isElem = row.kind === "ElementType";
         btn.className = "palette-item" + (isElem ? " element" : "");
         const fallback = isElem ? "box" : "folder-open";
         const icon = iconElement(
@@ -12019,7 +12019,7 @@
     await loadPaletteCatalog();
     const sel = document.getElementById("insert-type-id");
     if (!sel) return;
-    const typeClass = kind === "container" ? "place_type" : "element_type";
+    const typeClass = kind === "container" ? "PlaceType" : "ElementType";
     const rows = paletteRows(typeClass, "");
     sel.innerHTML = "";
     for (const row of rows) {

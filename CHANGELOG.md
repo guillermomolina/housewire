@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.65.0] — 2026-08-04
+
+### Changed
+
+- Closed internal enum **values** use PascalCase (keys stay snake_case):
+  ``kind`` (``PlaceType``, …), ``direction`` (``In``/``Out``/``InOut``),
+  ``role`` (``Phase``, ``PE``, …), ``install``/``mount``/``representation``.
+- No legacy aliases (``place_type``, ``inout``, ``in_wall``, …).
+
 ## [0.64.0] — 2026-08-04
 
 ### Added

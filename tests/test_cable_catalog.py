@@ -17,9 +17,9 @@ class TestCableCatalog(unittest.TestCase):
         self.catalog = load_catalog()
 
     def test_catalog_has_link_types(self) -> None:
-        self.assertEqual(self.catalog["Cable"]["kind"], "cable_type")
-        self.assertEqual(self.catalog["Conduit"]["kind"], "conduit_type")
-        self.assertEqual(self.catalog["Conductor"]["kind"], "conductor_type")
+        self.assertEqual(self.catalog["Cable"]["kind"], "CableType")
+        self.assertEqual(self.catalog["Conduit"]["kind"], "ConduitType")
+        self.assertEqual(self.catalog["Conductor"]["kind"], "ConductorType")
 
     def test_expand_cable_sheath_defaults(self) -> None:
         out = expand_cable({"type": "Cable", "subtype": "Earth"}, self.catalog)
@@ -57,32 +57,21 @@ class TestCableCatalog(unittest.TestCase):
                 "from": "A.N1",
                 "to": "B.S1",
                 "contains": ["L1"],
-                "install": "surface",
+                "install": "Surface",
             },
             self.catalog,
         )
-        self.assertEqual(conduit["install"], "surface")
+        self.assertEqual(conduit["install"], "Surface")
         cable = expand_cable(
             {
                 "type": "Cable",
                 "contains": ["L1_1"],
-                "install": "flush",
+                "install": "Flush",
                 "color": "WH",
             },
             self.catalog,
         )
-        self.assertEqual(cable["install"], "flush")
-        legacy = expand_conduit(
-            {
-                "type": "Conduit",
-                "from": "A.N1",
-                "to": "B.S1",
-                "contains": ["L1"],
-                "install": "in_wall",
-            },
-            self.catalog,
-        )
-        self.assertEqual(legacy["install"], "flush")
+        self.assertEqual(cable["install"], "Flush")
 
     def test_validate_accepts_sheath_and_conductors(self) -> None:
         doc = {

@@ -394,8 +394,8 @@ def run_socket_recipe(
             notes=None,
             openings=[opening],
             opening_grid=None,
-            install="flush",
-            mount="wall",
+            install="Flush",
+            mount="Wall",
             want_inline=want_inline,
             as_dir=as_dir,
         )
@@ -469,8 +469,8 @@ def run_lamp_recipe(
             notes=None,
             openings=[opening],
             opening_grid=None,
-            install="flush",
-            mount="ceiling",
+            install="Flush",
+            mount="Ceiling",
             want_inline=want_inline,
             as_dir=as_dir,
         )

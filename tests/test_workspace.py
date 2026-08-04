@@ -137,7 +137,7 @@ class TestWorkspaceApi(unittest.TestCase):
 
             client.patch(
                 "/api/physical/page",
-                json={"location_id": ".", "representation": "tube"},
+                json={"location_id": ".", "representation": "Tube"},
             )
             # Dirty active + open another = two tabs (no 409).
             opened_b = client.post(

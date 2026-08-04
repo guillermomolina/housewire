@@ -187,13 +187,13 @@ def set_field(
 
         value = normalize_install(value, context="place")
         if value is None:
-            raise ValueError("install must be 'surface' or 'flush'")
+            raise ValueError("install must be 'Surface' or 'Flush'")
     if nested_key is None and root_key == "mount":
         from housewire.house.links import normalize_mount
 
         value = normalize_mount(value, context="place")
         if value is None:
-            raise ValueError("mount must be 'wall', 'ceiling', or 'floor'")
+            raise ValueError("mount must be 'Wall', 'Ceiling', or 'Floor'")
 
     if nested_key is None:
         mapping[root_key] = value

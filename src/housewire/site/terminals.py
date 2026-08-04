@@ -6,7 +6,7 @@ ids. Optional ``name`` / ``label`` / ``role`` are display metadata only.
 ``terminal_grid: { NS: 2 }`` means 2 cells on N **and** 2 on S (N1,N2,S1,S2).
 ``N: 2`` means only the north face.
 
-For ``direction: inout`` pins on an NS/WE grid, the opposite-face cell of the
+For ``direction: InOut`` pins on an NS/WE grid, the opposite-face cell of the
 same index is also an attach point (e.g. TerminalStrip ``N1`` → ``[N1, S1]``).
 """
 
@@ -142,11 +142,11 @@ def pin_to_cells(
                 cell = key
             cells.append(cell)
             direction = (
-                str((meta or {}).get("direction") or "inout").lower()
+                str((meta or {}).get("direction") or "InOut")
                 if isinstance(meta, dict)
-                else "inout"
+                else "InOut"
             )
-            if direction == "inout" and face in SIDE_FACES:
+            if direction == "InOut" and face in SIDE_FACES:
                 opp = _opposite_face(face)
                 if opp and opp in grid:
                     cells.append(f"{opp}{a}")

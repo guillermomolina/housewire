@@ -17,9 +17,9 @@ elements:
             type: TerminalStrip
             terminal_grid: {NS: 3}
             terminals:
-              N1: {label: L, direction: inout, role: phase}
-              N2: {label: N, direction: inout, role: neutral}
-              N3: {label: PE, direction: inout, role: pe}
+              N1: {label: L, direction: InOut, role: Phase}
+              N2: {label: N, direction: InOut, role: Neutral}
+              N3: {label: PE, direction: InOut, role: PE}
             view:
               electrical: {x: 70.0, y: 70.0}
         cables: {}
@@ -35,9 +35,9 @@ elements:
             type: Luminaire
             terminal_grid: {N: 3}
             terminals:
-              N1: {label: '1', direction: in, role: phase}
-              N2: {label: '2', direction: in, role: earth}
-              N3: {label: '3', direction: in, role: neutral}
+              N1: {label: '1', direction: In, role: Phase}
+              N2: {label: '2', direction: In, role: Earth}
+              N3: {label: '3', direction: In, role: Neutral}
             view:
               electrical: {x: 100.0, y: 80.0}
         cables: {}

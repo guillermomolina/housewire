@@ -9,8 +9,8 @@ elements:
     label: Cuadro general
     name: Cuadro general
     notes: Acometida y jabalina; sale hacia la caja de derivacion
-    install: surface
-    mount: wall
+    install: Surface
+    mount: Wall
     opening_grid:
       S: 1
     openings:
@@ -43,14 +43,14 @@ elements:
     type: Room
     label: Habitacion
     notes: Estancia de prueba con interruptor y lampara via caja de derivacion
-    install: surface
+    install: Surface
     elements:
       Caja_derivacion:
         type: JunctionBox
         subtype: IP40
         label: Caja derivacion
-        install: surface
-        mount: wall
+        install: Surface
+        mount: Wall
         opening_grid:
           NS: 2
           WE: 2
@@ -71,20 +71,20 @@ elements:
             terminals:
               N1:
                 label: 1 L
-                direction: inout
-                role: phase
+                direction: InOut
+                role: Phase
               N2:
                 label: 2 L sw
-                direction: inout
-                role: phase
+                direction: InOut
+                role: Phase
               N3:
                 label: 3 N
-                direction: inout
-                role: neutral
+                direction: InOut
+                role: Neutral
               N4:
                 label: 4 PE
-                direction: inout
-                role: pe
+                direction: InOut
+                role: PE
             view:
               electrical:
                 x: 80.0
@@ -99,8 +99,8 @@ elements:
         type: DeviceBox
         subtype: OneGang
         label: Interruptor
-        install: surface
-        mount: wall
+        install: Surface
+        mount: Wall
         opening_grid:
           N: 1
         openings:
@@ -127,8 +127,8 @@ elements:
         type: LightPoint
         subtype: CeilingHole
         label: Lampara
-        install: surface
-        mount: ceiling
+        install: Surface
+        mount: Ceiling
         opening_grid:
           B: 1
         openings:
@@ -145,16 +145,16 @@ elements:
             terminals:
               N1:
                 label: '1'
-                direction: in
-                role: phase
+                direction: In
+                role: Phase
               N2:
                 label: '2'
-                direction: in
-                role: earth
+                direction: In
+                role: Earth
               N3:
                 label: '3'
-                direction: in
-                role: neutral
+                direction: In
+                role: Neutral
             view:
               electrical:
                 x: 116.0

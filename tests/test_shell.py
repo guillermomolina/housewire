@@ -248,7 +248,7 @@ class TestShellDispatcher(unittest.TestCase):
         s = self._session()
         code = self._run(
             s,
-            'add location "Caja X" --type JunctionBox --subtype IP40 --notes "mount: wall"',
+            'add location "Caja X" --type JunctionBox --subtype IP40 --notes "mount: Wall"',
         )
         self.assertEqual(code, 0)
         self.assertTrue(s.is_dirty())

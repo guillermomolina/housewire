@@ -16,8 +16,8 @@ elements:
         label: Left
         terminal_grid: {WE: 1}
         terminals:
-          E1: {label: '2', direction: out, role: phase}
-          W1: {label: '1', direction: in, role: phase}
+          E1: {label: '2', direction: Out, role: Phase}
+          W1: {label: '1', direction: In, role: Phase}
         view:
           electrical: {x: 20.0, y: 80.0}
       Mid_A:
@@ -35,8 +35,8 @@ elements:
         label: Right
         terminal_grid: {WE: 1}
         terminals:
-          E1: {label: '2', direction: out, role: phase}
-          W1: {label: '1', direction: in, role: phase}
+          E1: {label: '2', direction: Out, role: Phase}
+          W1: {label: '1', direction: In, role: Phase}
         view:
           electrical: {x: 320.0, y: 80.0}
     cables:

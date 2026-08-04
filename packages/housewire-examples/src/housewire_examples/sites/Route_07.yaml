@@ -13,7 +13,7 @@ elements:
         type: TerminalStrip
         terminal_grid: {NS: 1}
         terminals:
-          N1: {label: L, direction: inout, role: phase}
+          N1: {label: L, direction: InOut, role: Phase}
         view:
           electrical: {x: 80.0, y: 60.0}
     cables: {}

@@ -17,7 +17,7 @@ Each catalog type may declare a Lucide icon id (kebab-case):
 
 ```yaml
 # types/Socket.yaml (in housewire-catalog)
-kind: element_type
+kind: ElementType
 type: Socket
 icon: plug
 ```
@@ -128,8 +128,8 @@ conduits. Canvas and outline prefer ``name`` → id; inspector shows all three.
 - If the catalog type declares `subtypes:`, `subtype` must be one of those keys
   (omitted → `defaults.subtype` when set). Unknown values are rejected.
 - If the type has **no** `subtypes:` map, `subtype` must be omitted.
-- Subtype rows may set `defaults:` (e.g. JunctionBox `IP65` → `install: surface`,
-  `IP40` → `install: flush`). Instance `install` / `mount` still override.
+- Subtype rows may set `defaults:` (e.g. JunctionBox `IP65` → `install: Surface`,
+  `IP40` → `install: Flush`). Instance `install` / `mount` still override.
 
 - **Id**: e.g. `Caja_derivacion_4`. No spaces. Used in refs.
 - **`name`**: e.g. `CD4` (canvas).
@@ -152,7 +152,7 @@ elements:
         label: "Junction box 1"
         subtype: IP40
         notes: "100x100"
-        mount: ceiling
+        mount: Ceiling
         opening_grid: { NS: 2, WE: 2, B: 1 }
         openings: [B1-1, N1]
         elements:
@@ -198,26 +198,26 @@ The **site root** is the directory (or site YAML file) you pass to `housewire`
 
 ### `install` and `mount` (orthogonal axes)
 
-These fields answer different questions; do not reuse ``wall`` for both.
+These fields answer different questions; do not reuse ``Wall`` for both.
 
 | Field | Question | Values | Recommended default |
 |-------|----------|--------|---------------------|
-| **`mount`** | Which plane does it sit on? | `wall` · `ceiling` · `floor` | **`wall`** |
-| **`install`** | How is it fixed to that plane? | `surface` (on the finish) · `flush` (recessed / embutido) | **`flush`** |
+| **`mount`** | Which plane does it sit on? | `Wall` · `Ceiling` · `Floor` | **`Wall`** |
+| **`install`** | How is it fixed to that plane? | `Surface` (on the finish) · `Flush` (recessed / embutido) | **`Flush`** |
 
-Examples: a recessed wall socket is `install: flush` + `mount: wall`. Visible
-parking trunking is `install: surface` + `mount: wall` (or `ceiling`). A
-ceiling rose can be `install: flush` + `mount: ceiling`.
+Examples: a recessed wall socket is `install: Flush` + `mount: Wall`. Visible
+parking trunking is `install: Surface` + `mount: Wall` (or `Ceiling`). A
+ceiling rose can be `install: Flush` + `mount: Ceiling`.
 
 Optional on places that use `mount`, and on **Conduit** / **Cable** link
 entries. If omitted, nothing is assumed at load time (no silent rewrite); new
-places created by recipes default to `flush` + `wall` (lamps: `flush` +
-`ceiling`). Legacy `install: in_wall` is accepted and normalized to `flush`.
+places created by recipes default to `Flush` + `Wall` (lamps: `Flush` +
+`Ceiling`).
 
 | `install` | Meaning |
 |-----------|---------|
-| `surface` | Surface-mounted (visible box / trunking / tube) |
-| `flush` | Recessed in the finish of the mount plane |
+| `Surface` | Surface-mounted (visible box / trunking / tube) |
+| `Flush` | Recessed in the finish of the mount plane |
 
 It does not change the local opening frame.
 
@@ -226,8 +226,8 @@ It does not change the local opening frame.
 ```yaml
 type: DeviceBox
 subtype: OneGang          # OneGang | TwoGang | ThreeGang
-install: flush
-mount: wall
+install: Flush
+mount: Wall
 facing: S
 openings: [N1]
 elements:
@@ -268,8 +268,8 @@ Typical opening: `B1-1` (back toward the slab) or a contour face if the tube arr
 ```yaml
 type: LightPoint
 subtype: CeilingHole
-install: surface
-mount: ceiling
+install: Surface
+mount: Ceiling
 opening_grid:
   B: 1
 openings: [B1-1]
@@ -317,24 +317,24 @@ type (and optionally overridden on the instance):
 terminal_grid:
   NS: 2
 terminals:
-  N1: { label: "1", direction: in, role: neutral }
-  S1: { label: "2", direction: out, role: neutral }
-  N2: { label: "3", direction: in, role: phase }
-  S2: { label: "4", direction: out, role: phase }
+  N1: { label: "1", direction: In, role: Neutral }
+  S1: { label: "2", direction: Out, role: Neutral }
+  N2: { label: "3", direction: In, role: Phase }
+  S2: { label: "4", direction: Out, role: Phase }
 
 # instance: 6-way strip (N-side pins; NS grid draws both faces)
 Regleta_1:
   type: TerminalStrip
   terminal_grid: { NS: 6 }
   terminals:
-    N1: { direction: inout }
+    N1: { direction: Inout }
     # …
-    N6: { direction: inout }
+    N6: { direction: Inout }
 ```
 
 - `NS: 2` ≡ `N: 2` **and** `S: 2` (not “2 total”).
 - `N: 2` ≡ only the north face.
-- Pin id **is** the cell id; `inout` + NS also attaches the opposite face
+- Pin id **is** the cell id; `InOut` + NS also attaches the opposite face
   (`N1` → cells `[N1, S1]`). There is no `terminal_pairs`.
 
 ### Catalog element types
@@ -390,7 +390,7 @@ in the box frame, not geographic north.
 type: JunctionBox
 subtype: IP40
 notes: "100x100"
-mount: ceiling          # ceiling | wall | floor
+mount: Ceiling          # ceiling | wall | floor
 # facing: N             # wall: direction F faces (into the room)
 opening_grid:
   NS: 3                 # ≡ N: 3x1 and S: 3x1 (integer = one row)
@@ -438,7 +438,7 @@ views:
   physical:
     width: 2000
     height: 1400
-    representation: line   # line | tube
+    representation: Line   # line | tube
 ```
 
 - **`view.physical`**: canvas coordinates for that place under its parent canvas.
@@ -476,9 +476,9 @@ views:
 
 | `mount` | `F` faces… | `B` is… | Local N/S/E/W |
 |---------|------------|---------|---------------|
-| `ceiling` | floor | into the ceiling | perimeter (poker looking at F from below) |
-| `wall` | the room (`facing:`) | into the wall | local N = “up” edge of the F view |
-| `floor` | ceiling | into the floor | perimeter looking at F |
+| `Ceiling` | floor | into the ceiling | perimeter (poker looking at F from below) |
+| `Wall` | the room (`facing:`) | into the wall | local N = “up” edge of the F view |
+| `Floor` | ceiling | into the floor | perimeter looking at F |
 
 ### Usage
 
@@ -513,7 +513,7 @@ One dictionary. Kind is distinguished by `type`:
 | `Conductor` | `from`/`to` = `ElementRef.Terminal` (one each) | forbidden | Leaf wire = the electrical connection |
 
 Shared fields: `name`, `label`, `notes`, optional `section`, `color` (singular),
-optional `install` (`surface` | `flush`) on Conduit and Cable.
+optional `install` (`Surface` | `Flush`) on Conduit and Cable.
 Catalog subtypes remain (`Tube`, `Power`, …).
 
 ```yaml
@@ -723,4 +723,4 @@ Internal qualified names join location segments with `__`:
 - `from` / `to` = `LocationRef.OpeningId` (e.g. `Caja_derivacion_4.W2`,
   `Parking/Caja_derivacion_4.B2-1`, or `.N1` = current place). Required on
   `type: Conduit`.
-- Catalog: `catalog/Conduit.yaml` (`kind: conduit_type`).
+- Catalog: `catalog/Conduit.yaml` (`kind: ConduitType`).

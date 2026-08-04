@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-REPRESENTATIONS = frozenset({"line", "tube"})
+REPRESENTATIONS = frozenset({"Line", "Tube"})
 _ROTATIONS = frozenset({0, 90, 180, 270})
 
 
@@ -382,9 +382,9 @@ def get_physical_page(place: dict[str, Any]) -> dict[str, Any]:
         phys = dict(views["physical"])
     width = phys.get("width", 2000)
     height = phys.get("height", 1400)
-    representation = phys.get("representation", "tube")
+    representation = phys.get("representation", "Tube")
     if representation not in REPRESENTATIONS:
-        representation = "tube"
+        representation = "Tube"
     return {
         "width": float(width),
         "height": float(height),
