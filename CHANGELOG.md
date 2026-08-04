@@ -7,6 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.59.4] — 2026-08-04
+
+### Fixed
+
+- Collapsed left nav expand strip uses Sidebar / Barra lateral (not Outline).
+
 ## [0.59.3] — 2026-08-04
 
 ### Fixed
