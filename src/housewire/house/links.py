@@ -309,6 +309,13 @@ def validate_link_entry(
 ) -> None:
     """Validate one ``cables:`` entry in place context."""
     kind = resolve_link_kind(entry, catalog)
+    from housewire.house import validate_catalog_subtype
+
+    type_id = str(entry.get("type") or "")
+    if type_id:
+        validate_catalog_subtype(
+            type_id, entry, catalog, context=f"cables.{name}"
+        )
     if kind == "conduit":
         expanded = expand_conduit(entry, catalog)
         if not expanded.get("from") or not expanded.get("to"):

@@ -20,7 +20,7 @@ class TestShellCompletion(unittest.TestCase):
             "Caja_derivacion_1",
             under=("Parking",),
             type_id="JunctionBox",
-            subtype="100x100",
+            subtype="ip40",
         )
         save_site(self.root, doc)
         (self.root / "out").mkdir()

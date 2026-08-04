@@ -113,6 +113,22 @@ Elements use their YAML map key as **id**, optional ``name:`` (short display),
 and optional ``label:`` (longer human text) — same pattern as places / cables /
 conduits. Canvas and outline prefer ``name`` → id; inspector shows all three.
 
+### `type` and `subtype` (catalog vocabulary)
+
+| Field | Role | Form | Example |
+|-------|------|------|---------|
+| **`type`** | Catalog family (product class) | PascalCase catalog id | `JunctionBox`, `Cable`, `Conduit` |
+| **`subtype`** | Catalog variant of that family | Closed key from that type’s `subtypes:` map | `ip40`, `1-gang`, `power`, `M20` |
+
+- **Not free text.** Prose belongs in `name` / `label` / `notes` (e.g. «Cuadro
+  General», box size «100×100»).
+- Do **not** capitalize subtype like type; keep kebab-case / technical tokens.
+- If the catalog type declares `subtypes:`, `subtype` must be one of those keys
+  (omitted → `defaults.subtype` when set). Unknown values are rejected.
+- If the type has **no** `subtypes:` map, `subtype` must be omitted.
+- Subtype rows may set `defaults:` (e.g. JunctionBox `ip65` → `install: surface`,
+  `ip40` → `install: flush`). Instance `install` / `mount` still override.
+
 - **Id**: e.g. `Caja_derivacion_4`. No spaces. Used in refs.
 - **`name`**: e.g. `CD4` (canvas).
 - **`label`**: e.g. `Caja derivacion 4`. `add location "Caja derivacion 6"` → key
@@ -132,7 +148,8 @@ elements:
         type: JunctionBox
         name: JB1
         label: "Junction box 1"
-        subtype: "100x100 IP40"
+        subtype: ip40
+        notes: "100x100"
         mount: ceiling
         opening_grid: { NS: 2, WE: 2, B: 1 }
         openings: [B1-1, N1]
@@ -284,12 +301,11 @@ Reserve `DeviceBox` for real mechanism boxes (socket / switch).
 elements:
   MT_Luces:
     type: MCB
-    subtype: C10
     manufacturer: Merlin Gerin
     model: multi9
     serial: null
     label: LUZ
-    notes: "..."
+    notes: "C10 — ..."
     terminals:                # optional; merges over catalog
       N1: { label: "1" }
 ```
@@ -379,7 +395,8 @@ in the box frame, not geographic north.
 
 ```yaml
 type: JunctionBox
-subtype: "100x100 IP40"
+subtype: ip40
+notes: "100x100"
 mount: ceiling          # ceiling | wall | floor
 # facing: N             # wall: direction F faces (into the room)
 opening_grid:

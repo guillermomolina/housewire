@@ -7765,6 +7765,25 @@
     return text === key ? String(value) : text;
   }
 
+  /** Closed subtype keys + localized labels from ``/api/catalog``. */
+  function catalogSubtypeSelect(typeId) {
+    const row = (paletteCatalog && typeId && paletteCatalog[typeId]) || null;
+    const subs = (row && row.subtypes) || [];
+    if (!Array.isArray(subs) || !subs.length) {
+      return { options: null, optionLabels: null };
+    }
+    /** @type {Record<string, string>} */
+    const optionLabels = {};
+    const options = [];
+    for (const sub of subs) {
+      const id = String((sub && sub.id) || "").trim();
+      if (!id) continue;
+      options.push(id);
+      optionLabels[id] = String((sub && sub.label) || id);
+    }
+    return { options, optionLabels };
+  }
+
   function orientationNsFromFlip(flag) {
     return flag ? "south_to_north" : "north_to_south";
   }
@@ -7867,7 +7886,9 @@
           if (!opt) continue;
           const optionEl = document.createElement("option");
           optionEl.value = opt;
-          optionEl.textContent = propsValueLabel(spec.combo, opt);
+          optionEl.textContent =
+            (spec.optionLabels && spec.optionLabels[opt]) ||
+            propsValueLabel(spec.combo, opt);
           if (opt === value) known = true;
           input.appendChild(optionEl);
         }
@@ -8195,11 +8216,25 @@
       value: elem.type || "",
       editable: false,
     });
-    appendPropsRow(meta, {
-      key: "subtype",
-      value: elem.subtype || "",
-      editable: false,
-    });
+    {
+      const subSel = catalogSubtypeSelect(elem.type);
+      if (subSel.options && subSel.options.length) {
+        appendPropsRow(meta, {
+          key: "subtype",
+          value: elem.subtype || "",
+          editable: true,
+          combo: "subtype",
+          options: subSel.options,
+          optionLabels: subSel.optionLabels,
+        });
+      } else {
+        appendPropsRow(meta, {
+          key: "subtype",
+          value: elem.subtype || "",
+          editable: false,
+        });
+      }
+    }
     appendPropsRow(meta, {
       key: "notes",
       value: elem.notes || "",
@@ -8457,11 +8492,25 @@
         value: detail.type || "",
         editable: false,
       });
-      appendPropsRow(meta, {
-        key: "subtype",
-        value: detail.subtype || "",
-        editable: false,
-      });
+      {
+        const subSel = catalogSubtypeSelect(detail.type);
+        if (subSel.options && subSel.options.length) {
+          appendPropsRow(meta, {
+            key: "subtype",
+            value: detail.subtype || "",
+            editable: true,
+            combo: "subtype",
+            options: subSel.options,
+            optionLabels: subSel.optionLabels,
+          });
+        } else {
+          appendPropsRow(meta, {
+            key: "subtype",
+            value: detail.subtype || "",
+            editable: false,
+          });
+        }
+      }
       appendPropsRow(meta, {
         key: "install",
         value: detail.install || "",
@@ -8551,6 +8600,7 @@
 
   async function syncInspectorFromSelection() {
     await flushPendingPropsSave();
+    await loadPaletteCatalog().catch(() => null);
     setSelectedVisual();
     if (selectedIds.size === 0) {
       highlightOutlineSelection();

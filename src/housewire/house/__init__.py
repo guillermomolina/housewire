@@ -613,6 +613,46 @@ def _pin_id(pin: object) -> object:
     return text
 
 
+def validate_catalog_subtype(
+    type_id: str,
+    entry: dict[str, Any],
+    catalog: dict[str, dict[str, Any]],
+    *,
+    context: str,
+) -> None:
+    """Ensure ``subtype`` is a closed catalog key (or omitted when none exist)."""
+    type_def = catalog.get(str(type_id))
+    if not isinstance(type_def, dict):
+        return
+    subtypes = type_def.get("subtypes")
+    raw = entry.get("subtype")
+    has_raw = raw is not None and str(raw).strip() != ""
+    default = None
+    defaults = type_def.get("defaults")
+    if isinstance(defaults, dict) and defaults.get("subtype") is not None:
+        default = str(defaults.get("subtype")).strip() or None
+
+    if isinstance(subtypes, dict) and subtypes:
+        effective = str(raw).strip() if has_raw else default
+        allowed = ", ".join(sorted(str(k) for k in subtypes.keys()))
+        if not effective:
+            raise ValueError(
+                f"{context}: type {type_id} requires subtype (one of: {allowed})"
+            )
+        if effective not in subtypes:
+            raise ValueError(
+                f"{context}: unknown subtype {effective!r} for type {type_id}; "
+                f"expected one of: {allowed}"
+            )
+        return
+
+    if has_raw:
+        raise ValueError(
+            f"{context}: type {type_id} does not define catalog subtypes; "
+            f"omit subtype= (got {raw!r}; use name/label/notes for prose)"
+        )
+
+
 def _validate_element(
     name: str,
     element: dict[str, Any],
@@ -630,6 +670,9 @@ def _validate_element(
         raise ValueError(
             f"type: {type_id} belongs under cables:, not under elements:"
         )
+    validate_catalog_subtype(
+        type_id, element, catalog, context=f"elements.{name}"
+    )
     if is_place_type(type_id):
         return
 
@@ -670,6 +713,14 @@ def _validate_flat_fragment(
     ancestor cable ids in ``contains`` (cable lifted to LCA; tube stays local).
     """
     reject_legacy_keys(fragment)
+    place_type = fragment.get("type")
+    if place_type is not None and is_place_type(place_type):
+        validate_catalog_subtype(
+            str(place_type),
+            fragment,
+            catalog,
+            context="/".join(location_parts) or ".",
+        )
     prefix = location_prefix(location_parts)
     element_map: dict[str, str] = {}
     cable_map: dict[str, str] = {}

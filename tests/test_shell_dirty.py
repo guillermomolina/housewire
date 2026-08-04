@@ -45,7 +45,7 @@ class TestShellDirtyBuffer(unittest.TestCase):
     def test_add_element_does_not_write_until_save(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
-        self._run(s, "add element MT_A --type MCB --subtype C10")
+        self._run(s, "add element MT_A --type MCB ")
         self.assertTrue(s.is_dirty())
         disk = load_yaml(self.site_yaml)
         zona = get_place_node(disk, ("zona_a",))
@@ -63,13 +63,13 @@ class TestShellDirtyBuffer(unittest.TestCase):
         s = self._session()
         self._run(s, "cd zona_a")
         self.assertNotIn("*", s.prompt_label())
-        self._run(s, "add element MT_A --type MCB --subtype C10")
+        self._run(s, "add element MT_A --type MCB ")
         self.assertTrue(s.prompt_label().endswith("*"))
 
     def test_cd_keeps_dirty_buffers_in_memory(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
-        self._run(s, "add element MT_A --type MCB --subtype C10")
+        self._run(s, "add element MT_A --type MCB ")
         self.assertTrue(s.is_dirty(self.site_yaml))
         code = self._run(s, "cd /zona_b")
         self.assertEqual(code, 0)
@@ -87,7 +87,7 @@ class TestShellDirtyBuffer(unittest.TestCase):
     def test_cd_away_from_dirty_does_not_prompt(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
-        self._run(s, "add element MT_A --type MCB --subtype C10")
+        self._run(s, "add element MT_A --type MCB ")
         code = self._run(s, "cd /zona_b")
         self.assertEqual(code, 0)
         self.assertEqual(s.logical_parts, ["zona_b"])
@@ -98,7 +98,7 @@ class TestShellDirtyBuffer(unittest.TestCase):
 
         s = self._session()
         self._run(s, "cd zona_a")
-        self._run(s, "add element MT_A --type MCB --subtype C10")
+        self._run(s, "add element MT_A --type MCB ")
         self.answers = ["g"]
         self.assertTrue(request_leave(s))
         self.assertFalse(s.is_dirty())
@@ -110,7 +110,7 @@ class TestShellDirtyBuffer(unittest.TestCase):
 
         s = self._session()
         self._run(s, "cd zona_a")
-        self._run(s, "add element MT_A --type MCB --subtype C10")
+        self._run(s, "add element MT_A --type MCB ")
         self.answers = ["c"]
         self.assertFalse(request_leave(s))
         self.assertTrue(s.is_dirty())
@@ -118,7 +118,7 @@ class TestShellDirtyBuffer(unittest.TestCase):
     def test_reload_discards(self) -> None:
         s = self._session()
         self._run(s, "cd zona_a")
-        self._run(s, "add element MT_A --type MCB --subtype C10")
+        self._run(s, "add element MT_A --type MCB ")
         self.answers = ["s"]
         code = self._run(s, "reload")
         self.assertEqual(code, 0)

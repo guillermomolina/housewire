@@ -37,7 +37,7 @@ class TestDeleteSelection(unittest.TestCase):
         abm.add_element(box_b, "Strip", type_id="TerminalStrip")
 
     def test_delete_isolated_element(self) -> None:
-        abm.add_element(self.doc, "MT", type_id="MCB", subtype="C10")
+        abm.add_element(self.doc, "MT", type_id="MCB")
         result = delete_selection(self.doc, ["MT"])
         self.assertNotIn("MT", self.doc.get("elements") or {})
         self.assertIn("MT", result.deleted)
@@ -48,8 +48,8 @@ class TestDeleteSelection(unittest.TestCase):
         add_place(self.doc, "Room", type_id="Room")
         add_place(self.doc, "Box", under=("Room",), type_id="JunctionBox")
         box = get_place_node(self.doc, ("Room", "Box"))
-        abm.add_element(box, "A", type_id="MCB", subtype="C10")
-        abm.add_element(box, "B", type_id="MCB", subtype="C10")
+        abm.add_element(box, "A", type_id="MCB")
+        abm.add_element(box, "B", type_id="MCB")
         abm.add_conductor(
             box, "L1", section="1.5", color="BN", from_ref="A.N1", to_ref="B.N1"
         )

@@ -7,6 +7,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.0] — 2026-08-04
+
+### Added
+
+- Closed catalog ``subtype`` vocabulary: when a type defines ``subtypes:``,
+  values must be keys from that map (defaults apply when omitted); types
+  without a map must omit ``subtype`` (prose goes in ``name`` / ``label`` /
+  ``notes``).
+- UI inspector subtype field is a closed combo from ``/api/catalog`` when
+  the type has subtypes.
+
+### Changed
+
+- Documented type (PascalCase) vs subtype (kebab / technical tokens)
+  convention in ``docs/schema-house-v2.md``.
+
 ## [0.61.0] — 2026-08-04
 
 ### Changed

@@ -659,7 +659,7 @@ class TestServeApi(unittest.TestCase):
             )
             caja = get_place_node(doc, ("Parking", "Caja_4"))
             caja["openings"] = ["N1", "W2"]
-            abm.add_element(caja, "Regleta", type_id="TerminalStrip", subtype="3")
+            abm.add_element(caja, "Regleta", type_id="TerminalStrip")
             set_physical_position(caja, 100, 80)
             save_site(root, doc)
 
@@ -804,7 +804,7 @@ class TestServeApi(unittest.TestCase):
                 doc, "Caja_4", under=("Parking",), type_id="JunctionBox", label="Caja 4"
             )
             caja = get_place_node(doc, ("Parking", "Caja_4"))
-            abm.add_element(caja, "Regleta", type_id="TerminalStrip", subtype="3")
+            abm.add_element(caja, "Regleta", type_id="TerminalStrip")
             save_site(root, doc)
 
             client = TestClient(create_app(root))

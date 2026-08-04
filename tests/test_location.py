@@ -21,8 +21,8 @@ class TestDirectoryLocation(unittest.TestCase):
         doc = _yaml.safe_load(
             "schema: house/v2\n"
             "type: JunctionBox\n"
-            "subtype: '100x100 IP40'\n"
-            "notes: 'mount: ceiling'\n"
+            "subtype: ip40\n"
+            "notes: '100x100; mount: ceiling'\n"
             "elements:\n"
             "  Regleta:\n"
             "    type: TerminalStrip\n"
@@ -44,8 +44,8 @@ class TestDirectoryLocation(unittest.TestCase):
                 under=("Parking",),
                 type_id="JunctionBox",
                 label="Caja derivacion 1",
-                subtype="100x100 IP40",
-                notes="mount: ceiling",
+                subtype="ip40",
+                notes="100x100; mount: ceiling",
             )
             caja = get_place_node(doc, ("Parking", "Caja_derivacion_1"))
             caja.setdefault("elements", {})["Regleta"] = {"type": "TerminalStrip"}
@@ -72,7 +72,6 @@ class TestDirectoryLocation(unittest.TestCase):
                 doc,
                 "Cuadro_General",
                 type_id="Panel",
-                subtype="Cuadro",
                 notes="IGA",
                 label="Cuadro General",
             )
@@ -82,7 +81,7 @@ class TestDirectoryLocation(unittest.TestCase):
             loaded = _yaml.safe_load(index.read_text(encoding="utf-8"))
             panel = loaded["elements"]["Cuadro_General"]
             self.assertEqual(panel["type"], "Panel")
-            self.assertEqual(panel["subtype"], "Cuadro")
+            self.assertNotIn("subtype", panel)
             self.assertEqual(panel["label"], "Cuadro General")
 
     def test_create_location_normalizes_spaced_name(self) -> None:
@@ -188,7 +187,7 @@ schema: house/v2
 elements:
   Caja_1:
     type: JunctionBox
-    subtype: "100x100 IP40"
+    subtype: ip40
     notes: "mount: ceiling"
     elements:
       Regleta:
@@ -210,7 +209,7 @@ elements:
             doc,
             "MiCaja",
             type_id="JunctionBox",
-            subtype="100x100 IP40",
+            subtype="ip40",
             notes="mount: ceiling",
         )
         self.assertEqual(doc["elements"]["MiCaja"]["type"], "JunctionBox")

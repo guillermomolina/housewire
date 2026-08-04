@@ -28,12 +28,12 @@ class TestABMElements(unittest.TestCase):
         doc = abm.load_editable(self.yaml, self.root)
         abm.add_element(
             doc, "MT_B",
-            type_id="MCB", subtype="C10",
+            type_id="MCB",
             manufacturer="Merlin Gerin", model="multi9",
-            label="LUZ", notes="Prueba",
+            label="LUZ", notes="C10 — Prueba",
         )
         entry = doc["elements"]["MT_B"]
-        self.assertEqual(entry["subtype"], "C10")
+        self.assertNotIn("subtype", entry)
         self.assertEqual(entry["manufacturer"], "Merlin Gerin")
         self.assertEqual(entry["label"], "LUZ")
 
@@ -61,8 +61,8 @@ class TestABMElements(unittest.TestCase):
 
     def test_rm_element_with_conductor_raises(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
-        abm.add_element(doc, "A", type_id="MCB", subtype="C10")
-        abm.add_element(doc, "B", type_id="MCB", subtype="C10")
+        abm.add_element(doc, "A", type_id="MCB")
+        abm.add_element(doc, "B", type_id="MCB")
         abm.add_conductor(
             doc, "L", section="1.5 mm2", color="BN", from_ref="A.1", to_ref="B.1"
         )
@@ -308,7 +308,7 @@ class TestFormatShow(unittest.TestCase):
 
     def test_show_specific_element(self) -> None:
         doc = abm.load_editable(self.yaml, self.root)
-        abm.add_element(doc, "MT_A", type_id="MCB", subtype="C10")
+        abm.add_element(doc, "MT_A", type_id="MCB")
         text = abm.format_show(doc, element="MT_A")
         self.assertIn("element MT_A", text)
         self.assertIn("MCB", text)

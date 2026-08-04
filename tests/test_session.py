@@ -143,7 +143,7 @@ class TestSiteSession(unittest.TestCase):
         path = s.ensure_active_yaml()
         doc = abm.load_editable(path, self.root)
         place = s.place_node(doc)
-        abm.add_element(place, "MT_A", type_id="MCB", subtype="C10")
+        abm.add_element(place, "MT_A", type_id="MCB")
         abm.persist(doc, path, self.root)
         rows = s.list_elements()
         self.assertEqual(rows, [("MT_A", "MCB")])

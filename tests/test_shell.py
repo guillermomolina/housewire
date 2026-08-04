@@ -105,7 +105,7 @@ class TestShellDispatcher(unittest.TestCase):
         self.assertNotIn("housewire.yaml", out)
 
         self._run(s, "cd zona_a")
-        self._run(s, "add element MT_A --type MCB --subtype C10")
+        self._run(s, "add element MT_A --type MCB ")
 
     def test_use_sets_active(self) -> None:
         s = self._session()
@@ -117,7 +117,7 @@ class TestShellDispatcher(unittest.TestCase):
         s = self._session()
         self._run(s, "cd zona_a")
         self._run(s, "use housewire.yaml")
-        code = self._run(s, "add element MT_Nuevo --type MCB --subtype C10")
+        code = self._run(s, "add element MT_Nuevo --type MCB ")
         self.assertEqual(code, 0)
         self.assertTrue(s.is_dirty())
         _path, doc = s.ensure_doc()
@@ -131,7 +131,7 @@ class TestShellDispatcher(unittest.TestCase):
         s = self._session()
         self._run(s, "cd zona_a")
         self._run(s, "use housewire.yaml")
-        self._run(s, "add element MT_Nuevo --type MCB --subtype C10")
+        self._run(s, "add element MT_Nuevo --type MCB ")
         code = self._run(s, "rm element MT_Nuevo")
         self.assertEqual(code, 0)
         _path, doc = s.ensure_doc()
@@ -248,7 +248,7 @@ class TestShellDispatcher(unittest.TestCase):
         s = self._session()
         code = self._run(
             s,
-            'add location "Caja X" --type JunctionBox --subtype "100x100" --notes "mount: wall"',
+            'add location "Caja X" --type JunctionBox --subtype ip40 --notes "mount: wall"',
         )
         self.assertEqual(code, 0)
         self.assertTrue(s.is_dirty())
@@ -258,7 +258,7 @@ class TestShellDispatcher(unittest.TestCase):
         disk = abm.load_editable(s.active_path(), self.root)
         caja = get_place_node(disk, ("Caja_X",))
         self.assertEqual(caja["type"], "JunctionBox")
-        self.assertEqual(caja["subtype"], "100x100")
+        self.assertEqual(caja["subtype"], "ip40")
         self.assertEqual(caja["label"], "Caja X")
 
     def test_show_includes_location(self) -> None:
@@ -266,7 +266,7 @@ class TestShellDispatcher(unittest.TestCase):
         import sys
 
         doc = abm.load_editable(self.site_yaml, self.root)
-        add_place(doc, "zona_b", type_id="Floor", subtype="zona", notes="meta")
+        add_place(doc, "zona_b", type_id="Floor", notes="meta")
         save_site(self.root, doc)
         s = self._session()
         self._run(s, "cd zona_b")
@@ -280,7 +280,7 @@ class TestShellDispatcher(unittest.TestCase):
         self.assertEqual(code, 0)
         out = buf.getvalue()
         self.assertIn("place (Floor)", out)
-        self.assertIn("zona", out)
+        self.assertIn("meta", out)
 
 
 class TestShellLineContinuation(unittest.TestCase):
