@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.50.9] — 2026-08-04
+
+### Changed
+
+- Properties labels now show ``Vertical orientation`` / ``Horizontal orientation``
+  (and Spanish equivalents) instead of axis names.
+
 ## [0.50.8] — 2026-08-04
 
 ### Fixed
