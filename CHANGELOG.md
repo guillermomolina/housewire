@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.49.1] — 2026-08-04
+
+### Changed
+
+- Paste uniquifies ``name`` and ``label`` independently of the technical id
+  (same collision rule: append `` 1`` or increment a trailing number), so a
+  custom label like ``Luz cocina`` becomes ``Luz cocina 1`` when the original
+  is still present. Cut→paste keeps values when free.
+
 ## [0.49.0] — 2026-08-04
 
 ### Changed

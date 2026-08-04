@@ -42,6 +42,8 @@ from housewire.site.view_layout import (
 )
 
 _TRAILING_NUM = re.compile(r"^(.*?)(\d+)$")
+# Working name/label: trailing digits (optional space/underscore before them).
+_TRAILING_DISPLAY_NUM = re.compile(r"^(.*?)(?:[\s_]+)?(\d+)$")
 # Match nested canvas layout in physical_graph / app.js.
 _LEAF_W = 120.0
 _LEAF_H = 56.0
@@ -105,55 +107,90 @@ def display_name_from_id(yaml_id: str) -> str:
     return f"{stem} {int(num)}"
 
 
-def _id_stem(yaml_id: str) -> str:
-    s = str(yaml_id).strip()
-    match = _TRAILING_NUM.match(s)
-    if not match:
-        return s
-    stem = match.group(1).rstrip("_")
-    return stem or s
+def next_available_display_name(
+    existing: set[str] | dict[str, Any], preferred: str
+) -> str:
+    """Unique sibling working name/label: ``Foo``→``Foo 1``, ``Foo 1``→``Foo 2``.
 
-
-def _looks_like_id_derived(text: str, yaml_id: str) -> bool:
-    """True when ``text`` is empty or mirrors ``yaml_id`` / its display / stem."""
-    t = str(text).strip()
-    if not t:
-        return True
-    if t == yaml_id or t == display_name_from_id(yaml_id):
-        return True
-    if t.replace(" ", "_") == yaml_id:
-        return True
-    stem = _id_stem(yaml_id)
-    if t == stem or t.replace(" ", "_") == stem:
-        return True
-    return False
-
-
-def sync_working_names_after_rename(
-    node: dict[str, Any], *, old_id: str, new_id: str
-) -> None:
-    """When paste renames an id, keep ``name`` / ``label`` in sync as human text.
-
-    Custom labels/names are left alone. Auto-like values become
-    ``Interruptor 2`` (space), not ``Interruptor_2``.
+    Uses a space before the number (unlike technical ids, which use ``_``).
     """
-    if old_id == new_id:
-        return
-    new_display = display_name_from_id(new_id)
+    taken = (
+        {str(k).strip() for k in existing.keys() if str(k).strip()}
+        if isinstance(existing, dict)
+        else {str(x).strip() for x in existing if str(x).strip()}
+    )
+    name = str(preferred).strip()
+    if not name:
+        return name
+    if name not in taken:
+        return name
+    match = _TRAILING_DISPLAY_NUM.match(name)
+    if match:
+        stem = match.group(1).rstrip(" _")
+        if stem:
+            n = int(match.group(2)) + 1
+            while f"{stem} {n}" in taken:
+                n += 1
+            return f"{stem} {n}"
+    n = 1
+    while f"{name} {n}" in taken:
+        n += 1
+    return f"{name} {n}"
+
+
+def _sibling_working_fields(
+    elements: dict[str, Any],
+) -> tuple[set[str], set[str]]:
+    """Collect explicit ``name`` / ``label`` values among sibling nodes."""
+    names: set[str] = set()
+    labels: set[str] = set()
+    for node in elements.values():
+        if not isinstance(node, dict):
+            continue
+        raw_name = node.get("name")
+        if raw_name is not None and str(raw_name).strip():
+            names.add(str(raw_name).strip())
+        raw_label = node.get("label")
+        if raw_label is not None and str(raw_label).strip():
+            labels.add(str(raw_label).strip())
+    return names, labels
+
+
+def uniquify_working_names(
+    node: dict[str, Any],
+    *,
+    old_id: str,
+    new_id: str,
+    taken_names: set[str],
+    taken_labels: set[str],
+) -> None:
+    """Uniquify ``name`` / ``label`` independently of the technical id.
+
+    Same collision rule as ids, but with a spaced number. Empty ``name`` after an
+    id rename gets the spaced form of the new id. Empty ``label`` is left alone.
+    """
     raw_name = node.get("name")
     name_s = "" if raw_name is None else str(raw_name).strip()
-    if _looks_like_id_derived(name_s, old_id):
-        node["name"] = new_display
+    if name_s:
+        preferred = name_s
+    elif old_id != new_id:
+        preferred = display_name_from_id(new_id)
+    else:
+        preferred = ""
+    if preferred:
+        new_name = next_available_display_name(taken_names, preferred)
+        node["name"] = new_name
+        taken_names.add(new_name)
+
     raw_label = node.get("label")
     if raw_label is None:
         return
     label_s = str(raw_label).strip()
     if not label_s:
         return
-    if _looks_like_id_derived(label_s, old_id) or (
-        name_s and label_s == name_s
-    ):
-        node["label"] = new_display
+    new_label = next_available_display_name(taken_labels, label_s)
+    node["label"] = new_label
+    taken_labels.add(new_label)
 
 
 def _roots(
@@ -876,6 +913,7 @@ def paste_payload(
     elem_obstacles = _collect_element_obstacles(parent)
     fitted_rects: list[tuple[float, float, float, float]] = list(place_obstacles)
     fitted_rects.extend(elem_obstacles)
+    taken_names, taken_labels = _sibling_working_fields(elements)
 
     for item in items:
         if not isinstance(item, dict):
@@ -889,7 +927,13 @@ def paste_payload(
         root_rename[old_id] = new_id
         result.renamed[old_id] = new_id
         blob = copy.deepcopy(node)
-        sync_working_names_after_rename(blob, old_id=old_id, new_id=new_id)
+        uniquify_working_names(
+            blob,
+            old_id=old_id,
+            new_id=new_id,
+            taken_names=taken_names,
+            taken_labels=taken_labels,
+        )
         if kind == "place":
             rect = _place_without_overlap(blob, obstacles=place_obstacles)
             fitted_rects.append(rect)

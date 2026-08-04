@@ -7,6 +7,7 @@ from fixtures import add_place
 from housewire.site import abm
 from housewire.site.clipboard import (
     display_name_from_id,
+    next_available_display_name,
     next_available_id,
     pack_selection,
     paste_payload,
@@ -48,6 +49,28 @@ class TestDisplayNameFromId(unittest.TestCase):
         self.assertEqual(display_name_from_id("Interruptor"), "Interruptor")
 
 
+class TestNextAvailableDisplayName(unittest.TestCase):
+    def test_append_suffix(self) -> None:
+        self.assertEqual(
+            next_available_display_name({"Luz cocina"}, "Luz cocina"), "Luz cocina 1"
+        )
+
+    def test_increment(self) -> None:
+        self.assertEqual(
+            next_available_display_name({"Interruptor 1"}, "Interruptor 1"),
+            "Interruptor 2",
+        )
+
+    def test_skip_taken(self) -> None:
+        self.assertEqual(
+            next_available_display_name({"Box", "Box 1", "Box 2"}, "Box"),
+            "Box 3",
+        )
+
+    def test_free_keeps_value(self) -> None:
+        self.assertEqual(next_available_display_name({"Other"}, "Luz cocina"), "Luz cocina")
+
+
 class TestClipboard(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp, self.root, self.yaml = make_site()
@@ -80,7 +103,7 @@ class TestClipboard(unittest.TestCase):
         self.assertEqual(copy_node.get("name"), "Interruptor 1")
         self.assertEqual(copy_node.get("label"), "Interruptor 1")
 
-    def test_paste_preserves_custom_label(self) -> None:
+    def test_paste_bumps_unrelated_label(self) -> None:
         add_place(self.doc, "Room", type_id="Room")
         add_place(self.doc, "Interruptor", under=("Room",), type_id="JunctionBox")
         sw = get_place_node(self.doc, ("Room", "Interruptor"))
@@ -90,7 +113,29 @@ class TestClipboard(unittest.TestCase):
         paste_payload(self.doc, parent_id="Room", payload=payload)
         copy_node = get_place_node(self.doc, ("Room", "Interruptor_1"))
         self.assertEqual(copy_node.get("name"), "Interruptor 1")
-        self.assertEqual(copy_node.get("label"), "Luz cocina")
+        self.assertEqual(copy_node.get("label"), "Luz cocina 1")
+
+    def test_paste_increments_numbered_label(self) -> None:
+        add_place(self.doc, "Room", type_id="Room")
+        add_place(self.doc, "SW", under=("Room",), type_id="JunctionBox")
+        sw = get_place_node(self.doc, ("Room", "SW"))
+        sw["name"] = "SW"
+        sw["label"] = "Luz cocina 1"
+        payload = pack_selection(self.doc, ["Room/SW"])
+        paste_payload(self.doc, parent_id="Room", payload=payload)
+        copy_node = get_place_node(self.doc, ("Room", "SW_1"))
+        self.assertEqual(copy_node.get("label"), "Luz cocina 2")
+
+    def test_cut_paste_keeps_free_label(self) -> None:
+        add_place(self.doc, "Room", type_id="Room")
+        add_place(self.doc, "SW", under=("Room",), type_id="JunctionBox")
+        sw = get_place_node(self.doc, ("Room", "SW"))
+        sw["label"] = "Luz cocina"
+        payload = pack_selection(self.doc, ["Room/SW"])
+        delete_selection(self.doc, ["Room/SW"])
+        paste_payload(self.doc, parent_id="Room", payload=payload)
+        restored = get_place_node(self.doc, ("Room", "SW"))
+        self.assertEqual(restored.get("label"), "Luz cocina")
 
     def test_pack_cross_becomes_open_stub(self) -> None:
         add_place(self.doc, "Room", type_id="Room")
