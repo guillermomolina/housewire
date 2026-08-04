@@ -128,6 +128,41 @@ class TestClipboard(unittest.TestCase):
         paste_payload(self.doc, parent_id="Room", payload=payload)
         self.assertIn("Box", (room.get("elements") or {}))
 
+    def test_paste_avoids_overlap_and_grows_parent(self) -> None:
+        from housewire.site.view_layout import (
+            get_physical_position,
+            get_physical_size,
+            set_physical_position,
+            set_physical_size,
+        )
+
+        add_place(self.doc, "Room", type_id="Room")
+        add_place(self.doc, "Box", under=("Room",), type_id="JunctionBox")
+        room = get_place_node(self.doc, ("Room",))
+        box = get_place_node(self.doc, ("Room", "Box"))
+        set_physical_position(box, 28.0, 40.0)
+        set_physical_size(box, 120.0, 56.0)
+        set_physical_size(room, 200.0, 120.0)
+        payload = pack_selection(self.doc, ["Room/Box"])
+        paste_payload(self.doc, parent_id="Room", payload=payload)
+        box2 = get_place_node(self.doc, ("Room", "Box_1"))
+        pos1 = get_physical_position(box)
+        pos2 = get_physical_position(box2)
+        self.assertIsNotNone(pos1)
+        self.assertIsNotNone(pos2)
+        assert pos1 is not None and pos2 is not None
+        # Must not sit on the same origin (overlap avoidance).
+        self.assertNotEqual(
+            (round(pos1[0], 1), round(pos1[1], 1)),
+            (round(pos2[0], 1), round(pos2[1], 1)),
+        )
+        # Parent locked size should grow to fit both.
+        size = get_physical_size(room)
+        self.assertIsNotNone(size)
+        assert size is not None
+        self.assertGreaterEqual(size[0], 200.0)
+        self.assertGreater(size[0] * size[1], 200.0 * 120.0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -31,10 +31,33 @@ from housewire.site.delete_selection import (
 )
 from housewire.site.open_runs import format_open_notes
 from housewire.site.tree import logical_parts_from_id
-from housewire.site.view_layout import get_physical_position, set_physical_position
+from housewire.site.view_layout import (
+    get_electrical_position,
+    get_electrical_size,
+    get_physical_position,
+    get_physical_size,
+    set_electrical_position,
+    set_physical_position,
+    set_physical_size,
+)
 
 _TRAILING_NUM = re.compile(r"^(.*?)(\d+)$")
-_PASTE_OFFSET = 24.0
+# Match nested canvas layout in physical_graph / app.js.
+_LEAF_W = 120.0
+_LEAF_H = 56.0
+_ELEM_W = 72.0
+_ELEM_H = 28.0
+_GAP = 16.0
+_STEP_X = 160.0
+_STEP_Y = 110.0
+_ELEM_STEP_X = 80.0
+_ELEM_STEP_Y = 36.0
+_CONTENT_PAD = 28.0
+_CONTENT_HEADER = 36.0
+_ORIGIN_X = 28.0
+_ORIGIN_Y = 40.0
+_ELEM_ORIGIN_X = 28.0
+_ELEM_ORIGIN_Y = 8.0
 CLIPBOARD_VERSION = 1
 
 
@@ -569,32 +592,196 @@ def _merge_cables_into(
         dest[new] = entry
 
 
-def _offset_place_view(
-    node: dict[str, Any], *, occupied: set[tuple[float, float]]
-) -> None:
-    pos = get_physical_position(node)
-    if pos is None:
-        return
-    x, y = float(pos[0]), float(pos[1])
-    while (round(x, 1), round(y, 1)) in occupied:
-        x += _PASTE_OFFSET
-        y += _PASTE_OFFSET
-    set_physical_position(node, x, y)
-    occupied.add((round(x, 1), round(y, 1)))
+def _box_size(
+    node: dict[str, Any], *, default_w: float, default_h: float, electrical: bool
+) -> tuple[float, float]:
+    size = get_electrical_size(node) if electrical else get_physical_size(node)
+    if size is not None:
+        return float(size[0]), float(size[1])
+    return default_w, default_h
 
 
-def _collect_sibling_positions(parent: dict[str, Any]) -> set[tuple[float, float]]:
-    occupied: set[tuple[float, float]] = set()
+def _rects_overlap(
+    a: tuple[float, float, float, float],
+    b: tuple[float, float, float, float],
+    *,
+    gap: float = _GAP,
+) -> bool:
+    ax, ay, aw, ah = a
+    bx, by, bw, bh = b
+    return not (
+        ax + aw + gap <= bx
+        or bx + bw + gap <= ax
+        or ay + ah + gap <= by
+        or by + bh + gap <= ay
+    )
+
+
+def _candidate_positions(
+    preferred: tuple[float, float] | None,
+    *,
+    step_x: float,
+    step_y: float,
+    origin_x: float,
+    origin_y: float,
+) -> list[tuple[float, float]]:
+    """Preferred point first, then a compact spiral / grid of alternatives."""
+    out: list[tuple[float, float]] = []
+    seen: set[tuple[float, float]] = set()
+
+    def _add(x: float, y: float) -> None:
+        key = (round(x, 1), round(y, 1))
+        if key in seen or x < 0 or y < 0:
+            return
+        seen.add(key)
+        out.append((x, y))
+
+    if preferred is not None:
+        _add(preferred[0], preferred[1])
+    _add(origin_x, origin_y)
+    # Expanding rings around preferred (or origin).
+    base_x = preferred[0] if preferred is not None else origin_x
+    base_y = preferred[1] if preferred is not None else origin_y
+    for ring in range(1, 12):
+        for dx in range(-ring, ring + 1):
+            for dy in range(-ring, ring + 1):
+                if max(abs(dx), abs(dy)) != ring:
+                    continue
+                _add(base_x + dx * step_x, base_y + dy * step_y)
+    # Extra row/column scan from origin for dense parents.
+    for row in range(0, 8):
+        for col in range(0, 8):
+            _add(origin_x + col * step_x, origin_y + row * step_y)
+    return out
+
+
+def _find_free_position(
+    w: float,
+    h: float,
+    *,
+    preferred: tuple[float, float] | None,
+    obstacles: list[tuple[float, float, float, float]],
+    step_x: float,
+    step_y: float,
+    origin_x: float,
+    origin_y: float,
+) -> tuple[float, float]:
+    for x, y in _candidate_positions(
+        preferred,
+        step_x=step_x,
+        step_y=step_y,
+        origin_x=origin_x,
+        origin_y=origin_y,
+    ):
+        rect = (x, y, w, h)
+        if any(_rects_overlap(rect, other) for other in obstacles):
+            continue
+        return x, y
+    # Last resort: stack below the lowest obstacle.
+    if obstacles:
+        bottom = max(oy + oh for _ox, oy, _ow, oh in obstacles)
+        return origin_x, bottom + _GAP
+    return origin_x, origin_y
+
+
+def _collect_place_obstacles(parent: dict[str, Any]) -> list[tuple[float, float, float, float]]:
+    obstacles: list[tuple[float, float, float, float]] = []
     elements = parent.get("elements") or {}
     if not isinstance(elements, dict):
-        return occupied
+        return obstacles
     for child in elements.values():
         if not isinstance(child, dict) or not is_place_type(child.get("type")):
             continue
         pos = get_physical_position(child)
-        if pos is not None:
-            occupied.add((round(pos[0], 1), round(pos[1], 1)))
-    return occupied
+        if pos is None:
+            continue
+        w, h = _box_size(child, default_w=_LEAF_W, default_h=_LEAF_H, electrical=False)
+        obstacles.append((float(pos[0]), float(pos[1]), w, h))
+    return obstacles
+
+
+def _collect_element_obstacles(
+    parent: dict[str, Any],
+) -> list[tuple[float, float, float, float]]:
+    obstacles: list[tuple[float, float, float, float]] = []
+    elements = parent.get("elements") or {}
+    if not isinstance(elements, dict):
+        return obstacles
+    for child in elements.values():
+        if not isinstance(child, dict) or is_place_type(child.get("type")):
+            continue
+        pos = get_electrical_position(child)
+        if pos is None:
+            continue
+        w, h = _box_size(child, default_w=_ELEM_W, default_h=_ELEM_H, electrical=True)
+        obstacles.append((float(pos[0]), float(pos[1]), w, h))
+    return obstacles
+
+
+def _place_without_overlap(
+    node: dict[str, Any],
+    *,
+    obstacles: list[tuple[float, float, float, float]],
+) -> tuple[float, float, float, float]:
+    w, h = _box_size(node, default_w=_LEAF_W, default_h=_LEAF_H, electrical=False)
+    preferred = get_physical_position(node)
+    x, y = _find_free_position(
+        w,
+        h,
+        preferred=preferred,
+        obstacles=obstacles,
+        step_x=_STEP_X,
+        step_y=_STEP_Y,
+        origin_x=_ORIGIN_X,
+        origin_y=_ORIGIN_Y,
+    )
+    set_physical_position(node, x, y)
+    rect = (x, y, w, h)
+    obstacles.append(rect)
+    return rect
+
+
+def _element_without_overlap(
+    node: dict[str, Any],
+    *,
+    obstacles: list[tuple[float, float, float, float]],
+) -> tuple[float, float, float, float]:
+    w, h = _box_size(node, default_w=_ELEM_W, default_h=_ELEM_H, electrical=True)
+    preferred = get_electrical_position(node)
+    x, y = _find_free_position(
+        w,
+        h,
+        preferred=preferred,
+        obstacles=obstacles,
+        step_x=_ELEM_STEP_X,
+        step_y=_ELEM_STEP_Y,
+        origin_x=_ELEM_ORIGIN_X,
+        origin_y=_ELEM_ORIGIN_Y,
+    )
+    set_electrical_position(node, x, y)
+    rect = (x, y, w, h)
+    obstacles.append(rect)
+    return rect
+
+
+def _grow_parent_to_fit(
+    parent: dict[str, Any],
+    content_rects: list[tuple[float, float, float, float]],
+) -> None:
+    """If the parent has a locked size, enlarge it so pasted content fits."""
+    if not content_rects:
+        return
+    stored = get_physical_size(parent)
+    if stored is None:
+        # Unlocked parents auto-size from content on the next graph build.
+        return
+    max_r = max(x + w for x, _y, w, _h in content_rects)
+    max_b = max(y + h for _x, y, _w, h in content_rects)
+    need_w = max(_LEAF_W, max_r + 2 * _CONTENT_PAD)
+    need_h = max(_LEAF_H, _CONTENT_HEADER + max_b + _CONTENT_PAD)
+    sw, sh = float(stored[0]), float(stored[1])
+    if need_w > sw or need_h > sh:
+        set_physical_size(parent, max(sw, need_w), max(sh, need_h))
 
 
 def paste_payload(
@@ -619,7 +806,10 @@ def paste_payload(
     catalog = load_catalog()
     result = PasteResult()
     root_rename: dict[str, str] = {}
-    occupied = _collect_sibling_positions(parent)
+    place_obstacles = _collect_place_obstacles(parent)
+    elem_obstacles = _collect_element_obstacles(parent)
+    fitted_rects: list[tuple[float, float, float, float]] = list(place_obstacles)
+    fitted_rects.extend(elem_obstacles)
 
     for item in items:
         if not isinstance(item, dict):
@@ -634,16 +824,21 @@ def paste_payload(
         result.renamed[old_id] = new_id
         blob = copy.deepcopy(node)
         if kind == "place":
-            _offset_place_view(blob, occupied=occupied)
+            rect = _place_without_overlap(blob, obstacles=place_obstacles)
+            fitted_rects.append(rect)
             elements[new_id] = blob
             created = "/".join((*parent_parts, new_id)) if parent_parts else new_id
             result.created.append(created)
         elif kind == "element":
+            rect = _element_without_overlap(blob, obstacles=elem_obstacles)
+            fitted_rects.append(rect)
             elements[new_id] = blob
             created = "/".join((*parent_parts, new_id)) if parent_parts else new_id
             result.created.append(created)
         else:
             raise ValueError(f"Unknown clipboard item kind: {kind}")
+
+    _grow_parent_to_fit(parent, fitted_rects)
 
     parent_cables = payload.get("parent_cables") or {}
     if isinstance(parent_cables, dict) and parent_cables:

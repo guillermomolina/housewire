@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.48.1] — 2026-08-04
+
+### Fixed
+
+- Paste finds a free slot when the copied position overlaps siblings, and
+  enlarges a size-locked parent so the new content fits.
+
 ## [0.48.0] — 2026-08-04
 
 ### Added
