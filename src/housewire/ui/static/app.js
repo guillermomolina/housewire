@@ -1386,8 +1386,8 @@
 
   /**
    * Apply resize from original box + world delta for a handle.
-   * N/W keep the opposite edge fixed and stop at the origin (no negatives),
-   * so clamping x/y never inflates w/h past the E/S edge.
+   * N/W keep the opposite edge fixed; x/y may go negative during the gesture
+   * (normalized to >= 0 among siblings on drop).
    * @returns {{x:number,y:number,w:number,h:number}}
    */
   function computeResizedBox(orig, handle, dx, dy, minW, minH) {
@@ -1404,14 +1404,74 @@
       h = Math.max(minH, orig.h + dy);
     }
     if (handle.includes("w")) {
-      x = Math.min(right - minW, Math.max(0, orig.x + dx));
+      x = Math.min(right - minW, orig.x + dx);
       w = right - x;
     }
     if (handle.includes("n")) {
-      y = Math.min(bottom - minH, Math.max(0, orig.y + dy));
+      y = Math.min(bottom - minH, orig.y + dy);
       h = bottom - y;
     }
     return { x, y, w, h };
+  }
+
+  /**
+   * Shift sibling places or elements so min(x,y) >= 0. Returns shift applied.
+   * @param {string|null} parentId
+   * @param {"place"|"element"} kind
+   * @returns {{dx:number,dy:number,siblings:object[]}}
+   */
+  function normalizeContentOrigin(parentId, kind) {
+    const parentKey = parentId || null;
+    const siblings =
+      kind === "place"
+        ? (graph?.nodes || []).filter((n) => (n.parent || null) === parentKey)
+        : (graph?.elements || []).filter((e) => e.parent === parentId);
+    let minX = Infinity;
+    let minY = Infinity;
+    for (const s of siblings) {
+      minX = Math.min(minX, s.x ?? 0);
+      minY = Math.min(minY, s.y ?? 0);
+    }
+    if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+      return { dx: 0, dy: 0, siblings };
+    }
+    const dx = minX < 0 ? -minX : 0;
+    const dy = minY < 0 ? -minY : 0;
+    if (dx || dy) {
+      for (const s of siblings) {
+        s.x = Math.round((s.x ?? 0) + dx);
+        s.y = Math.round((s.y ?? 0) + dy);
+      }
+    }
+    return { dx, dy, siblings };
+  }
+
+  /**
+   * After drag/resize, renormalize any parent whose children went negative.
+   * @param {{placeParents?:(string|null)[], elementParents?:string[]}} groups
+   */
+  function normalizeAfterLayoutGesture(groups) {
+    const placeParents = new Set(groups.placeParents || []);
+    const elementParents = new Set(groups.elementParents || []);
+    const shiftedPlaces = new Set();
+    const shiftedElems = new Set();
+    const grownParents = new Set();
+    for (const parentId of placeParents) {
+      const { dx, dy, siblings } = normalizeContentOrigin(parentId, "place");
+      if (dx || dy) {
+        for (const s of siblings) shiftedPlaces.add(s.id);
+        if (parentId) grownParents.add(parentId);
+      }
+    }
+    for (const parentId of elementParents) {
+      if (!parentId) continue;
+      const { dx, dy, siblings } = normalizeContentOrigin(parentId, "element");
+      if (dx || dy) {
+        for (const s of siblings) shiftedElems.add(s.id);
+        grownParents.add(parentId);
+      }
+    }
+    return { shiftedPlaces, shiftedElems, grownParents };
   }
 
   function beginResizeDrag(ev, targetKind, targetId, handle, orig) {
@@ -1649,18 +1709,28 @@
             : node.w;
         autoH = node.h == null ? LEAF_H : node.h;
       } else {
+        let minL = 0;
+        let minT = 0;
         let maxR = 0;
         let maxB = 0;
         for (const kid of kids) {
-          maxR = Math.max(maxR, (kid.x ?? 0) + nodeW(kid));
-          maxB = Math.max(maxB, (kid.y ?? 0) + nodeH(kid));
+          const kx = kid.x ?? 0;
+          const ky = kid.y ?? 0;
+          minL = Math.min(minL, kx);
+          minT = Math.min(minT, ky);
+          maxR = Math.max(maxR, kx + nodeW(kid));
+          maxB = Math.max(maxB, ky + nodeH(kid));
         }
         for (const e of elems) {
-          maxR = Math.max(maxR, (e.x ?? 0) + (e.w ?? ELEM_W));
-          maxB = Math.max(maxB, (e.y ?? 0) + (e.h ?? ELEM_H));
+          const ex = e.x ?? 0;
+          const ey = e.y ?? 0;
+          minL = Math.min(minL, ex);
+          minT = Math.min(minT, ey);
+          maxR = Math.max(maxR, ex + (e.w ?? ELEM_W));
+          maxB = Math.max(maxB, ey + (e.h ?? ELEM_H));
         }
-        autoW = Math.max(LEAF_W, maxR + 2 * PAD);
-        autoH = Math.max(LEAF_H, HEADER + maxB + PAD);
+        autoW = Math.max(LEAF_W, maxR - minL + 2 * PAD);
+        autoH = Math.max(LEAF_H, HEADER + (maxB - minT) + PAD);
       }
       if (node.size_locked) {
         node.w = Math.max(Number(node.w) || 0, autoW);
@@ -7910,6 +7980,30 @@
         await syncInspectorFromSelection();
         return;
       }
+      // Normalize parent-local origin if N/W resize went negative, then paint.
+      const placeParents = [];
+      const elementParents = [];
+      if (finished.targetKind === "place") {
+        const node = graph?.nodes.find((n) => n.id === finished.targetId);
+        if (!node) {
+          await syncInspectorFromSelection();
+          return;
+        }
+        placeParents.push(node.parent || null);
+      } else {
+        const elem = (graph?.elements || []).find(
+          (e) => e.id === finished.targetId
+        );
+        if (!elem) {
+          await syncInspectorFromSelection();
+          return;
+        }
+        if (elem.parent) elementParents.push(elem.parent);
+      }
+      const norm = normalizeAfterLayoutGesture({
+        placeParents,
+        elementParents,
+      });
       // Full paint when electrical is on so terminal fans / inbox expansion
       // and cable attach points match the new box size.
       if (showElectrical) render();
@@ -7918,14 +8012,26 @@
       try {
         const payload = {};
         if (finished.targetKind === "place") {
-          const node = graph?.nodes.find((n) => n.id === finished.targetId);
-          if (!node) return;
-          payload[finished.targetId] = {
-            x: node.x,
-            y: node.y,
-            w: node.w,
-            h: node.h,
-          };
+          const ids = new Set([finished.targetId, ...norm.shiftedPlaces]);
+          for (const id of ids) {
+            const node = graph?.nodes.find((n) => n.id === id);
+            if (!node) continue;
+            payload[id] = { x: node.x, y: node.y };
+            if (node.size_locked || id === finished.targetId) {
+              payload[id].w = node.w;
+              payload[id].h = node.h;
+            }
+          }
+          for (const pid of norm.grownParents) {
+            const parent = graph?.nodes.find((n) => n.id === pid);
+            if (!parent || !parent.size_locked) continue;
+            payload[pid] = {
+              x: parent.x,
+              y: parent.y,
+              w: parent.w,
+              h: parent.h,
+            };
+          }
           const lastMeta = await api(`/api/physical/positions`, {
             method: "PATCH",
             body: JSON.stringify({
@@ -7940,16 +8046,27 @@
               : "Resized place"
           );
         } else {
-          const elem = (graph?.elements || []).find(
-            (e) => e.id === finished.targetId
-          );
-          if (!elem) return;
-          payload[finished.targetId] = {
-            x: elem.x,
-            y: elem.y,
-            w: elem.w,
-            h: elem.h,
-          };
+          const ids = new Set([finished.targetId, ...norm.shiftedElems]);
+          for (const id of ids) {
+            const elem = (graph?.elements || []).find((e) => e.id === id);
+            if (!elem) continue;
+            payload[id] = { x: elem.x, y: elem.y };
+            if (elem.size_locked || id === finished.targetId) {
+              payload[id].w = elem.w;
+              payload[id].h = elem.h;
+            }
+          }
+          const placePayload = {};
+          for (const pid of norm.grownParents) {
+            const parent = graph?.nodes.find((n) => n.id === pid);
+            if (!parent || !parent.size_locked) continue;
+            placePayload[pid] = {
+              x: parent.x,
+              y: parent.y,
+              w: parent.w,
+              h: parent.h,
+            };
+          }
           const lastMeta = await api(`/api/electrical/positions`, {
             method: "PATCH",
             body: JSON.stringify({
@@ -7957,6 +8074,15 @@
               positions: payload,
             }),
           });
+          if (Object.keys(placePayload).length) {
+            await api(`/api/physical/positions`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                location_id: locationId,
+                positions: placePayload,
+              }),
+            });
+          }
           applyEditFlags(lastMeta);
           setStatus(
             lastMeta && lastMeta.dirty
@@ -7996,6 +8122,18 @@
     // Re-route tubes/cables once after the drag, not on every pointermove.
     // Element-only moves leave place boxes fixed → reuse conduit geometry.
     const items = finished.items || [];
+    const placeParents = [];
+    const elementParents = [];
+    for (const item of items) {
+      if (item.kind === "place") {
+        const node = graph?.nodes.find((n) => n.id === item.id);
+        if (node) placeParents.push(node.parent || null);
+      } else if (item.kind === "element") {
+        const elem = (graph?.elements || []).find((e) => e.id === item.id);
+        if (elem?.parent) elementParents.push(elem.parent);
+      }
+    }
+    const norm = normalizeAfterLayoutGesture({ placeParents, elementParents });
     const onlyElements =
       items.length > 0 && items.every((it) => it.kind === "element");
     updateNodeVisual(
@@ -8006,7 +8144,7 @@
     try {
       const placePositions = {};
       const elemPositions = {};
-      for (const item of finished.items || []) {
+      for (const item of items) {
         if (item.kind === "place") {
           const node = graph?.nodes.find((n) => n.id === item.id);
           if (node) {
@@ -8026,6 +8164,34 @@
             }
           }
         }
+      }
+      for (const id of norm.shiftedPlaces) {
+        const node = graph?.nodes.find((n) => n.id === id);
+        if (!node || placePositions[id]) continue;
+        placePositions[id] = { x: node.x, y: node.y };
+        if (node.size_locked) {
+          placePositions[id].w = node.w;
+          placePositions[id].h = node.h;
+        }
+      }
+      for (const id of norm.shiftedElems) {
+        const elem = (graph?.elements || []).find((e) => e.id === id);
+        if (!elem || elemPositions[id]) continue;
+        elemPositions[id] = { x: elem.x, y: elem.y };
+        if (elem.size_locked) {
+          elemPositions[id].w = elem.w;
+          elemPositions[id].h = elem.h;
+        }
+      }
+      for (const pid of norm.grownParents) {
+        const parent = graph?.nodes.find((n) => n.id === pid);
+        if (!parent || !parent.size_locked) continue;
+        placePositions[pid] = {
+          x: parent.x,
+          y: parent.y,
+          w: parent.w,
+          h: parent.h,
+        };
       }
       if (
         !Object.keys(placePositions).length &&
@@ -8096,16 +8262,16 @@
         if (!node) continue;
         const parent = node.parent ? placeMap[node.parent] : null;
         const d = storedDragDelta(parent, dx, dy);
-        node.x = Math.max(0, Math.round(item.origX + d.dx));
-        node.y = Math.max(0, Math.round(item.origY + d.dy));
+        node.x = Math.round(item.origX + d.dx);
+        node.y = Math.round(item.origY + d.dy);
       } else if (item.kind === "element") {
         const elem = (graph?.elements || []).find((e) => e.id === item.id);
         if (!elem) continue;
         const parent = elem.parent ? placeMap[elem.parent] : null;
         const d = storedDragDelta(parent, dx, dy);
-        // Keep x/y >= 0; parent place grows via measureVisibleSizes.
-        elem.x = Math.max(0, Math.round(item.origX + d.dx));
-        elem.y = Math.max(0, Math.round(item.origY + d.dy));
+        // x/y may go negative during the gesture; renormalized on drop.
+        elem.x = Math.round(item.origX + d.dx);
+        elem.y = Math.round(item.origY + d.dy);
       }
     }
     // Transforms only while dragging; full cable/conduit re-route on drop.

@@ -30,6 +30,7 @@ from housewire.site.openings import declared_opening_ids, expand_opening_grid
 from housewire.site.terminals import element_terminal_layout, grid_to_api
 from housewire.site.tree import (
     get_place_node,
+    iter_place_children,
     iter_places,
     logical_parts_from_id,
     site_yaml_path,
@@ -46,6 +47,8 @@ from housewire.site.view_layout import (
     get_physical_position,
     get_physical_size,
     get_physical_view,
+    grow_view_size_by,
+    normalize_view_xy_siblings,
     set_electrical_position,
     set_electrical_size,
     set_physical_position,
@@ -1307,11 +1310,16 @@ def apply_positions(
     *,
     session_docs: dict[Path, dict[str, Any]],
 ) -> list[str]:
-    """Write positions ``{node_id: {x,y,w?,h?}}``. Return updated ids."""
+    """Write positions ``{node_id: {x,y,w?,h?}}``. Return updated ids.
+
+    Transient negatives are accepted then sibling groups are renormalized so
+    persisted ``x``/``y`` stay ``>= 0`` (parent-local origin).
+    """
     yaml_path, site_doc = _load_site_doc(site_root, session_docs=session_docs)
     session_docs[yaml_path] = site_doc
     canvas_parts = logical_parts_from_id(location_id)
     updated: list[str] = []
+    parents: set[tuple[str, ...]] = set()
     for node_id, pos in positions.items():
         parts = tuple(p for p in str(node_id).split("/") if p)
         if not parts:
@@ -1320,10 +1328,26 @@ def apply_positions(
             place = get_place_node(site_doc, canvas_parts + parts)
         except ValueError as exc:
             raise FileNotFoundError(f"Unknown node: {node_id}") from exc
-        set_physical_position(place, float(pos["x"]), float(pos["y"]))
+        set_physical_position(
+            place, float(pos["x"]), float(pos["y"]), allow_negative=True
+        )
         if "w" in pos and "h" in pos:
             set_physical_size(place, float(pos["w"]), float(pos["h"]))
         updated.append(str(node_id))
+        parents.add(tuple(canvas_parts) + parts[:-1])
+
+    for parent_parts in parents:
+        parent = get_place_node(site_doc, parent_parts)
+        siblings = [child for _name, child in iter_place_children(parent)]
+        dx, dy = normalize_view_xy_siblings(siblings, layer="physical")
+        if dx or dy:
+            grow_view_size_by(parent, "physical", dx, dy)
+            # Include every shifted sibling in the updated set.
+            rel = parent_parts[len(canvas_parts) :]
+            for name, _child in iter_place_children(parent):
+                sid = "/".join((*rel, name)) if rel else name
+                if sid not in updated:
+                    updated.append(sid)
     return updated
 
 
@@ -1334,11 +1358,15 @@ def apply_electrical_positions(
     *,
     session_docs: dict[Path, dict[str, Any]],
 ) -> list[str]:
-    """Write ``view.electrical`` for ``{place/element: {x,y,w?,h?}}``. Return ids."""
+    """Write ``view.electrical`` for ``{place/element: {x,y,w?,h?}}``. Return ids.
+
+    Transient negatives are renormalized among sibling elements under each host.
+    """
     yaml_path, site_doc = _load_site_doc(site_root, session_docs=session_docs)
     session_docs[yaml_path] = site_doc
     canvas_parts = logical_parts_from_id(location_id)
     updated: list[str] = []
+    hosts: set[tuple[str, ...]] = set()
     for node_id, pos in positions.items():
         place_parts, element_name = split_element_node_id(str(node_id))
         host = get_place_node(site_doc, canvas_parts + place_parts)
@@ -1348,10 +1376,35 @@ def apply_electrical_positions(
         elem = elements[element_name]
         if not isinstance(elem, dict):
             raise ValueError(f"Element {node_id} is not a map")
-        set_electrical_position(elem, float(pos["x"]), float(pos["y"]))
+        set_electrical_position(
+            elem, float(pos["x"]), float(pos["y"]), allow_negative=True
+        )
         if "w" in pos and "h" in pos:
             set_electrical_size(elem, float(pos["w"]), float(pos["h"]))
         updated.append(str(node_id))
+        hosts.add(tuple(canvas_parts) + tuple(place_parts))
+
+    for host_parts in hosts:
+        host = get_place_node(site_doc, host_parts)
+        elements = host.get("elements") or {}
+        if not isinstance(elements, dict):
+            continue
+        siblings: list[dict[str, Any]] = []
+        sibling_names: list[str] = []
+        for name, entry in elements.items():
+            if not isinstance(entry, dict) or is_place_type(entry.get("type")):
+                continue
+            siblings.append(entry)
+            sibling_names.append(str(name))
+        dx, dy = normalize_view_xy_siblings(siblings, layer="electrical")
+        if dx or dy:
+            grow_view_size_by(host, "physical", dx, dy)
+            rel = host_parts[len(canvas_parts) :]
+            host_rel = "/".join(rel) if rel else ""
+            for name in sibling_names:
+                eid = f"{host_rel}/{name}" if host_rel else name
+                if eid not in updated:
+                    updated.append(eid)
     return updated
 
 

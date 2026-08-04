@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.49.3] — 2026-08-04
+
+### Changed
+
+- Canvas drag/resize may use transient negative ``x``/``y``; on drop, siblings
+  are shifted and locked parent size grows so persisted layout stays
+  ``>= 0`` (parent-local origin).
+
 ## [0.49.2] — 2026-08-04
 
 ### Changed

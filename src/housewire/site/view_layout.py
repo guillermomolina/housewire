@@ -15,13 +15,15 @@ def _view_layer(obj: dict[str, Any], layer: str) -> dict[str, Any] | None:
     return layer_map if isinstance(layer_map, dict) else None
 
 
-def _get_xy(layer: dict[str, Any] | None) -> tuple[float, float] | None:
+def _get_xy(
+    layer: dict[str, Any] | None, *, allow_negative: bool = False
+) -> tuple[float, float] | None:
     if layer is None:
         return None
     x, y = layer.get("x"), layer.get("y")
     if isinstance(x, (int, float)) and isinstance(y, (int, float)):
         fx, fy = float(x), float(y)
-        if fx < 0 or fy < 0:
+        if not allow_negative and (fx < 0 or fy < 0):
             return None
         return fx, fy
     return None
@@ -34,11 +36,12 @@ def _set_xy(
     y: float,
     *,
     rotation: int | None = None,
+    allow_negative: bool = False,
 ) -> None:
     if not isinstance(obj, dict):
         raise ValueError("object must be a map")
     fx, fy = float(x), float(y)
-    if fx < 0 or fy < 0:
+    if not allow_negative and (fx < 0 or fy < 0):
         raise ValueError(f"view.{layer} x and y must be >= 0")
     view = obj.get("view")
     if view is None:
@@ -59,6 +62,48 @@ def _set_xy(
         if rot not in _ROTATIONS:
             raise ValueError("rotation must be 0, 90, 180, or 270")
         layer_map["rotation"] = rot
+
+
+def normalize_view_xy_siblings(
+    nodes: list[dict[str, Any]], *, layer: str
+) -> tuple[float, float]:
+    """Shift ``view.{layer}`` x/y on siblings so all are ``>= 0``.
+
+    Returns ``(dx, dy)`` applied (non-negative). Nodes without both x and y are
+    skipped. Persistent layout keeps a parent-local origin at the content
+    top-left; transient negatives from drag/resize are renormalized on commit.
+    """
+    positioned: list[tuple[dict[str, Any], float, float]] = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        raw = _get_xy(_view_layer(node, layer), allow_negative=True)
+        if raw is None:
+            continue
+        positioned.append((node, raw[0], raw[1]))
+    if not positioned:
+        return 0.0, 0.0
+    min_x = min(x for _n, x, _y in positioned)
+    min_y = min(y for _n, _x, y in positioned)
+    dx = -min_x if min_x < 0 else 0.0
+    dy = -min_y if min_y < 0 else 0.0
+    if dx == 0.0 and dy == 0.0:
+        return 0.0, 0.0
+    for node, x, y in positioned:
+        _set_xy(node, layer, x + dx, y + dy)
+    return dx, dy
+
+
+def grow_view_size_by(
+    obj: dict[str, Any], layer: str, dx: float, dy: float
+) -> None:
+    """Grow locked ``view.{layer}`` w/h by ``(dx, dy)`` when size is set."""
+    if dx == 0.0 and dy == 0.0:
+        return
+    size = _get_wh(_view_layer(obj, layer))
+    if size is None:
+        return
+    _set_wh(obj, layer, size[0] + float(dx), size[1] + float(dy))
 
 
 def _get_wh(layer: dict[str, Any] | None) -> tuple[float, float] | None:
@@ -114,12 +159,21 @@ def set_physical_position(
     y: float,
     *,
     rotation: int | None = None,
+    allow_negative: bool = False,
 ) -> None:
     """Write ``view.physical.x/y`` (and optional rotation) on a place map.
 
-    Coordinates must be ``>= 0`` (window layout uses parent-local origin).
+    Coordinates must be ``>= 0`` unless ``allow_negative`` (transient drag
+    values before :func:`normalize_view_xy_siblings`).
     """
-    _set_xy(place, "physical", x, y, rotation=rotation)
+    _set_xy(
+        place,
+        "physical",
+        x,
+        y,
+        rotation=rotation,
+        allow_negative=allow_negative,
+    )
 
 
 def get_physical_size(place: dict[str, Any]) -> tuple[float, float] | None:
@@ -155,13 +209,21 @@ def set_electrical_position(
     y: float,
     *,
     rotation: int | None = None,
+    allow_negative: bool = False,
 ) -> None:
     """Write ``view.electrical.x/y`` (and optional rotation) on an element map.
 
     Coordinates are parent-local (inside the hosting place box) and must be
-    ``>= 0``.
+    ``>= 0`` unless ``allow_negative`` (transient before normalize).
     """
-    _set_xy(element, "electrical", x, y, rotation=rotation)
+    _set_xy(
+        element,
+        "electrical",
+        x,
+        y,
+        rotation=rotation,
+        allow_negative=allow_negative,
+    )
 
 
 def get_electrical_size(element: dict[str, Any]) -> tuple[float, float] | None:

@@ -418,7 +418,10 @@ views:
 ```
 
 - **`view.physical`**: canvas coordinates for that place under its parent canvas.
-  ``x`` and ``y`` must be ``>= 0`` (parent-local origin at the content top-left).
+  ``x`` and ``y`` must be ``>= 0`` when persisted (parent-local origin at the
+  content top-left). The interactive editor may use transient negatives while
+  dragging or resizing N/W edges; on drop it shifts siblings and grows the
+  parent so stored coordinates stay non-negative.
   Optional ``w`` / ``h`` (``> 0``) lock the place box size on the canvas; when
   omitted, the UI auto-sizes from nested places and (when the electrical layer
   is on) elements. Optional ``flip_ns`` / ``flip_we`` mirror the place and its

@@ -83,6 +83,53 @@ class TestViewLayout(unittest.TestCase):
         place["view"] = {"physical": {"x": -5, "y": 20}}
         self.assertIsNone(get_physical_position(place))
 
+    def test_normalize_view_xy_siblings(self) -> None:
+        from housewire.site.view_layout import normalize_view_xy_siblings
+
+        a: dict = {"type": "JunctionBox"}
+        b: dict = {"type": "JunctionBox"}
+        set_physical_position(a, -20, 10, allow_negative=True)
+        set_physical_position(b, 40, -5, allow_negative=True)
+        dx, dy = normalize_view_xy_siblings([a, b], layer="physical")
+        self.assertEqual((dx, dy), (20.0, 5.0))
+        self.assertEqual(get_physical_position(a), (0.0, 15.0))
+        self.assertEqual(get_physical_position(b), (60.0, 0.0))
+
+    def test_normalize_noop_when_non_negative(self) -> None:
+        from housewire.site.view_layout import normalize_view_xy_siblings
+
+        a: dict = {"type": "JunctionBox"}
+        set_physical_position(a, 10, 20)
+        dx, dy = normalize_view_xy_siblings([a], layer="physical")
+        self.assertEqual((dx, dy), (0.0, 0.0))
+        self.assertEqual(get_physical_position(a), (10.0, 20.0))
+
+    def test_apply_positions_normalizes_negatives(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = init_site(root, type_id="House", label="Site")
+            add_place(doc, "Room", type_id="Room")
+            add_place(doc, "A", under=("Room",), type_id="JunctionBox")
+            add_place(doc, "B", under=("Room",), type_id="JunctionBox")
+            room = get_place_node(doc, ("Room",))
+            set_physical_size(room, 400, 300)
+            set_physical_position(get_place_node(doc, ("Room", "A")), 0, 40)
+            set_physical_position(get_place_node(doc, ("Room", "B")), 100, 40)
+            save_site(root, doc)
+            session_docs: dict[Path, dict] = {}
+            apply_positions(
+                root,
+                "Room",
+                {"A": {"x": -25, "y": 40}},
+                session_docs=session_docs,
+            )
+            a = get_place_node(session_docs[root / HOUSEWIRE_YAML], ("Room", "A"))
+            b = get_place_node(session_docs[root / HOUSEWIRE_YAML], ("Room", "B"))
+            room2 = get_place_node(session_docs[root / HOUSEWIRE_YAML], ("Room",))
+            self.assertEqual(get_physical_position(a), (0.0, 40.0))
+            self.assertEqual(get_physical_position(b), (125.0, 40.0))
+            self.assertEqual(get_physical_size(room2), (425.0, 300.0))
+
     def test_page_defaults_and_set(self) -> None:
         place: dict = {"schema": "house/v2", "type": "Room"}
         page = get_physical_page(place)
