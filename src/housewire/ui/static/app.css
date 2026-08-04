@@ -1158,7 +1158,7 @@ button:hover {
 
 .props-meta {
   display: grid;
-  grid-template-columns: 5.5rem 1fr;
+  grid-template-columns: 6.4rem 1fr;
   gap: 0.35rem 0.65rem;
   margin: 0 0 0.75rem;
   align-items: start;
@@ -1169,6 +1169,7 @@ button:hover {
   font-size: 0.7rem;
   text-transform: uppercase;
   padding-top: 0.4rem;
+  white-space: nowrap;
 }
 
 .props-meta dd {
@@ -1179,6 +1180,7 @@ button:hover {
 .props-meta input,
 .props-meta select,
 .props-meta textarea {
+  display: block;
   width: 100%;
   box-sizing: border-box;
   background: var(--bg);
@@ -1188,6 +1190,11 @@ button:hover {
   padding: 0.3rem 0.4rem;
   font: inherit;
   font-size: 0.85rem;
+  min-height: 1.9rem;
+}
+
+.props-meta select {
+  appearance: none;
 }
 
 .props-meta input[type="checkbox"] {
@@ -1225,7 +1232,15 @@ button:hover {
 }
 
 .props-meta .props-readonly {
-  padding: 0.3rem 0;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.3rem 0.4rem;
+  min-height: 1.9rem;
   word-break: break-word;
 }
 

@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.50.10] — 2026-08-04
+
+### Changed
+
+- Refined properties panel visual alignment: read-only and editable fields now
+  share the same field box style and sizing, with unified select/input width.
+- Orientation labels shortened to ``Orientation v./h.`` (and Spanish
+  ``Orientación v./h.``) to fit one line cleanly.
+
 ## [0.50.9] — 2026-08-04
 
 ### Changed
