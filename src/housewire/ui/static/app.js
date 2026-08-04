@@ -7453,6 +7453,22 @@
     return text === key ? String(value) : text;
   }
 
+  function orientationNsFromFlip(flag) {
+    return flag ? "south_to_north" : "north_to_south";
+  }
+
+  function orientationWeFromFlip(flag) {
+    return flag ? "east_to_west" : "west_to_east";
+  }
+
+  function flipFromOrientationNs(value) {
+    return String(value || "").trim() === "south_to_north";
+  }
+
+  function flipFromOrientationWe(value) {
+    return String(value || "").trim() === "east_to_west";
+  }
+
   function readPropsFieldsFromPanel(meta) {
     /** @type {Record<string, string|boolean>} */
     const fields = {};
@@ -7575,7 +7591,7 @@
   function bindPropsEditors(meta) {
     meta.querySelectorAll("[data-prop]").forEach((el) => {
       const key = el.getAttribute("data-prop");
-      if (el.type === "checkbox" && (key === "flip_ns" || key === "flip_we")) {
+      if (key === "orientation_ns" || key === "orientation_we") {
         el.addEventListener("change", () => {
           saveFlipPropsFromPanel().catch((err) =>
             setStatus(String(err.message || err))
@@ -7619,7 +7635,16 @@
     meta.querySelectorAll("select[data-prop]").forEach((el) => {
       const key = el.getAttribute("data-prop");
       if (!key) return;
-      const group = key === "install" ? "install" : key === "mount" ? "mount" : null;
+      const group =
+        key === "install"
+          ? "install"
+          : key === "mount"
+            ? "mount"
+            : key === "orientation_ns"
+              ? "orientation"
+              : key === "orientation_we"
+                ? "orientation"
+                : null;
       if (!group) return;
       [...el.options].forEach((opt) => {
         opt.textContent = propsValueLabel(group, opt.value);
@@ -7688,10 +7713,14 @@
     const meta = document.getElementById("props-meta");
     if (!meta) return;
     const cur = flipsFromGraph();
-    meta.querySelectorAll('input[type="checkbox"][data-prop]').forEach((el) => {
+    meta.querySelectorAll("select[data-prop]").forEach((el) => {
       const key = el.getAttribute("data-prop");
-      if (key === "flip_ns") el.checked = cur.flip_ns;
-      if (key === "flip_we") el.checked = cur.flip_we;
+      if (key === "orientation_ns") {
+        el.value = orientationNsFromFlip(cur.flip_ns);
+      }
+      if (key === "orientation_we") {
+        el.value = orientationWeFromFlip(cur.flip_we);
+      }
     });
   }
 
@@ -7701,9 +7730,10 @@
     if (!meta) return;
     /** @type {Record<string, boolean>} */
     const fields = {};
-    meta.querySelectorAll('input[type="checkbox"][data-prop]').forEach((el) => {
+    meta.querySelectorAll("select[data-prop]").forEach((el) => {
       const key = el.getAttribute("data-prop");
-      if (key === "flip_ns" || key === "flip_we") fields[key] = el.checked;
+      if (key === "orientation_ns") fields.flip_ns = flipFromOrientationNs(el.value);
+      if (key === "orientation_we") fields.flip_we = flipFromOrientationWe(el.value);
     });
     if (!Object.keys(fields).length) return;
     // Optimistic paint, but roll back if the server rejects (stale serve,
@@ -7859,18 +7889,20 @@
       multiline: true,
     });
     appendPropsRow(meta, {
-      key: "flip_ns",
-      value: Boolean(elem.flip_ns),
+      key: "orientation_ns",
+      value: orientationNsFromFlip(Boolean(elem.flip_ns)),
       editable: true,
-      checkbox: true,
-      labelKey: "flipVertical",
+      combo: "orientation",
+      options: ["north_to_south", "south_to_north"],
+      labelKey: "orientationNorthSouth",
     });
     appendPropsRow(meta, {
-      key: "flip_we",
-      value: Boolean(elem.flip_we),
+      key: "orientation_we",
+      value: orientationWeFromFlip(Boolean(elem.flip_we)),
       editable: true,
-      checkbox: true,
-      labelKey: "flipHorizontal",
+      combo: "orientation",
+      options: ["west_to_east", "east_to_west"],
+      labelKey: "orientationWestEast",
     });
     appendPropsRow(meta, {
       key: "terminals",
@@ -8055,18 +8087,20 @@
         multiline: true,
       });
       appendPropsRow(meta, {
-        key: "flip_ns",
-        value: Boolean(detail.flip_ns),
+        key: "orientation_ns",
+        value: orientationNsFromFlip(Boolean(detail.flip_ns)),
         editable: true,
-        checkbox: true,
-        labelKey: "flipVertical",
+        combo: "orientation",
+        options: ["north_to_south", "south_to_north"],
+        labelKey: "orientationNorthSouth",
       });
       appendPropsRow(meta, {
-        key: "flip_we",
-        value: Boolean(detail.flip_we),
+        key: "orientation_we",
+        value: orientationWeFromFlip(Boolean(detail.flip_we)),
         editable: true,
-        checkbox: true,
-        labelKey: "flipHorizontal",
+        combo: "orientation",
+        options: ["west_to_east", "east_to_west"],
+        labelKey: "orientationWestEast",
       });
       bindPropsEditors(meta);
       snapshotPropsBaseline(meta);

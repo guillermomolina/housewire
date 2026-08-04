@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.50.7] — 2026-08-04
+
+### Changed
+
+- Replaced flip checkboxes in the properties panel with localized orientation
+  selects (North/South and West/East) while preserving internal
+  ``flip_ns``/``flip_we`` storage.
+
 ## [0.50.6] — 2026-08-04
 
 ### Changed
