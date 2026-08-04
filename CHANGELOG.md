@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.47.0] — 2026-08-04
+
+### Added
+
+- UI **Delete** (Edit menu, toolbar trash, `Delete`/`Backspace`): cascade-remove
+  selected places/elements. Internal links go with the subtree; cross-boundary
+  conductors become open runs and relocate beside the surviving end; conduits
+  that lose an endpoint are dropped. One undoable edit via
+  ``POST /api/edit/delete``.
+
 ## [0.46.0] — 2026-08-03
 
 ### Changed

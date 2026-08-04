@@ -376,6 +376,46 @@ def create_app(site_root: Path | None = None) -> Any:
             **_edit_meta(),
         }
 
+    @app.post("/api/edit/delete")
+    async def api_edit_delete(request: Request) -> dict[str, Any]:
+        from housewire.site.delete_selection import (
+            delete_selection,
+            suggest_location_after_delete,
+        )
+
+        payload = await _json_body(request)
+        raw_ids = payload.get("ids") or []
+        if not isinstance(raw_ids, list) or not raw_ids:
+            raise HTTPException(400, "ids must be a non-empty list")
+        ids = [str(x).strip() for x in raw_ids if str(x).strip()]
+        if not ids:
+            raise HTTPException(400, "ids must be a non-empty list")
+        location_id = str(payload.get("location_id") or ".").strip() or "."
+        depth = _depth_from(payload)
+        session = _session()
+        try:
+            _preload_location(location_id)
+            _begin_edit()
+            _path, doc = session.ensure_doc(_site_yaml())
+            result = delete_selection(doc, ids)
+            session.mark_dirty(_site_yaml())
+            meta = _end_edit()
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        new_location = suggest_location_after_delete(
+            location_id, deleted_places=result.deleted_places
+        )
+        return {
+            "deleted": result.deleted,
+            "severed": result.severed,
+            "relocated": result.relocated,
+            "location": new_location,
+            "graph": _graph(new_location, depth),
+            **meta,
+        }
+
     @app.post("/api/physical/auto-layout")
     async def api_auto_layout(request: Request) -> dict[str, Any]:
         payload = await _json_body(request)

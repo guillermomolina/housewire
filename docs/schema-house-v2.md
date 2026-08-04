@@ -610,6 +610,22 @@ land OPEN_Linea_01 --from 'Cuadro_General/MT.[2, 3]' \
 Status lives on the open Cable/Conductor notes (`OPEN_` ids). No separate
 `connections` row.
 
+### Delete selection (UI)
+
+**Edit → Delete** (toolbar trash, `Delete` / `Backspace`) removes selected
+places/elements and their nested subtrees in one undoable edit:
+
+- Links entirely inside the deleted set are removed.
+- Conductors that cross the boundary are **severed** into open runs
+  (`status: open` in notes; the deleted-side `from`/`to` cleared) and
+  **relocated** next to the surviving endpoint (same open → claim → land
+  workflow above).
+- Conduits that lose an endpoint are deleted (`from`/`to` are required).
+  Surviving openings are simply free again.
+
+Shell `rm element` remains strict (refuses when conductors still reference the
+target). Cascade delete is a UI/API operation (`POST /api/edit/delete`).
+
 ## Drawing (UI)
 
 - In conduit segments: show the Conduit path; nest Cable sheaths and Conductors

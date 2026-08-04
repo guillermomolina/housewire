@@ -1021,6 +1021,68 @@ class TestServeApi(unittest.TestCase):
             self.assertEqual(detail["label"], "Moved label")
             self.assertTrue(redo_after_reset.json().get("can_reset"))
 
+    def test_edit_delete_selection(self) -> None:
+        try:
+            from fastapi.testclient import TestClient
+        except (ImportError, RuntimeError):
+            self.skipTest("fastapi/httpx not installed")
+
+        from housewire.ui.app import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = init_site(root, type_id="House", label="Site")
+            add_place(doc, "Room", type_id="Room", label="Room")
+            add_place(
+                doc, "Box_A", under=("Room",), type_id="JunctionBox", label="A"
+            )
+            add_place(
+                doc, "Box_B", under=("Room",), type_id="JunctionBox", label="B"
+            )
+            box_a = get_place_node(doc, ("Room", "Box_A"))
+            box_b = get_place_node(doc, ("Room", "Box_B"))
+            box_a["openings"] = ["E1"]
+            box_b["openings"] = ["W1"]
+            abm.add_element(box_a, "Strip", type_id="TerminalStrip")
+            abm.add_element(box_b, "Strip", type_id="TerminalStrip")
+            room = get_place_node(doc, ("Room",))
+            abm.add_conductor(
+                room,
+                "L1_1",
+                section="1.5",
+                color="BN",
+                from_ref="Box_A/Strip.N1",
+                to_ref="Box_B/Strip.N1",
+            )
+            abm.add_sheath(room, "L1", contains=["L1_1"], section="1.5")
+            abm.add_conduit(
+                room,
+                "C1",
+                contains=["L1"],
+                from_ref="Box_A.E1",
+                to_ref="Box_B.W1",
+            )
+            save_site(root, doc)
+
+            client = TestClient(create_app(root))
+            client.get("/api/physical?location=Room&depth=1")
+            deleted = client.post(
+                "/api/edit/delete",
+                json={
+                    "ids": ["Room/Box_A"],
+                    "location_id": "Room",
+                    "depth": 1,
+                },
+            )
+            self.assertEqual(deleted.status_code, 200, deleted.text)
+            body = deleted.json()
+            self.assertIn("Room/Box_A", body.get("deleted") or [])
+            self.assertTrue(body.get("dirty"))
+            self.assertTrue(body.get("can_undo"))
+            node_ids = {n["id"] for n in body["graph"]["nodes"]}
+            self.assertNotIn("Box_A", node_ids)
+            self.assertIn("Box_B", node_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

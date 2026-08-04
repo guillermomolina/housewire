@@ -422,6 +422,7 @@
     if (btnSave) btnSave.disabled = saveDisabled;
     if (menuSaveAs) menuSaveAs.disabled = !hasDocument;
     if (menuClose) menuClose.disabled = !hasDocument;
+    updateDeleteButtons();
   }
 
   function applyWorkspaceStatus(st) {
@@ -494,6 +495,88 @@
       return;
     }
     await applyEditGraph(res, "reset");
+  }
+
+  function pruneCollapsedOutline(deletedSiteIds) {
+    if (!deletedSiteIds || !deletedSiteIds.length) return;
+    const doomed = new Set(deletedSiteIds);
+    let changed = false;
+    for (const id of [...collapsedOutline]) {
+      if (doomed.has(id)) {
+        collapsedOutline.delete(id);
+        changed = true;
+        continue;
+      }
+      for (const del of doomed) {
+        if (del !== "." && id.startsWith(`${del}/`)) {
+          collapsedOutline.delete(id);
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (changed) saveCollapsedOutline();
+  }
+
+  async function deleteSelection() {
+    if (!hasDocument || !locationId || selectedIds.size < 1) return;
+    const siteIds = [...selectedIds]
+      .map((id) => canvasToSiteId(id))
+      .filter((id) => id && id !== ".");
+    if (!siteIds.length) {
+      setStatus("Cannot delete the site root");
+      return;
+    }
+    const n = siteIds.length;
+    const choice = await appDialog({
+      title: "Delete",
+      message:
+        n === 1
+          ? `Delete ${siteIds[0]} and its contents? Cross-boundary cables become open runs.`
+          : `Delete ${n} selected item(s) and their contents? Cross-boundary cables become open runs.`,
+      buttons: [
+        { id: "cancel", label: "Cancel" },
+        { id: "delete", label: "Delete", danger: true, primary: true },
+      ],
+    });
+    if (choice !== "delete") return;
+    const res = await api("/api/edit/delete", {
+      method: "POST",
+      body: JSON.stringify({
+        ids: siteIds,
+        location_id: locationId,
+        depth: depthLevel,
+      }),
+    });
+    pruneCollapsedOutline(res.deleted || siteIds);
+    clearSelectionState();
+    setSelectedVisual();
+    const newLoc = res.location || locationId;
+    if (newLoc !== locationId) {
+      locationId = newLoc;
+      rememberCurrentDocView();
+      if (res.graph) {
+        graph = res.graph;
+        depthLevel = graph.depth || depthLevel;
+        maxDepth = graph.max_depth || maxDepth;
+        render();
+      } else {
+        await loadLocation({ fit: false });
+      }
+    } else if (res.graph) {
+      graph = res.graph;
+      depthLevel = graph.depth || depthLevel;
+      maxDepth = graph.max_depth || maxDepth;
+      render();
+    }
+    applyEditFlags(res);
+    await loadOutline();
+    await syncInspectorFromSelection();
+    const count = (res.deleted || siteIds).length;
+    const bits = [`deleted ${count} item(s)`];
+    if ((res.severed || []).length) bits.push(`${res.severed.length} open run(s)`);
+    setStatus(`${bits.join(" · ")} · unsaved`);
+    scheduleStatusRefresh();
   }
 
   function updateDepthLabel() {
@@ -743,6 +826,15 @@
   function clearSelectionState() {
     selectedIds.clear();
     selectedId = null;
+    updateDeleteButtons();
+  }
+
+  function updateDeleteButtons() {
+    const enabled = hasDocument && selectedIds.size >= 1;
+    for (const id of ["btn-delete", "menu-delete"]) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !enabled;
+    }
   }
 
   function setSelectedVisual() {
@@ -815,6 +907,7 @@
       selectedId = [...normalized].slice(-1)[0] ?? null;
     }
     setSelectedVisual();
+    updateDeleteButtons();
   }
 
   function toggleSelectionId(id) {
@@ -8758,12 +8851,25 @@
   document.getElementById("btn-layout-reset")?.addEventListener("click", () => {
     resetEdits().catch((err) => setStatus(String(err.message || err)));
   });
+  document.getElementById("btn-delete")?.addEventListener("click", () => {
+    deleteSelection().catch((err) => setStatus(String(err.message || err)));
+  });
 
   document.addEventListener("keydown", (ev) => {
-    const tag = (ev.target && ev.target.tagName) || "";
-    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (isEditableFocus(ev.target)) return;
     const mod = ev.ctrlKey || ev.metaKey;
-    if (!mod) return;
+    if (!mod) {
+      if (ev.key === "Delete" || ev.key === "Backspace") {
+        const appModal = document.getElementById("app-modal");
+        const insertModal = document.getElementById("insert-modal");
+        if (appModal && !appModal.classList.contains("hidden")) return;
+        if (insertModal && !insertModal.classList.contains("hidden")) return;
+        if (selectedIds.size < 1) return;
+        ev.preventDefault();
+        deleteSelection().catch((err) => setStatus(String(err.message || err)));
+      }
+      return;
+    }
     const key = ev.key.toLowerCase();
     if (key === "s") {
       ev.preventDefault();
@@ -8927,6 +9033,8 @@
         redoEdit().catch((err) => setStatus(String(err.message || err)));
       } else if (action === "reset") {
         resetEdits().catch((err) => setStatus(String(err.message || err)));
+      } else if (action === "delete") {
+        deleteSelection().catch((err) => setStatus(String(err.message || err)));
       } else if (action === "auto-layout") {
         runAutoLayout().catch((err) => setStatus(String(err.message || err)));
       }
