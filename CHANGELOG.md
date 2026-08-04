@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.48.5] — 2026-08-04
+
+### Changed
+
+- Clipboard selection UX: **Copy** keeps the source selected (Paste duplicates as
+  a sibling); **Cut → Paste** with no selection returns items to their original
+  parent with severed cables left as open runs; after Paste the new items are
+  selected.
+
 ## [0.48.4] — 2026-08-04
 
 ### Fixed

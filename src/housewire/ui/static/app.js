@@ -76,6 +76,8 @@
   let canReset = false;
   /** In-memory Cut/Copy payload from POST /api/edit/copy|cut. */
   let editClipboard = null;
+  /** @type {"copy"|"cut"|null} */
+  let editClipboardMode = null;
   /** Session default: physical places/conduits only (no elements/cables). */
   let showElectrical = false;
   let outlineNodes = [];
@@ -581,20 +583,26 @@
   /**
    * Paste target place, or null if selection is ambiguous.
    *
-   * - Selected place(s) + element clipboard → paste *into* that place
-   * - Selected place(s) + place clipboard → paste as *siblings* (common parent)
-   * - Selected element(s) → common parent (siblings)
-   * - Empty selection → canvas, or original element parent when still under canvas
+   * Intended workflows:
+   * - Copy then Paste with the source still selected → sibling (duplicate beside)
+   * - Cut then Paste with empty selection → original parent (put back; cables stay
+   *   open/disconnected from any far end that was severed)
+   * - Paste with a place selected + element clipboard → into that place
+   * - Paste with a place selected + place clipboard → siblings of that place
    */
   function resolvePasteParentSiteId() {
     const onlyElems = clipboardHasOnlyElements(editClipboard);
 
     if (!selectedIds.size) {
-      if (onlyElems) {
-        const fromClip = clipboardSharedParentSiteId(editClipboard);
-        if (fromClip && siteIdUnderCanvas(fromClip, locationId)) {
-          return fromClip;
-        }
+      // Cut→paste (and copy→paste after clearing selection): same parent as source
+      // when it still sits under the current canvas.
+      const fromClip = clipboardSharedParentSiteId(editClipboard);
+      if (
+        fromClip &&
+        siteIdUnderCanvas(fromClip, locationId) &&
+        (editClipboardMode === "cut" || onlyElems)
+      ) {
+        return fromClip;
       }
       return locationId || ".";
     }
@@ -638,6 +646,7 @@
     }
 
     if (elemParents.length) {
+      // Copy→paste with source element still selected → sibling under same parent.
       const uniq = [...new Set(elemParents)];
       if (uniq.length !== 1) return null;
       return uniq[0];
@@ -657,9 +666,12 @@
       body: JSON.stringify({ ids: siteIds }),
     });
     editClipboard = res.payload || null;
+    editClipboardMode = editClipboard ? "copy" : null;
     updateDeleteButtons();
+    // Keep the source selected so Paste duplicates as a sibling.
+    highlightOutlineSelection();
     const n = (editClipboard?.items || []).length;
-    setStatus(`copied ${n} item(s)`);
+    setStatus(`copied ${n} item(s) · selection kept`);
   }
 
   async function cutSelection() {
@@ -678,6 +690,7 @@
       }),
     });
     editClipboard = res.payload || null;
+    editClipboardMode = editClipboard ? "cut" : null;
     updateDeleteButtons();
     pruneCollapsedOutline(res.deleted || siteIds);
     clearSelectionState();
@@ -704,7 +717,7 @@
     await loadOutline();
     await syncInspectorFromSelection();
     const count = (res.deleted || siteIds).length;
-    setStatus(`cut ${count} item(s) · unsaved`);
+    setStatus(`cut ${count} item(s) · paste returns to source · unsaved`);
     scheduleStatusRefresh();
   }
 
@@ -715,6 +728,7 @@
       setStatus("Select one place (or elements under the same parent) to paste into");
       return;
     }
+    const mode = editClipboardMode;
     const res = await api("/api/edit/paste", {
       method: "POST",
       body: JSON.stringify({
@@ -737,14 +751,27 @@
     const relIds = created
       .map((id) => siteToCanvasRelative(id))
       .filter((id) => id);
+    // After paste, select only the new items (source stays for another Copy paste).
     if (relIds.length) {
       commitSelection(new Set(relIds), relIds[0]);
+      highlightOutlineSelection();
     } else {
       clearSelectionState();
       setSelectedVisual();
     }
     await syncInspectorFromSelection();
-    setStatus(`pasted ${created.length || (editClipboard.items || []).length} item(s) · unsaved`);
+    const n = created.length || (editClipboard.items || []).length;
+    const hint =
+      mode === "copy"
+        ? "sibling duplicate"
+        : mode === "cut"
+          ? "at source (open runs if severed)"
+          : "";
+    setStatus(
+      hint
+        ? `pasted ${n} item(s) · ${hint} · unsaved`
+        : `pasted ${n} item(s) · unsaved`
+    );
     scheduleStatusRefresh();
   }
 
