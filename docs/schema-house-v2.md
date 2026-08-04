@@ -171,7 +171,7 @@ Place types (catalog; see `PLACE_TYPES` in code):
 | type | Meaning |
 |------|---------|
 | `Room` | Room / space |
-| `Stair` | Stair / vertical circulation linking two places (`connects`) |
+| `Stair` | Stair / vertical circulation |
 | `JunctionBox` | Junction / derivation box |
 | `DeviceBox` | Device box (socket / switch; 1-/2-/3-gang) |
 | `LightPoint` | Light point (ceiling/wall hole to a luminaire) |
@@ -180,20 +180,11 @@ Place types (catalog; see `PLACE_TYPES` in code):
 | `House` | Dwelling (need not be the tree root) |
 | `Location` | Generic place (rare; prefer a specific type) |
 
-### Stair (`connects`)
+### Stair
 
-A stair is a place in the tree (sibling of the floors it links). Use ``connects``
-to name the two ends:
-
-```yaml
-type: Stair
-label: Escalera Parking — Planta baja
-connects: [Parking, Planta_baja]
-```
-
-- ``connects``: list of two location refs (usually sibling ``Floor`` ids).
-- Optional; used by docs/UI to show what the stair joins.
-- Children (junction boxes, switches, light points) nest under the stair’s `elements:`.
+A stair is a place in the tree (often a sibling of the floors it links). Nest
+junction boxes, switches, and light points of the stair enclosure under its
+`elements:`.
 
 The **site root** is the directory (or site YAML file) you pass to `housewire`
 (`site_path`). Logical paths (`Garage/Junction_1`) are keys under nested

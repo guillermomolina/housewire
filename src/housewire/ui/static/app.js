@@ -7811,7 +7811,7 @@
   }
 
   function readPropsFieldsFromPanel(meta) {
-    /** @type {Record<string, string|boolean>} */
+    /** @type {Record<string, string|boolean|object>} */
     const fields = {};
     if (!meta) return fields;
     meta.querySelectorAll("[data-prop]").forEach((el) => {
@@ -7819,6 +7819,27 @@
       if (!key) return;
       if (el.type === "checkbox") fields[key] = el.checked;
       else fields[key] = el.value;
+    });
+    meta.querySelectorAll("[data-prop-json]").forEach((el) => {
+      const key = el.getAttribute("data-prop-json");
+      if (!key) return;
+      try {
+        fields[key] = JSON.parse(el.value || "null");
+      } catch (_err) {
+        /* keep previous / skip */
+      }
+    });
+    // Orientation selects map to flip_* boolean fields for the API.
+    meta.querySelectorAll("select[data-prop]").forEach((el) => {
+      const key = el.getAttribute("data-prop");
+      if (key === "orientation_ns") {
+        fields.flip_ns = flipFromOrientationNs(el.value);
+        delete fields.orientation_ns;
+      }
+      if (key === "orientation_we") {
+        fields.flip_we = flipFromOrientationWe(el.value);
+        delete fields.orientation_we;
+      }
     });
     return fields;
   }
@@ -7848,6 +7869,308 @@
       propsSavePromise = null;
     });
     await propsSavePromise;
+  }
+
+  const OPENING_PLACE_TYPES = new Set([
+    "JunctionBox",
+    "DeviceBox",
+    "LightPoint",
+    "Panel",
+  ]);
+  const FACE_ORDER = ["N", "S", "E", "W", "F", "B"];
+  const SIDE_FACES = new Set(["N", "S", "E", "W"]);
+
+  function parseFaceGridSpec(value) {
+    if (value == null || value === "") return [0, 0];
+    if (Array.isArray(value) && value.length >= 2) {
+      return [Math.max(0, Number(value[0]) || 0), Math.max(0, Number(value[1]) || 0)];
+    }
+    if (typeof value === "number") return [Math.max(0, value), value > 0 ? 1 : 0];
+    const text = String(value).trim().toLowerCase().replace(/\s+/g, "");
+    if (!text) return [0, 0];
+    if (text.includes("x")) {
+      const [a, b] = text.split("x");
+      return [Math.max(0, parseInt(a, 10) || 0), Math.max(0, parseInt(b, 10) || 0)];
+    }
+    const n = parseInt(text, 10) || 0;
+    return [Math.max(0, n), n > 0 ? 1 : 0];
+  }
+
+  /** Normalize API/YAML opening_grid into {face: [cols, rows]}. */
+  function expandFaceGridMap(raw) {
+    /** @type {Record<string, [number, number]>} */
+    const out = {};
+    if (!raw || typeof raw !== "object") return out;
+    const pairs = { NS: ["N", "S"], WE: ["W", "E"] };
+    for (const [key, value] of Object.entries(raw)) {
+      const spec = parseFaceGridSpec(value);
+      if (spec[0] < 1 || spec[1] < 1) continue;
+      if (pairs[key]) {
+        for (const face of pairs[key]) out[face] = spec;
+      } else if (FACE_ORDER.includes(key)) {
+        out[key] = spec;
+      }
+    }
+    return out;
+  }
+
+  function listFaceCellIds(face, cols, rows) {
+    const f = String(face || "").toUpperCase();
+    const c = Math.max(0, Number(cols) || 0);
+    const r = Math.max(0, Number(rows) || 0);
+    if (c < 1 || r < 1) return [];
+    if (SIDE_FACES.has(f)) {
+      const n = c * r;
+      return Array.from({ length: n }, (_, i) => `${f}${i + 1}`);
+    }
+    if (f === "F" || f === "B") {
+      const ids = [];
+      for (let row = 1; row <= r; row += 1) {
+        for (let col = 1; col <= c; col += 1) {
+          ids.push(`${f}${row}-${col}`);
+        }
+      }
+      return ids;
+    }
+    return [];
+  }
+
+  function compactFaceGridForSave(expanded) {
+    /** @type {Record<string, number|string>} */
+    const out = {};
+    for (const face of FACE_ORDER) {
+      const spec = expanded[face];
+      if (!spec || spec[0] < 1 || spec[1] < 1) continue;
+      const [cols, rows] = spec;
+      out[face] = rows === 1 ? cols : `${cols}x${rows}`;
+    }
+    return out;
+  }
+
+  function openingsOccupiedFromDetail(detail) {
+    const occ = new Set();
+    for (const c of detail?.conduits || []) {
+      for (const end of [c.from_opening, c.to_opening, c.from, c.to]) {
+        if (end == null) continue;
+        const s = String(end).trim();
+        const m =
+          s.match(/\.([NSEW]\d+|[FB]\d+-\d+)$/i) ||
+          s.match(/^([NSEW]\d+|[FB]\d+-\d+)$/i);
+        if (m) occ.add(m[1].toUpperCase());
+      }
+    }
+    return occ;
+  }
+
+  function terminalsOccupiedFromElement(elem) {
+    const occ = new Set();
+    const leaf = elem?.leaf_id || String(elem?.id || "").split("/").pop();
+    for (const edge of graph?.edges || []) {
+      for (const end of [edge.from, edge.to]) {
+        if (!end) continue;
+        const s = String(end);
+        if (leaf && s.startsWith(`${leaf}.`)) {
+          occ.add(s.slice(leaf.length + 1).toUpperCase());
+        } else if (elem?.id && s.startsWith(`${elem.id}.`)) {
+          occ.add(s.slice(String(elem.id).length + 1).toUpperCase());
+        }
+      }
+    }
+    for (const cable of graph?.cable_edges || []) {
+      for (const end of [cable.from, cable.to]) {
+        if (!end) continue;
+        const s = String(end);
+        if (leaf && s.includes(`${leaf}.`)) {
+          const m = s.match(/\.([NSEW]\d+|[FB]\d+-\d+)$/i);
+          if (m) occ.add(m[1].toUpperCase());
+        }
+      }
+    }
+    return occ;
+  }
+
+  /**
+   * Props block: per-face capacity + cell chips for openings or terminals.
+   * @param {HTMLElement} meta
+   * @param {{
+   *   mode: "openings"|"terminals",
+   *   gridRaw: object|null,
+   *   usedList?: string[],
+   *   usedMap?: Record<string, object>,
+   *   occupied?: Set<string>,
+   * }} opts
+   */
+  function appendFaceCellEditor(meta, opts) {
+    const mode = opts.mode;
+    const gridKey = mode === "openings" ? "opening_grid" : "terminal_grid";
+    const usedKey = mode === "openings" ? "openings" : "terminals";
+    const labelKey = mode === "openings" ? "openings" : "terminals";
+    /** @type {Record<string, [number, number]>} */
+    let expanded = expandFaceGridMap(opts.gridRaw);
+    /** @type {Set<string>} */
+    let used =
+      mode === "openings"
+        ? new Set((opts.usedList || []).map((x) => String(x).toUpperCase()))
+        : new Set(Object.keys(opts.usedMap || {}).map((x) => String(x).toUpperCase()));
+    /** @type {Record<string, object>} */
+    const usedMeta = { ...(opts.usedMap || {}) };
+    const occupied = opts.occupied || new Set();
+
+    const dt = document.createElement("dt");
+    dt.dataset.labelKey = labelKey;
+    dt.textContent = propsLabel(labelKey);
+    const dd = document.createElement("dd");
+    dd.className = "props-face-editor";
+
+    const gridInput = document.createElement("input");
+    gridInput.type = "hidden";
+    gridInput.dataset.propJson = gridKey;
+    const usedInput = document.createElement("input");
+    usedInput.type = "hidden";
+    usedInput.dataset.propJson = usedKey;
+
+    function syncHidden() {
+      gridInput.value = JSON.stringify(compactFaceGridForSave(expanded));
+      if (mode === "openings") {
+        usedInput.value = JSON.stringify([...used].sort());
+      } else {
+        /** @type {Record<string, object>} */
+        const map = {};
+        for (const id of used) {
+          map[id] = usedMeta[id] && typeof usedMeta[id] === "object" ? usedMeta[id] : {};
+        }
+        usedInput.value = JSON.stringify(map);
+      }
+    }
+
+    const diagram = document.createElement("div");
+    diagram.className = "props-face-diagram";
+    diagram.innerHTML =
+      '<span class="props-face-tag n">N</span>' +
+      '<span class="props-face-tag w">W</span>' +
+      '<span class="props-face-core">F</span>' +
+      '<span class="props-face-tag e">E</span>' +
+      '<span class="props-face-tag s">S</span>' +
+      '<span class="props-face-tag b">B</span>';
+
+    const facesHost = document.createElement("div");
+    facesHost.className = "props-face-list";
+
+    function renderFaces() {
+      facesHost.innerHTML = "";
+      for (const face of FACE_ORDER) {
+        const row = document.createElement("div");
+        row.className = "props-face-row";
+        const title = document.createElement("div");
+        title.className = "props-face-name";
+        title.textContent = face;
+        row.appendChild(title);
+
+        const controls = document.createElement("div");
+        controls.className = "props-face-controls";
+        const isPlane = face === "F" || face === "B";
+        const cur = expanded[face] || [0, 0];
+
+        const colsInput = document.createElement("input");
+        colsInput.type = "number";
+        colsInput.min = "0";
+        colsInput.max = "24";
+        colsInput.value = String(cur[0] || 0);
+        colsInput.title = isPlane ? t("props.face.cols") : t("props.face.count");
+        colsInput.className = "props-face-num";
+        colsInput.addEventListener("change", () => {
+          const cols = Math.max(0, parseInt(colsInput.value, 10) || 0);
+          const rows = isPlane
+            ? Math.max(0, parseInt(rowsInput.value, 10) || 0)
+            : cols > 0
+              ? 1
+              : 0;
+          if (cols < 1 || rows < 1) delete expanded[face];
+          else expanded[face] = [cols, rows || 1];
+          // Drop used cells that no longer fit.
+          const allowed = new Set(
+            listFaceCellIds(face, expanded[face]?.[0] || 0, expanded[face]?.[1] || 0)
+          );
+          for (const id of [...used]) {
+            if (id.startsWith(face) && !allowed.has(id) && !occupied.has(id)) {
+              used.delete(id);
+              delete usedMeta[id];
+            }
+          }
+          syncHidden();
+          renderFaces();
+          scheduleSaveProps();
+        });
+        controls.appendChild(colsInput);
+
+        let rowsInput = null;
+        if (isPlane) {
+          rowsInput = document.createElement("input");
+          rowsInput.type = "number";
+          rowsInput.min = "0";
+          rowsInput.max = "24";
+          rowsInput.value = String(cur[1] || 0);
+          rowsInput.title = t("props.face.rows");
+          rowsInput.className = "props-face-num";
+          rowsInput.addEventListener("change", () => {
+            colsInput.dispatchEvent(new Event("change"));
+          });
+          controls.appendChild(document.createTextNode("×"));
+          controls.appendChild(rowsInput);
+        }
+        row.appendChild(controls);
+
+        const chips = document.createElement("div");
+        chips.className = "props-face-chips";
+        const ids = listFaceCellIds(face, cur[0] || 0, cur[1] || 0);
+        if (!ids.length) {
+          const empty = document.createElement("span");
+          empty.className = "props-face-empty";
+          empty.textContent = "—";
+          chips.appendChild(empty);
+        }
+        for (const id of ids) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "props-face-chip";
+          btn.textContent = id;
+          if (used.has(id)) btn.classList.add("is-used");
+          if (occupied.has(id)) btn.classList.add("is-occupied");
+          btn.title = occupied.has(id)
+            ? t("props.face.occupied")
+            : used.has(id)
+              ? t("props.face.used")
+              : t("props.face.free");
+          btn.addEventListener("click", () => {
+            if (used.has(id)) {
+              if (occupied.has(id)) {
+                if (!window.confirm(t("props.face.confirmRemoveOccupied"))) return;
+              }
+              used.delete(id);
+              delete usedMeta[id];
+            } else {
+              used.add(id);
+              if (mode === "terminals" && !usedMeta[id]) usedMeta[id] = {};
+            }
+            syncHidden();
+            renderFaces();
+            scheduleSaveProps();
+          });
+          chips.appendChild(btn);
+        }
+        row.appendChild(chips);
+        facesHost.appendChild(row);
+      }
+    }
+
+    syncHidden();
+    renderFaces();
+    dd.appendChild(diagram);
+    dd.appendChild(facesHost);
+    dd.appendChild(gridInput);
+    dd.appendChild(usedInput);
+    meta.appendChild(dt);
+    meta.appendChild(dd);
   }
 
   function appendPropsRow(meta, spec) {
@@ -8267,11 +8590,23 @@
       options: ["west_to_east", "east_to_west"],
       labelKey: "orientationWestEast",
     });
-    appendPropsRow(meta, {
-      key: "terminals",
-      value: (elem.terminals || []).join(", "),
-      editable: false,
-    });
+    {
+      const hasGrid =
+        elem.terminal_grid && Object.keys(elem.terminal_grid).length;
+      const termList = Array.isArray(elem.terminals) ? elem.terminals : [];
+      const termMap = {};
+      for (const pin of termList) {
+        if (pin) termMap[String(pin)] = {};
+      }
+      if (hasGrid || termList.length) {
+        appendFaceCellEditor(meta, {
+          mode: "terminals",
+          gridRaw: elem.terminal_grid || null,
+          usedMap: termMap,
+          occupied: terminalsOccupiedFromElement(elem),
+        });
+      }
+    }
     bindPropsEditors(meta);
     snapshotPropsBaseline(meta);
     fillCablesForElement(elem);
@@ -8535,16 +8870,24 @@
         combo: "mount",
         options: ["wall", "ceiling", "floor"],
       });
-      appendPropsRow(meta, {
-        key: "openings",
-        value: (detail.openings || []).join(", "),
-        editable: false,
-      });
-      appendPropsRow(meta, {
-        key: "connects",
-        value: (detail.connects || []).join(" ↔ "),
-        editable: false,
-      });
+      {
+        const typeId = String(detail.type || "");
+        const showOpenings =
+          OPENING_PLACE_TYPES.has(typeId) ||
+          (detail.openings && detail.openings.length) ||
+          (detail.opening_grid && Object.keys(detail.opening_grid).length);
+        if (showOpenings) {
+          const node = (graph?.nodes || []).find(
+            (n) => n.id === id || n.id === detail.id
+          );
+          appendFaceCellEditor(meta, {
+            mode: "openings",
+            gridRaw: detail.opening_grid || node?.opening_grid || null,
+            usedList: detail.openings || [],
+            occupied: openingsOccupiedFromDetail(detail),
+          });
+        }
+      }
       appendPropsRow(meta, {
         key: "notes",
         value: detail.notes || "",

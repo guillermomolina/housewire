@@ -176,6 +176,23 @@ def declared_opening_ids(openings: Any) -> set[str] | None:
     raise ValueError("location.openings must be a list of ids")
 
 
+def list_grid_cell_ids(face: str, cols: int, rows: int = 1) -> list[str]:
+    """Enumerate cell ids for one face given ``(cols, rows)``."""
+    face_u = str(face).strip().upper()
+    if cols < 1 or rows < 1:
+        raise ValueError(f"grid size must be >= 1: {cols}x{rows}")
+    if face_u in SIDE_FACES:
+        n = cols * rows
+        return [f"{face_u}{i}" for i in range(1, n + 1)]
+    if face_u in PLANE_FACES:
+        out: list[str] = []
+        for row in range(1, rows + 1):
+            for col in range(1, cols + 1):
+                out.append(f"{face_u}{row}-{col}")
+        return out
+    raise ValueError(f"unknown face: {face!r}")
+
+
 def validate_location_openings(location: dict[str, Any]) -> None:
     """Validate ``openings`` / ``opening_grid`` on a location block if present."""
     if "opening_grid" in location:

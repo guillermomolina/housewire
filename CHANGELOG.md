@@ -7,6 +7,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.64.0] — 2026-08-04
+
+### Added
+
+- Properties panel face/cell editor for place ``opening_grid`` / ``openings``
+  and element ``terminal_grid`` / ``terminals`` (capacity steppers + chip
+  toggles).
+
+### Removed
+
+- Stair ``connects`` field (API, UI, docs, site data). Stair remains a normal
+  place in the tree.
+
 ## [0.63.0] — 2026-08-04
 
 ### Changed

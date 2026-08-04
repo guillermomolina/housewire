@@ -623,9 +623,9 @@ def place_detail(
     openings = meta.get("openings") or []
     if not isinstance(openings, list):
         openings = []
-    connects = doc.get("connects")
-    if not isinstance(connects, list):
-        connects = meta.get("connects") if isinstance(meta.get("connects"), list) else []
+    opening_grid = meta.get("opening_grid")
+    if not isinstance(opening_grid, dict):
+        opening_grid = None
     cables, conduits = _place_wiring(
         session,
         place_parts=place_parts,
@@ -652,7 +652,7 @@ def place_detail(
         "flip_ns": flip_ns,
         "flip_we": flip_we,
         "openings": [str(o) for o in openings],
-        "connects": [str(c) for c in connects],
+        "opening_grid": opening_grid,
         "elements": elements,
         "cables": cables,
         "conduits": conduits,
@@ -671,12 +671,31 @@ _EDITABLE_PLACE_FIELDS = frozenset(
         "mount",
         "flip_ns",
         "flip_we",
+        "opening_grid",
+        "openings",
     }
 )
 _EDITABLE_ELEMENT_FIELDS = frozenset(
-    {"name", "label", "type", "subtype", "notes", "flip_ns", "flip_we"}
+    {
+        "name",
+        "label",
+        "type",
+        "subtype",
+        "notes",
+        "flip_ns",
+        "flip_we",
+        "terminal_grid",
+        "terminals",
+    }
 )
 _FLIP_FIELDS = frozenset({"flip_ns", "flip_we"})
+# Apply capacity before used lists so validation sees a consistent pair.
+_STRUCTURED_FIELD_ORDER = (
+    "opening_grid",
+    "openings",
+    "terminal_grid",
+    "terminals",
+)
 
 
 def update_place_properties(
@@ -728,7 +747,12 @@ def update_place_properties(
         )
 
     flip_updates: dict[str, bool] = {}
-    for key, raw in fields.items():
+    ordered_keys = [k for k in _STRUCTURED_FIELD_ORDER if k in fields]
+    ordered_keys.extend(
+        k for k in fields if k not in _STRUCTURED_FIELD_ORDER
+    )
+    for key in ordered_keys:
+        raw = fields[key]
         if key in _FLIP_FIELDS:
             flip_updates[key] = parse_flip_field(raw)
             continue
@@ -736,6 +760,12 @@ def update_place_properties(
             if key in target:
                 abm.unset_field(target, key)
             continue
+        if key in {"opening_grid", "terminal_grid"} and not isinstance(raw, dict):
+            raise ValueError(f"{key} must be a map")
+        if key == "openings" and not isinstance(raw, list):
+            raise ValueError("openings must be a list of ids")
+        if key == "terminals" and not isinstance(raw, dict):
+            raise ValueError("terminals must be a map of pin id → metadata")
         # Plain text from the Properties panel (notes often contain "a: b").
         # Do not YAML-parse — that raises or turns free text into mappings.
         abm.set_field(target, key, raw, target=target_kind)

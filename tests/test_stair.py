@@ -17,7 +17,7 @@ class TestStairPlaceType(unittest.TestCase):
         self.assertIn("Stair", PLACE_TYPES)
         self.assertTrue(is_place_type("Stair"))
 
-    def test_create_stair_with_connects(self) -> None:
+    def test_create_stair(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             doc = init_site(root, type_id="House", label="Site")
@@ -29,15 +29,15 @@ class TestStairPlaceType(unittest.TestCase):
                 type_id="Stair",
                 label="Escalera Parking — Planta baja",
             )
-            stair = get_place_node(doc, ("Escalera_Parking_Planta_baja",))
-            stair["connects"] = ["Parking", "Planta_baja"]
             save_site(root, doc)
 
             stair_path = root / HOUSEWIRE_YAML
             reloaded_doc = abm.load_editable(stair_path, root)
-            reloaded = get_place_node(reloaded_doc, ("Escalera_Parking_Planta_baja",))
+            reloaded = get_place_node(
+                reloaded_doc, ("Escalera_Parking_Planta_baja",)
+            )
             self.assertEqual(reloaded["type"], "Stair")
-            self.assertEqual(reloaded["connects"], ["Parking", "Planta_baja"])
+            self.assertNotIn("connects", reloaded)
 
 
 if __name__ == "__main__":

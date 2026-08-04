@@ -21,7 +21,10 @@ from housewire.house.links import contained_ids, resolve_link_kind
 from housewire.site.io import load_yaml, require_house_document, save_yaml
 from housewire.site.openings import (
     declared_opening_ids,
+    expand_opening_grid,
     normalize_opening_id,
+    opening_fits_grid,
+    parse_opening_id,
     validate_location_openings,
 )
 from housewire.site.validate import validate_house_document
@@ -141,6 +144,24 @@ def _validate_type_field(value: Any, *, target: SetTarget) -> None:
 def _maybe_validate_openings(mapping: dict[str, Any], root_key: str) -> None:
     if root_key in {"openings", "opening_grid"}:
         validate_location_openings(mapping)
+    if root_key in {"terminals", "terminal_grid"}:
+        raw_grid = mapping.get("terminal_grid")
+        if raw_grid is not None:
+            expand_opening_grid(raw_grid)
+        terminals = mapping.get("terminals")
+        if terminals is not None and not isinstance(terminals, dict):
+            raise ValueError("terminals must be a map of pin id → metadata")
+        if isinstance(terminals, dict) and raw_grid is not None:
+            grid = expand_opening_grid(raw_grid)
+            for pin in terminals:
+                oid = normalize_opening_id(str(pin))
+                if grid and not opening_fits_grid(oid, grid):
+                    face, _, _ = parse_opening_id(oid)
+                    cols, rows = grid[face]
+                    raise ValueError(
+                        f"Terminal {oid} outside terminal_grid[{face}]="
+                        f"{cols}x{rows}"
+                    )
 
 
 def set_field(
