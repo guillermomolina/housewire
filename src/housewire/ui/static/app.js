@@ -7517,6 +7517,7 @@
     const labelText = spec.label || propsLabel(labelKey);
     dt.dataset.labelKey = labelKey;
     if (!spec.editable) {
+      dd.classList.add("props-kind-readonly");
       dt.textContent = labelText;
       const span = document.createElement("span");
       span.className = "props-readonly";
@@ -7542,8 +7543,10 @@
       label.appendChild(document.createTextNode(spec.checkLabel || t("props.enabled")));
       dd.appendChild(label);
     } else if (spec.combo) {
+      dd.classList.add("props-kind-select");
       dt.textContent = labelText;
       const input = document.createElement("select");
+      input.className = "props-select";
       input.dataset.prop = spec.key;
       if (Array.isArray(spec.options) && spec.options.length) {
         let known = false;
@@ -7568,6 +7571,7 @@
       }
       dd.appendChild(input);
     } else if (spec.multiline) {
+      dd.classList.add("props-kind-edit");
       dt.textContent = labelText;
       const ta = document.createElement("textarea");
       ta.dataset.prop = spec.key;
@@ -7576,9 +7580,11 @@
       ta.spellcheck = false;
       dd.appendChild(ta);
     } else {
+      dd.classList.add("props-kind-edit");
       dt.textContent = labelText;
       const input = document.createElement("input");
       input.type = "text";
+      input.className = "props-input";
       input.dataset.prop = spec.key;
       input.value = value;
       input.spellcheck = false;

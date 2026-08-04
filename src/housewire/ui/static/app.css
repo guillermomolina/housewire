@@ -922,8 +922,10 @@ button:hover {
 }
 
 .panel-expand {
-  flex-shrink: 0;
-  align-self: stretch;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 6;
   writing-mode: vertical-rl;
   text-orientation: mixed;
   border: none;
@@ -939,11 +941,13 @@ button:hover {
 }
 
 .panel-expand.left {
+  left: 0;
   border-right: 1px solid var(--border);
   writing-mode: vertical-lr;
 }
 
 .panel-expand.right {
+  right: 0;
   border-left: 1px solid var(--border);
 }
 
@@ -1259,13 +1263,29 @@ button:hover {
   display: block;
   width: 100%;
   box-sizing: border-box;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--panel) 65%, var(--bg));
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 0.3rem 0.4rem;
   min-height: 1.9rem;
   word-break: break-word;
+}
+
+.props-meta .props-kind-readonly .props-readonly {
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+}
+
+.props-meta .props-kind-select select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) calc(50% - 2px),
+    calc(100% - 9px) calc(50% - 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 1.6rem;
 }
 
 .props-meta input:focus,

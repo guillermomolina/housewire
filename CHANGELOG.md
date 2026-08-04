@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.51.1] — 2026-08-04
+
+### Fixed
+
+- Expand tabs are anchored to the correct workspace edges when panels are
+  collapsed, avoiding side confusion.
+- Properties panel now visually differentiates read-only fields from editable
+  and select fields while keeping aligned sizing.
+
 ## [0.51.0] — 2026-08-04
 
 ### Added
