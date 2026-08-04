@@ -1404,9 +1404,45 @@ button:hover {
 }
 
 .props-meta .props-face-editor {
+  margin: 0;
+  border: none;
+  background: transparent;
+}
+
+.props-face-summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.35;
+  word-break: break-word;
+  user-select: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.props-face-summary::-webkit-details-marker {
+  display: none;
+}
+
+.props-face-summary::before {
+  content: "▸";
+  color: var(--muted);
+  font-size: 0.65rem;
+  flex: 0 0 auto;
+  line-height: 1.4;
+}
+
+.props-face-editor[open] > .props-face-summary::before {
+  content: "▾";
+}
+
+.props-face-body {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  margin-top: 0.45rem;
 }
 
 .props-face-diagram {
@@ -1439,78 +1475,24 @@ button:hover {
 .props-face-diagram .props-face-tag.s { grid-column: 2; grid-row: 3; }
 .props-face-diagram .props-face-tag.b { grid-column: 2; grid-row: 4; }
 
-.props-face-summary {
-  font-size: 0.72rem;
-  color: var(--muted);
-  line-height: 1.35;
-  word-break: break-word;
-}
-
 .props-face-list {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.4rem;
 }
 
-.props-face-acc {
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--bg) 88%, var(--border));
-}
-
-.props-face-acc[open] {
-  background: var(--bg);
-}
-
-.props-face-acc-summary {
+.props-face-row {
   display: grid;
-  grid-template-columns: 0.7rem 1.2rem auto 1fr;
+  grid-template-columns: 1.2rem auto 1fr;
   gap: 0.35rem;
-  align-items: center;
-  list-style: none;
-  cursor: pointer;
-  padding: 0.28rem 0.4rem;
-  font-size: 0.72rem;
-  user-select: none;
-}
-
-.props-face-acc-summary::-webkit-details-marker {
-  display: none;
-}
-
-.props-face-acc-summary::before {
-  content: "▸";
-  color: var(--muted);
-  font-size: 0.65rem;
-  width: 0.7rem;
-}
-
-.props-face-acc[open] > .props-face-acc-summary::before {
-  content: "▾";
+  align-items: start;
 }
 
 .props-face-name {
   font-size: 0.7rem;
   font-weight: 600;
-  color: var(--text);
-}
-
-.props-face-size {
   color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.props-face-count {
-  color: var(--muted);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.props-face-acc-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 0 0.45rem 0.5rem;
+  padding-top: 0.25rem;
 }
 
 .props-face-controls {
@@ -1526,6 +1508,10 @@ button:hover {
   min-height: 1.6rem !important;
   padding: 0.15rem 0.25rem !important;
   text-align: center;
+}
+
+.props-face-cells {
+  min-width: 0;
 }
 
 .props-face-strip {

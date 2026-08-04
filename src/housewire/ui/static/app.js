@@ -8008,32 +8008,18 @@
     });
   }
 
-  function applyFaceUsedOf(el) {
-    const used = el.dataset.used;
-    const total = el.dataset.total;
-    if (!used || !total) {
-      el.textContent = "";
-      return;
-    }
-    el.textContent = t("props.face.usedOf", { used, total });
-  }
-
   function relabelFaceEditor(meta) {
     const editor = meta.querySelector(".props-face-editor");
     if (!editor) return;
     const summary = editor.querySelector(".props-face-summary");
     if (summary) applyFaceEditorSummary(summary);
-    editor.querySelectorAll(".props-face-count[data-used]").forEach((el) => {
-      applyFaceUsedOf(el);
-    });
     editor.querySelectorAll(".props-face-chip[data-title-key]").forEach((el) => {
       applyFaceCellTitle(el);
     });
-    // Number inputs use data-i18n-title / data-i18n-aria (applyDomTranslations).
   }
 
   /**
-   * Props block: compact face summary + accordion editors.
+   * Props block: one summary line; expand to edit all faces.
    * Side faces use a 1-row strip; F/B use a row×col matrix (id = Face{row}-{col}).
    * @param {HTMLElement} meta
    * @param {{
@@ -8059,14 +8045,20 @@
     /** @type {Record<string, object>} */
     const usedMeta = { ...(opts.usedMap || {}) };
     const occupied = opts.occupied || new Set();
-    /** @type {Set<string>} */
-    const openFaces = new Set();
+    let editorOpen = false;
 
     const dt = document.createElement("dt");
     dt.dataset.labelKey = labelKey;
     dt.textContent = propsLabel(labelKey);
-    const dd = document.createElement("dd");
-    dd.className = "props-face-editor";
+
+    const details = document.createElement("details");
+    details.className = "props-face-editor";
+
+    const summary = document.createElement("summary");
+    summary.className = "props-face-summary";
+
+    const body = document.createElement("div");
+    body.className = "props-face-body";
 
     const gridInput = document.createElement("input");
     gridInput.type = "hidden";
@@ -8101,7 +8093,7 @@
       return { used: n, total: ids.length };
     }
 
-    function overallSummaryParts() {
+    function syncSummaryEl() {
       const parts = [];
       let usedTotal = 0;
       let capTotal = 0;
@@ -8113,19 +8105,14 @@
         capTotal += total;
         parts.push(`${face}:${faceSizeLabel(face, cur)}`);
       }
-      return { faces: parts.join(" · "), used: usedTotal, total: capTotal };
-    }
-
-    function syncSummaryEl() {
-      const parts = overallSummaryParts();
-      if (!parts.faces) {
+      if (!parts.length) {
         delete summary.dataset.faces;
         delete summary.dataset.used;
         delete summary.dataset.total;
       } else {
-        summary.dataset.faces = parts.faces;
-        summary.dataset.used = String(parts.used);
-        summary.dataset.total = String(parts.total);
+        summary.dataset.faces = parts.join(" · ");
+        summary.dataset.used = String(usedTotal);
+        summary.dataset.total = String(capTotal);
       }
       applyFaceEditorSummary(summary);
     }
@@ -8176,51 +8163,24 @@
       '<span class="props-face-tag s">S</span>' +
       '<span class="props-face-tag b">B</span>';
 
-    const summary = document.createElement("div");
-    summary.className = "props-face-summary";
-
     const facesHost = document.createElement("div");
     facesHost.className = "props-face-list";
 
     function renderFaces() {
       syncSummaryEl();
+      details.open = editorOpen;
       facesHost.innerHTML = "";
       for (const face of FACE_ORDER) {
         const isPlane = face === "F" || face === "B";
         const cur = expanded[face] || [0, 0];
-        const { used: u, total } = faceUsedCount(face, cur);
 
-        const details = document.createElement("details");
-        details.className = "props-face-acc";
-        details.dataset.face = face;
-        if (openFaces.has(face)) details.open = true;
-        details.addEventListener("toggle", () => {
-          if (details.open) openFaces.add(face);
-          else openFaces.delete(face);
-        });
+        const row = document.createElement("div");
+        row.className = "props-face-row";
 
-        const sum = document.createElement("summary");
-        sum.className = "props-face-acc-summary";
-        const name = document.createElement("span");
+        const name = document.createElement("div");
         name.className = "props-face-name";
         name.textContent = face;
-        const size = document.createElement("span");
-        size.className = "props-face-size";
-        size.textContent = faceSizeLabel(face, cur);
-        const count = document.createElement("span");
-        count.className = "props-face-count";
-        if (total > 0) {
-          count.dataset.used = String(u);
-          count.dataset.total = String(total);
-          applyFaceUsedOf(count);
-        }
-        sum.appendChild(name);
-        sum.appendChild(size);
-        sum.appendChild(count);
-        details.appendChild(sum);
-
-        const body = document.createElement("div");
-        body.className = "props-face-acc-body";
+        row.appendChild(name);
 
         const controls = document.createElement("div");
         controls.className = "props-face-controls";
@@ -8257,7 +8217,6 @@
               delete usedMeta[id];
             }
           }
-          openFaces.add(face);
           syncHidden();
           renderFaces();
           scheduleSaveProps();
@@ -8281,28 +8240,30 @@
           controls.appendChild(document.createTextNode("×"));
           controls.appendChild(rowsInput);
         }
-        body.appendChild(controls);
+        row.appendChild(controls);
 
+        const cells = document.createElement("div");
+        cells.className = "props-face-cells";
         const cols = cur[0] || 0;
         const rows = cur[1] || 0;
         if (cols < 1 || rows < 1) {
           const empty = document.createElement("span");
           empty.className = "props-face-empty";
           empty.textContent = "—";
-          body.appendChild(empty);
+          cells.appendChild(empty);
         } else if (isPlane) {
           const matrix = document.createElement("div");
           matrix.className = "props-face-matrix";
           matrix.style.gridTemplateColumns = `repeat(${cols}, minmax(1.55rem, 1.8rem))`;
           matrix.setAttribute("role", "grid");
           matrix.setAttribute("aria-label", `${face} ${cols}×${rows}`);
-          for (let row = 1; row <= rows; row += 1) {
+          for (let rowI = 1; rowI <= rows; rowI += 1) {
             for (let col = 1; col <= cols; col += 1) {
-              const id = `${face}${row}-${col}`;
-              matrix.appendChild(makeCellButton(id, `${row}-${col}`));
+              const id = `${face}${rowI}-${col}`;
+              matrix.appendChild(makeCellButton(id, `${rowI}-${col}`));
             }
           }
-          body.appendChild(matrix);
+          cells.appendChild(matrix);
         } else {
           const strip = document.createElement("div");
           strip.className = "props-face-strip";
@@ -8310,21 +8271,28 @@
           for (let i = 0; i < ids.length; i += 1) {
             strip.appendChild(makeCellButton(ids[i], String(i + 1)));
           }
-          body.appendChild(strip);
+          cells.appendChild(strip);
         }
-
-        details.appendChild(body);
-        facesHost.appendChild(details);
+        row.appendChild(cells);
+        facesHost.appendChild(row);
       }
     }
 
+    details.addEventListener("toggle", () => {
+      editorOpen = details.open;
+    });
+
     syncHidden();
     renderFaces();
-    dd.appendChild(diagram);
-    dd.appendChild(summary);
-    dd.appendChild(facesHost);
-    dd.appendChild(gridInput);
-    dd.appendChild(usedInput);
+    body.appendChild(diagram);
+    body.appendChild(facesHost);
+    details.appendChild(summary);
+    details.appendChild(body);
+    details.appendChild(gridInput);
+    details.appendChild(usedInput);
+
+    const dd = document.createElement("dd");
+    dd.appendChild(details);
     meta.appendChild(dt);
     meta.appendChild(dd);
   }

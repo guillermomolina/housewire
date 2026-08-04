@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.66.2] — 2026-08-04
+
+### Changed
+
+- Openings/terminals props: one summary line; expand once to edit all faces
+  (F/B stay as a row×column matrix).
+
 ## [0.66.1] — 2026-08-04
 
 ### Fixed
