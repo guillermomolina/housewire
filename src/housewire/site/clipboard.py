@@ -167,15 +167,17 @@ def uniquify_working_names(
 ) -> None:
     """Uniquify ``name`` / ``label`` independently of the technical id.
 
-    Empty fields become ``Unnamed`` / ``Unlabeled``. When ``force`` is true
-    (copy paste, or id renamed on collision), always take the next spaced
-    variant even if the preferred text is free in the destination.
+    Empty fields become ``Unnamed`` / ``Unlabeled`` (no number until that text
+    is already taken). When ``force`` is true and the field already had a
+    value (copy paste), always take the next spaced variant even if free in
+    the destination.
     """
     raw_name = node.get("name")
     name_s = "" if raw_name is None else str(raw_name).strip()
+    name_was_empty = not name_s
     preferred_name = name_s if name_s else UNNAMED
     name_taken = set(taken_names)
-    if force:
+    if force and not name_was_empty:
         name_taken.add(preferred_name)
     new_name = next_available_display_name(name_taken, preferred_name)
     node["name"] = new_name
@@ -183,9 +185,10 @@ def uniquify_working_names(
 
     raw_label = node.get("label")
     label_s = "" if raw_label is None else str(raw_label).strip()
+    label_was_empty = not label_s
     preferred_label = label_s if label_s else UNLABELED
     label_taken = set(taken_labels)
-    if force:
+    if force and not label_was_empty:
         label_taken.add(preferred_label)
     new_label = next_available_display_name(label_taken, preferred_label)
     node["label"] = new_label

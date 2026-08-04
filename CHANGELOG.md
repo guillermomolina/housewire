@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.49.4] — 2026-08-04
+
+### Changed
+
+- Paste fills empty ``name`` / ``label`` as ``Unnamed`` / ``Unlabeled`` without
+  a number; ``Unnamed 1`` only when ``Unnamed`` is already taken (same for
+  labels). Copy still numbers pre-existing custom names/labels.
+
 ## [0.49.3] — 2026-08-04
 
 ### Changed

@@ -89,8 +89,21 @@ class TestClipboard(unittest.TestCase):
         elements = room.get("elements") or {}
         self.assertIn("Box", elements)
         self.assertIn("Box_1", elements)
-        self.assertEqual(elements["Box_1"].get("name"), "Unnamed 1")
-        self.assertEqual(elements["Box_1"].get("label"), "Unlabeled 1")
+        self.assertEqual(elements["Box_1"].get("name"), "Unnamed")
+        self.assertEqual(elements["Box_1"].get("label"), "Unlabeled")
+
+    def test_paste_second_unnamed_gets_number(self) -> None:
+        add_place(self.doc, "Room", type_id="Room")
+        add_place(self.doc, "Box", under=("Room",), type_id="JunctionBox")
+        payload = pack_selection(self.doc, ["Room/Box"])
+        paste_payload(self.doc, parent_id="Room", payload=payload, mode="copy")
+        paste_payload(self.doc, parent_id="Room", payload=payload, mode="copy")
+        room = get_place_node(self.doc, ("Room",))
+        elements = room.get("elements") or {}
+        self.assertEqual(elements["Box_1"].get("name"), "Unnamed")
+        self.assertEqual(elements["Box_2"].get("name"), "Unnamed 1")
+        self.assertEqual(elements["Box_1"].get("label"), "Unlabeled")
+        self.assertEqual(elements["Box_2"].get("label"), "Unlabeled 1")
 
     def test_paste_syncs_name_and_label(self) -> None:
         add_place(self.doc, "Room", type_id="Room")
