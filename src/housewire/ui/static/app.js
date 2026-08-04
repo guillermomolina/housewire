@@ -71,6 +71,10 @@
   /** Alt held for pan-anywhere (wheel+Alt still changes depth). */
   let altPanHeld = false;
   let marquee = null;
+  /** @type {number} */
+  let edgeAutoPanRaf = 0;
+  /** Last pointer client position while edge auto-pan is active. */
+  let edgeAutoPanClient = null;
   let saveTimer = null;
   let worldEl = null;
   let nodesById = {};
@@ -107,6 +111,13 @@
   const DBLCLICK_MS = 400;
   const ELEM_W = 72;
   const ELEM_H = 28;
+  /** Default insert size for new place containers (click without drag). */
+  const PLACE_INSERT_W = 240;
+  const PLACE_INSERT_H = 160;
+  /** Edge band (px) that triggers auto-pan while dragging. */
+  const EDGE_AUTOPAN_MARGIN = 44;
+  /** Max auto-pan speed (px per animation frame) at the viewport edge. */
+  const EDGE_AUTOPAN_MAX_PX = 18;
   /** Hit margin for resize edges/corners in screen pixels. */
   const RESIZE_HIT_PX = 7;
   /** Must stay in sync with housewire.ui.route_quality highway constants. */
@@ -182,15 +193,29 @@
     const id = normalizeIconId(name);
     const cls = extraClass ? `hw-icon ${extraClass}` : "hw-icon";
     return (
-      `<svg class="${cls}" aria-hidden="true" focusable="false">` +
-      `<use href="#icon-${id}"></use></svg>`
+      `<svg xmlns="http://www.w3.org/2000/svg" class="${cls}" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">` +
+      `<use href="#icon-${id}" width="24" height="24"></use></svg>`
     );
   }
 
   function iconElement(name, extraClass) {
-    const wrap = document.createElement("span");
-    wrap.innerHTML = iconHtml(name, extraClass);
-    return wrap.firstElementChild;
+    const id = normalizeIconId(name);
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute(
+      "class",
+      extraClass ? `hw-icon ${extraClass}` : "hw-icon"
+    );
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", "24");
+    svg.setAttribute("height", "24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `#icon-${id}`);
+    use.setAttribute("width", "24");
+    use.setAttribute("height", "24");
+    svg.appendChild(use);
+    return svg;
   }
 
   /** Lucide icon + type label on a canvas box (place or element). */
@@ -1087,6 +1112,75 @@
     if (moved) rememberCurrentDocView();
   }
 
+  /**
+   * Screen-space pan deltas when the pointer sits in the viewport edge band.
+   * Positive dx/dy move world content right/down (reveal left/top).
+   */
+  function edgeAutoPanDelta(clientX, clientY) {
+    if (!viewport) return { dx: 0, dy: 0 };
+    const rect = viewport.getBoundingClientRect();
+    const m = EDGE_AUTOPAN_MARGIN;
+    const max = EDGE_AUTOPAN_MAX_PX;
+    let dx = 0;
+    let dy = 0;
+    const left = clientX - rect.left;
+    const right = rect.right - clientX;
+    const top = clientY - rect.top;
+    const bottom = rect.bottom - clientY;
+    if (left < m) dx = max * (1 - Math.max(0, left) / m);
+    else if (right < m) dx = -max * (1 - Math.max(0, right) / m);
+    if (top < m) dy = max * (1 - Math.max(0, top) / m);
+    else if (bottom < m) dy = -max * (1 - Math.max(0, bottom) / m);
+    return { dx, dy };
+  }
+
+  function stopEdgeAutoPan() {
+    if (edgeAutoPanRaf) {
+      cancelAnimationFrame(edgeAutoPanRaf);
+      edgeAutoPanRaf = 0;
+    }
+    edgeAutoPanClient = null;
+  }
+
+  /** One auto-pan + reapply-drag step. Returns true if still near an edge. */
+  function applyEdgeAutoPanTick() {
+    if (!drag || !drag.moved || !edgeAutoPanClient) {
+      stopEdgeAutoPan();
+      return false;
+    }
+    const { x, y } = edgeAutoPanClient;
+    const { dx, dy } = edgeAutoPanDelta(x, y);
+    if (!dx && !dy) return false;
+    panX += dx;
+    panY += dy;
+    // Keep (client - startClient)/scale tracking the pointer as the camera moves.
+    drag.startClientX += dx;
+    drag.startClientY += dy;
+    applyWorldTransform();
+    const fakeEv = { clientX: x, clientY: y, pointerId: drag.pointerId };
+    if (drag.kind === "resize") applyResizeDrag(fakeEv);
+    else applyMultiDrag(fakeEv);
+    return true;
+  }
+
+  /** Track pointer and keep panning while it stays in the edge band. */
+  function scheduleEdgeAutoPan(ev) {
+    if (!drag || !drag.moved || !ev) {
+      stopEdgeAutoPan();
+      return;
+    }
+    edgeAutoPanClient = { x: ev.clientX, y: ev.clientY };
+    if (edgeAutoPanRaf) return;
+    const loop = () => {
+      edgeAutoPanRaf = 0;
+      if (!applyEdgeAutoPanTick()) return;
+      edgeAutoPanRaf = requestAnimationFrame(loop);
+    };
+    if (applyEdgeAutoPanTick()) {
+      edgeAutoPanRaf = requestAnimationFrame(loop);
+    }
+  }
+
   /** True when this pointerdown should pan instead of select/move. */
   function shouldPanPointer(ev) {
     if (!ev) return false;
@@ -1184,7 +1278,7 @@
     }
   }
 
-  function commitSelection(ids, primaryId) {
+  function commitSelection(ids, primaryId, { ensureVisible = true } = {}) {
     const normalized = normalizeSelectionSet(ids);
     selectedIds = normalized;
     if (primaryId != null && normalized.has(primaryId)) {
@@ -1194,13 +1288,17 @@
     }
     setSelectedVisual();
     updateDeleteButtons();
+    if (ensureVisible && selectedId) {
+      ensureIdVisible(selectedId);
+      highlightOutlineSelection({ scrollTo: selectedId });
+    }
   }
 
   function toggleSelectionId(id) {
     if (selectedIds.has(id)) {
       const next = new Set(selectedIds);
       next.delete(id);
-      commitSelection(next, null);
+      commitSelection(next, null, { ensureVisible: false });
       return;
     }
     const next = new Set(selectedIds);
@@ -1211,6 +1309,72 @@
 
   function replaceSelection(id) {
     commitSelection(id == null ? new Set() : new Set([id]), id);
+  }
+
+  function worldRectForSelectionId(id) {
+    if (!id || !graph) return null;
+    const byId = Object.fromEntries((graph.nodes || []).map((n) => [n.id, n]));
+    const node = (graph.nodes || []).find((n) => n.id === id);
+    if (node) return placeWorldRect(node, byId);
+    const elem = (graph.elements || []).find((e) => e.id === id);
+    if (elem) return elementWorldRect(elem, byId);
+    return null;
+  }
+
+  /** Pan the canvas so ``id`` stays inside the viewport (no zoom change). */
+  function ensureIdVisible(id, { padding = 48 } = {}) {
+    if (!id || !viewport) return;
+    const g = nodesById[id] || elementsById[id];
+    if (!g) {
+      // Fallback before paint: use graph world rects.
+      const wr = worldRectForSelectionId(id);
+      if (!wr) return;
+      const rect = viewport.getBoundingClientRect();
+      const viewW = Math.max(rect.width || 0, 1);
+      const viewH = Math.max(rect.height || 0, 1);
+      const sx1 = wr.x1 * scale + panX;
+      const sy1 = wr.y1 * scale + panY;
+      const sx2 = wr.x2 * scale + panX;
+      const sy2 = wr.y2 * scale + panY;
+      let dx = 0;
+      let dy = 0;
+      if (sx2 - sx1 > viewW - 2 * padding) dx = padding - sx1;
+      else if (sx1 < padding) dx = padding - sx1;
+      else if (sx2 > viewW - padding) dx = viewW - padding - sx2;
+      if (sy2 - sy1 > viewH - 2 * padding) dy = padding - sy1;
+      else if (sy1 < padding) dy = padding - sy1;
+      else if (sy2 > viewH - padding) dy = viewH - padding - sy2;
+      if (!dx && !dy) return;
+      panX += dx;
+      panY += dy;
+      applyWorldTransform();
+      rememberCurrentDocView();
+      return;
+    }
+    const box = g.querySelector(".node-box, .element-box") || g;
+    const br = box.getBoundingClientRect();
+    const vr = viewport.getBoundingClientRect();
+    let dx = 0;
+    let dy = 0;
+    if (br.width > vr.width - 2 * padding) {
+      dx = vr.left + padding - br.left;
+    } else if (br.left < vr.left + padding) {
+      dx = vr.left + padding - br.left;
+    } else if (br.right > vr.right - padding) {
+      dx = vr.right - padding - br.right;
+    }
+    if (br.height > vr.height - 2 * padding) {
+      dy = vr.top + padding - br.top;
+    } else if (br.top < vr.top + padding) {
+      dy = vr.top + padding - br.top;
+    } else if (br.bottom > vr.bottom - padding) {
+      dy = vr.bottom - padding - br.bottom;
+    }
+    if (!dx && !dy) return;
+    panX += dx;
+    panY += dy;
+    applyWorldTransform();
+    rememberCurrentDocView();
   }
 
   function clientToWorld(clientX, clientY) {
@@ -7951,7 +8115,7 @@
     });
     appendPropsRow(meta, {
       key: "parent",
-      value: elem.parent || "(canvas root)",
+      value: formatCanvasParentLabel(elem.parent),
       editable: false,
     });
     appendPropsRow(meta, {
@@ -8078,6 +8242,89 @@
   }
 
   /**
+   * Prefer human label/name over technical id for inspector Parent.
+   * Order: label → name → display_label → display_name → fallback id.
+   */
+  function humanPlaceTitle(obj, fallbackId) {
+    if (obj && typeof obj === "object") {
+      for (const key of ["label", "name", "display_label", "display_name"]) {
+        const v = obj[key];
+        if (v != null && String(v).trim()) return String(v).trim();
+      }
+    }
+    if (fallbackId && fallbackId !== ".") return String(fallbackId);
+    return t("props.siteRoot");
+  }
+
+  /** Resolve a site/canvas place id to a display title (outline, then graph). */
+  function placeTitleForId(placeId) {
+    if (!placeId || placeId === ".") {
+      const root = (outlineNodes || []).find(
+        (n) => n.kind !== "element" && n.id === "."
+      );
+      if (root) return humanPlaceTitle(root, ".");
+      const loc = graph?.location;
+      if (locationId === "." || !locationId) {
+        return humanPlaceTitle(loc, ".");
+      }
+      return humanPlaceTitle(null, ".");
+    }
+    const outline = (outlineNodes || []).find(
+      (n) => n.kind !== "element" && n.id === placeId
+    );
+    if (outline) return humanPlaceTitle(outline, placeId);
+    const node = (graph?.nodes || []).find((n) => n.id === placeId);
+    if (node) return humanPlaceTitle(node, placeId);
+    // Canvas-relative id under current view → site path for outline lookup.
+    if (locationId && locationId !== ".") {
+      const siteId = `${locationId}/${placeId}`;
+      const nested = (outlineNodes || []).find(
+        (n) => n.kind !== "element" && n.id === siteId
+      );
+      if (nested) return humanPlaceTitle(nested, placeId);
+    }
+    return humanPlaceTitle(null, placeId);
+  }
+
+  /**
+   * Human-readable parent for an element/place on the current canvas.
+   * ``parentId`` null/""/"." → current view location (canvas floor).
+   */
+  function formatCanvasParentLabel(parentId) {
+    if (parentId && parentId !== ".") {
+      return placeTitleForId(parentId);
+    }
+    return humanPlaceTitle(graph?.location, locationId || ".");
+  }
+
+  /**
+   * Parent id for a place shown in the inspector (canvas id or ``.``).
+   * Inspecting the canvas location itself uses the site-tree parent of
+   * ``locationId``.
+   */
+  function parentIdForPlaceInspector(placeCanvasId) {
+    if (!placeCanvasId || placeCanvasId === ".") {
+      if (!locationId || locationId === ".") return null;
+      if (!locationId.includes("/")) return ".";
+      return locationId.slice(0, locationId.lastIndexOf("/"));
+    }
+    const node = (graph?.nodes || []).find((n) => n.id === placeCanvasId);
+    if (!node) return ".";
+    return node.parent == null || node.parent === "" ? "." : node.parent;
+  }
+
+  function formatPlaceParentLabel(placeCanvasId) {
+    const parentId = parentIdForPlaceInspector(placeCanvasId);
+    if (parentId == null) return t("props.siteRoot");
+    // Canvas location itself → site-tree parent (absolute outline id).
+    if (!placeCanvasId || placeCanvasId === ".") {
+      return placeTitleForId(parentId);
+    }
+    // Nested place on this canvas → parent may be canvas-relative.
+    return formatCanvasParentLabel(parentId);
+  }
+
+  /**
    * Map a place id to the /api/place ``id`` query value.
    * The canvas location itself is ``.`` — ``location=Parking&id=Parking``
    * wrongly means Parking/Parking and 400s.
@@ -8128,6 +8375,11 @@
       if (!meta) return;
       meta.innerHTML = "";
       appendPropsRow(meta, { key: "id", value: detail.id, editable: false });
+      appendPropsRow(meta, {
+        key: "parent",
+        value: formatPlaceParentLabel(placeKey === "." ? "." : id),
+        editable: false,
+      });
       appendPropsRow(meta, {
         key: "name",
         value: detail.name || "",
@@ -8301,6 +8553,7 @@
   async function endDrag(ev) {
     if (!drag) return;
     if (ev && drag.pointerId != null && ev.pointerId !== drag.pointerId) return;
+    stopEdgeAutoPan();
     svg.classList.remove("dragging", "resizing");
     clearResizeHoverCursor();
     try {
@@ -8316,6 +8569,7 @@
     }
     const finished = drag;
     drag = null;
+    if (finished.moved) rememberCurrentDocView();
     if (finished.kind === "resize") {
       if (!finished.moved || !locationId) {
         await syncInspectorFromSelection();
@@ -8709,8 +8963,10 @@
     if (drag) {
       if (drag.kind === "resize") applyResizeDrag(ev);
       else applyMultiDrag(ev);
+      scheduleEdgeAutoPan(ev);
       return;
     }
+    stopEdgeAutoPan();
     if (marquee) {
       const dist = Math.hypot(
         ev.clientX - marquee.startClientX,
@@ -8765,6 +9021,7 @@
   });
 
   svg.addEventListener("pointercancel", (ev) => {
+    stopEdgeAutoPan();
     if (drag) endDrag(ev);
     if (marquee) endMarquee(ev);
     endPanDrag();
@@ -9532,7 +9789,58 @@
     }
   }
 
-  function highlightOutlineSelection() {
+  /** Scroll the outline list so ``siteId`` is in view. */
+  function scrollOutlineToSiteId(siteId) {
+    if (!siteId) return;
+    const host = document.getElementById("outline-tree");
+    if (!host) return;
+    let row = null;
+    for (const btn of host.querySelectorAll(".outline-item")) {
+      if (btn.dataset.id === siteId) {
+        row = btn;
+        break;
+      }
+    }
+    if (!row) return;
+    // Expand outline section if it was collapsed in the accordion.
+    const outlineSec = document.getElementById("outline-section");
+    if (outlineSec?.classList.contains("collapsed")) {
+      outlineSec.classList.remove("collapsed");
+      try {
+        sessionStorage.setItem("housewire-nav-outline-open", "1");
+      } catch {
+        /* ignore */
+      }
+      document.getElementById("btn-toggle-outline-section")?.setAttribute(
+        "aria-expanded",
+        "true"
+      );
+      const chev = document
+        .getElementById("btn-toggle-outline-section")
+        ?.querySelector(".nav-section-chevron");
+      if (chev) chev.innerHTML = iconHtml("chevron-down");
+      const paletteSec = document.getElementById("palette-section");
+      const resizer = document.getElementById("resizer-nav-split");
+      if (paletteSec && !paletteSec.classList.contains("collapsed")) {
+        resizer?.classList.remove("hidden");
+        let frac = 0.55;
+        try {
+          const v = Number(sessionStorage.getItem("housewire-nav-split"));
+          if (Number.isFinite(v) && v > 0.1 && v < 0.9) frac = v;
+        } catch {
+          /* ignore */
+        }
+        outlineSec.style.flex = `${frac} 1 0`;
+        paletteSec.style.flex = `${1 - frac} 1 0`;
+      } else {
+        outlineSec.style.flex = "1 1 auto";
+      }
+    }
+    row.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+
+  function highlightOutlineSelection(opts) {
+    const scrollToId = opts && opts.scrollTo != null ? opts.scrollTo : selectedId;
     let needPaint = false;
     const before = collapsedOutline.size;
     for (const id of selectedIds) {
@@ -9548,6 +9856,13 @@
     if (before !== collapsedOutline.size) needPaint = true;
     if (needPaint) renderOutline();
     else applyOutlineSelectionActive();
+    const focusSite = scrollToId ? canvasToSiteId(scrollToId) : null;
+    if (focusSite) {
+      // After expand/re-render, wait a frame so the row exists and layout is ready.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => scrollOutlineToSiteId(focusSite));
+      });
+    }
   }
 
   /** @deprecated Prefer highlightOutlineSelection for canvas selection. */
@@ -10318,56 +10633,112 @@
     setDepth(depthLevel - 1).catch((err) => setStatus(String(err.message || err)));
   });
 
-  viewport.addEventListener("pointerdown", (ev) => {
-    if (pendingCatalogPlacement && ev.button === 0) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      const rect = viewport.getBoundingClientRect();
-      placementDrag = {
-        pointerId: ev.pointerId,
-        startClientX: ev.clientX,
-        startClientY: ev.clientY,
-        startWorld: clientToWorld(ev.clientX, ev.clientY),
-      };
-      updateMarqueeDom(
-        ev.clientX - rect.left,
-        ev.clientY - rect.top,
-        ev.clientX - rect.left,
-        ev.clientY - rect.top
+  viewport.addEventListener(
+    "pointerdown",
+    (ev) => {
+      if (pendingCatalogPlacement && ev.button === 0) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const startWorld = clientToWorld(ev.clientX, ev.clientY);
+        const defs = catalogInsertDefaults(pendingCatalogPlacement.kind);
+        const isPlace = pendingCatalogPlacement.kind === "place_type";
+        placementDrag = {
+          pointerId: ev.pointerId,
+          startClientX: ev.clientX,
+          startClientY: ev.clientY,
+          startWorld,
+          parentId: placeParentAtWorld(startWorld.x, startWorld.y),
+          sized: false,
+          box: { x: startWorld.x, y: startWorld.y, w: defs.w, h: defs.h },
+          kind: pendingCatalogPlacement.kind,
+        };
+        updatePlacementGhost(
+          startWorld.x,
+          startWorld.y,
+          defs.w,
+          defs.h,
+          pendingCatalogPlacement
+        );
+        // Elements: click-to-place only (no size drag).
+        if (!isPlace) {
+          try {
+            viewport.setPointerCapture?.(ev.pointerId);
+          } catch {
+            /* ignore */
+          }
+        }
+        return;
+      }
+      if (drag || marquee) return;
+      if (ev.target !== svg && ev.target !== viewport) return;
+      if (beginMarquee(ev)) return;
+      if (shouldPanPointer(ev)) {
+        ev.preventDefault();
+        beginPanDrag(ev);
+        return;
+      }
+      if (ev.button === 0) {
+        // Empty canvas: drag pans; click (no move) clears selection.
+        ev.preventDefault();
+        beginPanDrag(ev, { clearOnClick: true });
+      }
+    },
+    true
+  );
+
+  window.addEventListener("pointermove", (ev) => {
+    if (pendingCatalogPlacement && !placementDrag) {
+      const wpos = clientToWorld(ev.clientX, ev.clientY);
+      const defs = catalogInsertDefaults(pendingCatalogPlacement.kind);
+      // Hover preview: cursor tip = NW (0,0) of the ghost.
+      updatePlacementGhost(
+        wpos.x,
+        wpos.y,
+        defs.w,
+        defs.h,
+        pendingCatalogPlacement
       );
       return;
     }
-    if (drag || marquee) return;
-    if (ev.target !== svg && ev.target !== viewport) return;
-    if (beginMarquee(ev)) return;
-    if (shouldPanPointer(ev)) {
-      ev.preventDefault();
-      beginPanDrag(ev);
+    if (!placementDrag || placementDrag.pointerId !== ev.pointerId) return;
+    if (!pendingCatalogPlacement) return;
+    const end = clientToWorld(ev.clientX, ev.clientY);
+    const start = placementDrag.startWorld;
+    const defs = catalogInsertDefaults(pendingCatalogPlacement.kind);
+    // Elements never size by drag — keep default box at the press point.
+    if (pendingCatalogPlacement.kind !== "place_type") {
+      placementDrag.sized = false;
+      placementDrag.box = { x: start.x, y: start.y, w: defs.w, h: defs.h };
+      updatePlacementGhost(start.x, start.y, defs.w, defs.h, pendingCatalogPlacement);
       return;
     }
-    if (ev.button === 0) {
-      // Empty canvas: drag pans; click (no move) clears selection.
-      ev.preventDefault();
-      beginPanDrag(ev, { clearOnClick: true });
-    }
-  });
-
-  window.addEventListener("pointermove", (ev) => {
-    if (!placementDrag || placementDrag.pointerId !== ev.pointerId) return;
-    const rect = viewport.getBoundingClientRect();
-    updateMarqueeDom(
-      placementDrag.startClientX - rect.left,
-      placementDrag.startClientY - rect.top,
-      ev.clientX - rect.left,
-      ev.clientY - rect.top
+    const dist = Math.hypot(
+      ev.clientX - placementDrag.startClientX,
+      ev.clientY - placementDrag.startClientY
     );
+    if (dist >= DRAG_THRESHOLD) {
+      placementDrag.sized = true;
+      // Rubber-band: NW fixed at click (0,0); cursor tip tracks SE.
+      const w = Math.max(8, end.x - start.x);
+      const h = Math.max(8, end.y - start.y);
+      placementDrag.box = { x: start.x, y: start.y, w, h };
+      updatePlacementGhost(start.x, start.y, w, h, pendingCatalogPlacement);
+    } else {
+      placementDrag.sized = false;
+      placementDrag.box = { x: start.x, y: start.y, w: defs.w, h: defs.h };
+      updatePlacementGhost(
+        start.x,
+        start.y,
+        defs.w,
+        defs.h,
+        pendingCatalogPlacement
+      );
+    }
   });
 
   window.addEventListener("pointerup", (ev) => {
     if (!placementDrag || placementDrag.pointerId !== ev.pointerId) return;
-    const x = ev.clientX;
-    const y = ev.clientY;
-    finalizeCatalogPlacement(x, y).catch((err) =>
+    finalizeCatalogPlacement(ev.clientX, ev.clientY).catch((err) =>
       setStatus(String(err.message || err))
     );
   });
@@ -10379,6 +10750,12 @@
 
   window.addEventListener("keydown", (ev) => {
     if (isEditableFocus(ev.target)) return;
+    if (ev.key === "Escape" && (pendingCatalogPlacement || placementDrag)) {
+      ev.preventDefault();
+      endCatalogPlacementMode();
+      setStatus(t("modal.cancel"));
+      return;
+    }
     if (ev.code === "Space") {
       if (!spacePanHeld) {
         spacePanHeld = true;
@@ -10519,9 +10896,106 @@
   function beginCatalogPlacement(draft) {
     pendingCatalogPlacement = draft;
     placementDrag = null;
+    clearPlacementGhost();
     insertMsg("");
     closeInsertModal();
+    viewport?.classList.add("placing");
     setStatus(t("insert.placeHint"));
+  }
+
+  function endCatalogPlacementMode() {
+    pendingCatalogPlacement = null;
+    placementDrag = null;
+    clearPlacementGhost();
+    hideMarquee();
+    viewport?.classList.remove("placing");
+  }
+
+  function catalogInsertDefaults(kind) {
+    if (kind === "place_type") {
+      return { w: PLACE_INSERT_W, h: PLACE_INSERT_H };
+    }
+    return { w: ELEM_W, h: ELEM_H };
+  }
+
+  /**
+   * Deepest place whose world box contains ``(wx, wy)``.
+   * Empty canvas / miss → current view (API ``"."``), never the site root
+   * above ``locationId``.
+   */
+  function placeParentAtWorld(wx, wy) {
+    const byId = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
+    let bestId = ".";
+    let bestDepth = -1;
+    for (const n of graph?.nodes || []) {
+      const r = placeWorldRect(n, byId);
+      if (wx < r.x1 || wx > r.x2 || wy < r.y1 || wy > r.y2) continue;
+      const depth = Array.isArray(n.parts)
+        ? n.parts.length
+        : String(n.id || "").split("/").filter(Boolean).length;
+      if (depth > bestDepth) {
+        bestDepth = depth;
+        bestId = n.id;
+      }
+    }
+    return bestId;
+  }
+
+  function clearPlacementGhost() {
+    document.getElementById("placement-ghost")?.remove();
+  }
+
+  function updatePlacementGhost(x, y, w, h, draft) {
+    if (!worldEl || !draft) return;
+    const isElem = draft.kind === "element_type";
+    let g = document.getElementById("placement-ghost");
+    if (!g) {
+      g = el("g", {
+        id: "placement-ghost",
+        class: "placement-ghost" + (isElem ? " element-node" : " node"),
+      });
+      const box = el("rect", {
+        class:
+          (isElem ? "element-box" : "node-box container") +
+          " placement-ghost-box selected",
+        x: "0",
+        y: "0",
+        width: String(w),
+        height: String(h),
+        rx: isElem ? "3" : "6",
+      });
+      g.appendChild(box);
+      const label = String(
+        draft.label || draft.name || draft.type_id || ""
+      ).trim();
+      if (label) {
+        g.appendChild(
+          el(
+            "text",
+            {
+              class: isElem ? "element-label" : "node-label",
+              x: isElem ? "4" : "8",
+              y: isElem ? "12" : "18",
+            },
+            fitLabel(label, w - (isElem ? 4 : 16))
+          )
+        );
+      }
+      worldEl.appendChild(g);
+    }
+    g.setAttribute("transform", `translate(${x},${y})`);
+    const box = g.querySelector("rect.placement-ghost-box");
+    if (box) {
+      box.setAttribute("width", String(Math.max(1, w)));
+      box.setAttribute("height", String(Math.max(1, h)));
+    }
+    const text = g.querySelector("text");
+    if (text) {
+      text.textContent = fitLabel(
+        String(draft.label || draft.name || draft.type_id || "").trim(),
+        w - (isElem ? 4 : 16)
+      );
+    }
   }
 
   function worldToParentLocal(x, y, parentId) {
@@ -10531,6 +11005,7 @@
     const byId = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
     const parent = byId[parentId];
     if (!parent) {
+      // Unknown canvas id: treat as current view content coords.
       return { x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)) };
     }
     const abs = absXY(parent, byId);
@@ -10546,32 +11021,35 @@
     const p = placementDrag;
     const end = clientToWorld(clientX, clientY);
     const start = p ? p.startWorld : end;
-    const minX = Math.min(start.x, end.x);
-    const minY = Math.min(start.y, end.y);
-    const wAbs = Math.abs(end.x - start.x);
-    const hAbs = Math.abs(end.y - start.y);
-    const defaultW = d.kind === "element_type" ? ELEM_W : 220;
-    const defaultH = d.kind === "element_type" ? ELEM_H : 140;
-    const placeRect = wAbs >= 8 && hAbs >= 8;
-    const parentCanvasId = selectedParentPlaceId();
-    const local = worldToParentLocal(minX, minY, parentCanvasId);
+    const defs = catalogInsertDefaults(d.kind);
+    let box = (p && p.box) || { x: start.x, y: start.y, w: defs.w, h: defs.h };
+    if (d.kind === "element_type") {
+      // Click place: NW at press point, default element size.
+      box = { x: start.x, y: start.y, w: defs.w, h: defs.h };
+    } else if (p && p.sized) {
+      const w = Math.max(LEAF_W, end.x - start.x);
+      const h = Math.max(LEAF_H, end.y - start.y);
+      box = { x: start.x, y: start.y, w, h };
+    }
+    // Parent from the placement origin (view floor → current location / ".").
+    const parentCanvasId = placeParentAtWorld(box.x + 1, box.y + 1);
+    const local = worldToParentLocal(box.x, box.y, parentCanvasId);
     const body = {
       location_id: locationId,
       place_id: resolvePlaceApiId(parentCanvasId),
       depth: depthLevel,
       type_id: d.type_id,
       subtype: d.subtype || undefined,
+      id: d.id || undefined,
       name: d.name,
       label: d.label || undefined,
       notes: d.notes || undefined,
       x: local.x,
       y: local.y,
-      w: Math.max(defaultW, Math.round(placeRect ? wAbs : defaultW)),
-      h: Math.max(defaultH, Math.round(placeRect ? hAbs : defaultH)),
+      w: Math.round(box.w),
+      h: Math.round(box.h),
     };
-    pendingCatalogPlacement = null;
-    placementDrag = null;
-    hideMarquee();
+    endCatalogPlacementMode();
     setStatus(t("insert.placing"));
     try {
       const res = await api("/api/insert/catalog-item", {
@@ -10604,34 +11082,97 @@
     if (desc) desc.value = "";
     const token = document.getElementById("catalog-id-token");
     if (token) token.value = "";
+    const nameEl = document.getElementById("catalog-name");
+    if (nameEl) nameEl.value = "";
+    const labelEl = document.getElementById("catalog-label");
+    if (labelEl) labelEl.value = "";
   }
 
-  function iconUseForKind(kind) {
-    return kind === "place_type" ? "#icon-folder-open" : "#icon-box";
+  /** Technical id from a localized label (keeps letters/digits, spaces → _). */
+  function suggestIdFromLabel(label) {
+    const raw = String(label || "").trim();
+    if (!raw) return "NewItem";
+    let out = "";
+    for (const ch of raw) {
+      if (/[\p{L}\p{N}_-]/u.test(ch)) out += ch;
+      else out += "_";
+    }
+    out = out.replace(/_+/g, "_").replace(/^_|_$/g, "");
+    return out || "NewItem";
   }
 
-  function nextSuggestedIdToken(parentId, base, kind) {
-    const stemRaw = String(base || "NewItem").trim() || "NewItem";
-    const stem = stemRaw.replace(/[^\w-]+/g, "_");
+  function siblingIdsUnder(parentId, kind) {
     const used = new Set();
+    const pid = parentId || ".";
     if (kind === "place_type") {
       for (const n of graph?.nodes || []) {
-        if ((n.parent || ".") === (parentId || ".")) {
+        if ((n.parent || ".") === pid || (n.parent == null && pid === ".")) {
           const leaf = String(n.id || "").split("/").pop();
           if (leaf) used.add(leaf);
         }
       }
     } else {
       for (const e of graph?.elements || []) {
-        if ((e.parent || ".") === (parentId || ".")) {
-          used.add(String(e.id || ""));
+        const ep = e.parent == null || e.parent === "" ? "." : e.parent;
+        if (ep === pid) {
+          const leaf = e.leaf_id || String(e.id || "").split("/").pop();
+          if (leaf) used.add(leaf);
         }
       }
     }
+    return used;
+  }
+
+  function siblingDisplayFieldsUnder(parentId, kind) {
+    const names = new Set();
+    const labels = new Set();
+    const pid = parentId || ".";
+    const consider = (node) => {
+      const rawN = node?.name;
+      if (rawN != null && String(rawN).trim()) names.add(String(rawN).trim());
+      const rawL = node?.label;
+      if (rawL != null && String(rawL).trim()) labels.add(String(rawL).trim());
+    };
+    if (kind === "place_type") {
+      for (const n of graph?.nodes || []) {
+        if ((n.parent || ".") === pid || (n.parent == null && pid === ".")) {
+          consider(n);
+        }
+      }
+    } else {
+      for (const e of graph?.elements || []) {
+        const ep = e.parent == null || e.parent === "" ? "." : e.parent;
+        if (ep === pid) consider(e);
+      }
+    }
+    return { names, labels };
+  }
+
+  /** Like paste ``next_available_id``: Foo → Foo_1 → Foo_2. */
+  function nextSuggestedIdToken(parentId, base, kind) {
+    const stem = suggestIdFromLabel(base);
+    const used = siblingIdsUnder(parentId, kind);
     if (!used.has(stem)) return stem;
-    let i = 2;
+    let i = 1;
     while (used.has(`${stem}_${i}`)) i += 1;
     return `${stem}_${i}`;
+  }
+
+  /** Like paste ``next_available_display_name``: Foo → Foo 1 → Foo 2. */
+  function nextSuggestedDisplayName(taken, preferred) {
+    const name = String(preferred || "").trim();
+    if (!name) return name;
+    if (!taken.has(name)) return name;
+    const m = /^(.*?)(?:\s+)(\d+)$/.exec(name);
+    if (m && m[1].trim()) {
+      const stem = m[1].trim();
+      let n = Number(m[2]) + 1;
+      while (taken.has(`${stem} ${n}`)) n += 1;
+      return `${stem} ${n}`;
+    }
+    let n = 1;
+    while (taken.has(`${name} ${n}`)) n += 1;
+    return `${name} ${n}`;
   }
 
   function prefillCatalogInsertFromRow(row, subtypeId) {
@@ -10640,7 +11181,10 @@
     const subEl = document.getElementById("catalog-subtype-label");
     const descEl = document.getElementById("catalog-description");
     const tokenEl = document.getElementById("catalog-id-token");
-    if (typeEl) typeEl.value = row.label || row.id || "";
+    const nameEl = document.getElementById("catalog-name");
+    const labelEl = document.getElementById("catalog-label");
+    const localized = String(row.label || row.id || "").trim() || "NewItem";
+    if (typeEl) typeEl.value = localized;
     if (descEl) descEl.value = row.description || "";
     let subtypeLabel = "—";
     if (subtypeId) {
@@ -10648,13 +11192,22 @@
       subtypeLabel = (hit && (hit.label || hit.id)) || String(subtypeId);
     }
     if (subEl) subEl.value = subtypeLabel;
-    if (tokenEl) {
-      tokenEl.value = nextSuggestedIdToken(
-        selectedParentPlaceId(),
-        String(row.id || ""),
-        row.kind || ""
-      );
+    const parentId = selectedParentPlaceId();
+    const kind = row.kind || "";
+    const idBase = suggestIdFromLabel(localized);
+    const idToken = nextSuggestedIdToken(parentId, localized, kind);
+    const { names, labels } = siblingDisplayFieldsUnder(parentId, kind);
+    const nameTaken = new Set(names);
+    const labelTaken = new Set(labels);
+    if (idToken !== idBase) {
+      nameTaken.add(localized);
+      labelTaken.add(localized);
     }
+    const displayName = nextSuggestedDisplayName(nameTaken, localized);
+    const displayLabel = nextSuggestedDisplayName(labelTaken, localized);
+    if (tokenEl) tokenEl.value = idToken;
+    if (nameEl) nameEl.value = displayName;
+    if (labelEl) labelEl.value = displayLabel;
   }
 
   function closeInsertModal() {
@@ -10746,8 +11299,9 @@
       kind: (pendingCatalogInsert && pendingCatalogInsert.source_kind) || "element_type",
       type_id: typeId,
       subtype: (pendingCatalogInsert && pendingCatalogInsert.subtype) || "",
-      name: token,
-      label: data.label || "",
+      id: token,
+      name: String(data.name || "").trim() || token,
+      label: String(data.label || "").trim() || String(data.name || "").trim() || token,
       notes: data.notes || "",
     });
     form.reset();
@@ -10766,8 +11320,23 @@
       for (const row of rows) {
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "palette-item";
-        btn.innerHTML = `<span class="palette-item-head"><svg class="hw-icon palette-item-icon" aria-hidden="true" focusable="false"><use href="${iconUseForKind(row.kind)}"></use></svg><strong>${row.label || row.id}</strong></span><small>${row.id}</small>`;
+        const isElem = row.kind === "element_type";
+        btn.className = "palette-item" + (isElem ? " element" : "");
+        const fallback = isElem ? "box" : "folder-open";
+        const icon = iconElement(
+          row.icon || fallback,
+          "palette-item-icon"
+        );
+        if (icon) btn.appendChild(icon);
+        const label = document.createElement("span");
+        label.className = "palette-item-label";
+        label.textContent = row.label || row.id || "";
+        btn.appendChild(label);
+        const idEl = document.createElement("span");
+        idEl.className = "palette-item-id";
+        idEl.textContent = row.id || "";
+        btn.appendChild(idEl);
+        btn.title = [row.label || row.id, row.id].filter(Boolean).join(" · ");
         btn.addEventListener("click", () => {
           pendingCatalogInsert = {
             type_id: row.id || "",
@@ -10785,26 +11354,141 @@
     render("palette-list-elements", elements);
   }
 
-  function initLeftPanelTabs() {
-    const btnOutline = document.getElementById("left-tab-outline");
-    const btnPalette = document.getElementById("left-tab-palette");
-    const paneOutline = document.getElementById("outline-tree");
-    const panePalette = document.getElementById("palette-panel");
-    if (!btnOutline || !btnPalette || !paneOutline || !panePalette) return;
-    const setTab = (tab) => {
-      const pal = tab === "palette";
-      btnOutline.classList.toggle("active", !pal);
-      btnPalette.classList.toggle("active", pal);
-      paneOutline.classList.toggle("hidden", pal);
-      panePalette.classList.toggle("hidden", !pal);
-      if (pal) {
+  function initLeftNavAccordion() {
+    const outlineSec = document.getElementById("outline-section");
+    const paletteSec = document.getElementById("palette-section");
+    const resizer = document.getElementById("resizer-nav-split");
+    const btnOutline = document.getElementById("btn-toggle-outline-section");
+    const btnPalette = document.getElementById("btn-toggle-palette-section");
+    if (!outlineSec || !paletteSec || !resizer || !btnOutline || !btnPalette) {
+      return;
+    }
+
+    const SPLIT_KEY = "housewire-nav-split";
+    const OUTLINE_OPEN_KEY = "housewire-nav-outline-open";
+    const PALETTE_OPEN_KEY = "housewire-nav-palette-open";
+    const SPLIT_MIN = 0.18;
+    const SPLIT_MAX = 0.82;
+
+    function loadSplitFrac() {
+      try {
+        const v = Number(sessionStorage.getItem(SPLIT_KEY));
+        if (Number.isFinite(v) && v >= SPLIT_MIN && v <= SPLIT_MAX) return v;
+      } catch {
+        /* ignore */
+      }
+      return 0.55;
+    }
+
+    function saveSplitFrac(frac) {
+      try {
+        sessionStorage.setItem(SPLIT_KEY, String(frac));
+      } catch {
+        /* ignore */
+      }
+    }
+
+    function sectionOpen(sec) {
+      return !sec.classList.contains("collapsed");
+    }
+
+    function setSectionChevron(btn, open) {
+      const host = btn.querySelector(".nav-section-chevron");
+      if (!host) return;
+      host.innerHTML = open ? iconHtml("chevron-down") : iconHtml("chevron-right");
+    }
+
+    function applyNavSplit() {
+      const outlineOpen = sectionOpen(outlineSec);
+      const paletteOpen = sectionOpen(paletteSec);
+      resizer.classList.toggle("hidden", !(outlineOpen && paletteOpen));
+      btnOutline.setAttribute("aria-expanded", outlineOpen ? "true" : "false");
+      btnPalette.setAttribute("aria-expanded", paletteOpen ? "true" : "false");
+      setSectionChevron(btnOutline, outlineOpen);
+      setSectionChevron(btnPalette, paletteOpen);
+      if (outlineOpen && paletteOpen) {
+        const frac = loadSplitFrac();
+        outlineSec.style.flex = `${frac} 1 0`;
+        paletteSec.style.flex = `${1 - frac} 1 0`;
+      } else if (outlineOpen) {
+        outlineSec.style.flex = "1 1 auto";
+        paletteSec.style.flex = "0 0 auto";
+      } else if (paletteOpen) {
+        outlineSec.style.flex = "0 0 auto";
+        paletteSec.style.flex = "1 1 auto";
+      } else {
+        outlineSec.style.flex = "0 0 auto";
+        paletteSec.style.flex = "0 0 auto";
+      }
+    }
+
+    function setSectionCollapsed(which, collapsed) {
+      const sec = which === "outline" ? outlineSec : paletteSec;
+      sec.classList.toggle("collapsed", collapsed);
+      try {
+        sessionStorage.setItem(
+          which === "outline" ? OUTLINE_OPEN_KEY : PALETTE_OPEN_KEY,
+          collapsed ? "0" : "1"
+        );
+      } catch {
+        /* ignore */
+      }
+      applyNavSplit();
+      if (which === "palette" && !collapsed) {
         loadPaletteCatalog()
           .then(() => renderPaletteSideList())
           .catch((err) => setStatus(String(err.message || err)));
       }
-    };
-    btnOutline.addEventListener("click", () => setTab("outline"));
-    btnPalette.addEventListener("click", () => setTab("palette"));
+    }
+
+    btnOutline.addEventListener("click", () => {
+      setSectionCollapsed("outline", sectionOpen(outlineSec));
+    });
+    btnPalette.addEventListener("click", () => {
+      setSectionCollapsed("palette", sectionOpen(paletteSec));
+    });
+
+    resizer.addEventListener("pointerdown", (ev) => {
+      if (!sectionOpen(outlineSec) || !sectionOpen(paletteSec)) return;
+      ev.preventDefault();
+      const split = document.getElementById("nav-split");
+      if (!split) return;
+      const bounds = split.getBoundingClientRect();
+      const move = (mev) => {
+        const y = mev.clientY - bounds.top;
+        const frac = Math.min(
+          SPLIT_MAX,
+          Math.max(SPLIT_MIN, y / Math.max(bounds.height, 1))
+        );
+        saveSplitFrac(frac);
+        applyNavSplit();
+      };
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        document.body.style.cursor = "";
+      };
+      document.body.style.cursor = "ns-resize";
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up, { once: true });
+    });
+
+    try {
+      if (sessionStorage.getItem(OUTLINE_OPEN_KEY) === "0") {
+        outlineSec.classList.add("collapsed");
+      }
+      if (sessionStorage.getItem(PALETTE_OPEN_KEY) === "0") {
+        paletteSec.classList.add("collapsed");
+      }
+    } catch {
+      /* ignore */
+    }
+    applyNavSplit();
+    if (sectionOpen(paletteSec)) {
+      loadPaletteCatalog()
+        .then(() => renderPaletteSideList())
+        .catch((err) => setStatus(String(err.message || err)));
+    }
   }
 
   async function openTypePickerFromInsert(kind) {
@@ -10868,10 +11552,12 @@
     ev.preventDefault();
     submitPaletteInsert(ev.target);
   });
-  initLeftPanelTabs();
 
   ensureIconSprite()
-    .then(() => loadConductorColors())
+    .then(() => {
+      initLeftNavAccordion();
+      return loadConductorColors();
+    })
     .then(() => api("/api/workspace"))
     .then((st) => applyWorkspaceStatus(st))
     .then(() => loadLocations())

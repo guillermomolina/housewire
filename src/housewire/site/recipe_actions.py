@@ -762,18 +762,13 @@ def update_place_properties(
 
 def _next_free_child_id(parent_doc: dict[str, Any], base: str) -> str:
     """Return unique child key under ``parent_doc['elements']``."""
+    from housewire.site.clipboard import next_available_id
+
     elements = parent_doc.get("elements") or {}
     if not isinstance(elements, dict):
         raise ValueError("elements must be a map")
     stem = str(base or "").strip() or "NewItem"
-    if stem not in elements:
-        return stem
-    n = 1
-    while True:
-        cand = f"{stem}_{n}"
-        if cand not in elements:
-            return cand
-        n += 1
+    return next_available_id(elements, stem)
 
 
 def _safe_token(raw: str | None, fallback: str) -> str:
@@ -782,6 +777,8 @@ def _safe_token(raw: str | None, fallback: str) -> str:
         return fallback
     out = "".join(ch if (ch.isalnum() or ch in {"_", "-"}) else "_" for ch in text)
     out = out.strip("_")
+    while "__" in out:
+        out = out.replace("__", "_")
     return out or fallback
 
 
@@ -792,6 +789,7 @@ def insert_catalog_item(
     place_id: str,
     type_id: str,
     subtype: str | None = None,
+    id: str | None = None,
     name: str | None = None,
     label: str | None = None,
     notes: str | None = None,
@@ -802,6 +800,12 @@ def insert_catalog_item(
 ) -> dict[str, Any]:
     """Insert place/element by catalog type under a selected place."""
     from housewire.house import is_place_type
+    from housewire.site.clipboard import (
+        display_name_from_id,
+        next_available_display_name,
+        next_available_id,
+        _sibling_working_fields,
+    )
     from housewire.site.io import create_inline_location
     from housewire.site.tree import get_place_node
     from housewire.site.view_layout import (
@@ -816,9 +820,35 @@ def insert_catalog_item(
     if not isinstance(parent_doc, dict):
         raise ValueError(f"Invalid place: {place_id}")
 
-    stem = _safe_token(name, _safe_token(type_id, "NewItem"))
-    child_id = _next_free_child_id(parent_doc, stem)
-    label_text = str(label).strip() if label is not None and str(label).strip() else None
+    parent_doc.setdefault("elements", {})
+    elements = parent_doc.get("elements") or {}
+    if not isinstance(elements, dict):
+        raise ValueError("elements must be a map")
+
+    preferred_id = _safe_token(
+        id, _safe_token(name, _safe_token(type_id, "NewItem"))
+    )
+    child_id = next_available_id(elements, preferred_id)
+    id_bumped = child_id != preferred_id
+
+    preferred_name = (
+        str(name).strip()
+        if name is not None and str(name).strip()
+        else display_name_from_id(preferred_id)
+    )
+    preferred_label = (
+        str(label).strip()
+        if label is not None and str(label).strip()
+        else preferred_name
+    )
+    taken_names, taken_labels = _sibling_working_fields(elements)
+    if id_bumped:
+        # Mirror paste: when the technical id collides, bump display fields too.
+        taken_names.add(preferred_name)
+        taken_labels.add(preferred_label)
+    working_name = next_available_display_name(taken_names, preferred_name)
+    working_label = next_available_display_name(taken_labels, preferred_label)
+
     notes_text = str(notes).strip() if notes is not None and str(notes).strip() else None
     subtype_text = (
         str(subtype).strip() if subtype is not None and str(subtype).strip() else None
@@ -836,8 +866,8 @@ def insert_catalog_item(
             type_id=type_id,
             subtype=subtype_text,
             notes=notes_text,
-            label=label_text,
-            working_name=name,
+            label=working_label,
+            working_name=working_name,
         )
         set_physical_position(created, x0, y0)
         if w is not None and h is not None:
@@ -853,15 +883,15 @@ def insert_catalog_item(
             child_id,
             type_id=str(type_id),
             subtype=subtype_text,
-            label=label_text,
+            label=working_label,
             notes=notes_text,
         )
         elements = parent_doc.get("elements") or {}
         created = elements.get(child_id)
         if isinstance(created, dict):
             set_electrical_position(created, x0, y0)
-            if name and str(name).strip():
-                created["name"] = str(name).strip()
+            created["name"] = working_name
+            created["label"] = working_label
         kind = "element"
 
     session.mark_dirty(path)
@@ -872,4 +902,6 @@ def insert_catalog_item(
         "parent_id": rel_parent,
         "type": str(type_id),
         "subtype": subtype_text,
+        "name": working_name,
+        "label": working_label,
     }

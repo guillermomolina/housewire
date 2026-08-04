@@ -7,6 +7,107 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.59.2] — 2026-08-04
+
+### Changed
+
+- Palette list styling matches the Outline tree (flat rows, shared hover,
+  icon/label treatment) instead of bordered cards.
+
+## [0.59.1] — 2026-08-04
+
+### Fixed
+
+- Selecting a place/element scrolls the Outline list to the last selected row
+  (and pans the canvas using live DOM bounds).
+
+## [0.59.0] — 2026-08-04
+
+### Changed
+
+- Left sidebar Outline and Palette share an accordion layout (Cursor-style):
+  both visible with a draggable horizontal split, each section collapsible on
+  its own, plus the existing whole-panel collapse.
+
+## [0.58.0] — 2026-08-04
+
+### Added
+
+- Selecting a place/element (single, additive, or marquee) pans the canvas so
+  the last selected item stays in view.
+
+## [0.57.1] — 2026-08-04
+
+### Changed
+
+- Place (container) properties show a Parent field; parent values for places
+  and elements prefer label/name over technical ids.
+
+## [0.57.0] — 2026-08-04
+
+### Changed
+
+- Catalog insert proposes localized ID / name / label from the type label
+  (e.g. Spanish ``Caja_de_derivación`` / ``Caja de derivación``).
+- On place, colliding siblings get paste-style suffixes (``_1``, `` 1``) for
+  id and display fields.
+
+## [0.56.1] — 2026-08-04
+
+### Fixed
+
+- Element properties Parent field shows the current view location name when the
+  item sits on the canvas floor (was labeled ``(canvas root)``).
+
+## [0.56.0] — 2026-08-04
+
+### Changed
+
+- Catalog placement preview follows the pointer with the cursor at the box
+  origin (0,0) before click.
+- Elements place with a single click (default size); containers still support
+  click-for-default or SE drag-to-size from the click corner.
+- Empty-canvas placement parents to the current view location (API ``"."``),
+  recomputed from the final origin rather than a stale press hit.
+
+## [0.55.1] — 2026-08-04
+
+### Fixed
+
+- Toolbar/menu Lucide icons: add ``viewBox`` on static SVGs, size ``<use>``
+  explicitly, and drop toolbar ``margin-right`` so pressed/hover tool buttons
+  center the glyph instead of overflowing to the right.
+
+## [0.55.0] — 2026-08-04
+
+### Added
+
+- While moving or resizing a selection, the canvas auto-pans when the pointer
+  approaches the viewport edge so the gesture can continue off-screen.
+
+## [0.54.2] — 2026-08-04
+
+### Fixed
+
+- Lucide icons via the sprite now set ``viewBox="0 0 24 24"`` so glyphs are
+  centered in their box (palette, outline, canvas type icons).
+
+## [0.54.1] — 2026-08-04
+
+### Fixed
+
+- Palette list icons now use each catalog type's ``icon`` field (same as canvas
+  / outline) instead of a generic folder/box glyph by kind.
+
+## [0.54.0] — 2026-08-04
+
+### Added
+
+- Catalog placement now picks the parent container from the first canvas click
+  (no prior selection required), supports click-for-default-size (larger for
+  containers than elements), and shows a live node/element ghost while dragging
+  instead of the selection marquee.
+
 ## [0.53.0] — 2026-08-04
 
 ### Added

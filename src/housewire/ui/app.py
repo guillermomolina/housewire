@@ -877,6 +877,7 @@ def create_app(site_root: Path | None = None) -> Any:
                 place_id=place_id,
                 type_id=type_id,
                 subtype=body.get("subtype"),
+                id=body.get("id"),
                 name=body.get("name"),
                 label=body.get("label"),
                 notes=body.get("notes"),
