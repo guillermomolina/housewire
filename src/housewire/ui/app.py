@@ -321,6 +321,30 @@ def create_app(site_root: Path | None = None) -> Any:
                 "description": catalog_type_description(
                     type_id, catalog=cat, locale=locale
                 ),
+                "subtypes": (
+                    [
+                        {
+                            "id": str(sub_id),
+                            "label": catalog_type_label(
+                                type_id,
+                                catalog=cat,
+                                subtype=str(sub_id),
+                                locale=locale,
+                            ),
+                            "description": catalog_type_description(
+                                type_id,
+                                catalog=cat,
+                                subtype=str(sub_id),
+                                locale=locale,
+                            ),
+                        }
+                        for sub_id in sorted(
+                            (data.get("subtypes") or {}).keys(), key=lambda s: str(s)
+                        )
+                    ]
+                    if isinstance(data.get("subtypes"), dict)
+                    else []
+                ),
                 "icon": data.get("icon") or "circle",
             }
             for type_id, data in sorted(cat.items())

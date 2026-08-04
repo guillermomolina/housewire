@@ -117,8 +117,8 @@
             <button type="button" role="menuitem" data-insert-action="element">
               <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-box"></use></svg><span data-i18n="menu.insert.element">Element…</span></span>
             </button>
-            <button type="button" role="menuitem" data-insert-action="palette">
-              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-layout-grid"></use></svg><span data-i18n="menu.insert.palette">Palette…</span></span>
+            <button type="button" role="menuitem" data-insert-action="container">
+              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-folder-plus"></use></svg><span data-i18n="menu.insert.container">Container…</span></span>
             </button>
             <button type="button" role="menuitem" data-insert-action="cable" disabled title="Coming soon">
               <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-link"></use></svg><span data-i18n="menu.insert.cable">Cable…</span></span>
@@ -200,7 +200,6 @@
         </button>
       </div>
     </div>
-    <div id="doc-label" class="doc-label" title="Active site document"></div>
   </nav>
   <header class="toolbar" aria-label="Tools">
     <div class="tool-group" title="File">
@@ -268,7 +267,25 @@
         <h2 data-i18n="panel.outline">Outline</h2>
         <button type="button" class="panel-collapse" id="btn-collapse-outline" title="Collapse outline" data-i18n-title="panel.outline.collapse" aria-expanded="true" aria-controls="nav-tree">«</button>
       </div>
+      <div class="panel-tabs">
+        <button type="button" id="left-tab-outline" class="panel-tab active" data-left-tab="outline"><span data-i18n="panel.outline">Outline</span></button>
+        <button type="button" id="left-tab-palette" class="panel-tab" data-left-tab="palette"><span data-i18n="menu.insert.palette">Palette…</span></button>
+      </div>
       <div id="outline-tree" class="outline-tree panel-body"></div>
+      <div id="palette-panel" class="panel-body hidden">
+        <label class="palette-field">
+          <span data-i18n="palette.search">Search</span>
+          <input id="palette-search-side" type="text" />
+        </label>
+        <div class="palette-group">
+          <h4 data-i18n="palette.containers">Containers</h4>
+          <div id="palette-list-containers" class="palette-list"></div>
+        </div>
+        <div class="palette-group">
+          <h4 data-i18n="palette.elements">Elements</h4>
+          <div id="palette-list-elements" class="palette-list"></div>
+        </div>
+      </div>
     </aside>
     <div id="resizer-outline" class="panel-resizer left" role="separator" aria-orientation="vertical" aria-label="Resize outline"></div>
     <button type="button" class="panel-expand left hidden" id="btn-expand-outline" title="Show outline" data-i18n-title="panel.outline.show" aria-controls="nav-tree"><span data-i18n="panel.outline">Outline</span></button>
@@ -384,22 +401,29 @@
             <button type="submit" class="primary">Add feed</button>
           </div>
         </form>
-        <form id="form-palette" class="insert-form hidden">
-          <label>Type class
-            <select name="type_class" id="palette-type-class">
-              <option value="element_type">Elements</option>
-              <option value="place_type">Containers</option>
-            </select>
+        <form id="form-type-pick" class="insert-form hidden">
+          <label><span data-i18n="insert.type">Type</span>
+            <select name="type_id" id="insert-type-id" required></select>
           </label>
-          <label>Search <input name="q" id="palette-search" placeholder="Type name or description" /></label>
-          <label>Type
-            <select name="type_id" id="palette-type-id" required></select>
+          <label><span data-i18n="insert.subtype">Subtype</span>
+            <select name="subtype" id="insert-subtype-id"></select>
           </label>
-          <label>Subtype (optional) <input name="subtype" id="palette-subtype" placeholder="subtype" /></label>
-          <label>Name (optional) <input name="name" id="palette-name" placeholder="auto from type" /></label>
           <div class="insert-form-actions">
             <button type="button" data-insert-dismiss><span data-i18n="modal.cancel">Cancel</span></button>
-            <button type="submit" class="primary">Insert selected type</button>
+            <button type="submit" class="primary"><span data-i18n="insert.next">Next</span></button>
+          </div>
+        </form>
+        <form id="form-catalog-item" class="insert-form hidden">
+          <label><span data-i18n="insert.type">Type</span> <input name="type_label" id="catalog-type-label" readonly /></label>
+          <label><span data-i18n="insert.subtype">Subtype</span> <input name="subtype_label" id="catalog-subtype-label" readonly /></label>
+          <label><span data-i18n="insert.description">Description</span> <textarea id="catalog-description" rows="2" readonly></textarea></label>
+          <label><span data-i18n="props.key.id">ID</span> <input name="id_token" id="catalog-id-token" required /></label>
+          <label><span data-i18n="props.key.name">Name</span> <input name="name" id="catalog-name" /></label>
+          <label><span data-i18n="props.key.label">Label</span> <input name="label" id="catalog-label" /></label>
+          <label><span data-i18n="props.key.notes">Notes</span> <textarea name="notes" id="catalog-notes" rows="3"></textarea></label>
+          <div class="insert-form-actions">
+            <button type="button" data-insert-dismiss><span data-i18n="modal.cancel">Cancel</span></button>
+            <button type="submit" class="primary"><span data-i18n="insert.add">Add</span></button>
           </div>
         </form>
         <p id="insert-msg" class="insert-msg"></p>

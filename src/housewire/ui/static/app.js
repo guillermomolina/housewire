@@ -1447,8 +1447,8 @@
     const dy = minY < 0 ? -minY : 0;
     if (dx || dy) {
       for (const s of siblings) {
-        s.x = Math.round((s.x ?? 0) + dx);
-        s.y = Math.round((s.y ?? 0) + dy);
+        s.x = (s.x ?? 0) + dx;
+        s.y = (s.y ?? 0) + dy;
       }
     }
     return { dx, dy, siblings };
@@ -1462,11 +1462,11 @@
    */
   function expandHostForOriginShift(host, dx, dy) {
     if (!host || (!dx && !dy)) return;
-    host.x = Math.round((host.x ?? 0) - dx);
-    host.y = Math.round((host.y ?? 0) - dy);
-    host.w = Math.round((Number(host.w) || 0) + dx);
-    host.h = Math.round((Number(host.h) || 0) + dy);
-    host.size_locked = true;
+    host.x = (host.x ?? 0) - dx;
+    host.y = (host.y ?? 0) - dy;
+    host.w = (Number(host.w) || 0) + dx;
+    host.h = (Number(host.h) || 0) + dy;
+    host._auto_absorb = true;
   }
 
   /**
@@ -1478,6 +1478,9 @@
    */
   function adjustDragOriginsAfterAbsorb(siblings, dx, dy, kind) {
     if (!drag || (!dx && !dy)) return;
+    // Snapshot-based multi-drag recomputes each frame from start origins;
+    // mutating origX/origY here freezes NW at 0 and looks like a pointer stop.
+    if (drag.kind === "multi" && drag.layoutSnapshot) return;
     const ids = new Set(siblings.map((s) => s.id));
     if (drag.kind === "multi") {
       for (const item of drag.items || []) {
@@ -1497,15 +1500,18 @@
   }
 
   /**
-   * Absorb negatives under parentId; expand host N/W; cascade if host goes negative.
+   * Absorb negatives under parentId; expand host N/W.
    * @param {string|null} parentId
    * @param {"place"|"element"} kind
-   * @returns {{shiftedPlaces:Set<string>,shiftedElems:Set<string>,grownParents:Set<string>}}
+   * @param {{cascade?: boolean}} [opts] When cascade is false (live drag), only
+   *   adjust the immediate host so ancestor normalization cannot nudge the
+   *   opposite wall on the first NW pixels.
+   * @returns {{shiftedPlaces:Set<string>,shiftedElems:Set<string>,adjustedParents:Set<string>}}
    */
-  function absorbNegativeOriginLive(parentId, kind) {
+  function absorbNegativeOriginLive(parentId, kind, { cascade = true } = {}) {
     const shiftedPlaces = new Set();
     const shiftedElems = new Set();
-    const grownParents = new Set();
+    const adjustedParents = new Set();
     let curParent = parentId;
     let curKind = kind;
     for (let guard = 0; guard < 16; guard++) {
@@ -1521,12 +1527,13 @@
       const host = graph?.nodes.find((n) => n.id === curParent);
       if (!host) break;
       expandHostForOriginShift(host, dx, dy);
-      grownParents.add(curParent);
+      adjustedParents.add(curParent);
+      if (!cascade) break;
       // Host may now be negative among its place siblings — cascade.
       curParent = host.parent || null;
       curKind = "place";
     }
-    return { shiftedPlaces, shiftedElems, grownParents };
+    return { shiftedPlaces, shiftedElems, adjustedParents };
   }
 
   /**
@@ -1538,20 +1545,78 @@
     const elementParents = new Set(groups.elementParents || []);
     const shiftedPlaces = new Set();
     const shiftedElems = new Set();
-    const grownParents = new Set();
+    const adjustedParents = new Set();
     for (const parentId of placeParents) {
       const r = absorbNegativeOriginLive(parentId, "place");
       for (const id of r.shiftedPlaces) shiftedPlaces.add(id);
-      for (const id of r.grownParents) grownParents.add(id);
+      for (const id of r.adjustedParents) adjustedParents.add(id);
     }
     for (const parentId of elementParents) {
       if (!parentId) continue;
       const r = absorbNegativeOriginLive(parentId, "element");
       for (const id of r.shiftedElems) shiftedElems.add(id);
       for (const id of r.shiftedPlaces) shiftedPlaces.add(id);
-      for (const id of r.grownParents) grownParents.add(id);
+      for (const id of r.adjustedParents) adjustedParents.add(id);
     }
-    return { shiftedPlaces, shiftedElems, grownParents };
+    return { shiftedPlaces, shiftedElems, adjustedParents };
+  }
+
+  function captureLayoutSnapshot() {
+    return {
+      nodes: (graph?.nodes || []).map((n) => ({
+        id: n.id,
+        x: n.x,
+        y: n.y,
+        w: n.w,
+        h: n.h,
+        size_locked: n.size_locked,
+        locked_w: n.locked_w,
+        locked_h: n.locked_h,
+        _originAbsorbX: n._originAbsorbX,
+        _originAbsorbY: n._originAbsorbY,
+      })),
+      elements: (graph?.elements || []).map((e) => ({
+        id: e.id,
+        x: e.x,
+        y: e.y,
+        w: e.w,
+        h: e.h,
+        size_locked: e.size_locked,
+        locked_w: e.locked_w,
+        locked_h: e.locked_h,
+      })),
+    };
+  }
+
+  function restoreLayoutSnapshot(snapshot) {
+    if (!snapshot || !graph) return;
+    const nodesById = Object.fromEntries((graph.nodes || []).map((n) => [n.id, n]));
+    const elemsById = Object.fromEntries((graph.elements || []).map((e) => [e.id, e]));
+    for (const row of snapshot.nodes || []) {
+      const n = nodesById[row.id];
+      if (!n) continue;
+      n.x = row.x;
+      n.y = row.y;
+      n.w = row.w;
+      n.h = row.h;
+      n.size_locked = row.size_locked;
+      n.locked_w = row.locked_w;
+      n.locked_h = row.locked_h;
+      n._originAbsorbX = row._originAbsorbX;
+      n._originAbsorbY = row._originAbsorbY;
+      n._auto_absorb = false;
+    }
+    for (const row of snapshot.elements || []) {
+      const e = elemsById[row.id];
+      if (!e) continue;
+      e.x = row.x;
+      e.y = row.y;
+      e.w = row.w;
+      e.h = row.h;
+      e.size_locked = row.size_locked;
+      e.locked_w = row.locked_w;
+      e.locked_h = row.locked_h;
+    }
   }
 
   function beginResizeDrag(ev, targetKind, targetId, handle, orig) {
@@ -1631,6 +1696,8 @@
       node.w = Math.round(next.w);
       node.h = Math.round(next.h);
       node.size_locked = true;
+      node.locked_w = node.w;
+      node.locked_h = node.h;
     } else {
       const elem = (graph?.elements || []).find((e) => e.id === drag.targetId);
       if (!elem) return;
@@ -1639,13 +1706,15 @@
       elem.w = Math.round(next.w);
       elem.h = Math.round(next.h);
       elem.size_locked = true;
+      elem.locked_w = elem.w;
+      elem.locked_h = elem.h;
     }
     if (drag.targetKind === "place") {
       const node = graph?.nodes.find((n) => n.id === drag.targetId);
-      if (node) absorbNegativeOriginLive(node.parent || null, "place");
+      if (node) absorbNegativeOriginLive(node.parent || null, "place", { cascade: false });
     } else {
       const elem = (graph?.elements || []).find((e) => e.id === drag.targetId);
-      if (elem?.parent) absorbNegativeOriginLive(elem.parent, "element");
+      if (elem?.parent) absorbNegativeOriginLive(elem.parent, "element", { cascade: false });
     }
     updateNodeVisual(null, { refresh: false });
   }
@@ -1819,9 +1888,23 @@
         autoW = Math.max(LEAF_W, maxR - minL + 2 * PAD);
         autoH = Math.max(LEAF_H, HEADER + (maxB - minT) + PAD);
       }
-      if (node.size_locked) {
-        node.w = Math.max(Number(node.w) || 0, autoW);
-        node.h = Math.max(Number(node.h) || 0, autoH);
+      if (node._auto_absorb) {
+        // Live NW absorb already grew w/h to keep the opposite wall fixed;
+        // do not let locked/auto measure shrink that transient growth away.
+        const baseW = node.size_locked
+          ? Number(node.locked_w ?? node.w) || 0
+          : 0;
+        const baseH = node.size_locked
+          ? Number(node.locked_h ?? node.h) || 0
+          : 0;
+        node.w = Math.max(Number(node.w) || 0, baseW, autoW);
+        node.h = Math.max(Number(node.h) || 0, baseH, autoH);
+        node._auto_absorb = false;
+      } else if (node.size_locked) {
+        const baseW = Number(node.locked_w ?? node.w) || 0;
+        const baseH = Number(node.locked_h ?? node.h) || 0;
+        node.w = Math.max(baseW, autoW);
+        node.h = Math.max(baseH, autoH);
       } else {
         node.w = autoW;
         node.h = autoH;
@@ -6813,6 +6896,7 @@
   function updateNodeVisual(_node, opts) {
     const refresh = !opts || opts.refresh !== false;
     const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+    // Keep live SE growth; NW absorb marks `_auto_absorb` so this does not wipe it.
     measureVisibleSizes();
     for (const n of graph.nodes) {
       const g = nodesById[n.id];
@@ -7016,6 +7100,7 @@
         startClientX: ev.clientX,
         startClientY: ev.clientY,
         items: buildDragItems(),
+        layoutSnapshot: captureLayoutSnapshot(),
         moved: false,
         captured: false,
         modClick: isModClick(ev),
@@ -7157,6 +7242,7 @@
         startClientX: ev.clientX,
         startClientY: ev.clientY,
         items: buildDragItems(),
+        layoutSnapshot: captureLayoutSnapshot(),
         moved: false,
         captured: false,
         modClick: isModClick(ev),
@@ -8277,15 +8363,11 @@
               payload[id].h = node.h;
             }
           }
-          for (const pid of norm.grownParents) {
+          for (const pid of norm.adjustedParents) {
             const parent = graph?.nodes.find((n) => n.id === pid);
-            if (!parent || !parent.size_locked) continue;
-            payload[pid] = {
-              x: parent.x,
-              y: parent.y,
-              w: parent.w,
-              h: parent.h,
-            };
+            if (!parent) continue;
+            // Auto absorb should persist origin shift, not lock in grown size.
+            payload[pid] = { x: parent.x, y: parent.y };
           }
           const lastMeta = await api(`/api/physical/positions`, {
             method: "PATCH",
@@ -8312,15 +8394,11 @@
             }
           }
           const placePayload = {};
-          for (const pid of norm.grownParents) {
+          for (const pid of norm.adjustedParents) {
             const parent = graph?.nodes.find((n) => n.id === pid);
-            if (!parent || !parent.size_locked) continue;
-            placePayload[pid] = {
-              x: parent.x,
-              y: parent.y,
-              w: parent.w,
-              h: parent.h,
-            };
+            if (!parent) continue;
+            // Auto absorb should persist origin shift, not lock in grown size.
+            placePayload[pid] = { x: parent.x, y: parent.y };
           }
           const lastMeta = await api(`/api/electrical/positions`, {
             method: "PATCH",
@@ -8391,9 +8469,36 @@
     const norm = normalizeAfterLayoutGesture({ placeParents, elementParents });
     const onlyElements =
       items.length > 0 && items.every((it) => it.kind === "element");
+    // SE growth happens in measureVisibleSizes; run it before deciding whether
+    // host geometry changed enough to require conduit re-route.
+    measureVisibleSizes();
+    let hostsChanged = norm.adjustedParents.size > 0;
+    if (!hostsChanged && finished.layoutSnapshot) {
+      const beforeById = Object.fromEntries(
+        (finished.layoutSnapshot.nodes || []).map((n) => [n.id, n])
+      );
+      const touchParents = new Set([
+        ...elementParents.filter(Boolean),
+        ...norm.adjustedParents,
+      ]);
+      for (const pid of touchParents) {
+        const before = beforeById[pid];
+        const now = (graph?.nodes || []).find((n) => n.id === pid);
+        if (!before || !now) continue;
+        if (
+          Number(before.x) !== Number(now.x) ||
+          Number(before.y) !== Number(now.y) ||
+          Number(before.w) !== Number(now.w) ||
+          Number(before.h) !== Number(now.h)
+        ) {
+          hostsChanged = true;
+          break;
+        }
+      }
+    }
     updateNodeVisual(
       null,
-      onlyElements ? { skipConduits: true } : undefined
+      onlyElements && !hostsChanged ? { skipConduits: true } : undefined
     );
     await syncInspectorFromSelection();
     try {
@@ -8438,15 +8543,11 @@
           elemPositions[id].h = elem.h;
         }
       }
-      for (const pid of norm.grownParents) {
+      for (const pid of norm.adjustedParents) {
         const parent = graph?.nodes.find((n) => n.id === pid);
-        if (!parent || !parent.size_locked) continue;
-        placePositions[pid] = {
-          x: parent.x,
-          y: parent.y,
-          w: parent.w,
-          h: parent.h,
-        };
+        if (!parent) continue;
+        // Auto absorb should persist origin shift, not lock in grown size.
+        placePositions[pid] = { x: parent.x, y: parent.y };
       }
       if (
         !Object.keys(placePositions).length &&
@@ -8508,6 +8609,9 @@
     }
     const dx = (ev.clientX - drag.startClientX) / scale;
     const dy = (ev.clientY - drag.startClientY) / scale;
+    // Recompute from the initial drag snapshot every frame so box growth/shrink
+    // is fully reversible when the pointer returns.
+    restoreLayoutSnapshot(drag.layoutSnapshot);
     const placeMap = Object.fromEntries(
       (graph?.nodes || []).map((n) => [n.id, n])
     );
@@ -8517,16 +8621,16 @@
         if (!node) continue;
         const parent = node.parent ? placeMap[node.parent] : null;
         const d = storedDragDelta(parent, dx, dy);
-        node.x = Math.round(item.origX + d.dx);
-        node.y = Math.round(item.origY + d.dy);
+        node.x = item.origX + d.dx;
+        node.y = item.origY + d.dy;
       } else if (item.kind === "element") {
         const elem = (graph?.elements || []).find((e) => e.id === item.id);
         if (!elem) continue;
         const parent = elem.parent ? placeMap[elem.parent] : null;
         const d = storedDragDelta(parent, dx, dy);
         // x/y may go negative during the gesture; absorb N/W into the host box.
-        elem.x = Math.round(item.origX + d.dx);
-        elem.y = Math.round(item.origY + d.dy);
+        elem.x = item.origX + d.dx;
+        elem.y = item.origY + d.dy;
       }
     }
     const seenElem = new Set();
@@ -8536,7 +8640,7 @@
         const elem = (graph?.elements || []).find((e) => e.id === item.id);
         if (elem?.parent && !seenElem.has(elem.parent)) {
           seenElem.add(elem.parent);
-          absorbNegativeOriginLive(elem.parent, "element");
+          absorbNegativeOriginLive(elem.parent, "element", { cascade: false });
         }
       } else if (item.kind === "place") {
         const node = graph?.nodes.find((n) => n.id === item.id);
@@ -8544,7 +8648,9 @@
         const key = node.parent || "";
         if (!seenPlace.has(key)) {
           seenPlace.add(key);
-          absorbNegativeOriginLive(node.parent || null, "place");
+          absorbNegativeOriginLive(node.parent || null, "place", {
+            cascade: false,
+          });
         }
       }
     }
@@ -9192,6 +9298,13 @@
   }
 
   async function loadLocations() {
+    if (!hasDocument) {
+      try {
+        applyWorkspaceStatus(await api("/api/workspace"));
+      } catch {
+        /* keep current state */
+      }
+    }
     await refreshDocumentLabel();
     if (!hasDocument) {
       canvasLocations = [];
@@ -9234,27 +9347,7 @@
   }
 
   async function refreshDocumentLabel() {
-    const el = document.getElementById("doc-label");
-    if (!el) return;
-    try {
-      const st = applyWorkspaceStatus(await api("/api/workspace"));
-      const doc = st.document;
-      if (!doc) {
-        el.textContent = "(no document)";
-        el.title = "Active site document";
-        return;
-      }
-      const n = (st.documents || []).length;
-      el.textContent =
-        n > 1 ? `${doc.title} (${n} open)` : String(doc.title || doc.yaml);
-      el.title = doc.yaml_path
-        ? String(doc.yaml_path)
-        : String(doc.path || "Active site document");
-    } catch {
-      el.textContent = "";
-      hasDocument = false;
-      updateFileMenuState({ dirty: false });
-    }
+    // File identity is shown in view tabs; no separate header label.
   }
 
   function renderDocTabs(st) {
@@ -9272,6 +9365,7 @@
       btn.dataset.docId = doc.id;
       const label = document.createElement("span");
       label.textContent = (doc.dirty ? "• " : "") + (doc.title || doc.yaml);
+      label.title = doc.yaml_path || doc.path || doc.title || doc.yaml || "";
       btn.appendChild(label);
       const close = document.createElement("button");
       close.type = "button";
@@ -9931,7 +10025,12 @@
       if (insertItem) {
         if (insertItem.disabled) return;
         closeAllMenus();
-        openInsertModal(insertItem.getAttribute("data-insert-action"));
+        const action = insertItem.getAttribute("data-insert-action");
+        if (action === "element" || action === "container") {
+          openTypePickerFromInsert(action).catch((err) => insertMsg(String(err.message || err), true));
+        } else {
+          openInsertModal(action);
+        }
         return;
       }
       const subTrigger = ev.target.closest(".menu-submenu-trigger");
@@ -10220,6 +10319,24 @@
   });
 
   viewport.addEventListener("pointerdown", (ev) => {
+    if (pendingCatalogPlacement && ev.button === 0) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const rect = viewport.getBoundingClientRect();
+      placementDrag = {
+        pointerId: ev.pointerId,
+        startClientX: ev.clientX,
+        startClientY: ev.clientY,
+        startWorld: clientToWorld(ev.clientX, ev.clientY),
+      };
+      updateMarqueeDom(
+        ev.clientX - rect.left,
+        ev.clientY - rect.top,
+        ev.clientX - rect.left,
+        ev.clientY - rect.top
+      );
+      return;
+    }
     if (drag || marquee) return;
     if (ev.target !== svg && ev.target !== viewport) return;
     if (beginMarquee(ev)) return;
@@ -10233,6 +10350,26 @@
       ev.preventDefault();
       beginPanDrag(ev, { clearOnClick: true });
     }
+  });
+
+  window.addEventListener("pointermove", (ev) => {
+    if (!placementDrag || placementDrag.pointerId !== ev.pointerId) return;
+    const rect = viewport.getBoundingClientRect();
+    updateMarqueeDom(
+      placementDrag.startClientX - rect.left,
+      placementDrag.startClientY - rect.top,
+      ev.clientX - rect.left,
+      ev.clientY - rect.top
+    );
+  });
+
+  window.addEventListener("pointerup", (ev) => {
+    if (!placementDrag || placementDrag.pointerId !== ev.pointerId) return;
+    const x = ev.clientX;
+    const y = ev.clientY;
+    finalizeCatalogPlacement(x, y).catch((err) =>
+      setStatus(String(err.message || err))
+    );
   });
 
   // Suppress middle-click autoscroll while panning the canvas.
@@ -10297,21 +10434,26 @@
     { passive: false }
   );
 
-  const INSERT_TITLES = {
-    socket: "Insert socket",
-    lamp: "Insert lamp",
-    feed: "Insert feed",
-    element: "Insert element",
-    palette: "Insert from palette",
+  const INSERT_TITLE_KEYS = {
+    socket: "menu.insert.socket",
+    lamp: "menu.insert.lamp",
+    feed: "menu.insert.feed",
+    "type-pick": "menu.insert.element",
+    "catalog-item": "menu.insert.element",
   };
 
   let paletteCatalog = null;
+  let pendingCatalogInsert = null;
+  let pendingCatalogPlacement = null;
+  let placementDrag = null;
 
   function selectedParentPlaceId() {
+    const nodes = graph?.nodes || [];
+    const places = new Set(nodes.map((n) => n.id));
     if (selectedId) {
       const elem = (graph?.elements || []).find((e) => e.id === selectedId);
       if (elem) return elem.parent || ".";
-      return selectedId;
+      if (places.has(selectedId)) return selectedId;
     }
     return ".";
   }
@@ -10338,36 +10480,33 @@
     return rows;
   }
 
-  function renderPaletteOptions() {
-    const classEl = document.getElementById("palette-type-class");
-    const qEl = document.getElementById("palette-search");
-    const typeEl = document.getElementById("palette-type-id");
-    if (!classEl || !qEl || !typeEl) return;
-    const rows = paletteRows(classEl.value, qEl.value);
-    typeEl.innerHTML = "";
-    for (const row of rows) {
-      const opt = document.createElement("option");
-      opt.value = row.id || "";
-      opt.textContent = `${row.label || row.id} (${row.id})`;
-      opt.title = row.description || "";
-      typeEl.appendChild(opt);
-    }
+  function subtypeRows(typeId) {
+    const row = (paletteCatalog && paletteCatalog[typeId]) || null;
+    const subs = (row && row.subtypes) || [];
+    return Array.isArray(subs) ? subs : [];
+  }
+
+  function renderSubtypeSelect(typeId, selected) {
+    const sel = document.getElementById("insert-subtype-id");
+    if (!sel) return;
+    const rows = subtypeRows(typeId);
+    sel.innerHTML = "";
     if (!rows.length) {
       const opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "No matches";
-      typeEl.appendChild(opt);
+      opt.textContent = "—";
+      sel.appendChild(opt);
+      sel.disabled = true;
+      return;
     }
-  }
-
-  async function prepPalette(kind) {
-    await loadPaletteCatalog();
-    const classEl = document.getElementById("palette-type-class");
-    const qEl = document.getElementById("palette-search");
-    if (!classEl || !qEl) return;
-    classEl.value = kind === "element" ? "element_type" : "element_type";
-    qEl.value = "";
-    renderPaletteOptions();
+    for (const row of rows) {
+      const opt = document.createElement("option");
+      opt.value = row.id || "";
+      opt.textContent = row.label || row.id || "";
+      sel.appendChild(opt);
+    }
+    sel.disabled = false;
+    if (selected) sel.value = selected;
   }
 
   function insertMsg(text, isError) {
@@ -10375,6 +10514,147 @@
     if (!el) return;
     el.textContent = text || "";
     el.classList.toggle("is-error", Boolean(isError && text));
+  }
+
+  function beginCatalogPlacement(draft) {
+    pendingCatalogPlacement = draft;
+    placementDrag = null;
+    insertMsg("");
+    closeInsertModal();
+    setStatus(t("insert.placeHint"));
+  }
+
+  function worldToParentLocal(x, y, parentId) {
+    if (!parentId || parentId === ".") {
+      return { x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)) };
+    }
+    const byId = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
+    const parent = byId[parentId];
+    if (!parent) {
+      return { x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)) };
+    }
+    const abs = absXY(parent, byId);
+    return {
+      x: Math.max(0, Math.round(x - abs.x - PAD)),
+      y: Math.max(0, Math.round(y - abs.y - HEADER)),
+    };
+  }
+
+  async function finalizeCatalogPlacement(clientX, clientY) {
+    if (!pendingCatalogPlacement || !locationId) return;
+    const d = pendingCatalogPlacement;
+    const p = placementDrag;
+    const end = clientToWorld(clientX, clientY);
+    const start = p ? p.startWorld : end;
+    const minX = Math.min(start.x, end.x);
+    const minY = Math.min(start.y, end.y);
+    const wAbs = Math.abs(end.x - start.x);
+    const hAbs = Math.abs(end.y - start.y);
+    const defaultW = d.kind === "element_type" ? ELEM_W : 220;
+    const defaultH = d.kind === "element_type" ? ELEM_H : 140;
+    const placeRect = wAbs >= 8 && hAbs >= 8;
+    const parentCanvasId = selectedParentPlaceId();
+    const local = worldToParentLocal(minX, minY, parentCanvasId);
+    const body = {
+      location_id: locationId,
+      place_id: resolvePlaceApiId(parentCanvasId),
+      depth: depthLevel,
+      type_id: d.type_id,
+      subtype: d.subtype || undefined,
+      name: d.name,
+      label: d.label || undefined,
+      notes: d.notes || undefined,
+      x: local.x,
+      y: local.y,
+      w: Math.max(defaultW, Math.round(placeRect ? wAbs : defaultW)),
+      h: Math.max(defaultH, Math.round(placeRect ? hAbs : defaultH)),
+    };
+    pendingCatalogPlacement = null;
+    placementDrag = null;
+    hideMarquee();
+    setStatus(t("insert.placing"));
+    try {
+      const res = await api("/api/insert/catalog-item", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      graph = res.graph;
+      depthLevel = graph.depth || depthLevel;
+      maxDepth = graph.max_depth || maxDepth;
+      render();
+      await loadOutline();
+      const newId = res.result?.id;
+      if (newId) await selectNode(newId);
+      setStatus(t("status.catalogAddedUnsaved"));
+      scheduleStatusRefresh();
+    } catch (err) {
+      const msg = String(err.message || err);
+      if (/place does not exist|invalid place/i.test(msg)) {
+        setStatus(t("insert.placeNotFound"));
+      } else {
+        setStatus(msg);
+      }
+    }
+  }
+
+  function resetCatalogInsertForm() {
+    const form = document.getElementById("form-catalog-item");
+    if (form) form.reset();
+    const desc = document.getElementById("catalog-description");
+    if (desc) desc.value = "";
+    const token = document.getElementById("catalog-id-token");
+    if (token) token.value = "";
+  }
+
+  function iconUseForKind(kind) {
+    return kind === "place_type" ? "#icon-folder-open" : "#icon-box";
+  }
+
+  function nextSuggestedIdToken(parentId, base, kind) {
+    const stemRaw = String(base || "NewItem").trim() || "NewItem";
+    const stem = stemRaw.replace(/[^\w-]+/g, "_");
+    const used = new Set();
+    if (kind === "place_type") {
+      for (const n of graph?.nodes || []) {
+        if ((n.parent || ".") === (parentId || ".")) {
+          const leaf = String(n.id || "").split("/").pop();
+          if (leaf) used.add(leaf);
+        }
+      }
+    } else {
+      for (const e of graph?.elements || []) {
+        if ((e.parent || ".") === (parentId || ".")) {
+          used.add(String(e.id || ""));
+        }
+      }
+    }
+    if (!used.has(stem)) return stem;
+    let i = 2;
+    while (used.has(`${stem}_${i}`)) i += 1;
+    return `${stem}_${i}`;
+  }
+
+  function prefillCatalogInsertFromRow(row, subtypeId) {
+    if (!row) return;
+    const typeEl = document.getElementById("catalog-type-label");
+    const subEl = document.getElementById("catalog-subtype-label");
+    const descEl = document.getElementById("catalog-description");
+    const tokenEl = document.getElementById("catalog-id-token");
+    if (typeEl) typeEl.value = row.label || row.id || "";
+    if (descEl) descEl.value = row.description || "";
+    let subtypeLabel = "—";
+    if (subtypeId) {
+      const hit = subtypeRows(row.id || "").find((x) => String(x.id) === String(subtypeId));
+      subtypeLabel = (hit && (hit.label || hit.id)) || String(subtypeId);
+    }
+    if (subEl) subEl.value = subtypeLabel;
+    if (tokenEl) {
+      tokenEl.value = nextSuggestedIdToken(
+        selectedParentPlaceId(),
+        String(row.id || ""),
+        row.kind || ""
+      );
+    }
   }
 
   function closeInsertModal() {
@@ -10395,29 +10675,18 @@
   function openInsertModal(kind) {
     const modal = document.getElementById("insert-modal");
     const titleEl = document.getElementById("insert-modal-title");
-    if (!modal || !INSERT_TITLES[kind]) return;
-    if (titleEl) titleEl.textContent = INSERT_TITLES[kind];
-    for (const id of ["socket", "lamp", "feed", "palette"]) {
+    if (!modal || !INSERT_TITLE_KEYS[kind]) return;
+    if (titleEl) titleEl.textContent = t(INSERT_TITLE_KEYS[kind]);
+    for (const id of ["socket", "lamp", "feed", "type-pick", "catalog-item"]) {
       const form = document.getElementById(`form-${id}`);
       if (form) form.classList.toggle("hidden", id !== kind);
-    }
-    if (kind === "element") {
-      kind = "palette";
-      for (const id of ["socket", "lamp", "feed", "palette"]) {
-        const form = document.getElementById(`form-${id}`);
-        if (form) form.classList.toggle("hidden", id !== kind);
-      }
-      if (titleEl) titleEl.textContent = INSERT_TITLES.element;
-      prepPalette("element").catch((err) => insertMsg(String(err.message || err), true));
-    } else if (kind === "palette") {
-      prepPalette("palette").catch((err) => insertMsg(String(err.message || err), true));
     }
     insertMsg("");
     modal.classList.remove("hidden");
     modal.setAttribute("aria-hidden", "false");
     document.addEventListener("keydown", onInsertModalKey);
-    const form = document.getElementById(`form-${kind === "element" ? "palette" : kind}`);
-    const first = form && form.querySelector("input:not([type=hidden])");
+    const form = document.getElementById(`form-${kind}`);
+    const first = form && form.querySelector("input:not([type=hidden]),select,textarea");
     setTimeout(() => first && first.focus(), 0);
   }
 
@@ -10463,42 +10732,100 @@
   async function submitPaletteInsert(form) {
     if (!locationId) return;
     const data = Object.fromEntries(new FormData(form).entries());
-    const typeId = String(data.type_id || "").trim();
+    const typeId = String((pendingCatalogInsert && pendingCatalogInsert.type_id) || "").trim();
     if (!typeId) {
-      insertMsg("Select one type.", true);
+      insertMsg(t("insert.selectType"), true);
       return;
     }
-    const body = {
-      location_id: locationId,
-      place_id: selectedParentPlaceId(),
-      depth: depthLevel,
-      type_id: typeId,
-      subtype: data.subtype || undefined,
-      name: data.name || undefined,
-      x: 24,
-      y: 24,
-      w: 220,
-      h: 140,
-    };
-    insertMsg("…");
-    try {
-      const res = await api("/api/insert/catalog-item", {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      graph = res.graph;
-      depthLevel = graph.depth || depthLevel;
-      maxDepth = graph.max_depth || maxDepth;
-      render();
-      await loadOutline();
-      const newId = res.result?.id;
-      if (newId) await selectNode(newId);
-      setStatus("catalog item added · unsaved");
-      scheduleStatusRefresh();
-      closeInsertModal();
-    } catch (err) {
-      insertMsg(String(err.message || err), true);
+    const token = String(data.id_token || "").trim();
+    if (!token) {
+      insertMsg(t("insert.idRequired"), true);
+      return;
     }
+    beginCatalogPlacement({
+      kind: (pendingCatalogInsert && pendingCatalogInsert.source_kind) || "element_type",
+      type_id: typeId,
+      subtype: (pendingCatalogInsert && pendingCatalogInsert.subtype) || "",
+      name: token,
+      label: data.label || "",
+      notes: data.notes || "",
+    });
+    form.reset();
+    resetCatalogInsertForm();
+  }
+
+  function renderPaletteSideList() {
+    const qEl = document.getElementById("palette-search-side");
+    const q = qEl ? qEl.value : "";
+    const containers = paletteRows("place_type", q);
+    const elements = paletteRows("element_type", q);
+    const render = (hostId, rows) => {
+      const host = document.getElementById(hostId);
+      if (!host) return;
+      host.innerHTML = "";
+      for (const row of rows) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "palette-item";
+        btn.innerHTML = `<span class="palette-item-head"><svg class="hw-icon palette-item-icon" aria-hidden="true" focusable="false"><use href="${iconUseForKind(row.kind)}"></use></svg><strong>${row.label || row.id}</strong></span><small>${row.id}</small>`;
+        btn.addEventListener("click", () => {
+          pendingCatalogInsert = {
+            type_id: row.id || "",
+            subtype: "",
+            source_kind: row.kind || "",
+          };
+          resetCatalogInsertForm();
+          prefillCatalogInsertFromRow(row, "");
+          openInsertModal("catalog-item");
+        });
+        host.appendChild(btn);
+      }
+    };
+    render("palette-list-containers", containers);
+    render("palette-list-elements", elements);
+  }
+
+  function initLeftPanelTabs() {
+    const btnOutline = document.getElementById("left-tab-outline");
+    const btnPalette = document.getElementById("left-tab-palette");
+    const paneOutline = document.getElementById("outline-tree");
+    const panePalette = document.getElementById("palette-panel");
+    if (!btnOutline || !btnPalette || !paneOutline || !panePalette) return;
+    const setTab = (tab) => {
+      const pal = tab === "palette";
+      btnOutline.classList.toggle("active", !pal);
+      btnPalette.classList.toggle("active", pal);
+      paneOutline.classList.toggle("hidden", pal);
+      panePalette.classList.toggle("hidden", !pal);
+      if (pal) {
+        loadPaletteCatalog()
+          .then(() => renderPaletteSideList())
+          .catch((err) => setStatus(String(err.message || err)));
+      }
+    };
+    btnOutline.addEventListener("click", () => setTab("outline"));
+    btnPalette.addEventListener("click", () => setTab("palette"));
+  }
+
+  async function openTypePickerFromInsert(kind) {
+    await loadPaletteCatalog();
+    const sel = document.getElementById("insert-type-id");
+    if (!sel) return;
+    const typeClass = kind === "container" ? "place_type" : "element_type";
+    const rows = paletteRows(typeClass, "");
+    sel.innerHTML = "";
+    for (const row of rows) {
+      const opt = document.createElement("option");
+      opt.value = row.id || "";
+      opt.textContent = row.label || row.id || "";
+      sel.appendChild(opt);
+    }
+    const first = rows[0] && rows[0].id;
+    if (first) {
+      sel.value = first;
+      renderSubtypeSelect(first, "");
+    }
+    openInsertModal("type-pick");
   }
 
   document.getElementById("form-socket")?.addEventListener("submit", (ev) => {
@@ -10513,19 +10840,40 @@
     ev.preventDefault();
     submitInsert("feed", ev.target);
   });
-  document.getElementById("palette-type-class")?.addEventListener("change", () => {
-    renderPaletteOptions();
+  document.getElementById("insert-type-id")?.addEventListener("change", (ev) => {
+    renderSubtypeSelect(ev.target.value, "");
   });
-  document.getElementById("palette-search")?.addEventListener("input", () => {
-    renderPaletteOptions();
+  document.getElementById("form-type-pick")?.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const data = Object.fromEntries(new FormData(ev.target).entries());
+    const typeId = String(data.type_id || "").trim();
+    if (!typeId) {
+      insertMsg(t("insert.selectType"), true);
+      return;
+    }
+    const row = (paletteCatalog && paletteCatalog[typeId]) || {};
+    pendingCatalogInsert = {
+      type_id: typeId,
+      subtype: String(data.subtype || "").trim(),
+      source_kind: row.kind || "",
+    };
+    resetCatalogInsertForm();
+    prefillCatalogInsertFromRow(row, pendingCatalogInsert.subtype);
+    openInsertModal("catalog-item");
   });
-  document.getElementById("form-palette")?.addEventListener("submit", (ev) => {
+  document.getElementById("palette-search-side")?.addEventListener("input", () => {
+    renderPaletteSideList();
+  });
+  document.getElementById("form-catalog-item")?.addEventListener("submit", (ev) => {
     ev.preventDefault();
     submitPaletteInsert(ev.target);
   });
+  initLeftPanelTabs();
 
   ensureIconSprite()
     .then(() => loadConductorColors())
+    .then(() => api("/api/workspace"))
+    .then((st) => applyWorkspaceStatus(st))
     .then(() => loadLocations())
     .catch((err) => setStatus(String(err.message || err)));
 })();

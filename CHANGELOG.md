@@ -7,6 +7,34 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.53.0] — 2026-08-04
+
+### Added
+
+- Outline panel palette tab listing all catalog containers/elements, with
+  localized Insert → Element… / Container… type-subtype pickers and a shared
+  insert-details modal (immutable ID, read-only description).
+- After Add, explicit canvas click-drag placement sets initial position and size.
+- Catalog API exposes localized subtype options for combo selection.
+
+### Changed
+
+- Document identity is shown in tabs only (filename removed from the header).
+- Catalog insert no longer commits immediately on modal submit; it enters
+  placement mode with localized guidance.
+
+### Fixed
+
+- Initial document tab renders on startup when a site is already open.
+- Interior-element drag autosize expands/shrinks the host in all directions
+  (including NW) and is reversible before release via drag-start snapshot
+  recomputation; opposite-wall jumps from ancestor cascade during live drag
+  are avoided.
+- After element drags that change host geometry, container conduits are
+  re-routed on drop (live re-route remains disabled for performance).
+- Locked host autosize growth is anchored to persisted base size, and
+  auto-absorb no longer persists grown w/h as a new lock.
+
 ## [0.52.0] — 2026-08-04
 
 ### Added
