@@ -7,6 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.50.4] — 2026-08-04
+
+### Fixed
+
+- Site outline refreshes after property panel edits (e.g. ``name`` / ``label``).
+
 ## [0.50.3] — 2026-08-04
 
 ### Fixed

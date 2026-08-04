@@ -7731,6 +7731,8 @@
       res.dirty ? "properties updated · unsaved" : "properties updated"
     );
     scheduleStatusRefresh();
+    await loadOutline();
+    highlightOutlineSelection();
     if (!reload) return;
     if (propsTarget.kind === "element" && selectedId) {
       const elem = (graph?.elements || []).find((e) => e.id === selectedId);
