@@ -1177,6 +1177,7 @@ button:hover {
 }
 
 .props-meta input,
+.props-meta select,
 .props-meta textarea {
   width: 100%;
   box-sizing: border-box;
@@ -1229,6 +1230,7 @@ button:hover {
 }
 
 .props-meta input:focus,
+.props-meta select:focus,
 .props-meta textarea:focus {
   outline: none;
   border-color: var(--accent);

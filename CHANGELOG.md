@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.50.8] — 2026-08-04
+
+### Fixed
+
+- Properties panel ``select`` controls now use the same width and field styling
+  as text inputs.
+
 ## [0.50.7] — 2026-08-04
 
 ### Changed
