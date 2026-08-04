@@ -10301,7 +10301,74 @@
     socket: "Insert socket",
     lamp: "Insert lamp",
     feed: "Insert feed",
+    element: "Insert element",
+    palette: "Insert from palette",
   };
+
+  let paletteCatalog = null;
+
+  function selectedParentPlaceId() {
+    if (selectedId) {
+      const elem = (graph?.elements || []).find((e) => e.id === selectedId);
+      if (elem) return elem.parent || ".";
+      return selectedId;
+    }
+    return ".";
+  }
+
+  async function loadPaletteCatalog() {
+    if (paletteCatalog) return paletteCatalog;
+    const data = await api("/api/catalog");
+    paletteCatalog = data.types || {};
+    return paletteCatalog;
+  }
+
+  function paletteRows(typeClass, q) {
+    const rows = Object.values(paletteCatalog || {}).filter((row) => {
+      if (!row || typeof row !== "object") return false;
+      if (typeClass && row.kind !== typeClass) return false;
+      const needle = String(q || "").trim().toLowerCase();
+      if (!needle) return true;
+      const hay = `${row.id || ""} ${row.label || ""} ${row.description || ""}`.toLowerCase();
+      return hay.includes(needle);
+    });
+    rows.sort((a, b) =>
+      String(a.label || a.id || "").localeCompare(String(b.label || b.id || ""))
+    );
+    return rows;
+  }
+
+  function renderPaletteOptions() {
+    const classEl = document.getElementById("palette-type-class");
+    const qEl = document.getElementById("palette-search");
+    const typeEl = document.getElementById("palette-type-id");
+    if (!classEl || !qEl || !typeEl) return;
+    const rows = paletteRows(classEl.value, qEl.value);
+    typeEl.innerHTML = "";
+    for (const row of rows) {
+      const opt = document.createElement("option");
+      opt.value = row.id || "";
+      opt.textContent = `${row.label || row.id} (${row.id})`;
+      opt.title = row.description || "";
+      typeEl.appendChild(opt);
+    }
+    if (!rows.length) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "No matches";
+      typeEl.appendChild(opt);
+    }
+  }
+
+  async function prepPalette(kind) {
+    await loadPaletteCatalog();
+    const classEl = document.getElementById("palette-type-class");
+    const qEl = document.getElementById("palette-search");
+    if (!classEl || !qEl) return;
+    classEl.value = kind === "element" ? "element_type" : "element_type";
+    qEl.value = "";
+    renderPaletteOptions();
+  }
 
   function insertMsg(text, isError) {
     const el = document.getElementById("insert-msg");
@@ -10330,15 +10397,26 @@
     const titleEl = document.getElementById("insert-modal-title");
     if (!modal || !INSERT_TITLES[kind]) return;
     if (titleEl) titleEl.textContent = INSERT_TITLES[kind];
-    for (const id of ["socket", "lamp", "feed"]) {
+    for (const id of ["socket", "lamp", "feed", "palette"]) {
       const form = document.getElementById(`form-${id}`);
       if (form) form.classList.toggle("hidden", id !== kind);
+    }
+    if (kind === "element") {
+      kind = "palette";
+      for (const id of ["socket", "lamp", "feed", "palette"]) {
+        const form = document.getElementById(`form-${id}`);
+        if (form) form.classList.toggle("hidden", id !== kind);
+      }
+      if (titleEl) titleEl.textContent = INSERT_TITLES.element;
+      prepPalette("element").catch((err) => insertMsg(String(err.message || err), true));
+    } else if (kind === "palette") {
+      prepPalette("palette").catch((err) => insertMsg(String(err.message || err), true));
     }
     insertMsg("");
     modal.classList.remove("hidden");
     modal.setAttribute("aria-hidden", "false");
     document.addEventListener("keydown", onInsertModalKey);
-    const form = document.getElementById(`form-${kind}`);
+    const form = document.getElementById(`form-${kind === "element" ? "palette" : kind}`);
     const first = form && form.querySelector("input:not([type=hidden])");
     setTimeout(() => first && first.focus(), 0);
   }
@@ -10382,6 +10460,47 @@
     }
   }
 
+  async function submitPaletteInsert(form) {
+    if (!locationId) return;
+    const data = Object.fromEntries(new FormData(form).entries());
+    const typeId = String(data.type_id || "").trim();
+    if (!typeId) {
+      insertMsg("Select one type.", true);
+      return;
+    }
+    const body = {
+      location_id: locationId,
+      place_id: selectedParentPlaceId(),
+      depth: depthLevel,
+      type_id: typeId,
+      subtype: data.subtype || undefined,
+      name: data.name || undefined,
+      x: 24,
+      y: 24,
+      w: 220,
+      h: 140,
+    };
+    insertMsg("…");
+    try {
+      const res = await api("/api/insert/catalog-item", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      graph = res.graph;
+      depthLevel = graph.depth || depthLevel;
+      maxDepth = graph.max_depth || maxDepth;
+      render();
+      await loadOutline();
+      const newId = res.result?.id;
+      if (newId) await selectNode(newId);
+      setStatus("catalog item added · unsaved");
+      scheduleStatusRefresh();
+      closeInsertModal();
+    } catch (err) {
+      insertMsg(String(err.message || err), true);
+    }
+  }
+
   document.getElementById("form-socket")?.addEventListener("submit", (ev) => {
     ev.preventDefault();
     submitInsert("socket", ev.target);
@@ -10393,6 +10512,16 @@
   document.getElementById("form-feed")?.addEventListener("submit", (ev) => {
     ev.preventDefault();
     submitInsert("feed", ev.target);
+  });
+  document.getElementById("palette-type-class")?.addEventListener("change", () => {
+    renderPaletteOptions();
+  });
+  document.getElementById("palette-search")?.addEventListener("input", () => {
+    renderPaletteOptions();
+  });
+  document.getElementById("form-palette")?.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    submitPaletteInsert(ev.target);
   });
 
   ensureIconSprite()

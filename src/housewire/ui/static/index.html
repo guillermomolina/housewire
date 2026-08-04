@@ -114,8 +114,11 @@
               <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-arrow-left-right"></use></svg><span data-i18n="menu.insert.feed">Feed…</span></span>
             </button>
             <hr class="menu-sep" />
-            <button type="button" role="menuitem" data-insert-action="element" disabled title="Coming soon" data-i18n-title="menu.insert.comingSoon">
+            <button type="button" role="menuitem" data-insert-action="element">
               <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-box"></use></svg><span data-i18n="menu.insert.element">Element…</span></span>
+            </button>
+            <button type="button" role="menuitem" data-insert-action="palette">
+              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-layout-grid"></use></svg><span data-i18n="menu.insert.palette">Palette…</span></span>
             </button>
             <button type="button" role="menuitem" data-insert-action="cable" disabled title="Coming soon">
               <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-link"></use></svg><span data-i18n="menu.insert.cable">Cable…</span></span>
@@ -379,6 +382,24 @@
           <div class="insert-form-actions">
             <button type="button" data-insert-dismiss><span data-i18n="modal.cancel">Cancel</span></button>
             <button type="submit" class="primary">Add feed</button>
+          </div>
+        </form>
+        <form id="form-palette" class="insert-form hidden">
+          <label>Type class
+            <select name="type_class" id="palette-type-class">
+              <option value="element_type">Elements</option>
+              <option value="place_type">Containers</option>
+            </select>
+          </label>
+          <label>Search <input name="q" id="palette-search" placeholder="Type name or description" /></label>
+          <label>Type
+            <select name="type_id" id="palette-type-id" required></select>
+          </label>
+          <label>Subtype (optional) <input name="subtype" id="palette-subtype" placeholder="subtype" /></label>
+          <label>Name (optional) <input name="name" id="palette-name" placeholder="auto from type" /></label>
+          <div class="insert-form-actions">
+            <button type="button" data-insert-dismiss><span data-i18n="modal.cancel">Cancel</span></button>
+            <button type="submit" class="primary">Insert selected type</button>
           </div>
         </form>
         <p id="insert-msg" class="insert-msg"></p>

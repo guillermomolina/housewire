@@ -758,3 +758,118 @@ def update_place_properties(
     return place_detail(
         session, canvas_location_id=canvas_location_id, place_id=place_id
     )
+
+
+def _next_free_child_id(parent_doc: dict[str, Any], base: str) -> str:
+    """Return unique child key under ``parent_doc['elements']``."""
+    elements = parent_doc.get("elements") or {}
+    if not isinstance(elements, dict):
+        raise ValueError("elements must be a map")
+    stem = str(base or "").strip() or "NewItem"
+    if stem not in elements:
+        return stem
+    n = 1
+    while True:
+        cand = f"{stem}_{n}"
+        if cand not in elements:
+            return cand
+        n += 1
+
+
+def _safe_token(raw: str | None, fallback: str) -> str:
+    text = str(raw or "").strip()
+    if not text:
+        return fallback
+    out = "".join(ch if (ch.isalnum() or ch in {"_", "-"}) else "_" for ch in text)
+    out = out.strip("_")
+    return out or fallback
+
+
+def insert_catalog_item(
+    session: SiteSession,
+    *,
+    canvas_location_id: str,
+    place_id: str,
+    type_id: str,
+    subtype: str | None = None,
+    name: str | None = None,
+    label: str | None = None,
+    notes: str | None = None,
+    x: float | None = None,
+    y: float | None = None,
+    w: float | None = None,
+    h: float | None = None,
+) -> dict[str, Any]:
+    """Insert place/element by catalog type under a selected place."""
+    from housewire.house import is_place_type
+    from housewire.site.io import create_inline_location
+    from housewire.site.tree import get_place_node
+    from housewire.site.view_layout import (
+        set_electrical_position,
+        set_physical_position,
+        set_physical_size,
+    )
+
+    place_parts = _resolve_place_parts(canvas_location_id, place_id)
+    path, site_doc = session.ensure_doc()
+    parent_doc = get_place_node(site_doc, place_parts)
+    if not isinstance(parent_doc, dict):
+        raise ValueError(f"Invalid place: {place_id}")
+
+    stem = _safe_token(name, _safe_token(type_id, "NewItem"))
+    child_id = _next_free_child_id(parent_doc, stem)
+    label_text = str(label).strip() if label is not None and str(label).strip() else None
+    notes_text = str(notes).strip() if notes is not None and str(notes).strip() else None
+    subtype_text = (
+        str(subtype).strip() if subtype is not None and str(subtype).strip() else None
+    )
+    x0 = float(x) if x is not None else 24.0
+    y0 = float(y) if y is not None else 24.0
+
+    rel_parent = _relative_place_id(canvas_location_id, place_parts)
+    rel_inserted = child_id if rel_parent in {".", ""} else f"{rel_parent}/{child_id}"
+    is_place = is_place_type(type_id)
+    if is_place:
+        created = create_inline_location(
+            parent_doc,
+            child_id,
+            type_id=type_id,
+            subtype=subtype_text,
+            notes=notes_text,
+            label=label_text,
+            working_name=name,
+        )
+        set_physical_position(created, x0, y0)
+        if w is not None and h is not None:
+            try:
+                set_physical_size(created, float(w), float(h))
+            except ValueError:
+                # Keep default autosize if caller sends invalid dimensions.
+                pass
+        kind = "place"
+    else:
+        abm.add_element(
+            parent_doc,
+            child_id,
+            type_id=str(type_id),
+            subtype=subtype_text,
+            label=label_text,
+            notes=notes_text,
+        )
+        elements = parent_doc.get("elements") or {}
+        created = elements.get(child_id)
+        if isinstance(created, dict):
+            set_electrical_position(created, x0, y0)
+            if name and str(name).strip():
+                created["name"] = str(name).strip()
+        kind = "element"
+
+    session.mark_dirty(path)
+    return {
+        "kind": kind,
+        "id": rel_inserted,
+        "leaf_id": child_id,
+        "parent_id": rel_parent,
+        "type": str(type_id),
+        "subtype": subtype_text,
+    }

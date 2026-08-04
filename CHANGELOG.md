@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.52.0] — 2026-08-04
+
+### Added
+
+- New ``Insert → Palette…`` flow for catalog-based insertion:
+  place containers and electrical elements can be selected from a searchable
+  palette and inserted directly into the current place context.
+- New API ``POST /api/insert/catalog-item`` for generic catalog item insertion
+  (place/element), returning updated graph + inserted id for immediate
+  selection in UI.
+
 ## [0.51.1] — 2026-08-04
 
 ### Fixed

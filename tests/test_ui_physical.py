@@ -546,6 +546,21 @@ class TestServeApi(unittest.TestCase):
             self.assertEqual(about_es["lang"], "es")
             self.assertIn("lienzo", about_es["description"])
 
+            inserted = client.post(
+                "/api/insert/catalog-item",
+                json={
+                    "location_id": "Parking",
+                    "place_id": "Caja_4",
+                    "type_id": "LightPoint",
+                    "name": "Punto_1",
+                    "depth": 2,
+                },
+            ).json()
+            self.assertEqual(inserted["result"]["kind"], "place")
+            self.assertEqual(inserted["result"]["id"], "Caja_4/Punto_1")
+            inserted_ids = {n["id"] for n in inserted["graph"]["nodes"]}
+            self.assertIn("Caja_4/Punto_1", inserted_ids)
+
             house = client.get(
                 "/api/physical", params={"location": ".", "depth": 2}
             ).json()

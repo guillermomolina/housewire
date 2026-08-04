@@ -833,6 +833,45 @@ def create_app(site_root: Path | None = None) -> Any:
         except (ValueError, FileExistsError, FileNotFoundError) as exc:
             raise HTTPException(400, str(exc)) from exc
 
+    @app.post("/api/insert/catalog-item")
+    async def api_insert_catalog_item(request: Request) -> dict[str, Any]:
+        from housewire.site.recipe_actions import insert_catalog_item
+
+        body = await _json_body(request)
+        location_id = str(body.get("location_id") or ".").strip() or "."
+        place_id = str(body.get("place_id") or ".").strip() or "."
+        type_id = str(body.get("type_id") or "").strip()
+        if not type_id:
+            raise HTTPException(400, "type_id is required")
+        depth = _depth_from(body)
+        try:
+            _preload_location(location_id)
+            _begin_edit()
+            result = insert_catalog_item(
+                _session(),
+                canvas_location_id=location_id,
+                place_id=place_id,
+                type_id=type_id,
+                subtype=body.get("subtype"),
+                name=body.get("name"),
+                label=body.get("label"),
+                notes=body.get("notes"),
+                x=body.get("x"),
+                y=body.get("y"),
+                w=body.get("w"),
+                h=body.get("h"),
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        meta = _end_edit()
+        return {
+            "result": result,
+            "graph": _graph(location_id, depth),
+            **meta,
+        }
+
     @app.post("/api/save")
     def api_save() -> dict[str, Any]:
         session = _session()
