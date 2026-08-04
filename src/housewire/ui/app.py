@@ -416,6 +416,98 @@ def create_app(site_root: Path | None = None) -> Any:
             **meta,
         }
 
+    @app.post("/api/edit/copy")
+    async def api_edit_copy(request: Request) -> dict[str, Any]:
+        from housewire.site.clipboard import pack_selection
+
+        payload = await _json_body(request)
+        raw_ids = payload.get("ids") or []
+        if not isinstance(raw_ids, list) or not raw_ids:
+            raise HTTPException(400, "ids must be a non-empty list")
+        ids = [str(x).strip() for x in raw_ids if str(x).strip()]
+        if not ids:
+            raise HTTPException(400, "ids must be a non-empty list")
+        session = _session()
+        try:
+            _path, doc = session.ensure_doc(_site_yaml())
+            clip = pack_selection(doc, ids)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return {"payload": clip}
+
+    @app.post("/api/edit/cut")
+    async def api_edit_cut(request: Request) -> dict[str, Any]:
+        from housewire.site.clipboard import pack_selection
+        from housewire.site.delete_selection import (
+            delete_selection,
+            suggest_location_after_delete,
+        )
+
+        payload = await _json_body(request)
+        raw_ids = payload.get("ids") or []
+        if not isinstance(raw_ids, list) or not raw_ids:
+            raise HTTPException(400, "ids must be a non-empty list")
+        ids = [str(x).strip() for x in raw_ids if str(x).strip()]
+        if not ids:
+            raise HTTPException(400, "ids must be a non-empty list")
+        location_id = str(payload.get("location_id") or ".").strip() or "."
+        depth = _depth_from(payload)
+        session = _session()
+        try:
+            _preload_location(location_id)
+            _begin_edit()
+            _path, doc = session.ensure_doc(_site_yaml())
+            clip = pack_selection(doc, ids)
+            result = delete_selection(doc, ids)
+            session.mark_dirty(_site_yaml())
+            meta = _end_edit()
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        new_location = suggest_location_after_delete(
+            location_id, deleted_places=result.deleted_places
+        )
+        return {
+            "payload": clip,
+            "deleted": result.deleted,
+            "location": new_location,
+            "graph": _graph(new_location, depth),
+            **meta,
+        }
+
+    @app.post("/api/edit/paste")
+    async def api_edit_paste(request: Request) -> dict[str, Any]:
+        from housewire.site.clipboard import paste_payload
+
+        body = await _json_body(request)
+        parent_id = str(body.get("parent_id") or ".").strip() or "."
+        clip = body.get("payload")
+        if not isinstance(clip, dict):
+            raise HTTPException(400, "payload must be an object")
+        location_id = str(body.get("location_id") or ".").strip() or "."
+        depth = _depth_from(body)
+        session = _session()
+        try:
+            _preload_location(location_id)
+            _begin_edit()
+            _path, doc = session.ensure_doc(_site_yaml())
+            result = paste_payload(doc, parent_id=parent_id, payload=clip)
+            session.mark_dirty(_site_yaml())
+            meta = _end_edit()
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return {
+            "created": result.created,
+            "renamed": result.renamed,
+            "graph": _graph(location_id, depth),
+            **meta,
+        }
+
     @app.post("/api/physical/auto-layout")
     async def api_auto_layout(request: Request) -> dict[str, Any]:
         payload = await _json_body(request)

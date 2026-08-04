@@ -626,6 +626,20 @@ places/elements and their nested subtrees in one undoable edit:
 Shell `rm element` remains strict (refuses when conductors still reference the
 target). Cascade delete is a UI/API operation (`POST /api/edit/delete`).
 
+### Cut / Copy / Paste (UI)
+
+**Edit → Cut / Copy / Paste** (`Ctrl+X` / `Ctrl+C` / `Ctrl+V`) use the same
+selection scope as Delete (places/elements). Clipboard is in-browser memory.
+
+- **Copy** packs the subtree; internal links stay intact; cross-boundary
+  conductors become open-run stubs on the selected side; broken conduits are
+  omitted.
+- **Cut** packs then cascade-deletes in one undo step.
+- **Paste** inserts under the selected place (or the common parent of selected
+  elements; else the current canvas place). Colliding sibling ids rename
+  (`Interruptor` → `Interruptor_1`, `Interruptor_1` → `Interruptor_2`).
+- Outline siblings use **natural sort** (`Interruptor_2` before `Interruptor_10`).
+
 ## Drawing (UI)
 
 - In conduit segments: show the Conduit path; nest Cable sheaths and Conductors

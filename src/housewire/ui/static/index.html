@@ -58,6 +58,18 @@
           <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-history"></use></svg><span>Reset</span></span>
         </button>
         <hr class="menu-sep" />
+        <button type="button" role="menuitem" data-edit-action="cut" id="menu-cut" disabled>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-scissors"></use></svg><span>Cut</span></span>
+          <span class="menu-shortcut">Ctrl+X</span>
+        </button>
+        <button type="button" role="menuitem" data-edit-action="copy" id="menu-copy" disabled>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-copy"></use></svg><span>Copy</span></span>
+          <span class="menu-shortcut">Ctrl+C</span>
+        </button>
+        <button type="button" role="menuitem" data-edit-action="paste" id="menu-paste" disabled>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-clipboard-paste"></use></svg><span>Paste</span></span>
+          <span class="menu-shortcut">Ctrl+V</span>
+        </button>
         <button type="button" role="menuitem" data-edit-action="delete" id="menu-delete" disabled>
           <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-trash-2"></use></svg><span>Delete</span></span>
           <span class="menu-shortcut">Del</span>
@@ -170,6 +182,15 @@
       </button>
       <button type="button" class="tool-btn" id="btn-layout-reset" title="Reset edits" aria-label="Reset edits" disabled>
         <svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-history"></use></svg>
+      </button>
+      <button type="button" class="tool-btn" id="btn-cut" title="Cut (Ctrl+X)" aria-label="Cut" disabled>
+        <svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-scissors"></use></svg>
+      </button>
+      <button type="button" class="tool-btn" id="btn-copy" title="Copy (Ctrl+C)" aria-label="Copy" disabled>
+        <svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-copy"></use></svg>
+      </button>
+      <button type="button" class="tool-btn" id="btn-paste" title="Paste (Ctrl+V)" aria-label="Paste" disabled>
+        <svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-clipboard-paste"></use></svg>
       </button>
       <button type="button" class="tool-btn" id="btn-delete" title="Delete (Del)" aria-label="Delete" disabled>
         <svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-trash-2"></use></svg>

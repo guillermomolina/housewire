@@ -24,6 +24,7 @@ tabs. The last location/depth per open file is remembered while switching tabs.
 | Save as… | Browser/OS save picker; opens the copy as another tab |
 | Close / tab × | Close that document (prompt if dirty) |
 | Edit → Delete | Cascade-delete selected places/elements (`Del` / Backspace); cross-boundary cables become open runs |
+| Edit → Cut / Copy / Paste | Clipboard pack of selection (`Ctrl+X`/`C`/`V`); paste under selected place with id rename |
 
 ```text
 Workspace
@@ -43,6 +44,9 @@ Workspace
 - `POST /api/workspace/save-as` — `{ "path": "…" }` duplicate site tree as a new tab
 - `POST /api/save` — save active document; returns YAML text for client write-back
 - `POST /api/edit/delete` — `{ "ids": ["Place/…"], "location_id"?, "depth"? }` cascade delete selection
+- `POST /api/edit/copy` — `{ "ids": […] }` pack selection (no mutation)
+- `POST /api/edit/cut` — pack + cascade delete (one undo)
+- `POST /api/edit/paste` — `{ "parent_id", "payload", "location_id"?, "depth"? }`
 
 `housewire serve $SITE` may start with one site on disk; File → Open adds more
 tabs beside it.

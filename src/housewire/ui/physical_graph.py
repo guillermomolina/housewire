@@ -147,11 +147,13 @@ def _iter_electrical_elements(
     doc: dict[str, Any],
 ) -> list[tuple[str, dict[str, Any]]]:
     """Non-place entries under ``elements:`` (Socket, TerminalStrip, …)."""
+    from housewire.site.natural_sort import natural_sort_key
+
     raw = doc.get("elements") or {}
     if not isinstance(raw, dict):
         return []
     out: list[tuple[str, dict[str, Any]]] = []
-    for name, defn in sorted(raw.items(), key=lambda kv: str(kv[0]).lower()):
+    for name, defn in sorted(raw.items(), key=lambda kv: natural_sort_key(str(kv[0]))):
         if not isinstance(defn, dict):
             continue
         type_id = defn.get("type")
@@ -742,8 +744,10 @@ def list_canvas_locations(
                 parent_key = None
         children.setdefault(parent_key, []).append(loc_id)
 
+    from housewire.site.natural_sort import natural_sort_key
+
     for kids in children.values():
-        kids.sort(key=lambda i: places[i]["display_name"].lower())
+        kids.sort(key=lambda i: natural_sort_key(places[i]["display_name"]))
 
     rows: list[dict[str, Any]] = []
 
@@ -896,8 +900,10 @@ def list_site_outline(
                 parent_key = None
         children.setdefault(parent_key, []).append(loc_id)
 
+    from housewire.site.natural_sort import natural_sort_key
+
     for kids in children.values():
-        kids.sort(key=lambda i: places[i]["display_name"].lower())
+        kids.sort(key=lambda i: natural_sort_key(places[i]["display_name"]))
 
     rows: list[dict[str, Any]] = []
 

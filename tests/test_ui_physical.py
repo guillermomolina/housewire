@@ -1083,6 +1083,60 @@ class TestServeApi(unittest.TestCase):
             self.assertNotIn("Box_A", node_ids)
             self.assertIn("Box_B", node_ids)
 
+    def test_edit_copy_cut_paste(self) -> None:
+        try:
+            from fastapi.testclient import TestClient
+        except (ImportError, RuntimeError):
+            self.skipTest("fastapi/httpx not installed")
+
+        from housewire.ui.app import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = init_site(root, type_id="House", label="Site")
+            add_place(doc, "Room", type_id="Room", label="Room")
+            add_place(
+                doc, "Box", under=("Room",), type_id="JunctionBox", label="Box"
+            )
+            save_site(root, doc)
+
+            client = TestClient(create_app(root))
+            client.get("/api/physical?location=Room&depth=1")
+            copied = client.post(
+                "/api/edit/copy",
+                json={"ids": ["Room/Box"]},
+            )
+            self.assertEqual(copied.status_code, 200, copied.text)
+            payload = copied.json()["payload"]
+            self.assertEqual(len(payload.get("items") or []), 1)
+
+            pasted = client.post(
+                "/api/edit/paste",
+                json={
+                    "parent_id": "Room",
+                    "payload": payload,
+                    "location_id": "Room",
+                    "depth": 1,
+                },
+            )
+            self.assertEqual(pasted.status_code, 200, pasted.text)
+            self.assertTrue(pasted.json().get("dirty"))
+            created = pasted.json().get("created") or []
+            self.assertTrue(any("Box_1" in c for c in created), created)
+
+            cut = client.post(
+                "/api/edit/cut",
+                json={
+                    "ids": ["Room/Box_1"],
+                    "location_id": "Room",
+                    "depth": 1,
+                },
+            )
+            self.assertEqual(cut.status_code, 200, cut.text)
+            self.assertTrue(cut.json().get("payload"))
+            node_ids = {n["id"] for n in cut.json()["graph"]["nodes"]}
+            self.assertNotIn("Box_1", node_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

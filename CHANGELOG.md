@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.48.0] — 2026-08-04
+
+### Added
+
+- UI **Cut / Copy / Paste** (Edit menu, toolbar, ``Ctrl+X``/``C``/``V``): pack
+  selected places/elements with internal links; cross-boundary conductors become
+  open-run stubs; paste under the focused place with numeric id collision
+  renaming. Outline uses natural sort for sibling names.
+
 ## [0.47.0] — 2026-08-04
 
 ### Added

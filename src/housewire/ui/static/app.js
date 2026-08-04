@@ -74,6 +74,8 @@
   let canUndo = false;
   let canRedo = false;
   let canReset = false;
+  /** In-memory Cut/Copy payload from POST /api/edit/copy|cut. */
+  let editClipboard = null;
   /** Session default: physical places/conduits only (no elements/cables). */
   let showElectrical = false;
   let outlineNodes = [];
@@ -518,6 +520,165 @@
     if (changed) saveCollapsedOutline();
   }
 
+  function updateDeleteButtons() {
+    const hasSel = hasDocument && selectedIds.size >= 1;
+    for (const id of ["btn-delete", "menu-delete", "btn-cut", "menu-cut", "btn-copy", "menu-copy"]) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !hasSel;
+    }
+    const canPaste = hasDocument && Boolean(editClipboard);
+    for (const id of ["btn-paste", "menu-paste"]) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !canPaste;
+    }
+  }
+
+  function selectedSiteIds() {
+    return [...selectedIds]
+      .map((id) => canvasToSiteId(id))
+      .filter((id) => id && id !== ".");
+  }
+
+  /** Paste parent site id, or null if selection is ambiguous. */
+  function resolvePasteParentSiteId() {
+    if (!selectedIds.size) return locationId || ".";
+    const placeSites = [];
+    const elemParents = [];
+    const placeById = Object.fromEntries(
+      (graph?.nodes || []).map((n) => [n.id, n])
+    );
+    const elemById = Object.fromEntries(
+      (graph?.elements || []).map((e) => [e.id, e])
+    );
+    for (const id of selectedIds) {
+      if (placeById[id]) {
+        placeSites.push(canvasToSiteId(id));
+        continue;
+      }
+      const elem = elemById[id];
+      if (elem) {
+        const parentRel = elem.parent;
+        if (parentRel == null || parentRel === "" || parentRel === ".") {
+          elemParents.push(locationId || ".");
+        } else {
+          elemParents.push(canvasToSiteId(parentRel));
+        }
+      }
+    }
+    if (placeSites.length && elemParents.length) return null;
+    if (placeSites.length > 1) return null;
+    if (placeSites.length === 1) return placeSites[0];
+    if (elemParents.length) {
+      const uniq = [...new Set(elemParents)];
+      if (uniq.length !== 1) return null;
+      return uniq[0];
+    }
+    return locationId || ".";
+  }
+
+  async function copySelection() {
+    if (!hasDocument || selectedIds.size < 1) return;
+    const siteIds = selectedSiteIds();
+    if (!siteIds.length) {
+      setStatus("Cannot copy the site root");
+      return;
+    }
+    const res = await api("/api/edit/copy", {
+      method: "POST",
+      body: JSON.stringify({ ids: siteIds }),
+    });
+    editClipboard = res.payload || null;
+    updateDeleteButtons();
+    const n = (editClipboard?.items || []).length;
+    setStatus(`copied ${n} item(s)`);
+  }
+
+  async function cutSelection() {
+    if (!hasDocument || !locationId || selectedIds.size < 1) return;
+    const siteIds = selectedSiteIds();
+    if (!siteIds.length) {
+      setStatus("Cannot cut the site root");
+      return;
+    }
+    const res = await api("/api/edit/cut", {
+      method: "POST",
+      body: JSON.stringify({
+        ids: siteIds,
+        location_id: locationId,
+        depth: depthLevel,
+      }),
+    });
+    editClipboard = res.payload || null;
+    updateDeleteButtons();
+    pruneCollapsedOutline(res.deleted || siteIds);
+    clearSelectionState();
+    setSelectedVisual();
+    const newLoc = res.location || locationId;
+    if (newLoc !== locationId) {
+      locationId = newLoc;
+      rememberCurrentDocView();
+      if (res.graph) {
+        graph = res.graph;
+        depthLevel = graph.depth || depthLevel;
+        maxDepth = graph.max_depth || maxDepth;
+        render();
+      } else {
+        await loadLocation({ fit: false });
+      }
+    } else if (res.graph) {
+      graph = res.graph;
+      depthLevel = graph.depth || depthLevel;
+      maxDepth = graph.max_depth || maxDepth;
+      render();
+    }
+    applyEditFlags(res);
+    await loadOutline();
+    await syncInspectorFromSelection();
+    const count = (res.deleted || siteIds).length;
+    setStatus(`cut ${count} item(s) · unsaved`);
+    scheduleStatusRefresh();
+  }
+
+  async function pasteClipboard() {
+    if (!hasDocument || !locationId || !editClipboard) return;
+    const parentId = resolvePasteParentSiteId();
+    if (parentId == null) {
+      setStatus("Select one place (or elements under the same parent) to paste into");
+      return;
+    }
+    const res = await api("/api/edit/paste", {
+      method: "POST",
+      body: JSON.stringify({
+        parent_id: parentId,
+        payload: editClipboard,
+        location_id: locationId,
+        depth: depthLevel,
+      }),
+    });
+    if (res.graph) {
+      graph = res.graph;
+      depthLevel = graph.depth || depthLevel;
+      maxDepth = graph.max_depth || maxDepth;
+      render();
+    }
+    applyEditFlags(res);
+    expandOutlineAncestors(parentId);
+    await loadOutline();
+    const created = res.created || [];
+    const relIds = created
+      .map((id) => siteToCanvasRelative(id))
+      .filter((id) => id);
+    if (relIds.length) {
+      commitSelection(new Set(relIds), relIds[0]);
+    } else {
+      clearSelectionState();
+      setSelectedVisual();
+    }
+    await syncInspectorFromSelection();
+    setStatus(`pasted ${created.length || (editClipboard.items || []).length} item(s) · unsaved`);
+    scheduleStatusRefresh();
+  }
+
   async function deleteSelection() {
     if (!hasDocument || !locationId || selectedIds.size < 1) return;
     const siteIds = [...selectedIds]
@@ -827,14 +988,6 @@
     selectedIds.clear();
     selectedId = null;
     updateDeleteButtons();
-  }
-
-  function updateDeleteButtons() {
-    const enabled = hasDocument && selectedIds.size >= 1;
-    for (const id of ["btn-delete", "menu-delete"]) {
-      const el = document.getElementById(id);
-      if (el) el.disabled = !enabled;
-    }
   }
 
   function setSelectedVisual() {
@@ -8854,6 +9007,15 @@
   document.getElementById("btn-delete")?.addEventListener("click", () => {
     deleteSelection().catch((err) => setStatus(String(err.message || err)));
   });
+  document.getElementById("btn-cut")?.addEventListener("click", () => {
+    cutSelection().catch((err) => setStatus(String(err.message || err)));
+  });
+  document.getElementById("btn-copy")?.addEventListener("click", () => {
+    copySelection().catch((err) => setStatus(String(err.message || err)));
+  });
+  document.getElementById("btn-paste")?.addEventListener("click", () => {
+    pasteClipboard().catch((err) => setStatus(String(err.message || err)));
+  });
 
   document.addEventListener("keydown", (ev) => {
     if (isEditableFocus(ev.target)) return;
@@ -8879,6 +9041,21 @@
     if (key === "o") {
       ev.preventDefault();
       fileOpen().catch((err) => setStatus(String(err.message || err)));
+      return;
+    }
+    if (key === "x") {
+      ev.preventDefault();
+      cutSelection().catch((err) => setStatus(String(err.message || err)));
+      return;
+    }
+    if (key === "c") {
+      ev.preventDefault();
+      copySelection().catch((err) => setStatus(String(err.message || err)));
+      return;
+    }
+    if (key === "v") {
+      ev.preventDefault();
+      pasteClipboard().catch((err) => setStatus(String(err.message || err)));
       return;
     }
     if (key === "z" && !ev.shiftKey) {
@@ -9033,6 +9210,12 @@
         redoEdit().catch((err) => setStatus(String(err.message || err)));
       } else if (action === "reset") {
         resetEdits().catch((err) => setStatus(String(err.message || err)));
+      } else if (action === "cut") {
+        cutSelection().catch((err) => setStatus(String(err.message || err)));
+      } else if (action === "copy") {
+        copySelection().catch((err) => setStatus(String(err.message || err)));
+      } else if (action === "paste") {
+        pasteClipboard().catch((err) => setStatus(String(err.message || err)));
       } else if (action === "delete") {
         deleteSelection().catch((err) => setStatus(String(err.message || err)));
       } else if (action === "auto-layout") {
