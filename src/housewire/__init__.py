@@ -1,7 +1,7 @@
 """HouseWire — document home electrical installations (UI + shell)."""
 
 __title__ = "HouseWire"
-__version__ = "0.49.5"
+__version__ = "0.50.0"
 __author__ = "Guillermo Adrián Molina"
 __license__ = "SSPL-1.0"
 __copyright__ = "Copyright (c) 2026 Guillermo Adrián Molina"

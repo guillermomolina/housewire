@@ -453,18 +453,27 @@ def catalog_type_label(
     *,
     catalog: dict[str, dict[str, Any]] | None = None,
     subtype: str | None = None,
+    locale: str | None = None,
 ) -> str:
     """Human type name for UI: catalog ``label`` / ``name`` (legacy ``title``).
 
-    Falls back to the type id when the catalog has no display string.
+    When ``locale`` is ``es`` and ``label_es`` is set, that wins. Falls back to
+    the type id when the catalog has no display string.
     """
+    from housewire.i18n import normalize_locale
+
     tid = str(type_id or "").strip()
     cat = catalog if catalog is not None else load_catalog()
     type_def = cat.get(tid)
     if not isinstance(type_def, dict):
         return tid or "?"
+    loc = normalize_locale(locale) if locale is not None else "en"
 
     def _pick(row: dict[str, Any]) -> str | None:
+        if loc == "es":
+            raw_es = row.get("label_es")
+            if raw_es is not None and str(raw_es).strip():
+                return str(raw_es).strip()
         for key in ("label", "name", "title"):
             raw = row.get(key)
             if raw is not None and str(raw).strip():

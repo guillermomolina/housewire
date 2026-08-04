@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.50.0] — 2026-08-04
+
+### Added
+
+- UI locale **en** / **es**: browser detection, ``View → Language``,
+  ``localStorage`` key ``housewire-locale``, and ``lang`` /
+  ``Accept-Language`` on API requests so outline/catalog type labels and
+  paste placeholders (``Unnamed`` / ``Sin nombre``, etc.) follow the
+  active language.
+
 ## [0.49.5] — 2026-08-04
 
 ### Fixed

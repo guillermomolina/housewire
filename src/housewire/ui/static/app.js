@@ -3,6 +3,13 @@
   const depthLabel = document.getElementById("depth-label");
   const statusEl = document.getElementById("status");
   const viewport = document.getElementById("viewport");
+  const I18n = window.HouseWireI18n || {
+    t: (k) => k,
+    getLocale: () => "en",
+    setLocale: () => "en",
+    applyDomTranslations: () => {},
+  };
+  const t = (key, vars) => I18n.t(key, vars);
 
   const LEAF_W = 120;
   const LEAF_H = 56;
@@ -666,7 +673,7 @@
     if (!hasDocument || selectedIds.size < 1) return;
     const siteIds = selectedSiteIds();
     if (!siteIds.length) {
-      setStatus("Cannot copy the site root");
+      setStatus(t("status.cannotCopyRoot"));
       return;
     }
     const res = await api("/api/edit/copy", {
@@ -679,14 +686,14 @@
     // Keep the source selected so Paste duplicates as a sibling.
     highlightOutlineSelection();
     const n = (editClipboard?.items || []).length;
-    setStatus(`copied ${n} item(s) · selection kept`);
+    setStatus(t("status.copied", { n }));
   }
 
   async function cutSelection() {
     if (!hasDocument || !locationId || selectedIds.size < 1) return;
     const siteIds = selectedSiteIds();
     if (!siteIds.length) {
-      setStatus("Cannot cut the site root");
+      setStatus(t("status.cannotCutRoot"));
       return;
     }
     const res = await api("/api/edit/cut", {
@@ -725,7 +732,7 @@
     await loadOutline();
     await syncInspectorFromSelection();
     const count = (res.deleted || siteIds).length;
-    setStatus(`cut ${count} item(s) · paste returns to source · unsaved`);
+    setStatus(t("status.cut", { n: count }));
     scheduleStatusRefresh();
   }
 
@@ -733,7 +740,7 @@
     if (!hasDocument || !locationId || !editClipboard) return;
     const parentId = resolvePasteParentSiteId();
     if (parentId == null) {
-      setStatus("Select one place (or elements under the same parent) to paste into");
+      setStatus(t("status.pasteNeedParent"));
       return;
     }
     const mode = editClipboardMode;
@@ -743,6 +750,7 @@
         parent_id: parentId,
         payload: editClipboard,
         mode: mode || "copy",
+        lang: I18n.getLocale ? I18n.getLocale() : "en",
         location_id: locationId,
         depth: depthLevel,
       }),
@@ -770,17 +778,7 @@
     }
     await syncInspectorFromSelection();
     const n = created.length || (editClipboard.items || []).length;
-    const hint =
-      mode === "copy"
-        ? "sibling duplicate"
-        : mode === "cut"
-          ? "at source (open runs if severed)"
-          : "";
-    setStatus(
-      hint
-        ? `pasted ${n} item(s) · ${hint} · unsaved`
-        : `pasted ${n} item(s) · unsaved`
-    );
+    setStatus(t("status.pasted", { n }));
     scheduleStatusRefresh();
   }
 
@@ -790,7 +788,7 @@
       .map((id) => canvasToSiteId(id))
       .filter((id) => id && id !== ".");
     if (!siteIds.length) {
-      setStatus("Cannot delete the site root");
+      setStatus(t("status.cannotDeleteRoot"));
       return;
     }
     const n = siteIds.length;
@@ -886,9 +884,19 @@
   }
 
   async function api(path, options) {
-    const res = await fetch(path, {
-      headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
+    const locale = I18n.getLocale ? I18n.getLocale() : "en";
+    const headers = {
+      "Content-Type": "application/json",
+      "Accept-Language": locale,
+      ...(options?.headers || {}),
+    };
+    let url = path;
+    if (url.indexOf("lang=") < 0) {
+      url += (url.indexOf("?") >= 0 ? "&" : "?") + "lang=" + encodeURIComponent(locale);
+    }
+    const res = await fetch(url, {
       ...options,
+      headers,
     });
     if (!res.ok) {
       const body = await res.text();
@@ -8121,8 +8129,8 @@
           applyEditFlags(lastMeta);
           setStatus(
             lastMeta && lastMeta.dirty
-              ? "Resized place · unsaved"
-              : "Resized place"
+              ? t("status.resizedPlaceUnsaved")
+              : t("status.resizedPlace")
           );
         } else {
           const ids = new Set([finished.targetId, ...norm.shiftedElems]);
@@ -8165,8 +8173,8 @@
           applyEditFlags(lastMeta);
           setStatus(
             lastMeta && lastMeta.dirty
-              ? "Resized element · unsaved"
-              : "Resized element"
+              ? t("status.resizedElementUnsaved")
+              : t("status.resizedElement")
           );
         }
         scheduleStatusRefresh();
@@ -8302,8 +8310,8 @@
         Object.keys(placePositions).length + Object.keys(elemPositions).length;
       setStatus(
         lastMeta && lastMeta.dirty
-          ? `Moved ${n} · unsaved`
-          : `Moved ${n}`
+          ? t("status.movedUnsaved", { n })
+          : t("status.moved", { n })
       );
       scheduleStatusRefresh();
     } catch (err) {
@@ -8503,7 +8511,11 @@
       const n = (st.dirty || []).length;
       const dirty = n > 0 || dirtyLocal;
       setStatus(
-        n ? `${n} dirty file(s)` : dirtyLocal ? "layout pending" : "saved"
+        n
+          ? t("status.dirty", { n })
+          : dirtyLocal
+            ? t("status.layoutPending")
+            : t("status.savedOk")
       );
       updateFileMenuState({ dirty });
     } catch {
@@ -8520,7 +8532,7 @@
     // here — that triggers the browser "allow edit" permission aviso. OS Open /
     // Save As pickers remain available; Save persists via the housewire server.
     const data = await api("/api/save", { method: "POST", body: "{}" });
-    setStatus(`saved ${(data.saved || []).length} file(s)`);
+    setStatus(t("status.saved", { n: (data.saved || []).length }));
     applyEditFlags(data);
     dirtyLocal = false;
     updateSaveButton(false);
@@ -9735,6 +9747,28 @@
     if (light) light.setAttribute("aria-checked", theme === "light" ? "true" : "false");
   }
 
+  function syncLanguageMenu() {
+    const loc = I18n.getLocale ? I18n.getLocale() : "en";
+    const en = document.getElementById("menu-lang-en");
+    const es = document.getElementById("menu-lang-es");
+    if (en) en.setAttribute("aria-checked", loc === "en" ? "true" : "false");
+    if (es) es.setAttribute("aria-checked", loc === "es" ? "true" : "false");
+  }
+
+  async function setUiLocale(next) {
+    I18n.setLocale(next);
+    syncLanguageMenu();
+    if (hasDocument && locationId) {
+      try {
+        await loadGraph();
+        await loadOutline();
+        await syncInspectorFromSelection();
+      } catch (err) {
+        setStatus(String(err.message || err));
+      }
+    }
+  }
+
   function setTheme(theme) {
     const next = theme === "light" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
@@ -9763,6 +9797,13 @@
         setTheme(action === "theme-light" ? "light" : "dark");
         return;
       }
+      if (action === "lang-en" || action === "lang-es") {
+        closeAllMenus();
+        setUiLocale(action === "lang-es" ? "es" : "en").catch((err) =>
+          setStatus(String(err.message || err))
+        );
+        return;
+      }
       closeAllMenus();
       if (action === "zoom-in") zoomIn();
       else if (action === "zoom-out") zoomOut();
@@ -9777,9 +9818,25 @@
         );
       }
     });
+
+    const languageHost = menuView.querySelector("#menu-language-btn")
+      ? menuView.querySelector("#menu-language-btn").closest(".menu-item-submenu")
+      : null;
+    if (languageHost) {
+      languageHost.addEventListener("mouseenter", () => {
+        const flyout = languageHost.querySelector(".menu-flyout");
+        const trigger = languageHost.querySelector(".menu-submenu-trigger");
+        if (!flyout || !trigger) return;
+        flyout.classList.remove("hidden");
+        languageHost.classList.add("is-open");
+        trigger.setAttribute("aria-expanded", "true");
+      });
+    }
   }
 
   syncThemeMenu();
+  syncLanguageMenu();
+  I18n.applyDomTranslations();
 
   function closeAboutModal() {
     const modal = document.getElementById("about-modal");

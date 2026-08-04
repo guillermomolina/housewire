@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -13,70 +13,82 @@
       } catch (e) {
         document.documentElement.setAttribute("data-theme", "dark");
       }
+      try {
+        var loc = localStorage.getItem("housewire-locale");
+        if (!loc) {
+          var nav = (navigator.languages && navigator.languages[0]) || navigator.language || "en";
+          loc = String(nav).toLowerCase().indexOf("es") === 0 ? "es" : "en";
+        } else {
+          loc = String(loc).toLowerCase().indexOf("es") === 0 ? "es" : "en";
+        }
+        document.documentElement.setAttribute("lang", loc);
+      } catch (e) {
+        document.documentElement.setAttribute("lang", "en");
+      }
     })();
   </script>
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/static/app.css?v=__VERSION__" />
 </head>
 <body>
-  <nav class="menubar" aria-label="Application">
+  <nav class="menubar" aria-label="Application" data-i18n-aria="app.aria">
     <a class="brand" href="/" title="HouseWire">
       <img class="brand-logo" src="/static/logo.svg" width="22" height="22" alt="" />
       <span class="brand-text">HouseWire</span>
     </a>
     <div class="menu" data-menu="file">
-      <button type="button" class="menu-btn" id="menu-file-btn" aria-haspopup="true" aria-expanded="false">File</button>
+      <button type="button" class="menu-btn" id="menu-file-btn" aria-haspopup="true" aria-expanded="false"><span data-i18n="menu.file">File</span></button>
       <div class="menu-dropdown hidden" id="menu-file" role="menu">
         <button type="button" role="menuitem" data-file-action="open">
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-folder-open"></use></svg><span>Open…</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-folder-open"></use></svg><span data-i18n="menu.file.open">Open…</span></span>
           <span class="menu-shortcut">Ctrl+O</span>
         </button>
         <button type="button" role="menuitem" data-file-action="save" id="menu-save" disabled>
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-save"></use></svg><span>Save</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-save"></use></svg><span data-i18n="menu.file.save">Save</span></span>
           <span class="menu-shortcut">Ctrl+S</span>
         </button>
         <button type="button" role="menuitem" data-file-action="save-as" id="menu-save-as" disabled>
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-file-output"></use></svg><span>Save as…</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-file-output"></use></svg><span data-i18n="menu.file.saveAs">Save as…</span></span>
         </button>
         <button type="button" role="menuitem" data-file-action="close" id="menu-close" disabled>
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-x"></use></svg><span>Close</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-x"></use></svg><span data-i18n="menu.file.close">Close</span></span>
         </button>
       </div>
     </div>
     <div class="menu" data-menu="edit">
-      <button type="button" class="menu-btn" id="menu-edit-btn" aria-haspopup="true" aria-expanded="false">Edit</button>
+      <button type="button" class="menu-btn" id="menu-edit-btn" aria-haspopup="true" aria-expanded="false"><span data-i18n="menu.edit">Edit</span></button>
       <div class="menu-dropdown hidden" id="menu-edit" role="menu">
         <button type="button" role="menuitem" data-edit-action="undo" id="menu-undo" disabled>
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-undo-2"></use></svg><span>Undo</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-undo-2"></use></svg><span data-i18n="menu.edit.undo">Undo</span></span>
           <span class="menu-shortcut">Ctrl+Z</span>
         </button>
         <button type="button" role="menuitem" data-edit-action="redo" id="menu-redo" disabled>
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-redo-2"></use></svg><span>Redo</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-redo-2"></use></svg><span data-i18n="menu.edit.redo">Redo</span></span>
           <span class="menu-shortcut">Ctrl+Y</span>
         </button>
         <button type="button" role="menuitem" data-edit-action="reset" id="menu-layout-reset" disabled>
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-history"></use></svg><span>Reset</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-history"></use></svg><span data-i18n="menu.edit.reset">Reset</span></span>
         </button>
         <hr class="menu-sep" />
         <button type="button" role="menuitem" data-edit-action="cut" id="menu-cut" disabled>
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-scissors"></use></svg><span>Cut</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-scissors"></use></svg><span data-i18n="menu.edit.cut">Cut</span></span>
           <span class="menu-shortcut">Ctrl+X</span>
         </button>
         <button type="button" role="menuitem" data-edit-action="copy" id="menu-copy" disabled>
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-copy"></use></svg><span>Copy</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-copy"></use></svg><span data-i18n="menu.edit.copy">Copy</span></span>
           <span class="menu-shortcut">Ctrl+C</span>
         </button>
         <button type="button" role="menuitem" data-edit-action="paste" id="menu-paste" disabled>
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-clipboard-paste"></use></svg><span>Paste</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-clipboard-paste"></use></svg><span data-i18n="menu.edit.paste">Paste</span></span>
           <span class="menu-shortcut">Ctrl+V</span>
         </button>
         <button type="button" role="menuitem" data-edit-action="delete" id="menu-delete" disabled>
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-trash-2"></use></svg><span>Delete</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-trash-2"></use></svg><span data-i18n="menu.edit.delete">Delete</span></span>
           <span class="menu-shortcut">Del</span>
         </button>
         <hr class="menu-sep" />
         <button type="button" role="menuitem" data-edit-action="auto-layout" id="menu-auto-layout">
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-layout-grid"></use></svg><span>Auto-layout</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-layout-grid"></use></svg><span data-i18n="menu.edit.autoLayout">Auto-layout</span></span>
         </button>
         <hr class="menu-sep" />
         <div class="menu-item-submenu">
@@ -88,76 +100,100 @@
             aria-expanded="false"
             aria-controls="menu-insert"
           >
-            <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg><span>Insert</span></span>
+            <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg><span data-i18n="menu.edit.insert">Insert</span></span>
             <span class="menu-caret" aria-hidden="true"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-chevron-right"></use></svg></span>
           </button>
           <div class="menu-flyout hidden" id="menu-insert" role="menu">
             <button type="button" role="menuitem" data-insert-action="socket">
-              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-plug"></use></svg><span>Socket…</span></span>
+              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-plug"></use></svg><span data-i18n="menu.insert.socket">Socket…</span></span>
             </button>
             <button type="button" role="menuitem" data-insert-action="lamp">
-              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-lightbulb"></use></svg><span>Lamp…</span></span>
+              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-lightbulb"></use></svg><span data-i18n="menu.insert.lamp">Lamp…</span></span>
             </button>
             <button type="button" role="menuitem" data-insert-action="feed">
-              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-arrow-left-right"></use></svg><span>Feed…</span></span>
+              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-arrow-left-right"></use></svg><span data-i18n="menu.insert.feed">Feed…</span></span>
             </button>
             <hr class="menu-sep" />
-            <button type="button" role="menuitem" data-insert-action="element" disabled title="Coming soon">
-              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-box"></use></svg><span>Element…</span></span>
+            <button type="button" role="menuitem" data-insert-action="element" disabled title="Coming soon" data-i18n-title="menu.insert.comingSoon">
+              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-box"></use></svg><span data-i18n="menu.insert.element">Element…</span></span>
             </button>
             <button type="button" role="menuitem" data-insert-action="cable" disabled title="Coming soon">
-              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-link"></use></svg><span>Cable…</span></span>
+              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-link"></use></svg><span data-i18n="menu.insert.cable">Cable…</span></span>
             </button>
             <button type="button" role="menuitem" data-insert-action="conduit" disabled title="Coming soon">
-              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-grip-horizontal"></use></svg><span>Conduit…</span></span>
+              <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-grip-horizontal"></use></svg><span data-i18n="menu.insert.conduit">Conduit…</span></span>
             </button>
           </div>
         </div>
       </div>
     </div>
     <div class="menu" data-menu="view">
-      <button type="button" class="menu-btn" id="menu-view-btn" aria-haspopup="true" aria-expanded="false">View</button>
+      <button type="button" class="menu-btn" id="menu-view-btn" aria-haspopup="true" aria-expanded="false"><span data-i18n="menu.view">View</span></button>
       <div class="menu-dropdown hidden" id="menu-view" role="menu">
         <button type="button" role="menuitemcheckbox" data-view-action="electrical" id="menu-electrical" aria-checked="true">
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-zap"></use></svg><span>Electrical</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-zap"></use></svg><span data-i18n="menu.view.electrical">Electrical</span></span>
           <span class="menu-check" aria-hidden="true"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
         </button>
         <hr class="menu-sep" />
         <button type="button" role="menuitemradio" data-view-action="theme-dark" id="menu-theme-dark" aria-checked="true">
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-moon"></use></svg><span>Dark mode</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-moon"></use></svg><span data-i18n="menu.view.dark">Dark mode</span></span>
           <span class="menu-check" aria-hidden="true"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
         </button>
         <button type="button" role="menuitemradio" data-view-action="theme-light" id="menu-theme-light" aria-checked="false">
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-sun"></use></svg><span>Light mode</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-sun"></use></svg><span data-i18n="menu.view.light">Light mode</span></span>
           <span class="menu-check" aria-hidden="true"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
         </button>
         <hr class="menu-sep" />
         <button type="button" role="menuitem" data-view-action="zoom-in">
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-zoom-in"></use></svg><span>Zoom in</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-zoom-in"></use></svg><span data-i18n="menu.view.zoomIn">Zoom in</span></span>
         </button>
         <button type="button" role="menuitem" data-view-action="zoom-out">
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-zoom-out"></use></svg><span>Zoom out</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-zoom-out"></use></svg><span data-i18n="menu.view.zoomOut">Zoom out</span></span>
         </button>
         <button type="button" role="menuitem" data-view-action="fit">
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-maximize-2"></use></svg><span>Fit</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-maximize-2"></use></svg><span data-i18n="menu.view.fit">Fit</span></span>
         </button>
         <p class="menu-hint" role="note">
-          Pan: Space+drag, middle-click, or drag empty canvas
+          <span data-i18n="menu.view.panHint">Pan: Space+drag, middle-click, or drag empty canvas</span>
         </p>
         <hr class="menu-sep" />
         <button type="button" role="menuitem" data-view-action="depth-in" id="menu-depth-in">
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-layers"></use></svg><span>Depth in</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-layers"></use></svg><span data-i18n="menu.view.depthIn">Depth in</span></span>
         </button>
         <button type="button" role="menuitem" data-view-action="depth-out" id="menu-depth-out">
-          <span class="menu-item-main"><svg class="hw-icon hw-icon-flip-y" aria-hidden="true" focusable="false"><use href="#icon-layers"></use></svg><span>Depth out</span></span>
+          <span class="menu-item-main"><svg class="hw-icon hw-icon-flip-y" aria-hidden="true" focusable="false"><use href="#icon-layers"></use></svg><span data-i18n="menu.view.depthOut">Depth out</span></span>
         </button>
+        <hr class="menu-sep" />
+        <div class="menu-item-submenu">
+          <button
+            type="button"
+            class="menu-submenu-trigger"
+            id="menu-language-btn"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-controls="menu-language"
+          >
+            <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-globe"></use></svg><span data-i18n="menu.view.language">Language</span></span>
+            <span class="menu-caret" aria-hidden="true"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-chevron-right"></use></svg></span>
+          </button>
+          <div class="menu-flyout hidden" id="menu-language" role="menu">
+            <button type="button" role="menuitemradio" data-view-action="lang-en" id="menu-lang-en" aria-checked="true">
+              <span class="menu-item-main"><span data-i18n="menu.view.lang.en">English</span></span>
+              <span class="menu-check" aria-hidden="true"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
+            </button>
+            <button type="button" role="menuitemradio" data-view-action="lang-es" id="menu-lang-es" aria-checked="false">
+              <span class="menu-item-main"><span data-i18n="menu.view.lang.es">Spanish</span></span>
+              <span class="menu-check" aria-hidden="true"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg></span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="menu" data-menu="help">
-      <button type="button" class="menu-btn" id="menu-help-btn" aria-haspopup="true" aria-expanded="false">Help</button>
+      <button type="button" class="menu-btn" id="menu-help-btn" aria-haspopup="true" aria-expanded="false"><span data-i18n="menu.help">Help</span></button>
       <div class="menu-dropdown hidden" id="menu-help" role="menu">
         <button type="button" role="menuitem" data-help-action="about">
-          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-info"></use></svg><span>About</span></span>
+          <span class="menu-item-main"><svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-info"></use></svg><span data-i18n="menu.help.about">About HouseWire</span></span>
         </button>
       </div>
     </div>
@@ -217,46 +253,46 @@
         <svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-minus"></use></svg>
       </button>
       <span id="depth-label" class="depth-label" title="Depth">1/1</span>
-      <button type="button" class="tool-btn" id="btn-depth-in" title="Depth in (Alt+wheel)" aria-label="Depth in">
+      <button type="button" class="tool-btn" id="btn-depth-in" title="Depth in (Alt+wheel)" data-i18n-title="tool.depthIn" aria-label="Depth in" data-i18n-aria="menu.view.depthIn">
         <svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg>
       </button>
     </div>
   </header>
-  <div id="view-tabs" class="view-tabs" role="tablist" aria-label="Open files"></div>
+  <div id="view-tabs" class="view-tabs" role="tablist" aria-label="Open files" data-i18n-aria="tabs.openFiles"></div>
   <div class="workspace">
-    <aside id="nav-tree" class="nav-tree" aria-label="Site outline">
+    <aside id="nav-tree" class="nav-tree" aria-label="Site outline" data-i18n-aria="aria.siteOutline">
       <div class="panel-head">
-        <h2>Outline</h2>
-        <button type="button" class="panel-collapse" id="btn-collapse-outline" title="Collapse outline" aria-expanded="true" aria-controls="nav-tree">«</button>
+        <h2 data-i18n="panel.outline">Outline</h2>
+        <button type="button" class="panel-collapse" id="btn-collapse-outline" title="Collapse outline" data-i18n-title="panel.outline.collapse" aria-expanded="true" aria-controls="nav-tree">«</button>
       </div>
       <div id="outline-tree" class="outline-tree panel-body"></div>
     </aside>
-    <button type="button" class="panel-expand left hidden" id="btn-expand-outline" title="Show outline" aria-controls="nav-tree">Outline</button>
+    <button type="button" class="panel-expand left hidden" id="btn-expand-outline" title="Show outline" data-i18n-title="panel.outline.show" aria-controls="nav-tree"><span data-i18n="panel.outline">Outline</span></button>
     <main id="viewport">
       <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
       <div id="marquee" class="marquee hidden" aria-hidden="true"></div>
     </main>
-    <button type="button" class="panel-expand right hidden" id="btn-expand-inspector" title="Show properties" aria-controls="side-panel">Properties</button>
+    <button type="button" class="panel-expand right hidden" id="btn-expand-inspector" title="Show properties" data-i18n-title="panel.properties.show" aria-controls="side-panel"><span data-i18n="panel.properties">Properties</span></button>
     <aside id="side-panel" class="side-panel">
       <div class="panel-head">
-        <h2>Properties</h2>
-        <button type="button" class="panel-collapse" id="btn-collapse-inspector" title="Collapse properties" aria-expanded="true" aria-controls="side-panel">»</button>
+        <h2 data-i18n="panel.properties">Properties</h2>
+        <button type="button" class="panel-collapse" id="btn-collapse-inspector" title="Collapse properties" data-i18n-title="panel.properties.collapse" aria-expanded="true" aria-controls="side-panel">»</button>
       </div>
       <div class="panel-body">
-        <div id="panel-empty" class="panel-empty">Selecciona una caja o elemento</div>
+        <div id="panel-empty" class="panel-empty" data-i18n="panel.empty">Select a box or element</div>
         <div id="panel-props" class="panel-block hidden">
-          <h3>Properties</h3>
+          <h3 data-i18n="panel.props.heading">Properties</h3>
           <dl id="props-meta" class="props-meta"></dl>
           <div id="props-elements-block">
-            <h4>Elements</h4>
+            <h4 data-i18n="panel.props.elements">Elements</h4>
             <ul id="props-elements" class="props-list"></ul>
           </div>
           <div id="props-conduits-block">
-            <h4>Conduits</h4>
+            <h4 data-i18n="panel.props.conduits">Conduits</h4>
             <ul id="props-conduits" class="props-list"></ul>
           </div>
           <div id="props-cables-block" class="hidden">
-            <h4>Cables</h4>
+            <h4 data-i18n="panel.props.cables">Cables</h4>
             <ul id="props-cables" class="props-list"></ul>
           </div>
         </div>
@@ -265,7 +301,7 @@
   </div>
   <footer class="statusbar">
     <div id="status" class="statusbar-msg" aria-live="polite"></div>
-    <div class="statusbar-zoom" title="Canvas zoom">
+    <div class="statusbar-zoom" title="Canvas zoom" data-i18n-title="status.zoom">
       <button type="button" class="statusbar-zoom-btn" id="status-zoom-out" aria-label="Zoom out">
         <svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-zoom-out"></use></svg>
       </button>
@@ -287,10 +323,10 @@
   <div id="app-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-modal-dismiss></div>
     <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="app-modal-title" aria-describedby="app-modal-message">
-      <h2 id="app-modal-title">Confirm</h2>
+      <h2 id="app-modal-title" data-i18n="modal.confirm">Confirm</h2>
       <p id="app-modal-message" class="modal-hint"></p>
       <label id="app-modal-input-wrap" class="modal-field hidden">
-        <span id="app-modal-input-label">Path</span>
+        <span id="app-modal-input-label" data-i18n="modal.path">Path</span>
         <input id="app-modal-input" type="text" autocomplete="off" spellcheck="false" />
       </label>
       <div class="modal-actions" id="app-modal-actions"></div>
@@ -306,7 +342,7 @@
     >
       <div class="modal-card-head">
         <h2 id="insert-modal-title">Insert</h2>
-        <button type="button" class="modal-close" data-insert-dismiss aria-label="Close">
+        <button type="button" class="modal-close" data-insert-dismiss aria-label="Close" data-i18n-aria="modal.close">
           <svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-x"></use></svg>
         </button>
       </div>
@@ -317,7 +353,7 @@
           <label>Strip <input name="strip" value="Regleta" required /></label>
           <label>Pins <input name="pins" placeholder="3,2,1" /></label>
           <div class="insert-form-actions">
-            <button type="button" data-insert-dismiss>Cancel</button>
+            <button type="button" data-insert-dismiss><span data-i18n="modal.cancel">Cancel</span></button>
             <button type="submit" class="primary">Add socket</button>
           </div>
         </form>
@@ -328,7 +364,7 @@
           <label>Pins <input name="pins" required placeholder="6,5,2" /></label>
           <label>To pins <input name="to_pins" placeholder="1,2,3" /></label>
           <div class="insert-form-actions">
-            <button type="button" data-insert-dismiss>Cancel</button>
+            <button type="button" data-insert-dismiss><span data-i18n="modal.cancel">Cancel</span></button>
             <button type="submit" class="primary">Add lamp</button>
           </div>
         </form>
@@ -339,7 +375,7 @@
           <label>From pin <input name="from_pin" required placeholder="Regleta.1" /></label>
           <label>To pin <input name="to_pin" required placeholder="Regleta.1" /></label>
           <div class="insert-form-actions">
-            <button type="button" data-insert-dismiss>Cancel</button>
+            <button type="button" data-insert-dismiss><span data-i18n="modal.cancel">Cancel</span></button>
             <button type="submit" class="primary">Add feed</button>
           </div>
         </form>
@@ -357,7 +393,7 @@
     >
       <div class="modal-card-head">
         <h2 id="about-modal-title">About</h2>
-        <button type="button" class="modal-close" data-about-dismiss aria-label="Close">
+        <button type="button" class="modal-close" data-about-dismiss aria-label="Close" data-i18n-aria="modal.close">
           <svg class="hw-icon" aria-hidden="true" focusable="false"><use href="#icon-x"></use></svg>
         </button>
       </div>
@@ -380,21 +416,22 @@
             <dd><a id="about-repository" href="#" target="_blank" rel="noopener noreferrer"></a></dd>
           </div>
           <div>
-            <dt>License</dt>
+            <dt data-i18n="about.license">License</dt>
             <dd id="about-license"></dd>
           </div>
           <div>
-            <dt>Copyright</dt>
+            <dt data-i18n="about.copyright">Copyright</dt>
             <dd id="about-copyright"></dd>
           </div>
         </dl>
         <div class="modal-actions">
-          <button type="button" class="primary" data-about-dismiss>Close</button>
+          <button type="button" class="primary" data-about-dismiss><span data-i18n="modal.close">Close</span></button>
         </div>
       </div>
     </div>
   </div>
   <input type="file" id="file-open-input" accept=".yaml,.yml,text/yaml,application/x-yaml" hidden />
+  <script src="/static/i18n.js?v=__VERSION__"></script>
   <script src="/static/app.js?v=__VERSION__"></script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 """FastAPI app: interactive physical location canvas."""
 
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -12,11 +13,13 @@ from housewire import (
     __title__,
     __version__,
 )
+from housewire.i18n import normalize_locale
 from housewire.site.view_layout import get_physical_page, set_physical_page
 from housewire.ui import physical_graph as pg
 from housewire.ui.workspace import Workspace, create_workspace
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+_request_locale: ContextVar[str] = ContextVar("housewire_request_locale", default="en")
 
 try:
     from fastapi import FastAPI, HTTPException, Request
@@ -66,10 +69,45 @@ def create_app(site_root: Path | None = None) -> Any:
         session.ensure_doc(_site_yaml())
         return _root()
 
-    def _graph(location_id: str, depth: int = 1) -> dict[str, Any]:
+    def _locale_from_request(
+        request: Request | None = None,
+        *,
+        body: dict[str, Any] | None = None,
+        raw: str | None = None,
+    ) -> str:
+        if raw is not None and str(raw).strip():
+            return normalize_locale(raw)
+        if body and body.get("lang") is not None:
+            return normalize_locale(body.get("lang"))
+        if request is not None:
+            q = request.query_params.get("lang")
+            if q:
+                return normalize_locale(q)
+            accept = request.headers.get("accept-language") or ""
+            if accept:
+                first = accept.split(",", 1)[0].split(";", 1)[0]
+                return normalize_locale(first)
+        return normalize_locale(None)
+
+    def _set_request_locale(locale: str) -> None:
+        _request_locale.set(normalize_locale(locale))
+
+    @app.middleware("http")
+    async def _locale_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+        _set_request_locale(_locale_from_request(request))
+        return await call_next(request)
+
+    def _graph(
+        location_id: str, depth: int = 1, *, locale: str | None = None
+    ) -> dict[str, Any]:
         root = _preload_location(location_id)
+        loc = locale if locale is not None else _request_locale.get()
         return pg.build_physical_graph(
-            root, location_id, depth=depth, session_docs=_session_docs()
+            root,
+            location_id,
+            depth=depth,
+            session_docs=_session_docs(),
+            locale=loc,
         )
 
     def _touch_site() -> None:
@@ -248,41 +286,46 @@ def create_app(site_root: Path | None = None) -> Any:
         }
 
     @app.get("/api/outline")
-    def api_outline() -> dict[str, Any]:
+    def api_outline(request: Request) -> dict[str, Any]:
+        locale = _locale_from_request(request)
+        _set_request_locale(locale)
         return {
             "nodes": pg.list_site_outline(
                 _root(),
                 site_yaml=_site_yaml(),
                 session_docs=_session_docs(),
+                locale=locale,
             )
         }
 
     @app.get("/api/catalog")
-    def api_catalog() -> dict[str, Any]:
-        from housewire.house import load_catalog
+    def api_catalog(request: Request) -> dict[str, Any]:
+        from housewire.house import catalog_type_label, load_catalog
 
         root = _root()
         cat = load_catalog(root)
+        locale = _locale_from_request(request)
+        _set_request_locale(locale)
         types = {
             type_id: {
                 "id": type_id,
                 "kind": data.get("kind"),
-                "label": (
-                    data.get("label")
-                    or data.get("name")
-                    or data.get("title")
-                ),
+                "label": catalog_type_label(type_id, catalog=cat, locale=locale),
                 "icon": data.get("icon") or "circle",
             }
             for type_id, data in sorted(cat.items())
             if isinstance(data, dict)
         }
-        return {"types": types}
+        return {"types": types, "lang": locale}
 
     @app.get("/api/physical")
-    def api_physical(location: str, depth: int = 1) -> dict[str, Any]:
+    def api_physical(
+        request: Request, location: str, depth: int = 1
+    ) -> dict[str, Any]:
         try:
-            return _graph(location, _depth_from(raw=depth))
+            locale = _locale_from_request(request)
+            _set_request_locale(locale)
+            return _graph(location, _depth_from(raw=depth), locale=locale)
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
         except ValueError as exc:
@@ -501,11 +544,14 @@ def create_app(site_root: Path | None = None) -> Any:
             _begin_edit()
             _path, doc = session.ensure_doc(_site_yaml())
             mode = body.get("mode")
+            locale = _locale_from_request(request, body=body)
+            _set_request_locale(locale)
             result = paste_payload(
                 doc,
                 parent_id=parent_id,
                 payload=clip,
                 mode=str(mode) if mode is not None else None,
+                locale=locale,
             )
             session.mark_dirty(_site_yaml())
             meta = _end_edit()
@@ -516,7 +562,7 @@ def create_app(site_root: Path | None = None) -> Any:
         return {
             "created": result.created,
             "renamed": result.renamed,
-            "graph": _graph(location_id, depth),
+            "graph": _graph(location_id, depth, locale=locale),
             **meta,
         }
 

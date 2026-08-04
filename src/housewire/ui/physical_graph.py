@@ -247,6 +247,7 @@ def _build_element_nodes(
     places: list[tuple[tuple[str, ...], dict[str, Any]]],
     loc_doc: dict[str, Any],
     catalog=None,
+    locale: str | None = None,
 ) -> list[dict[str, Any]]:
     """Electrical elements for places in the graph (+ canvas root doc)."""
     sources: list[tuple[tuple[str, ...], dict[str, Any]]] = [
@@ -321,6 +322,7 @@ def _build_element_nodes(
                             if defn.get("subtype") is not None
                             else None
                         ),
+                        locale=locale,
                     ),
                     "label": label_s,
                     "notes": notes_s,
@@ -799,6 +801,7 @@ def list_site_outline(
     *,
     site_yaml: Path | None = None,
     session_docs: dict[Path, dict[str, Any]] | None = None,
+    locale: str | None = None,
 ) -> list[dict[str, Any]]:
     """Full site outline: every place + electrical elements (preorder flat)."""
     root = site_root.resolve()
@@ -836,7 +839,7 @@ def list_site_outline(
             "display_name": place_name(meta, place_id),
             "type": type_id,
             "icon": catalog_icon(type_id, catalog=catalog, instance=node),
-            "type_label": catalog_type_label(type_id, catalog=catalog),
+            "type_label": catalog_type_label(type_id, catalog=catalog, locale=locale),
             "parts": parts,
         }
         elem_rows: list[dict[str, Any]] = []
@@ -876,6 +879,7 @@ def list_site_outline(
                             if defn.get("subtype") is not None
                             else None
                         ),
+                        locale=locale,
                     ),
                     "subtype": defn.get("subtype"),
                     "label": label_s,
@@ -930,7 +934,7 @@ def list_site_outline(
                     "type": info["type"],
                     "icon": info.get("icon") or "circle",
                     "type_label": info.get("type_label")
-                    or catalog_type_label(info["type"], catalog=catalog),
+                    or catalog_type_label(info["type"], catalog=catalog, locale=locale),
                     "depth": depth,
                     "selectable": loc_id in selectable,
                 }
@@ -949,6 +953,7 @@ def build_physical_graph(
     *,
     depth: int = 1,
     session_docs: dict[Path, dict[str, Any]] | None = None,
+    locale: str | None = None,
 ) -> dict[str, Any]:
     """Build UI graph for one location (nested places in the site YAML)."""
     if depth < 1:
@@ -1089,7 +1094,7 @@ def build_physical_graph(
                 "display_name": place_name(meta, place_id),
                 "display_label": place_label(meta, place_id),
                 "icon": catalog_icon(type_id, catalog=catalog, instance=doc),
-                "type_label": catalog_type_label(type_id, catalog=catalog),
+                "type_label": catalog_type_label(type_id, catalog=catalog, locale=locale),
                 "openings": [
                     {"id": oid, "face": _opening_face(oid)} for oid in openings
                 ],
@@ -1205,7 +1210,7 @@ def build_physical_graph(
     edges = list(edge_by_geom.values())
 
     elements = _build_element_nodes(
-        places=places, loc_doc=loc_doc, catalog=catalog
+        places=places, loc_doc=loc_doc, catalog=catalog, locale=locale
     )
     element_ids = {e["id"] for e in elements}
     cable_edges = _build_cable_edges(

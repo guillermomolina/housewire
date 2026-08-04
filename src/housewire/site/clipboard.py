@@ -17,6 +17,7 @@ from housewire.house.conduit_ref import (
     split_conduit_endpoint,
 )
 from housewire.house.links import resolve_link_kind
+from housewire.i18n import unlabeled_for, unnamed_for
 from housewire.site.delete_selection import (
     _element_deleted,
     _expand_deletion_sets,
@@ -61,8 +62,6 @@ _ORIGIN_Y = 40.0
 _ELEM_ORIGIN_X = 28.0
 _ELEM_ORIGIN_Y = 8.0
 CLIPBOARD_VERSION = 1
-UNNAMED = "Unnamed"
-UNLABELED = "Unlabeled"
 
 
 @dataclass
@@ -164,18 +163,21 @@ def uniquify_working_names(
     taken_names: set[str],
     taken_labels: set[str],
     force: bool,
+    locale: str | None = None,
 ) -> None:
     """Uniquify ``name`` / ``label`` independently of the technical id.
 
-    Empty fields become ``Unnamed`` / ``Unlabeled`` (no number until that text
-    is already taken). When ``force`` is true and the field already had a
-    value (copy paste), always take the next spaced variant even if free in
-    the destination.
+    Empty fields become locale-specific ``Unnamed`` / ``Unlabeled`` (no number
+    until that text is already taken). When ``force`` is true and the field
+    already had a value (copy paste), always take the next spaced variant even
+    if free in the destination.
     """
+    unnamed = unnamed_for(locale or "en")
+    unlabeled = unlabeled_for(locale or "en")
     raw_name = node.get("name")
     name_s = "" if raw_name is None else str(raw_name).strip()
     name_was_empty = not name_s
-    preferred_name = name_s if name_s else UNNAMED
+    preferred_name = name_s if name_s else unnamed
     name_taken = set(taken_names)
     if force and not name_was_empty:
         name_taken.add(preferred_name)
@@ -186,7 +188,7 @@ def uniquify_working_names(
     raw_label = node.get("label")
     label_s = "" if raw_label is None else str(raw_label).strip()
     label_was_empty = not label_s
-    preferred_label = label_s if label_s else UNLABELED
+    preferred_label = label_s if label_s else unlabeled
     label_taken = set(taken_labels)
     if force and not label_was_empty:
         label_taken.add(preferred_label)
@@ -895,11 +897,13 @@ def paste_payload(
     parent_id: str,
     payload: dict[str, Any],
     mode: str | None = None,
+    locale: str | None = None,
 ) -> PasteResult:
     """Insert clipboard payload under ``parent_id``. Mutates ``doc``.
 
     ``mode`` is ``\"copy\"`` or ``\"cut\"``. Copy always numbers ``name`` /
-    ``label``; cut only bumps on collisions (and fills empty fields).
+    ``label`` when they already had a value; cut only bumps on collisions
+    (and fills empty fields). ``locale`` selects Unnamed/Unlabeled text.
     """
     if not isinstance(payload, dict):
         raise ValueError("payload must be an object")
@@ -940,6 +944,7 @@ def paste_payload(
             taken_names=taken_names,
             taken_labels=taken_labels,
             force=copy_mode or (old_id != new_id),
+            locale=locale,
         )
         if kind == "place":
             rect = _place_without_overlap(blob, obstacles=place_obstacles)
