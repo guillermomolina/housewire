@@ -186,23 +186,37 @@ The **site root** is the directory (or site YAML file) you pass to `housewire`
 - Dirty YAML stay in memory across `cd`; `save` writes dirty buffers; `exit`
   prompts per dirty file.
 
-### `install` (surface vs in wall)
+### `install` and `mount` (orthogonal axes)
 
-Optional on places with `mount`, and on **Conduit** / **Cable** link entries:
+These fields answer different questions; do not reuse ``wall`` for both.
+
+| Field | Question | Values | Recommended default |
+|-------|----------|--------|---------------------|
+| **`mount`** | Which plane does it sit on? | `wall` · `ceiling` · `floor` | **`wall`** |
+| **`install`** | How is it fixed to that plane? | `surface` (on the finish) · `flush` (recessed / embutido) | **`flush`** |
+
+Examples: a recessed wall socket is `install: flush` + `mount: wall`. Visible
+parking trunking is `install: surface` + `mount: wall` (or `ceiling`). A
+ceiling rose can be `install: flush` + `mount: ceiling`.
+
+Optional on places that use `mount`, and on **Conduit** / **Cable** link
+entries. If omitted, nothing is assumed at load time (no silent rewrite); new
+places created by recipes default to `flush` + `wall` (lamps: `flush` +
+`ceiling`). Legacy `install: in_wall` is accepted and normalized to `flush`.
 
 | `install` | Meaning |
 |-----------|---------|
 | `surface` | Surface-mounted (visible box / trunking / tube) |
-| `in_wall` | Recessed in wall / ceiling / floor (legacy synonym: `flush`) |
+| `flush` | Recessed in the finish of the mount plane |
 
-If omitted, nothing is assumed. It does not change the local opening frame.
+It does not change the local opening frame.
 
 ### DeviceBox
 
 ```yaml
 type: DeviceBox
 subtype: 1-gang          # 1-gang | 2-gang | 3-gang
-install: surface
+install: flush
 mount: wall
 facing: S
 openings: [N1]
@@ -226,11 +240,11 @@ elements:
 Shell (no hand-editing required):
 
 ```text
-set install surface
+set install flush
 set openings=[N1]
 set opening_grid.N=1
 add location Interruptor_1 --type DeviceBox --subtype 1-gang \
-  --set install=surface --set mount=wall --set openings=[N1]
+  --set install=flush --set mount=wall --set openings=[N1]
 set --element Switch notes "…"
 ```
 
@@ -489,7 +503,7 @@ One dictionary. Kind is distinguished by `type`:
 | `Conductor` | `from`/`to` = `ElementRef.Terminal` (one each) | forbidden | Leaf wire = the electrical connection |
 
 Shared fields: `name`, `label`, `notes`, optional `section`, `color` (singular),
-optional `install` (`surface` | `in_wall`) on Conduit and Cable.
+optional `install` (`surface` | `flush`) on Conduit and Cable.
 Catalog subtypes remain (`tube`, `power`, …).
 
 ```yaml

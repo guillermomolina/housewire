@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.61.0] — 2026-08-04
+
+### Changed
+
+- ``install`` values are ``surface`` | ``flush`` (recessed). Legacy
+  ``in_wall`` normalizes to ``flush`` so it no longer collides with
+  ``mount: wall``.
+- Documented defaults for new places: ``install: flush``, ``mount: wall``
+  (lamps: flush + ceiling). Recipes follow those defaults.
+- UI labels: Flush / Embutido (not “In wall”).
+
 ## [0.60.1] — 2026-08-04
 
 ### Fixed

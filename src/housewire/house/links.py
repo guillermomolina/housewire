@@ -16,19 +16,26 @@ CABLE_CATALOG_KIND = "cable_type"
 CONDUIT_CATALOG_KIND = "conduit_type"
 CONDUCTOR_CATALOG_KIND = "conductor_type"
 
-# Same closed set as place ``install`` (UI: surface | in_wall).
-INSTALL_VALUES = frozenset({"surface", "in_wall"})
+# Same closed set as place ``install`` (UI: surface | flush).
+INSTALL_VALUES = frozenset({"surface", "flush"})
+DEFAULT_INSTALL = "flush"
+DEFAULT_MOUNT = "wall"
+MOUNT_VALUES = frozenset({"wall", "ceiling", "floor"})
 
 
-def _normalize_install(raw: Any, *, context: str) -> str | None:
+def normalize_install(raw: Any, *, context: str = "install") -> str | None:
+    """Canonicalize ``install`` to ``surface`` | ``flush`` (or None if empty).
+
+    Legacy ``in_wall`` is accepted and rewritten to ``flush`` (``in_wall``
+    collided with ``mount: wall``).
+    """
     if raw is None:
         return None
     value = str(raw).strip()
     if not value:
         return None
-    if value == "flush":
-        # Legacy synonym from early docs.
-        value = "in_wall"
+    if value == "in_wall":
+        value = "flush"
     if value not in INSTALL_VALUES:
         raise ValueError(
             f"{context}: install must be one of "
@@ -37,7 +44,24 @@ def _normalize_install(raw: Any, *, context: str) -> str | None:
     return value
 
 
+def normalize_mount(raw: Any, *, context: str = "mount") -> str | None:
+    """Canonicalize ``mount`` to ``wall`` | ``ceiling`` | ``floor``."""
+    if raw is None:
+        return None
+    value = str(raw).strip()
+    if not value:
+        return None
+    if value not in MOUNT_VALUES:
+        raise ValueError(
+            f"{context}: mount must be one of "
+            f"{', '.join(sorted(MOUNT_VALUES))} (got {raw!r})"
+        )
+    return value
 
+
+def _normalize_install(raw: Any, *, context: str) -> str | None:
+    """Backward-compatible alias."""
+    return normalize_install(raw, context=context)
 def _catalog_defaults_for_subtype(
     type_def: dict[str, Any] | None, subtype: str | None
 ) -> dict[str, Any]:

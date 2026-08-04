@@ -66,23 +66,23 @@ class TestCableCatalog(unittest.TestCase):
             {
                 "type": "Cable",
                 "contains": ["L1_1"],
-                "install": "in_wall",
+                "install": "flush",
                 "color": "WH",
             },
             self.catalog,
         )
-        self.assertEqual(cable["install"], "in_wall")
-        flushed = expand_conduit(
+        self.assertEqual(cable["install"], "flush")
+        legacy = expand_conduit(
             {
                 "type": "Conduit",
                 "from": "A.N1",
                 "to": "B.S1",
                 "contains": ["L1"],
-                "install": "flush",
+                "install": "in_wall",
             },
             self.catalog,
         )
-        self.assertEqual(flushed["install"], "in_wall")
+        self.assertEqual(legacy["install"], "flush")
 
     def test_validate_accepts_sheath_and_conductors(self) -> None:
         doc = {

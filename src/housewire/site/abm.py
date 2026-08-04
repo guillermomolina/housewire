@@ -161,6 +161,19 @@ def set_field(
     if root_key == "type" and nested_key is None:
         _validate_type_field(value, target=target)
 
+    if nested_key is None and root_key == "install":
+        from housewire.house.links import normalize_install
+
+        value = normalize_install(value, context="place")
+        if value is None:
+            raise ValueError("install must be 'surface' or 'flush'")
+    if nested_key is None and root_key == "mount":
+        from housewire.house.links import normalize_mount
+
+        value = normalize_mount(value, context="place")
+        if value is None:
+            raise ValueError("mount must be 'wall', 'ceiling', or 'floor'")
+
     if nested_key is None:
         mapping[root_key] = value
     else:

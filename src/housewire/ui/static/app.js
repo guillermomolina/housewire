@@ -8467,7 +8467,7 @@
         value: detail.install || "",
         editable: true,
         combo: "install",
-        options: ["surface", "in_wall"],
+        options: ["surface", "flush"],
       });
       appendPropsRow(meta, {
         key: "mount",
