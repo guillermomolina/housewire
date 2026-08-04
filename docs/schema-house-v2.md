@@ -186,14 +186,14 @@ The **site root** is the directory (or site YAML file) you pass to `housewire`
 - Dirty YAML stay in memory across `cd`; `save` writes dirty buffers; `exit`
   prompts per dirty file.
 
-### `install` (surface vs flush)
+### `install` (surface vs in wall)
 
-Optional on places with `mount`:
+Optional on places with `mount`, and on **Conduit** / **Cable** link entries:
 
 | `install` | Meaning |
 |-----------|---------|
-| `surface` | Surface-mounted (visible box / trunking) |
-| `flush` | Recessed in wall / ceiling / floor |
+| `surface` | Surface-mounted (visible box / trunking / tube) |
+| `in_wall` | Recessed in wall / ceiling / floor (legacy synonym: `flush`) |
 
 If omitted, nothing is assumed. It does not change the local opening frame.
 
@@ -488,7 +488,8 @@ One dictionary. Kind is distinguished by `type`:
 | `Cable` | none (sheath / bundle) | ids of Cable and/or Conductor | Jacket grouping; drawn inside conduits |
 | `Conductor` | `from`/`to` = `ElementRef.Terminal` (one each) | forbidden | Leaf wire = the electrical connection |
 
-Shared fields: `name`, `label`, `notes`, optional `section`, `color` (singular).
+Shared fields: `name`, `label`, `notes`, optional `section`, `color` (singular),
+optional `install` (`surface` | `in_wall`) on Conduit and Cable.
 Catalog subtypes remain (`tube`, `power`, …).
 
 ```yaml

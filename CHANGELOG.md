@@ -7,6 +7,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.60.0] — 2026-08-04
+
+### Added
+
+- Conduit and Cable link entries accept ``install: surface | in_wall`` (legacy
+  ``flush`` normalizes to ``in_wall``), same closed set as places.
+
+### Changed
+
+- Docs: install values documented as ``surface`` / ``in_wall`` (not ``flush``).
+
 ## [0.59.4] — 2026-08-04
 
 ### Fixed

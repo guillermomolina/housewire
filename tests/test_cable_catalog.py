@@ -49,6 +49,41 @@ class TestCableCatalog(unittest.TestCase):
         self.assertEqual(out["subtype"], "M20")
         self.assertEqual(out["contains"], ["L1"])
 
+    def test_expand_preserves_install_on_conduit_and_cable(self) -> None:
+        conduit = expand_conduit(
+            {
+                "type": "Conduit",
+                "subtype": "tube",
+                "from": "A.N1",
+                "to": "B.S1",
+                "contains": ["L1"],
+                "install": "surface",
+            },
+            self.catalog,
+        )
+        self.assertEqual(conduit["install"], "surface")
+        cable = expand_cable(
+            {
+                "type": "Cable",
+                "contains": ["L1_1"],
+                "install": "in_wall",
+                "color": "WH",
+            },
+            self.catalog,
+        )
+        self.assertEqual(cable["install"], "in_wall")
+        flushed = expand_conduit(
+            {
+                "type": "Conduit",
+                "from": "A.N1",
+                "to": "B.S1",
+                "contains": ["L1"],
+                "install": "flush",
+            },
+            self.catalog,
+        )
+        self.assertEqual(flushed["install"], "in_wall")
+
     def test_validate_accepts_sheath_and_conductors(self) -> None:
         doc = {
             "schema": "house/v2",

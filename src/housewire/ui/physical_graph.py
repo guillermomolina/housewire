@@ -1178,6 +1178,12 @@ def build_physical_graph(
                 if raw_color is not None and str(raw_color).strip()
                 else None
             )
+            raw_install = conduit.get("install")
+            tube_install = (
+                str(raw_install).strip()
+                if raw_install is not None and str(raw_install).strip()
+                else None
+            )
             existing = edge_by_geom.get(geom_key)
             if existing is None:
                 edge_by_geom[geom_key] = {
@@ -1200,6 +1206,7 @@ def build_physical_graph(
                     "contains_all": sorted(all_ids),
                     "subtype": conduit.get("subtype"),
                     "color": tube_color,
+                    "install": tube_install,
                 }
             else:
                 merged = list(dict.fromkeys([*existing["contains"], *contains]))
@@ -1209,6 +1216,8 @@ def build_physical_graph(
                 )
                 if existing.get("color") is None and tube_color is not None:
                     existing["color"] = tube_color
+                if existing.get("install") is None and tube_install is not None:
+                    existing["install"] = tube_install
                 if existing.get("subtype") is None and conduit.get("subtype") is not None:
                     existing["subtype"] = conduit.get("subtype")
     edges = list(edge_by_geom.values())

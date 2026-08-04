@@ -16,6 +16,27 @@ CABLE_CATALOG_KIND = "cable_type"
 CONDUIT_CATALOG_KIND = "conduit_type"
 CONDUCTOR_CATALOG_KIND = "conductor_type"
 
+# Same closed set as place ``install`` (UI: surface | in_wall).
+INSTALL_VALUES = frozenset({"surface", "in_wall"})
+
+
+def _normalize_install(raw: Any, *, context: str) -> str | None:
+    if raw is None:
+        return None
+    value = str(raw).strip()
+    if not value:
+        return None
+    if value == "flush":
+        # Legacy synonym from early docs.
+        value = "in_wall"
+    if value not in INSTALL_VALUES:
+        raise ValueError(
+            f"{context}: install must be one of "
+            f"{', '.join(sorted(INSTALL_VALUES))} (got {raw!r})"
+        )
+    return value
+
+
 
 def _catalog_defaults_for_subtype(
     type_def: dict[str, Any] | None, subtype: str | None
@@ -113,6 +134,11 @@ def expand_conduit(
             out[key] = copy.deepcopy(raw[key])
         elif key in defaults:
             out[key] = copy.deepcopy(defaults[key])
+    install = _normalize_install(raw.get("install"), context="Conduit")
+    if install is None and "install" in defaults:
+        install = _normalize_install(defaults.get("install"), context="Conduit")
+    if install is not None:
+        out["install"] = install
     return out
 
 
@@ -167,6 +193,11 @@ def expand_cable(
                 out[key] = copy.deepcopy(defaults[key])
     if "section" not in out and "gauge" not in out and defaults.get("section"):
         out["section"] = copy.deepcopy(defaults["section"])
+    install = _normalize_install(raw.get("install"), context="Cable")
+    if install is None and "install" in defaults:
+        install = _normalize_install(defaults.get("install"), context="Cable")
+    if install is not None:
+        out["install"] = install
     return out
 
 
