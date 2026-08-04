@@ -1447,6 +1447,81 @@
   }
 
   /**
+   * Move host box west/north and grow w/h so the wall follows content.
+   * @param {object} host
+   * @param {number} dx
+   * @param {number} dy
+   */
+  function expandHostForOriginShift(host, dx, dy) {
+    if (!host || (!dx && !dy)) return;
+    host.x = Math.round((host.x ?? 0) - dx);
+    host.y = Math.round((host.y ?? 0) - dy);
+    host.w = Math.round((Number(host.w) || 0) + dx);
+    host.h = Math.round((Number(host.h) || 0) + dy);
+    host.size_locked = true;
+  }
+
+  /**
+   * Keep drag gesture origins aligned after a live origin absorb.
+   * @param {object[]} siblings
+   * @param {number} dx
+   * @param {number} dy
+   * @param {"place"|"element"} kind
+   */
+  function adjustDragOriginsAfterAbsorb(siblings, dx, dy, kind) {
+    if (!drag || (!dx && !dy)) return;
+    const ids = new Set(siblings.map((s) => s.id));
+    if (drag.kind === "multi") {
+      for (const item of drag.items || []) {
+        if (!ids.has(item.id)) continue;
+        if (kind === "place" && item.kind === "place") {
+          item.origX += dx;
+          item.origY += dy;
+        } else if (kind === "element" && item.kind === "element") {
+          item.origX += dx;
+          item.origY += dy;
+        }
+      }
+    } else if (drag.kind === "resize" && ids.has(drag.targetId)) {
+      drag.origX += dx;
+      drag.origY += dy;
+    }
+  }
+
+  /**
+   * Absorb negatives under parentId; expand host N/W; cascade if host goes negative.
+   * @param {string|null} parentId
+   * @param {"place"|"element"} kind
+   * @returns {{shiftedPlaces:Set<string>,shiftedElems:Set<string>,grownParents:Set<string>}}
+   */
+  function absorbNegativeOriginLive(parentId, kind) {
+    const shiftedPlaces = new Set();
+    const shiftedElems = new Set();
+    const grownParents = new Set();
+    let curParent = parentId;
+    let curKind = kind;
+    for (let guard = 0; guard < 16; guard++) {
+      const { dx, dy, siblings } = normalizeContentOrigin(curParent, curKind);
+      if (!dx && !dy) break;
+      if (curKind === "place") {
+        for (const s of siblings) shiftedPlaces.add(s.id);
+      } else {
+        for (const s of siblings) shiftedElems.add(s.id);
+      }
+      adjustDragOriginsAfterAbsorb(siblings, dx, dy, curKind);
+      if (!curParent) break;
+      const host = graph?.nodes.find((n) => n.id === curParent);
+      if (!host) break;
+      expandHostForOriginShift(host, dx, dy);
+      grownParents.add(curParent);
+      // Host may now be negative among its place siblings — cascade.
+      curParent = host.parent || null;
+      curKind = "place";
+    }
+    return { shiftedPlaces, shiftedElems, grownParents };
+  }
+
+  /**
    * After drag/resize, renormalize any parent whose children went negative.
    * @param {{placeParents?:(string|null)[], elementParents?:string[]}} groups
    */
@@ -1457,19 +1532,16 @@
     const shiftedElems = new Set();
     const grownParents = new Set();
     for (const parentId of placeParents) {
-      const { dx, dy, siblings } = normalizeContentOrigin(parentId, "place");
-      if (dx || dy) {
-        for (const s of siblings) shiftedPlaces.add(s.id);
-        if (parentId) grownParents.add(parentId);
-      }
+      const r = absorbNegativeOriginLive(parentId, "place");
+      for (const id of r.shiftedPlaces) shiftedPlaces.add(id);
+      for (const id of r.grownParents) grownParents.add(id);
     }
     for (const parentId of elementParents) {
       if (!parentId) continue;
-      const { dx, dy, siblings } = normalizeContentOrigin(parentId, "element");
-      if (dx || dy) {
-        for (const s of siblings) shiftedElems.add(s.id);
-        grownParents.add(parentId);
-      }
+      const r = absorbNegativeOriginLive(parentId, "element");
+      for (const id of r.shiftedElems) shiftedElems.add(id);
+      for (const id of r.shiftedPlaces) shiftedPlaces.add(id);
+      for (const id of r.grownParents) grownParents.add(id);
     }
     return { shiftedPlaces, shiftedElems, grownParents };
   }
@@ -1559,6 +1631,13 @@
       elem.w = Math.round(next.w);
       elem.h = Math.round(next.h);
       elem.size_locked = true;
+    }
+    if (drag.targetKind === "place") {
+      const node = graph?.nodes.find((n) => n.id === drag.targetId);
+      if (node) absorbNegativeOriginLive(node.parent || null, "place");
+    } else {
+      const elem = (graph?.elements || []).find((e) => e.id === drag.targetId);
+      if (elem?.parent) absorbNegativeOriginLive(elem.parent, "element");
     }
     updateNodeVisual(null, { refresh: false });
   }
@@ -8269,9 +8348,28 @@
         if (!elem) continue;
         const parent = elem.parent ? placeMap[elem.parent] : null;
         const d = storedDragDelta(parent, dx, dy);
-        // x/y may go negative during the gesture; renormalized on drop.
+        // x/y may go negative during the gesture; absorb N/W into the host box.
         elem.x = Math.round(item.origX + d.dx);
         elem.y = Math.round(item.origY + d.dy);
+      }
+    }
+    const seenElem = new Set();
+    const seenPlace = new Set();
+    for (const item of drag.items || []) {
+      if (item.kind === "element") {
+        const elem = (graph?.elements || []).find((e) => e.id === item.id);
+        if (elem?.parent && !seenElem.has(elem.parent)) {
+          seenElem.add(elem.parent);
+          absorbNegativeOriginLive(elem.parent, "element");
+        }
+      } else if (item.kind === "place") {
+        const node = graph?.nodes.find((n) => n.id === item.id);
+        if (!node) continue;
+        const key = node.parent || "";
+        if (!seenPlace.has(key)) {
+          seenPlace.add(key);
+          absorbNegativeOriginLive(node.parent || null, "place");
+        }
       }
     }
     // Transforms only while dragging; full cable/conduit re-route on drop.

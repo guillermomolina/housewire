@@ -106,6 +106,25 @@ def grow_view_size_by(
     _set_wh(obj, layer, size[0] + float(dx), size[1] + float(dy))
 
 
+def shift_place_origin(place: dict[str, Any], dx: float, dy: float) -> None:
+    """Expand a place box toward N/W: move ``x``/``y`` by ``(-dx,-dy)`` and grow w/h.
+
+    Used when children were shifted out of negative local coordinates so the
+    west/north wall moves with the content instead of only growing east/south.
+    """
+    if dx == 0.0 and dy == 0.0:
+        return
+    raw = _get_xy(get_physical_view(place), allow_negative=True)
+    if raw is not None:
+        set_physical_position(
+            place,
+            raw[0] - float(dx),
+            raw[1] - float(dy),
+            allow_negative=True,
+        )
+    grow_view_size_by(place, "physical", dx, dy)
+
+
 def _get_wh(layer: dict[str, Any] | None) -> tuple[float, float] | None:
     if layer is None:
         return None

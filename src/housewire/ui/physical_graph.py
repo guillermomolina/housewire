@@ -53,6 +53,7 @@ from housewire.site.view_layout import (
     set_electrical_size,
     set_physical_position,
     set_physical_size,
+    shift_place_origin,
 )
 
 # Window-style nested layout (must match UI constants in static/app.js).
@@ -1303,6 +1304,43 @@ def apply_auto_layout(
     return updated
 
 
+def _absorb_place_children_origin(
+    site_doc: dict[str, Any],
+    canvas_parts: tuple[str, ...],
+    parent_parts: tuple[str, ...],
+    updated: list[str],
+    *,
+    _depth: int = 0,
+) -> None:
+    """Shift sibling places out of negatives; move parent N/W wall; cascade."""
+    if _depth > 32:
+        return
+    parent = get_place_node(site_doc, parent_parts)
+    siblings = [child for _name, child in iter_place_children(parent)]
+    dx, dy = normalize_view_xy_siblings(siblings, layer="physical")
+    if not dx and not dy:
+        return
+    rel = parent_parts[len(canvas_parts) :]
+    for name, _child in iter_place_children(parent):
+        sid = "/".join((*rel, name)) if rel else name
+        if sid not in updated:
+            updated.append(sid)
+    if parent_parts:
+        shift_place_origin(parent, dx, dy)
+        parent_rel = "/".join(parent_parts[len(canvas_parts) :])
+        if parent_rel and parent_rel not in updated:
+            updated.append(parent_rel)
+        _absorb_place_children_origin(
+            site_doc,
+            canvas_parts,
+            parent_parts[:-1],
+            updated,
+            _depth=_depth + 1,
+        )
+    else:
+        grow_view_size_by(parent, "physical", dx, dy)
+
+
 def apply_positions(
     site_root: Path,
     location_id: str,
@@ -1313,7 +1351,8 @@ def apply_positions(
     """Write positions ``{node_id: {x,y,w?,h?}}``. Return updated ids.
 
     Transient negatives are accepted then sibling groups are renormalized so
-    persisted ``x``/``y`` stay ``>= 0`` (parent-local origin).
+    persisted ``x``/``y`` stay ``>= 0`` (parent-local origin). Parent boxes
+    expand toward N/W when content was shifted.
     """
     yaml_path, site_doc = _load_site_doc(site_root, session_docs=session_docs)
     session_docs[yaml_path] = site_doc
@@ -1336,18 +1375,10 @@ def apply_positions(
         updated.append(str(node_id))
         parents.add(tuple(canvas_parts) + parts[:-1])
 
-    for parent_parts in parents:
-        parent = get_place_node(site_doc, parent_parts)
-        siblings = [child for _name, child in iter_place_children(parent)]
-        dx, dy = normalize_view_xy_siblings(siblings, layer="physical")
-        if dx or dy:
-            grow_view_size_by(parent, "physical", dx, dy)
-            # Include every shifted sibling in the updated set.
-            rel = parent_parts[len(canvas_parts) :]
-            for name, _child in iter_place_children(parent):
-                sid = "/".join((*rel, name)) if rel else name
-                if sid not in updated:
-                    updated.append(sid)
+    for parent_parts in sorted(parents, key=len, reverse=True):
+        _absorb_place_children_origin(
+            site_doc, canvas_parts, parent_parts, updated
+        )
     return updated
 
 
@@ -1360,7 +1391,8 @@ def apply_electrical_positions(
 ) -> list[str]:
     """Write ``view.electrical`` for ``{place/element: {x,y,w?,h?}}``. Return ids.
 
-    Transient negatives are renormalized among sibling elements under each host.
+    Transient negatives are renormalized among sibling elements under each host;
+    the host box expands toward N/W when needed.
     """
     yaml_path, site_doc = _load_site_doc(site_root, session_docs=session_docs)
     session_docs[yaml_path] = site_doc
@@ -1398,13 +1430,19 @@ def apply_electrical_positions(
             sibling_names.append(str(name))
         dx, dy = normalize_view_xy_siblings(siblings, layer="electrical")
         if dx or dy:
-            grow_view_size_by(host, "physical", dx, dy)
+            shift_place_origin(host, dx, dy)
             rel = host_parts[len(canvas_parts) :]
             host_rel = "/".join(rel) if rel else ""
             for name in sibling_names:
                 eid = f"{host_rel}/{name}" if host_rel else name
                 if eid not in updated:
                     updated.append(eid)
+            if host_rel and host_rel not in updated:
+                updated.append(host_rel)
+            if host_parts:
+                _absorb_place_children_origin(
+                    site_doc, canvas_parts, host_parts[:-1], updated
+                )
     return updated
 
 

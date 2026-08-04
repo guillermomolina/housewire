@@ -112,6 +112,7 @@ class TestViewLayout(unittest.TestCase):
             add_place(doc, "A", under=("Room",), type_id="JunctionBox")
             add_place(doc, "B", under=("Room",), type_id="JunctionBox")
             room = get_place_node(doc, ("Room",))
+            set_physical_position(room, 50, 60)
             set_physical_size(room, 400, 300)
             set_physical_position(get_place_node(doc, ("Room", "A")), 0, 40)
             set_physical_position(get_place_node(doc, ("Room", "B")), 100, 40)
@@ -123,11 +124,14 @@ class TestViewLayout(unittest.TestCase):
                 {"A": {"x": -25, "y": 40}},
                 session_docs=session_docs,
             )
-            a = get_place_node(session_docs[root / HOUSEWIRE_YAML], ("Room", "A"))
-            b = get_place_node(session_docs[root / HOUSEWIRE_YAML], ("Room", "B"))
-            room2 = get_place_node(session_docs[root / HOUSEWIRE_YAML], ("Room",))
+            yaml = root / HOUSEWIRE_YAML
+            a = get_place_node(session_docs[yaml], ("Room", "A"))
+            b = get_place_node(session_docs[yaml], ("Room", "B"))
+            room2 = get_place_node(session_docs[yaml], ("Room",))
             self.assertEqual(get_physical_position(a), (0.0, 40.0))
             self.assertEqual(get_physical_position(b), (125.0, 40.0))
+            # Room wall moves west with the content (x-=25, w+=25).
+            self.assertEqual(get_physical_position(room2), (25.0, 60.0))
             self.assertEqual(get_physical_size(room2), (425.0, 300.0))
 
     def test_page_defaults_and_set(self) -> None:

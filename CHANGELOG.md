@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.49.5] — 2026-08-04
+
+### Fixed
+
+- Dragging/resizing content past the west/north edge grows the host box in that
+  direction live (moves the wall), not only east/south.
+
 ## [0.49.4] — 2026-08-04
 
 ### Changed
