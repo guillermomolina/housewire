@@ -40,10 +40,12 @@ _DUMP_JS = """() => {
     const sw=parseFloat(getComputedStyle(el).strokeWidth)||17.5;
     const core = el.getAttribute('data-core-d');
     const painted = el.getAttribute('d') || '';
+    const title = (el.querySelector('title')||{}).textContent || '';
     return {
       pts: parse(painted),
       corePts: parse(core || painted),
       half: sw/2,
+      title,
     };
   });
   const strands=[...svg.querySelectorAll('path')]
@@ -67,6 +69,7 @@ _DUMP_JS = """() => {
     ver: document.querySelector('script[src*="app.js"]')?.src || '',
     tubes: tubes.map(t=>t.pts),
     tube_cores: tubes.map(t=>t.corePts),
+    tube_titles: tubes.map(t=>t.title),
     halves: tubes.map(t=>t.half),
     strands: strands.map(s=>s.pts),
     strokes: strands.map(s=>s.stroke),
@@ -570,6 +573,36 @@ def assert_tubes_avoid_l_overlap(
         multi,
         min_extra_bend_tubes,
         msg=f"expected ≥{min_extra_bend_tubes} tubes with ≥2 bends, got {multi}",
+    )
+    return data
+
+
+def assert_named_tube_segment_count(
+    test: unittest.TestCase,
+    data: dict,
+    *,
+    title_substr: str,
+    segments: int,
+) -> None:
+    """Assert the painted tube whose title contains ``title_substr`` has N segments."""
+    titles = data.get("tube_titles") or []
+    raw = data.get("tubes") or []
+    hits = [
+        (title, pts)
+        for title, pts in zip(titles, raw, strict=False)
+        if title_substr in (title or "") and len(pts) >= 2
+    ]
+    test.assertEqual(
+        len(hits),
+        1,
+        msg=f"expected one tube matching {title_substr!r}, got {hits!r} titles={titles}",
+    )
+    clean = _clean_ortho_pts(hits[0][1])
+    segs = max(0, len(clean) - 1)
+    test.assertEqual(
+        segs,
+        segments,
+        msg=f"{title_substr}: expected {segments} segments, got {segs}: {clean}",
     )
 
 
