@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.11] — 2026-08-05
+
+### Changed
+
+- In isometric boxes, front-face outline is slightly thicker so 3D depth reads
+  clearly while all wireframe edges stay neutral gray when not selected.
+
 ## [0.77.10] — 2026-08-05
 
 ### Changed

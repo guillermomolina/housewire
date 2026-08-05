@@ -2258,6 +2258,7 @@ button:hover {
 .node-box.iso-box {
   rx: 0;
   ry: 0;
+  stroke-width: 1.8;
 }
 
 .opening-mark {
