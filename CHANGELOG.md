@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.1] — 2026-08-05
+
+### Changed
+
+- Logo, menu bar, and open-file tabs share one app header row (tabs scroll
+  on the right).
+
 ## [0.77.0] — 2026-08-05
 
 ### Changed

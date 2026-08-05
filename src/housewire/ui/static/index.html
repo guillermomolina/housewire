@@ -31,7 +31,7 @@
   <link rel="stylesheet" href="/static/app.css?v=__VERSION__" />
 </head>
 <body>
-  <div id="view-tabs" class="view-tabs" role="tablist" aria-label="Open files" data-i18n-aria="tabs.openFiles"></div>
+  <header class="app-header">
   <nav class="menubar" aria-label="Application" data-i18n-aria="app.aria">
     <a class="brand" href="/" title="HouseWire">
       <img class="brand-logo" src="/static/logo.svg" width="22" height="22" alt="" />
@@ -208,6 +208,8 @@
       </div>
     </div>
   </nav>
+  <div id="view-tabs" class="view-tabs" role="tablist" aria-label="Open files" data-i18n-aria="tabs.openFiles"></div>
+  </header>
   <header class="toolbar" aria-label="Tools" data-i18n-aria="toolbar.aria">
     <div class="tool-group" title="File" data-i18n-title="menu.file">
       <button type="button" class="tool-btn" id="btn-new" title="New (Ctrl+N)" data-i18n-title="tool.new" aria-label="New" data-i18n-aria="menu.file.new">

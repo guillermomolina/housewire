@@ -28,10 +28,9 @@ only—not siblings at ancestor levels. Moving **up** the breadcrumb adds one
 to depth per level (keeping Electrical as set); entering a container still
 resets depth to 1 for that view.
 
-**Chrome layout:** file **tabs** sit above the menu bar; the toolbar holds file
-and edit actions only. **Depth**, **Electrical**, **fit**, and **zoom** live on
-the status strip under the canvas (not under the outline or inspector). That
-strip also shows the active filename, save state, and transient messages.
+**Chrome layout:** the **app header** groups logo, menu bar, and open-file
+**tabs** on one row; the toolbar holds file and edit actions; depth,
+Electrical, fit, and zoom sit on the status strip under the canvas.
 
 | Action | Meaning |
 |--------|---------|

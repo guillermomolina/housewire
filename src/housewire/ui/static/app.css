@@ -68,17 +68,27 @@ body {
   min-height: 100%;
 }
 
+.app-header {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  min-height: 2.15rem;
+  position: relative;
+  z-index: 30;
+}
+
 .menubar {
   display: flex;
   align-items: center;
   gap: 0.35rem;
   padding: 0 0.5rem;
   min-height: 2.15rem;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
+  background: transparent;
+  border-bottom: none;
   font-size: 0.85rem;
   position: relative;
-  z-index: 30;
   overflow: visible;
   flex-shrink: 0;
 }
@@ -662,13 +672,17 @@ body {
 .view-tabs {
   display: flex;
   flex-wrap: nowrap;
+  align-items: stretch;
   gap: 0;
+  flex: 1;
+  min-width: 0;
   overflow-x: auto;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  min-height: 2rem;
-  padding: 0 0.35rem;
-  flex-shrink: 0;
+  background: transparent;
+  border-bottom: none;
+  border-left: 1px solid var(--border);
+  min-height: 2.15rem;
+  padding: 0 0.15rem 0 0;
+  flex-shrink: 1;
 }
 
 .view-tab {
@@ -679,11 +693,12 @@ body {
   border-right: 1px solid var(--border);
   background: transparent;
   color: var(--muted);
-  padding: 0.4rem 0.65rem;
+  padding: 0.35rem 0.65rem;
   font: inherit;
   font-size: 0.8rem;
   cursor: pointer;
   white-space: nowrap;
+  align-self: stretch;
 }
 
 .view-tab:hover {
