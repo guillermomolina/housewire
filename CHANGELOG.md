@@ -8,6 +8,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.69.0] — 2026-08-05
+
+### Added
+
+- Leaf places with openings: NW isometric bevel and circle marks for every
+  ``opening_grid`` cell (used or unused). Near faces (N/W/F) are bold; far
+  faces (S/E/B) are dashed or double-outline, with a per-face visual offset.
+  Conduit routing mouths stay on the 2D contour.
+
 ## [0.68.6] — 2026-08-05
 
 ### Fixed

@@ -469,7 +469,11 @@ views:
   draw only when the place is a leaf in the current depth view. Cables ride on
   conduit paths when visible. With electrical off, conduit tube width ignores
   cable packing (thin tubes).
-- Back openings (`B…`) are drawn at the symbol center, not as a fourth side.
+- Back openings (`B…`) and side openings are drawn as circles on a light NW
+  isometric bevel of the leaf place: near faces (**N**, **W**, **F**) use a
+  bold mark; far faces (**S**, **E**, **B**) use a dashed / double outline.
+  Mark positions are visually offset toward NW by face; routing mouths stay on
+  the 2D contour. Every `opening_grid` cell is shown (used or not).
 - Omitted when unused; the UI does not require these fields.
 
 ### Mounting

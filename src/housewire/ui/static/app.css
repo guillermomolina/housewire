@@ -1997,23 +1997,22 @@ button:hover {
   border-color: var(--accent, #3b82f6);
 }
 
-.opening-side,
-.opening-front,
-.opening-back,
-.opening-front-mark,
-.opening-back-mark,
+.opening-mark,
+.opening-mark-ring,
+.opening-label,
 .element-terminal {
   cursor: pointer;
 }
 
-#viewport.wiring-conduit .opening-side,
-#viewport.wiring-conduit .opening-front,
-#viewport.wiring-conduit .opening-back,
-#viewport.wiring-conduit .opening-front-mark,
-#viewport.wiring-conduit .opening-back-mark,
-#viewport.wiring-conduit .opening-side-mark {
+#viewport.wiring-conduit .opening-mark,
+#viewport.wiring-conduit .opening-mark-ring,
+#viewport.wiring-conduit .opening-label {
   stroke: var(--accent, #3b82f6);
   pointer-events: auto;
+}
+
+#viewport.wiring-conduit .opening-label {
+  fill: var(--accent, #3b82f6);
 }
 
 #viewport.wiring-conductor .element-terminal {
@@ -2072,41 +2071,77 @@ button:hover {
   pointer-events: none;
 }
 
-.opening-side {
-  fill: var(--opening);
-  font-size: 8px;
+/* NW isometric bevel on leaf places that have openings. */
+.node-iso {
   pointer-events: none;
 }
 
-.opening-side-mark {
-  fill: transparent;
-  stroke: transparent;
+.node-iso-face {
+  fill: color-mix(in srgb, var(--node) 55%, transparent);
+  stroke: var(--edge);
   stroke-width: 1;
-  pointer-events: none;
+  stroke-linejoin: round;
 }
 
-.opening-back {
-  fill: var(--back);
-  font-size: 7px;
-  pointer-events: none;
+.node-iso-far {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1;
+  stroke-dasharray: 3 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
 
-.opening-back-mark {
-  fill: color-mix(in srgb, var(--back) 18%, transparent);
-  stroke: var(--back);
-  stroke-width: 1.2;
+.opening-mark {
   pointer-events: none;
+  stroke-linejoin: round;
 }
 
-.opening-front {
-  fill: var(--opening);
-  font-size: 7px;
-  pointer-events: none;
-}
-
-.opening-front-mark {
-  fill: color-mix(in srgb, var(--opening) 18%, transparent);
+.opening-mark.opening-near {
+  fill: color-mix(in srgb, var(--opening) 22%, transparent);
   stroke: var(--opening);
-  stroke-width: 1.2;
+  stroke-width: 2.25;
+}
+
+.opening-mark.opening-far {
+  fill: none;
+  stroke: var(--opening);
+  stroke-width: 1.15;
+  stroke-dasharray: 2.5 2;
+}
+
+.opening-mark.opening-face-B.opening-far,
+.opening-mark.opening-face-B.opening-near {
+  stroke: var(--back);
+}
+
+.opening-mark.opening-face-B.opening-near {
+  fill: color-mix(in srgb, var(--back) 18%, transparent);
+}
+
+.opening-mark-ring {
+  fill: none;
+  stroke: var(--opening);
+  stroke-width: 1;
+  stroke-opacity: 0.55;
   pointer-events: none;
+}
+
+.opening-mark-ring.opening-face-B {
+  stroke: var(--back);
+}
+
+.opening-label {
+  font-size: 6.5px;
+  pointer-events: none;
+  fill: var(--opening);
+}
+
+.opening-label.opening-far {
+  fill: color-mix(in srgb, var(--opening) 70%, var(--muted));
+  font-size: 6px;
+}
+
+.opening-label.opening-face-B {
+  fill: var(--back);
 }

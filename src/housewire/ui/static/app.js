@@ -2627,6 +2627,127 @@
   }
 
   const PLANE_R = 6;
+  /** NW isometric extrusion (SVG up-left) for leaf place bevel + mouth marks. */
+  const ISO_DX = -8;
+  const ISO_DY = -8;
+  const OPENING_MARK_R = 5;
+
+  /** True for faces treated as near/visible under a fixed NW camera. */
+  function isoFaceNear(visualFace) {
+    const f = String(visualFace || "").toUpperCase();
+    return f === "N" || f === "W" || f === "F";
+  }
+
+  /**
+   * Visual offset for an opening mark on a face (routing mouths stay unshifted).
+   * N most NW … B most recessed.
+   */
+  function isoOffsetForVisualFace(visualFace) {
+    const f = String(visualFace || "").toUpperCase();
+    const scales = {
+      N: 1.0,
+      W: 0.78,
+      F: 0.62,
+      E: 0.28,
+      S: 0.22,
+      B: 0.06,
+    };
+    const s = scales[f] != null ? scales[f] : 0.4;
+    return {
+      dx: ISO_DX * s,
+      dy: ISO_DY * s,
+      near: isoFaceNear(f),
+      face: f,
+    };
+  }
+
+  /** All opening cell ids for a place: opening_grid cells ∪ declared openings. */
+  function openingCellsForNode(node) {
+    const ids = new Set();
+    const expanded = expandFaceGridMap(node.opening_grid);
+    for (const face of ["N", "S", "E", "W", "F", "B"]) {
+      const spec = expanded[face];
+      if (!spec) continue;
+      for (const id of listFaceCellIds(face, spec[0], spec[1])) {
+        ids.add(id);
+      }
+    }
+    for (const op of node.openings || []) {
+      const id = typeof op === "string" ? op : op && op.id;
+      if (id) ids.add(String(id));
+    }
+    return [...ids];
+  }
+
+  function nodeHasOpeningMarks(node) {
+    if (!node) return false;
+    if ((node.openings || []).length) return true;
+    const grid = node.opening_grid;
+    return Boolean(grid && typeof grid === "object" && Object.keys(grid).length);
+  }
+
+  /** Local mark position = 2D mouth + iso offset (for paint / sync / hit). */
+  function openingMarkLocal(node, openingId, byId) {
+    const faceHint = String(openingId || "?").match(/^[NSEWFB]/i)?.[0] || "?";
+    const anchor = openingAnchorLocal(node, openingId, faceHint, byId);
+    const visualFace = anchor.face || faceHint;
+    const iso = isoOffsetForVisualFace(visualFace);
+    return {
+      x: anchor.x + iso.dx,
+      y: anchor.y + iso.dy,
+      face: visualFace,
+      near: iso.near,
+      mouthX: anchor.x,
+      mouthY: anchor.y,
+    };
+  }
+
+  function nodeIsoTopPathD(w, _h) {
+    return `M 0 0 L ${w} 0 L ${w + ISO_DX} ${ISO_DY} L ${ISO_DX} ${ISO_DY} Z`;
+  }
+
+  function nodeIsoWestPathD(_w, h) {
+    return `M 0 0 L ${ISO_DX} ${ISO_DY} L ${ISO_DX} ${h + ISO_DY} L 0 ${h} Z`;
+  }
+
+  function nodeIsoFarEdgesD(w, h) {
+    return (
+      `M ${w} 0 L ${w + ISO_DX} ${ISO_DY} ` +
+      `L ${w + ISO_DX} ${h + ISO_DY} L ${ISO_DX} ${h + ISO_DY}`
+    );
+  }
+
+  function appendNodeIsoBevel(g, w, h) {
+    const iso = el("g", { class: "node-iso", "aria-hidden": "true" });
+    iso.appendChild(
+      el("path", { class: "node-iso-face node-iso-top", d: nodeIsoTopPathD(w, h) })
+    );
+    iso.appendChild(
+      el("path", {
+        class: "node-iso-face node-iso-west",
+        d: nodeIsoWestPathD(w, h),
+      })
+    );
+    iso.appendChild(
+      el("path", {
+        class: "node-iso-far",
+        d: nodeIsoFarEdgesD(w, h),
+      })
+    );
+    g.appendChild(iso);
+    return iso;
+  }
+
+  function syncNodeIsoBevel(g, w, h) {
+    const iso = g.querySelector("g.node-iso");
+    if (!iso) return;
+    const top = iso.querySelector("path.node-iso-top");
+    const west = iso.querySelector("path.node-iso-west");
+    const far = iso.querySelector("path.node-iso-far");
+    if (top) top.setAttribute("d", nodeIsoTopPathD(w, h));
+    if (west) west.setAttribute("d", nodeIsoWestPathD(w, h));
+    if (far) far.setAttribute("d", nodeIsoFarEdgesD(w, h));
+  }
 
   function planeGridDims(node, face, plane) {
     let cols = 1;
@@ -7360,45 +7481,23 @@
 
   function syncOpeningMarks(node) {
     const g = nodesById[node.id];
-    if (!g || !node.openings?.length) return;
+    if (!g || !nodeHasOpeningMarks(node)) return;
     const w = nodeW(node);
     const h = nodeH(node);
     const placeMap = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
-    for (const op of node.openings) {
-      const face = (op.face || op.id?.[0] || "?").toUpperCase();
-      const anchor = openingAnchorLocal(node, op.id, face, placeMap);
-      const visualFace = anchor.face || flipFace(face, effectiveFlips(node, placeMap));
-      const sel = `[data-opening="${CSS.escape(String(op.id))}"]`;
-      if (face === "B" || face === "F") {
-        const circle = g.querySelector(`circle${sel}`);
-        const text = g.querySelector(`text${sel}`);
-        if (circle) {
-          circle.setAttribute("cx", String(anchor.x));
-          circle.setAttribute("cy", String(anchor.y));
-        }
-        if (text) {
-          text.setAttribute("x", String(anchor.x));
-          text.setAttribute("y", String(anchor.y + 3));
-        }
-        continue;
+    syncNodeIsoBevel(g, w, h);
+    for (const oid of openingCellsForNode(node)) {
+      const mark = openingMarkLocal(node, oid, placeMap);
+      const sel = `[data-opening="${CSS.escape(String(oid))}"]`;
+      g.querySelectorAll(`circle${sel}`).forEach((circle) => {
+        circle.setAttribute("cx", String(mark.x));
+        circle.setAttribute("cy", String(mark.y));
+      });
+      const text = g.querySelector(`text.opening-label${sel}`);
+      if (text) {
+        text.setAttribute("x", String(mark.x));
+        text.setAttribute("y", String(mark.y + 3));
       }
-      const mark = g.querySelector(`circle.opening-side-mark${sel}`);
-      if (mark) {
-        mark.setAttribute("cx", String(anchor.x));
-        mark.setAttribute("cy", String(anchor.y));
-      }
-      const text = g.querySelector(`text.opening-side${sel}`);
-      if (!text) continue;
-      const labelX =
-        visualFace === "W" ? 4 : visualFace === "E" ? w - 4 : anchor.x;
-      const labelY =
-        visualFace === "N" ? 10 : visualFace === "S" ? h - 3 : anchor.y + 3;
-      text.setAttribute("x", String(labelX));
-      text.setAttribute("y", String(labelY));
-      text.setAttribute(
-        "text-anchor",
-        visualFace === "W" ? "start" : visualFace === "E" ? "end" : "middle"
-      );
     }
   }
 
@@ -7492,11 +7591,15 @@
     const w = nodeW(node);
     const h = nodeH(node);
     const hasKids = childrenOf(node.id).length > 0;
+    const showOpenings = !hasKids && nodeHasOpeningMarks(node);
     const g = el("g", {
       class: "node" + (hasKids ? " container" : ""),
       "data-id": node.id,
       transform: `translate(${a.x},${a.y})`,
     });
+    if (showOpenings) {
+      appendNodeIsoBevel(g, w, h);
+    }
     const box = el("rect", {
       class:
         "node-box" +
@@ -7527,75 +7630,50 @@
       textClass: "node-type",
     });
 
-    if (!hasKids) {
-      const planes = (node.openings || []).filter(
-        (o) => o.face === "B" || o.face === "F"
-      );
-      const sides = (node.openings || []).filter(
-        (o) => o.face !== "B" && o.face !== "F"
-      );
-      for (const op of sides) {
-        const anchor = openingAnchorLocal(node, op.id, op.face, byId);
-        const visualFace = anchor.face || op.face;
-        const labelX =
-          visualFace === "W" ? 4 : visualFace === "E" ? w - 4 : anchor.x;
-        const labelY =
-          visualFace === "N" ? 10 : visualFace === "S" ? h - 3 : anchor.y + 3;
-        // Invisible hit target at the mouth (label text alone is too small).
-        g.appendChild(
-          el("circle", {
-            class: "opening-side-mark",
-            "data-opening": op.id,
-            cx: anchor.x,
-            cy: anchor.y,
-            r: PLANE_R,
-          })
-        );
-        g.appendChild(
-          el(
-            "text",
-            {
-              class: "opening-side",
-              "data-opening": op.id,
-              x: labelX,
-              y: labelY,
-              "text-anchor":
-                visualFace === "W"
-                  ? "start"
-                  : visualFace === "E"
-                    ? "end"
-                    : "middle",
-            },
-            op.id
-          )
-        );
-      }
-      for (const op of planes) {
-        const anchor = openingAnchorLocal(node, op.id, op.face, byId);
-        const markClass =
-          op.face === "F" ? "opening-front-mark" : "opening-back-mark";
-        const textClass =
-          op.face === "F" ? "opening-front" : "opening-back";
-        g.appendChild(
-          el("circle", {
-            class: markClass,
-            "data-opening": op.id,
-            cx: anchor.x,
-            cy: anchor.y,
-            r: PLANE_R,
-          })
-        );
+    if (showOpenings) {
+      const cells = openingCellsForNode(node);
+      // Far marks first so near strokes paint on top when they overlap.
+      const ordered = [...cells].sort((a, b) => {
+        const ma = openingMarkLocal(node, a, byId);
+        const mb = openingMarkLocal(node, b, byId);
+        if (ma.near !== mb.near) return ma.near ? 1 : -1;
+        return 0;
+      });
+      for (const oid of ordered) {
+        const mark = openingMarkLocal(node, oid, byId);
+        const nearFar = mark.near ? "opening-near" : "opening-far";
+        const faceClass = `opening-face-${mark.face || "X"}`;
+        if (!mark.near) {
+          g.appendChild(
+            el("circle", {
+              class: `opening-mark-ring opening-far ${faceClass}`,
+              "data-opening": oid,
+              cx: mark.x,
+              cy: mark.y,
+              r: OPENING_MARK_R + 2,
+            })
+          );
+        }
+        const circle = el("circle", {
+          class: `opening-mark ${nearFar} ${faceClass}`,
+          "data-opening": oid,
+          cx: mark.x,
+          cy: mark.y,
+          r: OPENING_MARK_R,
+        });
+        circle.appendChild(el("title", null, oid));
+        g.appendChild(circle);
         g.appendChild(
           el(
             "text",
             {
-              class: textClass,
-              "data-opening": op.id,
-              x: anchor.x,
-              y: anchor.y + 3,
+              class: `opening-label ${nearFar} ${faceClass}`,
+              "data-opening": oid,
+              x: mark.x,
+              y: mark.y + 3,
               "text-anchor": "middle",
             },
-            op.id
+            oid
           )
         );
       }
