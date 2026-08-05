@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.75.2] — 2026-08-05
+
+### Changed
+
+- View toolbar and menu: Electrical sits next to depth (+/−); depth items
+  are grouped together in the View menu (depth out/in, then Electrical).
+
 ## [0.75.1] — 2026-08-05
 
 ### Fixed

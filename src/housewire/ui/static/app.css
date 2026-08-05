@@ -337,6 +337,25 @@ body {
   background: var(--border);
 }
 
+.tool-sep-inline {
+  display: inline-block;
+  align-self: center;
+  width: 1px;
+  height: 1.25rem;
+  min-height: 0;
+  margin: 0 0.2rem;
+}
+
+.tool-depth-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.05rem;
+}
+
+.tool-depth-cluster .depth-label {
+  margin: 0 0.05rem;
+}
+
 .tool-btn {
   display: inline-flex;
   align-items: center;
