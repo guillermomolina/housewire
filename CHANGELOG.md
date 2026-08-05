@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.3] — 2026-08-05
+
+### Fixed
+
+- File Save now routes to Save As when a document has no filesystem target,
+  and regular Save writes back to the chosen file path.
+
+
 ## [0.77.2] — 2026-08-05
 
 ### Fixed
