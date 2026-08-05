@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.73.7] — 2026-08-05
+
+### Fixed
+
+- Boot no longer aborts when syncing the electrical UI: ``paletteCatalog`` is
+  declared before the early ``syncElectricalUi`` call so route E2E (and the
+  Electrical toolbar button) work again.
+
 ## [0.73.6] — 2026-08-05
 
 ### Fixed

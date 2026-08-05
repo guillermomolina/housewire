@@ -41,6 +41,8 @@
   let panX = 40;
   let panY = 40;
   let dirtyLocal = false;
+  /** Catalog type rows for the left palette (null until /api/catalog). */
+  let paletteCatalog = null;
   /** Client mirror of whether the workspace has an open document. */
   let hasDocument = false;
   /** @type {string | null} */
@@ -12340,7 +12342,6 @@
     "catalog-item": "menu.insert.element",
   };
 
-  let paletteCatalog = null;
   let pendingCatalogInsert = null;
   let pendingCatalogPlacement = null;
   let placementDrag = null;
