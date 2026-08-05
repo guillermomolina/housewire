@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.4] — 2026-08-05
+
+### Fixed
+
+- Leaf place isometric boxes draw a full hidden wireframe (back face and depth
+  ribs) with dashed strokes, matching far opening marks.
+
 ## [0.77.3] — 2026-08-05
 
 ### Fixed

@@ -2230,6 +2230,7 @@ button:hover {
   stroke-linejoin: miter;
 }
 
+.node-iso-hidden,
 .node-iso-far {
   fill: none;
   stroke: var(--edge);

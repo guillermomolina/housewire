@@ -2824,10 +2824,15 @@
     return `M 0 0 L ${ISO_DX} ${ISO_DY} L ${ISO_DX} ${h + ISO_DY} L 0 ${h} Z`;
   }
 
-  function nodeIsoFarEdgesD(w, h) {
+  /** Dashed hidden edges: back face (B) + depth ribs (E/S sides). */
+  function nodeIsoHiddenWireD(w, h) {
+    const dx = ISO_DX;
+    const dy = ISO_DY;
     return (
-      `M ${w} 0 L ${w + ISO_DX} ${ISO_DY} ` +
-      `L ${w + ISO_DX} ${h + ISO_DY} L ${ISO_DX} ${h + ISO_DY}`
+      `M ${dx} ${dy} H ${w + dx} V ${h + dy} H ${dx} Z ` +
+      `M ${w} 0 L ${w + dx} ${dy} ` +
+      `M ${w} ${h} L ${w + dx} ${h + dy} ` +
+      `M 0 ${h} L ${dx} ${h + dy}`
     );
   }
 
@@ -2844,8 +2849,8 @@
     );
     iso.appendChild(
       el("path", {
-        class: "node-iso-far",
-        d: nodeIsoFarEdgesD(w, h),
+        class: "node-iso-hidden",
+        d: nodeIsoHiddenWireD(w, h),
       })
     );
     g.appendChild(iso);
@@ -2857,10 +2862,14 @@
     if (!iso) return;
     const top = iso.querySelector("path.node-iso-top");
     const west = iso.querySelector("path.node-iso-west");
-    const far = iso.querySelector("path.node-iso-far");
+    let hidden = iso.querySelector("path.node-iso-hidden");
+    if (!hidden) {
+      hidden = iso.querySelector("path.node-iso-far");
+      if (hidden) hidden.setAttribute("class", "node-iso-hidden");
+    }
     if (top) top.setAttribute("d", nodeIsoTopPathD(w, h));
     if (west) west.setAttribute("d", nodeIsoWestPathD(w, h));
-    if (far) far.setAttribute("d", nodeIsoFarEdgesD(w, h));
+    if (hidden) hidden.setAttribute("d", nodeIsoHiddenWireD(w, h));
   }
 
   function planeGridDims(node, face, plane) {
