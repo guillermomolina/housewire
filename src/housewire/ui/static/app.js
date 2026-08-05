@@ -4620,6 +4620,12 @@
         [p2.x, p2.y],
       ]
     );
+    // Keep conduit endpoints locked to rendered mouth positions even after
+    // route simplification removes tiny out-and-back detours.
+    if (pts.length) {
+      pts[0] = [p1.x, p1.y];
+      pts[pts.length - 1] = [p2.x, p2.y];
+    }
     return { d: pointsToPathD(pts), segs: segsFromPoints(pts, half) };
   }
 

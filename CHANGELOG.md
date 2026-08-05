@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.14] — 2026-08-05
+
+### Fixed
+
+- Conduit paths now pin their first/last route points to opening mouths after
+  route simplification, preventing endpoints from stopping short of the target
+  opening marks.
+
 ## [0.77.13] — 2026-08-05
 
 ### Fixed
