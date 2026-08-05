@@ -8,6 +8,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.73.4] — 2026-08-05
+
+### Fixed
+
+- Catalog insert uses ASCII technical ids (``Caja_de_derivacion``) so canvas
+  navigation does not fail on Unicode NFD forms of accented ids.
+- Place lookup accepts NFC-equivalent path segments for legacy accented ids.
+- Nested catalog placement requests enough canvas depth so new child places
+  appear immediately.
+
 ## [0.73.3] — 2026-08-05
 
 ### Fixed

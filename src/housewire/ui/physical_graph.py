@@ -963,11 +963,14 @@ def build_physical_graph(
     depth: int = 1,
     session_docs: dict[Path, dict[str, Any]] | None = None,
     locale: str | None = None,
+    site_yaml: Path | None = None,
 ) -> dict[str, Any]:
     """Build UI graph for one location (nested places in the site YAML)."""
     if depth < 1:
         raise ValueError("depth must be >= 1")
-    _yaml_path, site_doc = _load_site_doc(site_root, session_docs=session_docs)
+    _yaml_path, site_doc = _load_site_doc(
+        site_root, session_docs=session_docs, site_yaml=site_yaml
+    )
     canvas_parts = logical_parts_from_id(location_id)
     try:
         loc_doc = get_place_node(site_doc, canvas_parts)
@@ -1290,12 +1293,19 @@ def apply_auto_layout(
     origin_x: float = 80.0,
     origin_y: float = 80.0,
     cols: int = 4,
+    site_yaml: Path | None = None,
 ) -> list[str]:
     """Assign grid positions to nodes missing x/y (or all if force)."""
     graph = build_physical_graph(
-        site_root, location_id, depth=depth, session_docs=session_docs
+        site_root,
+        location_id,
+        depth=depth,
+        session_docs=session_docs,
+        site_yaml=site_yaml,
     )
-    yaml_path, site_doc = _load_site_doc(site_root, session_docs=session_docs)
+    yaml_path, site_doc = _load_site_doc(
+        site_root, session_docs=session_docs, site_yaml=site_yaml
+    )
     session_docs[yaml_path] = site_doc
     canvas_parts = logical_parts_from_id(location_id)
     by_parent: dict[str | None, list[dict[str, Any]]] = {}
@@ -1478,12 +1488,19 @@ def apply_electrical_auto_layout(
     session_docs: dict[Path, dict[str, Any]],
     depth: int = 1,
     force: bool = False,
+    site_yaml: Path | None = None,
 ) -> list[str]:
     """Assign grid ``view.electrical`` when missing (or all if force)."""
     graph = build_physical_graph(
-        site_root, location_id, depth=depth, session_docs=session_docs
+        site_root,
+        location_id,
+        depth=depth,
+        session_docs=session_docs,
+        site_yaml=site_yaml,
     )
-    yaml_path, site_doc = _load_site_doc(site_root, session_docs=session_docs)
+    yaml_path, site_doc = _load_site_doc(
+        site_root, session_docs=session_docs, site_yaml=site_yaml
+    )
     session_docs[yaml_path] = site_doc
     canvas_parts = logical_parts_from_id(location_id)
     by_parent: dict[str | None, list[dict[str, Any]]] = {}

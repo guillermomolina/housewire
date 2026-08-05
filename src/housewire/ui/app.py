@@ -107,6 +107,7 @@ def create_app(site_root: Path | None = None) -> Any:
             depth=depth,
             session_docs=_session_docs(),
             locale=loc,
+            site_yaml=_site_yaml(),
         )
 
     def _touch_site() -> None:
@@ -992,6 +993,7 @@ def create_app(site_root: Path | None = None) -> Any:
                 session_docs=docs,
                 depth=depth,
                 force=force,
+                site_yaml=_site_yaml(),
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
@@ -1070,6 +1072,7 @@ def create_app(site_root: Path | None = None) -> Any:
                 session_docs=docs,
                 depth=depth,
                 force=force,
+                site_yaml=_site_yaml(),
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc

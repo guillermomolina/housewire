@@ -12714,10 +12714,17 @@
     // Parent from the placement origin (view floor → current location / ".").
     const parentCanvasId = placeParentAtWorld(box.x + 1, box.y + 1);
     const local = worldToParentLocal(box.x, box.y, parentCanvasId);
+    // Nested inserts need enough depth to appear on the canvas (and in the
+    // returned graph). Depth 1 only shows direct children of the canvas.
+    const parentRelDepth =
+      !parentCanvasId || parentCanvasId === "."
+        ? 0
+        : String(parentCanvasId).split("/").filter(Boolean).length;
+    const needDepth = Math.max(depthLevel, parentRelDepth + 1);
     const body = {
       location_id: locationId,
       place_id: resolvePlaceApiId(parentCanvasId),
-      depth: depthLevel,
+      depth: needDepth,
       type_id: d.type_id,
       subtype: d.subtype || undefined,
       id: d.id || undefined,
@@ -12737,9 +12744,14 @@
         body: JSON.stringify(body),
       });
       graph = res.graph;
-      depthLevel = graph.depth || depthLevel;
-      maxDepth = graph.max_depth || maxDepth;
+      depthLevel = Math.max(
+        needDepth,
+        graph.depth || depthLevel,
+        depthLevel
+      );
+      maxDepth = Math.max(graph.max_depth || maxDepth, depthLevel);
       render();
+      updateDepthLabel();
       await loadOutline();
       const newId = res.result?.id;
       if (newId) await selectNode(newId);
@@ -12768,13 +12780,14 @@
     if (labelEl) labelEl.value = "";
   }
 
-  /** Technical id from a localized label (keeps letters/digits, spaces → _). */
+  /** Technical id from a localized label (ASCII; accents stripped). */
   function suggestIdFromLabel(label) {
     const raw = String(label || "").trim();
     if (!raw) return "NewItem";
+    const ascii = raw.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
     let out = "";
-    for (const ch of raw) {
-      if (/[\p{L}\p{N}_-]/u.test(ch)) out += ch;
+    for (const ch of ascii) {
+      if (/[A-Za-z0-9_-]/.test(ch)) out += ch;
       else out += "_";
     }
     out = out.replace(/_+/g, "_").replace(/^_|_$/g, "");

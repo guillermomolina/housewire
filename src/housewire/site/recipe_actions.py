@@ -807,13 +807,13 @@ def _next_free_child_id(parent_doc: dict[str, Any], base: str) -> str:
 
 
 def _safe_token(raw: str | None, fallback: str) -> str:
+    """ASCII technical id (accents stripped), same rules as ``normalize_token``."""
+    from housewire.house import normalize_token
+
     text = str(raw or "").strip()
     if not text:
         return fallback
-    out = "".join(ch if (ch.isalnum() or ch in {"_", "-"}) else "_" for ch in text)
-    out = out.strip("_")
-    while "__" in out:
-        out = out.replace("__", "_")
+    out = normalize_token(text)
     return out or fallback
 
 
