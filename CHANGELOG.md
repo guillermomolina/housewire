@@ -8,6 +8,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.73.8] — 2026-08-05
+
+### Fixed
+
+- File → New: tab shows the real YAML filename (``Nuevo_sitio.yaml``) with a
+  dirty bullet until Save; root Id in properties shows that technical stem
+  (path remains ``.``); sticky dirty no longer clears when the temp file matches
+  the buffer.
+
 ## [0.73.7] — 2026-08-05
 
 ### Fixed

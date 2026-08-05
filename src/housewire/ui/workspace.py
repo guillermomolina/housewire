@@ -9,6 +9,7 @@ from typing import Any
 
 import yaml
 
+from housewire.house import normalize_token
 from housewire.site.io import create_site_document, require_house_document, save_yaml
 from housewire.site.paths import find_site_yaml, is_yaml, list_root_yaml_files
 from housewire.site.session import SiteSession
@@ -32,6 +33,8 @@ class Document:
     browser_origin: bool = False
     # Optional tab label (e.g. localized "New site"); falls back to YAML name.
     display_title: str | None = None
+    # File → New: stay dirty until the first Save (even if buffer matches disk).
+    force_dirty: bool = False
 
     @property
     def yaml_path(self) -> Path:
@@ -93,6 +96,7 @@ class Workspace:
     def _doc_payload(self, doc: Document) -> dict[str, Any]:
         yaml_path = doc.yaml_path
         dirty_paths = doc.session.dirty_paths()
+        dirty = bool(dirty_paths) or doc.force_dirty
         return {
             "id": doc.id,
             "path": str(doc.root),
@@ -101,8 +105,17 @@ class Workspace:
             "yaml_path": str(yaml_path),
             "title": doc.title,
             "browser_origin": doc.browser_origin,
-            "dirty": bool(dirty_paths),
+            "dirty": dirty,
         }
+
+    def clear_force_dirty(self, doc_id: str | None = None) -> None:
+        """Clear File → New sticky dirty (after a successful Save)."""
+        target = doc_id if doc_id is not None else self.active_id
+        if target is None:
+            return
+        doc = self.documents.get(target)
+        if doc is not None:
+            doc.force_dirty = False
 
     def status(self) -> dict[str, Any]:
         docs = [
@@ -114,11 +127,18 @@ class Workspace:
         dirty: list[str] = []
         if active is not None:
             root = active.root
+            seen: set[str] = set()
             for path in active.session.dirty_paths():
                 try:
-                    dirty.append(str(path.relative_to(root)))
+                    rel = str(path.relative_to(root))
                 except ValueError:
-                    dirty.append(str(path))
+                    rel = str(path)
+                dirty.append(rel)
+                seen.add(rel)
+            if active.force_dirty:
+                yaml_name = active.yaml_path.name
+                if yaml_name not in seen:
+                    dirty.append(yaml_name)
         return {
             "documents": docs,
             "active": self.active_id,
@@ -242,17 +262,18 @@ class Workspace:
     ) -> Document:
         """Create an empty site tab (temp dir + localized YAML name).
 
-        The new document is marked dirty until Save / Save as. Tab title,
-        root ``name``/``label``, and suggested filename follow ``locale``
-        (``es`` → ``Nuevo sitio`` / ``Nuevo sitio.yaml``).
+        The new document stays dirty until Save / Save as. Tab text is the
+        YAML filename (technical stem + ``.yaml``). Root ``name``/``label``
+        follow ``locale`` (``es`` → ``Nuevo sitio`` / ``Nuevo_sitio.yaml``).
         """
         loc = str(locale or "en").strip().lower()
         if loc.startswith("es"):
-            title = "Nuevo sitio"
+            human = "Nuevo sitio"
         else:
-            title = "New site"
-        root_label = label or title
-        yaml_name = f"{title}.yaml"
+            human = "New site"
+        root_label = label or human
+        tech_id = normalize_token(root_label)
+        yaml_name = f"{tech_id}.yaml"
         root = Path(tempfile.mkdtemp(prefix="housewire-new-"))
         self._browser_temps.append(root)
         yaml_path = create_site_document(
@@ -264,7 +285,9 @@ class Workspace:
         )
         doc = self.open_site(yaml_path, force=True, browser_origin=True)
         registered = self.documents[doc.id]
-        registered.display_title = title
+        # Tab shows the real filename (with .yaml), not a title without suffix.
+        registered.display_title = None
+        registered.force_dirty = True
         registered.session.mark_dirty(yaml_path)
         return registered
 

@@ -1282,6 +1282,7 @@ def create_app(site_root: Path | None = None) -> Any:
             raise HTTPException(409, str(exc)) from exc
         # Even if nothing was dirty, align baseline with the on-disk doc.
         session.mark_edit_baseline(_site_yaml())
+        workspace.clear_force_dirty()
         yaml_path = session.site_yaml()
         try:
             text = yaml_path.read_text(encoding="utf-8")

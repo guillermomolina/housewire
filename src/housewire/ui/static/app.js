@@ -47,6 +47,8 @@
   let hasDocument = false;
   /** @type {string | null} */
   let activeDocId = null;
+  /** Active document YAML filename (e.g. Nuevo_sitio.yaml) for root Id display. */
+  let activeYamlName = null;
   /** @type {Record<string, FileSystemFileHandle>} */
   let fileHandles = {};
   /** sessionStorage key for per-document camera/view (survives F5). */
@@ -496,12 +498,19 @@
     const docs = (st && st.documents) || [];
     hasDocument = docs.length > 0 && Boolean(st.document);
     activeDocId = (st && st.active) || (st.document && st.document.id) || null;
+    activeYamlName =
+      (st && st.document && st.document.yaml) ||
+      (st &&
+        st.documents &&
+        st.documents.find((d) => d.id === activeDocId)?.yaml) ||
+      null;
     if (!hasDocument) {
       dirtyLocal = false;
       canUndo = false;
       canRedo = false;
       canReset = false;
       activeDocId = null;
+      activeYamlName = null;
       updateHistoryButtons();
     }
     const serverDirty = ((st && st.dirty) || []).length > 0;
@@ -9501,6 +9510,14 @@
     return id;
   }
 
+  /** Root place path is ``.``; show the site YAML stem (``Nuevo_sitio``). */
+  function formatPlaceIdDisplay(id) {
+    if (id && id !== ".") return id;
+    const yaml = activeYamlName || "";
+    const stem = yaml.replace(/\.(ya?ml)$/i, "");
+    return stem || id || "—";
+  }
+
   async function fillPlaceInspector(id, detailOpt) {
     await flushPendingPropsSave();
     hideLinkActionBar();
@@ -9534,7 +9551,11 @@
       const meta = document.getElementById("props-meta");
       if (!meta) return;
       meta.innerHTML = "";
-      appendPropsRow(meta, { key: "id", value: detail.id, editable: false });
+      appendPropsRow(meta, {
+        key: "id",
+        value: formatPlaceIdDisplay(detail.id),
+        editable: false,
+      });
       appendPropsRow(meta, {
         key: "parent",
         value: formatPlaceParentLabel(placeKey === "." ? "." : id),
@@ -10843,7 +10864,7 @@
       applyWorkspaceStatus(st);
       await reloadAfterDocumentChange();
       const name =
-        (st.document && (st.document.title || st.document.yaml)) ||
+        (st.document && (st.document.yaml || st.document.title)) ||
         t("file.newSiteTitle");
       setStatus(t("status.newSite", { name }));
     } catch (err) {
@@ -11101,14 +11122,20 @@
       btn.setAttribute("aria-selected", doc.id === active ? "true" : "false");
       btn.dataset.docId = doc.id;
       const label = document.createElement("span");
-      label.textContent = (doc.dirty ? "• " : "") + (doc.title || doc.yaml);
-      label.title = doc.yaml_path || doc.path || doc.title || doc.yaml || "";
+      const dirty =
+        Boolean(doc.dirty) ||
+        (doc.id === active && dirtyLocal) ||
+        ((st.dirty || []).length > 0 && doc.id === active);
+      // Prefer real filename (with .yaml) over a title without extension.
+      const tabName = doc.yaml || doc.title || "untitled";
+      label.textContent = (dirty ? "• " : "") + tabName;
+      label.title = doc.yaml_path || doc.path || tabName;
       btn.appendChild(label);
       const close = document.createElement("button");
       close.type = "button";
       close.className = "view-tab-close";
       close.title = "Close file";
-      close.setAttribute("aria-label", `Close ${doc.title || doc.yaml}`);
+      close.setAttribute("aria-label", `Close ${tabName}`);
       close.textContent = "×";
       close.addEventListener("click", (ev) => {
         ev.stopPropagation();
