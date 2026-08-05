@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.82.6] — 2026-08-05
+
+### Fixed
+
+- Localize remaining UI strings that still used hard-coded English: unsaved
+  close / delete dialogs, modal defaults, recipe insert forms, and status-bar
+  messages (``es`` / ``en`` via ``i18n.js``).
+
 ## [0.82.5] — 2026-08-05
 
 ### Fixed

@@ -319,8 +319,8 @@
       return Promise.resolve(null);
     }
     const buttons = opts.buttons || [
-      { id: "cancel", label: "Cancel" },
-      { id: "ok", label: "OK", primary: true },
+      { id: "cancel", label: t("modal.cancel") },
+      { id: "ok", label: t("modal.ok"), primary: true },
     ];
     return new Promise((resolve) => {
       titleEl.textContent = opts.title || "HouseWire";
@@ -331,7 +331,7 @@
         if (wantsInput) {
           inputWrap.classList.remove("hidden");
           if (inputLabel) {
-            inputLabel.textContent = opts.input.label || "Path";
+            inputLabel.textContent = opts.input.label || t("modal.path");
           }
           inputEl.value = opts.input.value || "";
           inputEl.placeholder = opts.input.placeholder || "";
@@ -426,13 +426,13 @@
       title: opts.title || "HouseWire",
       message: opts.message || "",
       input: {
-        label: opts.label || "Path",
+        label: opts.label || t("modal.path"),
         value: opts.value || "",
         placeholder: opts.placeholder || "",
       },
       buttons: [
-        { id: "cancel", label: "Cancel" },
-        { id: "ok", label: opts.okLabel || "OK", primary: true },
+        { id: "cancel", label: t("modal.cancel") },
+        { id: "ok", label: opts.okLabel || t("modal.ok"), primary: true },
       ],
     });
     if (choice !== "ok" || !inputEl) return null;
@@ -442,14 +442,14 @@
 
   /** @returns {Promise<"save"|"discard"|null>} */
   async function confirmUnsavedClose(docTitle) {
-    const name = docTitle || "This file";
+    const name = docTitle || t("modal.unsavedThisFile");
     const choice = await appDialog({
-      title: "Unsaved changes",
-      message: `${name} has unsaved changes. Save before closing?`,
+      title: t("modal.unsavedTitle"),
+      message: t("modal.unsavedMessage", { name }),
       buttons: [
-        { id: "cancel", label: "Cancel" },
-        { id: "discard", label: "Discard", danger: true },
-        { id: "save", label: "Save", primary: true },
+        { id: "cancel", label: t("modal.cancel") },
+        { id: "discard", label: t("modal.discard"), danger: true },
+        { id: "save", label: t("menu.file.save"), primary: true },
       ],
     });
     if (choice === "save" || choice === "discard") return choice;
@@ -933,14 +933,14 @@
     }
     const n = siteIds.length;
     const choice = await appDialog({
-      title: "Delete",
+      title: t("modal.deleteTitle"),
       message:
         n === 1
-          ? `Delete ${siteIds[0]} and its contents? Cross-boundary cables become open runs.`
-          : `Delete ${n} selected item(s) and their contents? Cross-boundary cables become open runs.`,
+          ? t("modal.deleteOne", { id: siteIds[0] })
+          : t("modal.deleteMany", { n }),
       buttons: [
-        { id: "cancel", label: "Cancel" },
-        { id: "delete", label: "Delete", danger: true, primary: true },
+        { id: "cancel", label: t("modal.cancel") },
+        { id: "delete", label: t("menu.edit.delete"), danger: true, primary: true },
       ],
     });
     if (choice !== "delete") return;
@@ -9844,7 +9844,7 @@
       render();
     }
     applyEditFlags(res);
-    setStatus("flip updated");
+    setStatus(t("status.flipUpdated"));
     scheduleStatusRefresh();
     if (propsTarget.kind === "element" && selectedId) {
       const elem = (graph?.elements || []).find((e) => e.id === selectedId);
@@ -9895,7 +9895,7 @@
       render();
     }
     applyEditFlags(res);
-    setStatus("properties updated");
+    setStatus(t("status.propertiesUpdated"));
     scheduleStatusRefresh();
     await loadOutline();
     highlightOutlineSelection();
@@ -9914,7 +9914,7 @@
     const empty = document.getElementById("panel-empty");
     const panel = document.getElementById("panel-props");
     if (!empty || !panel) {
-      setStatus("Properties panel missing — hard-reload the page (Ctrl+Shift+R)");
+      setStatus(t("status.propsPanelMissing"));
       return;
     }
     ensurePropertiesVisible();
@@ -10218,7 +10218,7 @@
     const empty = document.getElementById("panel-empty");
     const panel = document.getElementById("panel-props");
     if (!empty || !panel) {
-      setStatus("Properties panel missing — hard-reload the page (Ctrl+Shift+R)");
+      setStatus(t("status.propsPanelMissing"));
       return;
     }
     if (!id || !locationId) {
@@ -10399,7 +10399,7 @@
       return;
     }
     if (selectedIds.size > 1) {
-      setStatus(`${selectedIds.size} selected`);
+      setStatus(t("status.nSelected", { n: selectedIds.size }));
       highlightOutlineSelection();
       await fillPlaceInspector(null);
       return;
@@ -10686,16 +10686,16 @@
     if (opt) {
       depthLevel = DEPTH_MAX_REQUEST;
       await setCanvasLocation(nextId);
-      setStatus(`Entered ${nextId}`);
+      setStatus(t("status.entered", { id: nextId }));
       return;
     }
     // Not a canvas root in the selector: deepen the view instead.
     if (node.expandable || childrenOf(node.id).length) {
       await setDepth(depthLevel + 1);
-      setStatus(`Depth ${depthLevel}`);
+      setStatus(t("status.depth", { n: depthLevel }));
       return;
     }
-    setStatus(`No deeper view for ${node.id}`);
+    setStatus(t("status.noDeeperView", { id: node.id }));
   }
 
   async function endDrag(ev) {
@@ -11562,7 +11562,7 @@
         fileHandles[st.document.id] = picked.handle;
       }
       await reloadAfterDocumentChange();
-      setStatus(`opened ${picked.name}`);
+      setStatus(t("status.opened", { name: picked.name }));
     } catch (err) {
       setStatus(String(err.message || err));
     }
@@ -11683,14 +11683,14 @@
       if (!hasDocument) {
         clearDocumentUi();
         await refreshDocumentLabel();
-        setStatus("document closed — File → Open…");
+        setStatus(t("status.documentClosedNeedOpen"));
         return;
       }
       if (wasActive) {
         resetCanvasState();
         await loadLocations();
       }
-      setStatus("document closed");
+      setStatus(t("status.documentClosed"));
     } catch (err) {
       setStatus(String(err.message || err));
     }
@@ -11712,7 +11712,11 @@
       applyWorkspaceStatus(st);
       resetCanvasState();
       await loadLocations();
-      setStatus(`switched to ${(st.document && st.document.title) || docId}`);
+      setStatus(
+        t("status.switchedTo", {
+          name: (st.document && st.document.title) || docId,
+        })
+      );
     } catch (err) {
       setStatus(String(err.message || err));
     }
@@ -11815,7 +11819,7 @@
       });
       if (hasCamera) applySavedCamera(saved);
     } else {
-      setStatus("No locations with children found");
+      setStatus(t("status.noLocations"));
     }
   }
 
@@ -12331,7 +12335,7 @@
     }
     const canvasRoot = nearestSelectableAncestor(placeId);
     if (!canvasRoot) {
-      setStatus(`No canvas view for ${placeId}`);
+      setStatus(t("status.noCanvasView", { id: placeId }));
       return;
     }
     const needDepth = placeDepthUnderCanvas(placeId, canvasRoot);
@@ -12359,7 +12363,7 @@
     if (!parentPlace) return;
     const canvasRoot = nearestSelectableAncestor(parentPlace);
     if (!canvasRoot) {
-      setStatus(`No canvas view for ${parentPlace}`);
+      setStatus(t("status.noCanvasView", { id: parentPlace }));
       return;
     }
     const needDepth = placeDepthUnderCanvas(parentPlace, canvasRoot);
@@ -12407,13 +12411,13 @@
     rememberCurrentDocView();
     const bits = [];
     if (filled.length) {
-      bits.push(`${filled.length} place(s)`);
+      bits.push(t("status.autoPlacedPlaces", { n: filled.length }));
     }
     if (filledElem.length) {
-      bits.push(`${filledElem.length} element(s)`);
+      bits.push(t("status.autoPlacedElements", { n: filledElem.length }));
     }
     if (bits.length) {
-      setStatus(`auto-placed ${bits.join(" + ")} missing x/y`);
+      setStatus(t("status.autoPlaced", { bits: bits.join(" + ") }));
     }
     renderOutline();
     updateDocStatusStrip();
@@ -13958,7 +13962,7 @@
       await loadOutline();
       const newId = res.result?.place_id;
       if (newId) await selectNode(newId);
-      setStatus(`${kind} added`);
+      setStatus(t("status.kindAdded", { kind }));
       scheduleStatusRefresh();
       form.reset();
       if (selectedId) {
