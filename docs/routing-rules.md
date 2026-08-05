@@ -3,8 +3,10 @@
 These rules define what **correct** physical/electrical canvas routing looks
 like for HouseWire. Detectors live in
 [`housewire.ui.route_quality`](../src/housewire/ui/route_quality.py); the hop
-assembler is in [`app.js`](../src/housewire/ui/static/app.js)
-(`cableBaseSubpaths`). End-to-end checks paint a site and call
+assembler (`cableBaseSubpaths`) lives in
+[`app/03-routing.js`](../src/housewire/ui/static/app/03-routing.js)
+(bundled into [`app.js`](../src/housewire/ui/static/app.js); run ``make bundle-ui``).
+End-to-end checks paint a site and call
 `assess_live_canvas` on the SVG paths.
 
 English only in this document (program/docs language). Site YAML labels may

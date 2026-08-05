@@ -8,6 +8,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.85.0] — 2026-08-05
+
+### Changed
+
+- Split the UI ``app.js`` IIFE into domain fragments under
+  ``src/housewire/ui/static/app/`` (``01-core`` … ``05-shell``). The browser
+  still loads one generated ``app.js``; rebuild with ``make bundle-ui`` /
+  ``python scripts/bundle_ui_app.py``.
+
 ## [0.84.0] — 2026-08-05
 
 ### Added

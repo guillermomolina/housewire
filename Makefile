@@ -9,7 +9,7 @@ CATALOG_LOCAL := catalogs/default
 # Parallel workers for live route E2E (each spins serve + Chromium).
 E2E_WORKERS ?= 4
 
-.PHONY: all prepare install test test-route-e2e test-route-e2e-smoke
+.PHONY: all prepare install test test-route-e2e test-route-e2e-smoke bundle-ui
 
 # Editable install with dev tools + UI + examples + catalog.
 EXTRAS := .[dev,ui,examples,catalog]
@@ -29,6 +29,10 @@ prepare:
 	$(MAKE) install
 
 all:
+
+# Concatenate ``src/housewire/ui/static/app/*.js`` → ``app.js`` (served IIFE).
+bundle-ui:
+	$(PYTHON) scripts/bundle_ui_app.py
 
 test: test-unit test-route-e2e
 
