@@ -30,10 +30,10 @@ prepare:
 
 all:
 
-# Unit/integration first; live route E2E in parallel (xdist).
-test:
+test: test-unit test-route-e2e
+
+test-unit:
 	$(PYTHON) -m pytest tests --ignore=tests/route_e2e -q
-	$(PYTHON) -m pytest tests/route_e2e -q -n $(E2E_WORKERS) --dist loadfile
 
 # Full live route suite (Chromium from ``make install``).
 test-route-e2e:
