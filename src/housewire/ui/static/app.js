@@ -4883,7 +4883,8 @@
         return { d, dCore: d, segs: segsFromPoints(pts, half) };
       }
       // Offset B/F mouths: prefer a single Manhattan L (one corner) mark-to-mark
-      // when both L orientations clear endpoint-excluded obstacles.
+      // when both L orientations clear place obstacles and prior tubes
+      // (no colinear stack — Route_28 needs C/U when L paths would overlap).
       if (
         fromPlane &&
         toPlane &&
@@ -4902,12 +4903,16 @@
             [m2.x, m2.y],
           ]),
         ];
+        const stackEps = Math.max(LANE_GAP, half || 0);
         /** @type {{pts:number[][], cost:number, len:number}[]} */
         const scored = [];
         for (const pts of lCandidates) {
           if (pts.length < 3) continue;
           const cost = pathObstacleCost(pts, obstacles);
           if (cost > 0) continue;
+          if (pathStackConflictCost(pts, occupied, stackEps, half) > 0) {
+            continue;
+          }
           let len = 0;
           for (let i = 1; i < pts.length; i++) {
             len += Math.hypot(

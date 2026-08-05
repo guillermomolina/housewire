@@ -1,0 +1,199 @@
+schema: house/v2
+type: House
+name: Route_28
+label: Route 28 — back-face conduits that cannot share L paths
+notes: >
+  Same B 2x2 JunctionBox pattern as Route_27, but DeviceBoxes are placed so
+  mark-to-mark Manhattan L routes would colinear-stack; routing must use
+  extra bends (C/U) so tubes stay separated.
+
+elements:
+  Caja_de_derivacion:
+    type: JunctionBox
+    elements: {}
+    cables: {}
+    name: Caja de derivación
+    label: Caja de derivación
+    subtype: IP40
+    opening_grid:
+      B: 2x2
+    install: Flush
+    mount: Wall
+    openings: []
+    view:
+      physical:
+        x: 438.2076423637224
+        y: 528.3154239547403
+        w: 234.0
+        h: 196.0
+  Caja_de_mecanismo_3:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo 3
+    label: West
+    subtype: OneGang
+    opening_grid:
+      B: 1
+    install: Surface
+    mount: Wall
+    openings: []
+    view:
+      physical:
+        x: 374.863907239884
+        y: 0.0
+        w: 240.0
+        h: 160.0
+  Caja_de_mecanismo_2:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo 2
+    label: North
+    subtype: OneGang
+    opening_grid:
+      B: 1
+    install: Surface
+    mount: Wall
+    openings: []
+    view:
+      physical:
+        x: 77.24786766242451
+        y: 139.4640378388413
+        w: 240.0
+        h: 160.0
+  Caja_de_mecanismo_1:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo 1
+    label: East
+    subtype: OneGang
+    opening_grid:
+      B: 1
+    install: Surface
+    mount: Wall
+    openings: []
+    view:
+      physical:
+        x: 21.36588549516658
+        y: 346.87857834810654
+        w: 240.0
+        h: 160.0
+  Caja_de_mecanismo:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo
+    label: South
+    subtype: OneGang
+    opening_grid:
+      B: 1
+    install: Surface
+    mount: Wall
+    openings: []
+    view:
+      physical:
+        x: 79.80560156624188
+        y: 543.0640335153324
+        w: 240.0
+        h: 160.0
+cables:
+  OPEN_Linea_01_1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    subtype: Power
+  OPEN_Linea_01_2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    subtype: Power
+  OPEN_Linea_01:
+    type: Cable
+    contains:
+    - OPEN_Linea_01_1
+    - OPEN_Linea_01_2
+    color: BK
+    subtype: Power
+  Conducto_OPEN_Linea_01_01:
+    type: Conduit
+    from: Caja_de_mecanismo_3.B1-1
+    to: Caja_de_derivacion.B1-1
+    contains:
+    - OPEN_Linea_01
+    subtype: Tube
+  OPEN_Linea_02_1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    subtype: Power
+  OPEN_Linea_02_2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    subtype: Power
+  OPEN_Linea_02:
+    type: Cable
+    contains:
+    - OPEN_Linea_02_1
+    - OPEN_Linea_02_2
+    color: BK
+    subtype: Power
+  Conducto_OPEN_Linea_02_01:
+    type: Conduit
+    from: Caja_de_mecanismo_2.B1-1
+    to: Caja_de_derivacion.B1-2
+    contains:
+    - OPEN_Linea_02
+    subtype: Tube
+  OPEN_Linea_03_1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    subtype: Power
+  OPEN_Linea_03_2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    subtype: Power
+  OPEN_Linea_03:
+    type: Cable
+    contains:
+    - OPEN_Linea_03_1
+    - OPEN_Linea_03_2
+    color: BK
+    subtype: Power
+  Conducto_OPEN_Linea_03_01:
+    type: Conduit
+    from: Caja_de_mecanismo_1.B1-1
+    to: Caja_de_derivacion.B2-2
+    contains:
+    - OPEN_Linea_03
+    subtype: Tube
+  OPEN_Linea_04_1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    subtype: Power
+  OPEN_Linea_04_2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    subtype: Power
+  OPEN_Linea_04:
+    type: Cable
+    contains:
+    - OPEN_Linea_04_1
+    - OPEN_Linea_04_2
+    color: BK
+    subtype: Power
+  Conducto_OPEN_Linea_04_01:
+    type: Conduit
+    from: Caja_de_derivacion.B2-1
+    to: Caja_de_mecanismo.B1-1
+    contains:
+    - OPEN_Linea_04
+    subtype: Tube
+install: Surface
+mount: Wall

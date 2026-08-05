@@ -118,7 +118,9 @@ an inbox path from the boca to the pin. Intermediate `Cable` sheaths
       ``halfWidth_a + halfWidth_b + laneGap`` apart. Perpendicular crossings
       are allowed and **preferred** over a long C-detour around the other
       tube. Strands of conduit A sitting on conduit B’s stroke is wrong;
-      strands of A on A’s own tube is correct.
+      strands of A on A’s own tube is correct. The mark-to-mark Manhattan L
+      shortcut for plane bocas (B/F) must refuse candidates that would stack
+      on already routed tubes (fall through to contour / ortho; see Route_28).
     - **Inbox** — Same-box cables stay inside the host place content box;
       the place grows to fit the cable envelope when needed. Prefer short
       runs (including crossings) over long outside loops.
@@ -177,3 +179,5 @@ Live E2E coverage:
 | `Route_24` | Straight side-face cross conduits |
 | `Route_25` | ISO opening-mark layout |
 | `Route_26` | Straight back-face conduits (no vertices) |
+| `Route_27` | L-shaped back-face conduits (one corner) |
+| `Route_28` | Back-face L would stack — use C/U instead |

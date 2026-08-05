@@ -8,6 +8,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.82.0] — 2026-08-05
+
+### Added
+
+- Example **Route_28** and E2E: back-face layout where mark-to-mark L paths
+  would colinear-stack; live routes must clear prior tubes and use extra bends.
+
+### Changed
+
+- Plane-to-plane Manhattan L shortcut rejects candidates that stack on already
+  occupied conduit segments (falls through to contour / ortho routing).
+
 ## [0.81.1] — 2026-08-05
 
 ### Fixed

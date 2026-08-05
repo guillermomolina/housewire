@@ -429,6 +429,55 @@ def assert_tubes_l_shape(
     test.assertEqual(bad, [], msg=f"non-L tubes: {bad}")
 
 
+def assert_tubes_avoid_l_overlap(
+    test: unittest.TestCase,
+    site_name: str,
+    *,
+    expected: int,
+    min_extra_bend_tubes: int = 1,
+) -> None:
+    """Site cannot keep every tube as a single L without stacking.
+
+    Live cores must not colinear-overlap, and at least
+    ``min_extra_bend_tubes`` cores must have ≥2 bends (C/U fallback when the
+    mark-to-mark L shortcut would stack on prior tubes).
+    """
+    from housewire.ui.route_quality import tubes_colinear_overlap
+
+    site = resolve_example_site(site_name)
+    if site is None or not site.is_file():
+        raise unittest.SkipTest(
+            f"{site_name} not found (install housewire-examples)"
+        )
+    data = dump_live_canvas(site, require_tubes=True)
+    test.assertNotIn("err", data, msg=data)
+    raw = data.get("tube_cores") or data.get("tubes") or []
+    tubes = [t for t in raw if len(t) >= 2]
+    test.assertEqual(len(tubes), expected, msg=data)
+    halves = data.get("halves") or []
+    if halves and len(halves) == len(data.get("tubes") or []):
+        # Align halves with non-empty cores the same way as assert_site_routes_ok.
+        raw_paint = data.get("tubes") or []
+        raw_cores = data.get("tube_cores") or raw_paint
+        halves = [
+            h
+            for t, h in zip(raw_cores, halves, strict=False)
+            if len(t) >= 2
+        ]
+    overlap = tubes_colinear_overlap(
+        tubes,
+        tube_half_widths=halves or None,
+    )
+    test.assertEqual(overlap, [], msg=f"colinear tube overlap: {overlap}")
+
+    multi = sum(1 for pts in tubes if _ortho_bend_count(pts) >= 2)
+    test.assertGreaterEqual(
+        multi,
+        min_extra_bend_tubes,
+        msg=f"expected ≥{min_extra_bend_tubes} tubes with ≥2 bends, got {multi}",
+    )
+
+
 # Match src/housewire/ui/static/app.js isometric opening-mark constants.
 _ISO_DX = -20.0
 _ISO_DY = -20.0
