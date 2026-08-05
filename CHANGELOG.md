@@ -8,6 +8,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.9] — 2026-08-05
+
+### Fixed
+
+- The top-right front↔back diagonal is now solid (visible edge), side openings
+  use a dedicated color, and front/back opening marks are pushed further inside
+  their face rectangles using a 1.5x depth inset rule to avoid overlap with
+  side openings.
+
 ## [0.77.8] — 2026-08-05
 
 ### Fixed

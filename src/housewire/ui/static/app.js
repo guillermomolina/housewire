@@ -2733,6 +2733,8 @@
   const ISO_MARK_SIDE_DEPTH_T = 0.5;
   /** Keep marks clear from any projected rectangle border. */
   const ISO_MARK_FACE_MARGIN = OPENING_MARK_R + 6;
+  /** F/B marks stay deeper inside their face than side marks (>= 1.5X). */
+  const ISO_MARK_FB_INSET_FACTOR = 1.5;
   /** Tiny anti-colinearity offset for F/B marks inside their faces. */
   const ISO_MARK_FB_STAGGER = 3;
 
@@ -2788,20 +2790,22 @@
     // Keep marks off face borders so circles do not touch box lines.
     const w = nodeW(node);
     const h = nodeH(node);
+    const insetX = Math.max(margin, Math.abs(ISO_DX) * ISO_MARK_FB_INSET_FACTOR);
+    const insetY = Math.max(margin, Math.abs(ISO_DY) * ISO_MARK_FB_INSET_FACTOR);
     if (f === "F") {
-      x = Math.max(margin, Math.min(w - margin, x));
-      y = Math.max(margin, Math.min(h - margin, y));
+      x = Math.max(insetX, Math.min(w - insetX, x));
+      y = Math.max(insetY, Math.min(h - insetY, y));
       x += ISO_MARK_FB_STAGGER;
       y -= ISO_MARK_FB_STAGGER;
-      x = Math.max(margin, Math.min(w - margin, x));
-      y = Math.max(margin, Math.min(h - margin, y));
+      x = Math.max(insetX, Math.min(w - insetX, x));
+      y = Math.max(insetY, Math.min(h - insetY, y));
     } else if (f === "B") {
-      x = Math.max(ISO_DX + margin, Math.min(ISO_DX + w - margin, x));
-      y = Math.max(ISO_DY + margin, Math.min(ISO_DY + h - margin, y));
+      x = Math.max(ISO_DX + insetX, Math.min(ISO_DX + w - insetX, x));
+      y = Math.max(ISO_DY + insetY, Math.min(ISO_DY + h - insetY, y));
       x -= ISO_MARK_FB_STAGGER;
       y += ISO_MARK_FB_STAGGER;
-      x = Math.max(ISO_DX + margin, Math.min(ISO_DX + w - margin, x));
-      y = Math.max(ISO_DY + margin, Math.min(ISO_DY + h - margin, y));
+      x = Math.max(ISO_DX + insetX, Math.min(ISO_DX + w - insetX, x));
+      y = Math.max(ISO_DY + insetY, Math.min(ISO_DY + h - insetY, y));
     } else if (f === "N" || f === "S") {
       x = Math.max(margin, Math.min(w - margin, x));
     } else if (f === "E" || f === "W") {
@@ -2832,6 +2836,7 @@
     return (
       `M ${dx} ${dy} H ${w + dx} ` +
       `M ${dx} ${dy} V ${h + dy} ` +
+      `M ${w} 0 L ${w + dx} ${dy} ` +
       `M 0 0 L ${dx} ${dy} ` +
       `M 0 ${h} L ${dx} ${h + dy}`
     );
@@ -2843,7 +2848,6 @@
     const dy = ISO_DY;
     return (
       `M ${w + dx} ${dy} V ${h + dy} H ${dx} ` +
-      `M ${w} 0 L ${w + dx} ${dy} ` +
       `M ${w} ${h} L ${w + dx} ${h + dy}`
     );
   }

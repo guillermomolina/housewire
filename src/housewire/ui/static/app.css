@@ -2279,13 +2279,18 @@ button:hover {
   stroke-linecap: butt;
 }
 
-.opening-mark.opening-face-B.opening-far,
-.opening-mark.opening-face-B.opening-near {
-  stroke: var(--back);
+.opening-mark.opening-face-N,
+.opening-mark.opening-face-S,
+.opening-mark.opening-face-E,
+.opening-mark.opening-face-W {
+  stroke: color-mix(in srgb, var(--accent) 80%, var(--opening));
 }
 
-.opening-mark.opening-face-B.opening-near {
-  fill: color-mix(in srgb, var(--back) 18%, transparent);
+.opening-mark.opening-face-N.opening-near,
+.opening-mark.opening-face-S.opening-near,
+.opening-mark.opening-face-E.opening-near,
+.opening-mark.opening-face-W.opening-near {
+  fill: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .opening-label {
@@ -2299,6 +2304,9 @@ button:hover {
   font-size: 6px;
 }
 
-.opening-label.opening-face-B {
-  fill: var(--back);
+.opening-label.opening-face-N,
+.opening-label.opening-face-S,
+.opening-label.opening-face-E,
+.opening-label.opening-face-W {
+  fill: color-mix(in srgb, var(--accent) 80%, var(--opening));
 }
