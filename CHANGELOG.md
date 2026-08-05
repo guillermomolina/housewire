@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.70.2] — 2026-08-05
+
+### Fixed
+
+- Empty new sites list the House root as a canvas location, so Insert → Element
+  Add can enter placement (previously ``locationId`` stayed unset and Add did
+  nothing).
+
 ## [0.70.1] — 2026-08-05
 
 ### Fixed

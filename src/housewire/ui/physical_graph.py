@@ -677,7 +677,9 @@ def list_canvas_locations(
     """Place tree (preorder), only nodes useful as canvas roots.
 
     Each row includes ``depth`` for UI indentation. A node is included if it
-    has child places (selectable) or is an ancestor of such a node.
+    has child places (selectable) or is an ancestor of such a node. An empty
+    site (root with no child places) still lists ``"."`` so the first items
+    can be placed.
     Pass ``site_yaml`` when the site root contains several YAML files.
     """
     root = site_root.resolve()
@@ -732,6 +734,11 @@ def list_canvas_locations(
         parts = info["parts"]
         if any(_is_descendant(parts, other["parts"]) for other in places.values()):
             selectable.add(loc_id)
+
+    # Empty site (House with no child places): still expose root so the UI can
+    # open a canvas and place the first containers/elements.
+    if "." in places and not selectable:
+        selectable.add(".")
 
     keep: set[str] = set(selectable)
     for loc_id in selectable:

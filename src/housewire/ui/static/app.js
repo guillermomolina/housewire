@@ -12711,7 +12711,10 @@
   }
 
   async function submitPaletteInsert(form) {
-    if (!locationId) return;
+    if (!locationId) {
+      insertMsg(t("status.needCanvas"), true);
+      return;
+    }
     const data = Object.fromEntries(new FormData(form).entries());
     const typeId = String((pendingCatalogInsert && pendingCatalogInsert.type_id) || "").trim();
     if (!typeId) {

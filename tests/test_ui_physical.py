@@ -351,6 +351,20 @@ class TestPhysicalGraph(unittest.TestCase):
             )
             self.assertEqual(socket.get("icon"), "plug")
 
+    def test_empty_house_lists_root_canvas(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            from housewire.site.io import create_site_document
+
+            create_site_document(root, type_id="House", label="Blank")
+            locations = list_canvas_locations(root)
+            self.assertEqual(len(locations), 1)
+            self.assertEqual(locations[0]["id"], ".")
+            self.assertTrue(locations[0]["selectable"])
+            graph = build_physical_graph(root, ".", depth=1)
+            self.assertEqual(graph["nodes"], [])
+            self.assertEqual(graph["elements"], [])
+
     def test_multi_hop_cable_follows_conduit_chain(self) -> None:
         """Cable listed in several conduits gets a hop path between hosts."""
         with tempfile.TemporaryDirectory() as tmp:
