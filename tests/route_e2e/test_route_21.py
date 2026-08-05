@@ -5,6 +5,7 @@ import unittest
 
 from tests.route_e2e._harness import (
     assert_named_tube_segment_count,
+    assert_no_colinear_tube_overlap,
     assert_site_routes_ok,
     dump_live_canvas,
     resolve_example_site,
@@ -29,6 +30,7 @@ class TestRoute21(unittest.TestCase):
             )
         data = dump_live_canvas(site, require_tubes=True, depth=2)
         self.assertNotIn("err", data, msg=data)
+        assert_no_colinear_tube_overlap(self, data)
         assert_named_tube_segment_count(
             self,
             data,

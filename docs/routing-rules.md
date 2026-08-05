@@ -161,7 +161,8 @@ site, dumps `path.edge-tube` and colored strands, then runs
 | Terminal V | `missing terminal V diagonal` |
 | Opening parallel | `multi-cable strands meet` / `meet at mouth` |
 | Tube packing | `tube underfilled` |
-| Conduit stack | `tubes colinear-overlap` |
+| Conduit stack | `tubes colinear-overlap` — asserted in every live geometry E2E via
+  ``assert_no_colinear_tube_overlap`` / ``assert_site_routes_ok`` |
 | Through element | `through element` |
 | Out-and-back | `out-and-back` |
 

@@ -332,13 +332,48 @@ def dump_live_canvas(
                 proc.kill()
 
 
+def assert_no_colinear_tube_overlap(
+    test: unittest.TestCase,
+    data: dict,
+    *,
+    min_overlap: float = 24.0,
+) -> None:
+    """Fail if any two painted conduits colinear-stack (routing rule 15).
+
+    Used by every live geometry E2E helper so sites cannot skip the check.
+    """
+    from housewire.ui.route_quality import tubes_colinear_overlap
+
+    raw = data.get("tubes") or []
+    tubes = [t for t in raw if len(t) >= 2]
+    if len(tubes) < 2:
+        return
+    halves = data.get("halves") or []
+    if halves and len(halves) == len(data.get("tubes") or []):
+        halves = [
+            h
+            for t, h in zip(data.get("tubes") or [], halves, strict=False)
+            if len(t) >= 2
+        ]
+    overlap = tubes_colinear_overlap(
+        tubes,
+        tube_half_widths=halves or None,
+        min_overlap=min_overlap,
+    )
+    test.assertEqual(
+        overlap,
+        [],
+        msg=f"colinear tube overlap: {overlap}",
+    )
+
+
 def assert_site_routes_ok(
     test: unittest.TestCase,
     site_name: str,
     *,
     require_tubes: bool = True,
     min_strands: int = 1,
-) -> None:
+) -> dict:
     """Load ``site_name`` and assert live route invariants."""
     site = resolve_example_site(site_name)
     if site is None or not site.is_file():
@@ -354,6 +389,7 @@ def assert_site_routes_ok(
     )
     if require_tubes:
         test.assertGreaterEqual(len(data.get("tubes") or []), 1, msg=data)
+    assert_no_colinear_tube_overlap(test, data)
     raw_cores = data.get("tube_cores") or data.get("tubes") or []
     tubes = [t for t in raw_cores if len(t) >= 2]
     halves = data.get("halves") or []
@@ -381,6 +417,7 @@ def assert_site_routes_ok(
         [],
         msg=f"site={site_name} ver={data.get('ver')} issues={issues}",
     )
+    return data
 
 
 def _clean_ortho_pts(
@@ -449,6 +486,7 @@ def assert_tubes_straight(
     test.assertNotIn("err", data, msg=data)
     tubes = [t for t in (data.get("tubes") or []) if len(t) >= 2]
     test.assertEqual(len(tubes), expected, msg=data)
+    assert_no_colinear_tube_overlap(test, data)
     bad: list[tuple[int, list]] = []
     for i, pts in enumerate(tubes):
         xs = [p[0] for p in pts]
@@ -461,6 +499,7 @@ def assert_tubes_straight(
         if max_points is not None and len(pts) > max_points:
             bad.append((i, pts))
     test.assertEqual(bad, [], msg=f"non-straight tubes: {bad}")
+    return data
 
 
 def assert_tubes_l_shape(
@@ -487,6 +526,7 @@ def assert_tubes_l_shape(
     raw = data.get("tube_cores") or data.get("tubes") or []
     tubes = [t for t in raw if len(t) >= 2]
     test.assertEqual(len(tubes), expected, msg=data)
+    assert_no_colinear_tube_overlap(test, data)
     bad: list[tuple[int, str, list]] = []
     for i, pts in enumerate(tubes):
         clean = _clean_ortho_pts(pts)
@@ -509,6 +549,7 @@ def assert_tubes_l_shape(
             elif len(clean) > max_points:
                 bad.append((i, f"points={len(clean)}", clean))
     test.assertEqual(bad, [], msg=f"non-L tubes: {bad}")
+    return data
 
 
 def assert_tubes_avoid_l_overlap(
@@ -518,7 +559,7 @@ def assert_tubes_avoid_l_overlap(
     expected: int,
     min_extra_bend_tubes: int = 1,
     max_segments_when_extra: int = 3,
-) -> None:
+) -> dict:
     """Site cannot keep every tube as a single L without stacking.
 
     Live tubes must not colinear-overlap, and at least
@@ -526,8 +567,6 @@ def assert_tubes_avoid_l_overlap(
     Those detours must stay within ``max_segments_when_extra`` segments
     (mark-to-mark C/U, not contour+iso stub chains).
     """
-    from housewire.ui.route_quality import tubes_colinear_overlap
-
     site = resolve_example_site(site_name)
     if site is None or not site.is_file():
         raise unittest.SkipTest(
@@ -539,19 +578,7 @@ def assert_tubes_avoid_l_overlap(
     raw = data.get("tubes") or data.get("tube_cores") or []
     tubes = [t for t in raw if len(t) >= 2]
     test.assertEqual(len(tubes), expected, msg=data)
-    halves = data.get("halves") or []
-    if halves and len(halves) == len(data.get("tubes") or []):
-        raw_paint = data.get("tubes") or []
-        halves = [
-            h
-            for t, h in zip(raw_paint, halves, strict=False)
-            if len(t) >= 2
-        ]
-    overlap = tubes_colinear_overlap(
-        tubes,
-        tube_half_widths=halves or None,
-    )
-    test.assertEqual(overlap, [], msg=f"colinear tube overlap: {overlap}")
+    assert_no_colinear_tube_overlap(test, data)
 
     multi = 0
     for pts in tubes:

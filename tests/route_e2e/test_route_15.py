@@ -5,6 +5,7 @@ import unittest
 
 from tests.route_e2e._harness import (
     assert_named_tube_segment_count,
+    assert_no_colinear_tube_overlap,
     dump_live_canvas,
     resolve_example_site,
 )
@@ -28,6 +29,7 @@ class TestRoute15(unittest.TestCase):
             msg=data.get("depth_label"),
         )
         self.assertEqual(len(data.get("tubes") or []), 1, msg=data)
+        assert_no_colinear_tube_overlap(self, data)
         # User: 1 segment when aligned (this fixture), at most 3 otherwise.
         assert_named_tube_segment_count(
             self,

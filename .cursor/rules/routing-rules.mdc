@@ -27,3 +27,6 @@ quality detectors, or live route E2E:
 8. If the user states a **segment budget** for a named conduit, add a failing
    E2E assert for that tube (see `conduit-segment-budget-tests` rule) — do not
    ship the routing fix without that check.
+9. Every live geometry E2E must assert **no colinear tube stack**
+   (`assert_no_colinear_tube_overlap` / `assert_site_routes_ok`). Do not add a
+   new route E2E that skips this check.
