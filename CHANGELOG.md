@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+
+## [0.68.1] — 2026-08-05
+
+### Fixed
+
+- Example sites Route_13 / Route_18 / Route_20 / Route_21: restored valid YAML
+  indentation for `name` under Supply / EarthElectrode (broken File → Open and
+  `yaml.safe_load` after a subtype cleanup).
+
 ## [0.68.0] — 2026-08-05
 
 ### Changed

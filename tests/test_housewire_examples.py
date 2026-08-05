@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+
+import yaml
 
 
 class TestHousewireExamples(unittest.TestCase):
@@ -21,6 +24,26 @@ class TestHousewireExamples(unittest.TestCase):
         text = path.read_text(encoding="utf-8")
         self.assertIn("schema: house/v2", text)
         self.assertIn("Route 21", text)
+
+    def test_all_bundled_sites_are_valid_yaml(self) -> None:
+        """Every packaged Route_*.yaml must parse (File → Open loads them)."""
+        sites = (
+            Path(__file__).resolve().parents[1]
+            / "packages"
+            / "housewire-examples"
+            / "src"
+            / "housewire_examples"
+            / "sites"
+        )
+        if not sites.is_dir():
+            raise unittest.SkipTest("housewire-examples sites dir missing")
+        files = sorted(sites.glob("Route_*.yaml"))
+        self.assertTrue(files, msg=f"no Route_*.yaml under {sites}")
+        for path in files:
+            with self.subTest(site=path.name):
+                data = yaml.safe_load(path.read_text(encoding="utf-8"))
+                self.assertIsInstance(data, dict, msg=path.name)
+                self.assertEqual(data.get("schema"), "house/v2", msg=path.name)
 
 
 if __name__ == "__main__":

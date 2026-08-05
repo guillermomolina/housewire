@@ -18,7 +18,7 @@ elements:
     elements:
       Acometida:
         type: Supply
-                name: Acometida
+        name: Acometida
         label: Acometida
         notes: Entrada de red (fase + neutro)
         view:
@@ -27,7 +27,7 @@ elements:
             y: 20.0
       Jabalina:
         type: EarthElectrode
-                name: Jabalina
+        name: Jabalina
         label: Jabalina
         notes: Toma de tierra / jabalina
         view:
