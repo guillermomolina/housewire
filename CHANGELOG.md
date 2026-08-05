@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.75.3] — 2026-08-05
+
+### Fixed
+
+- After inserting or reparenting a place into another, depth increases
+  automatically so the new selection appears in the outline and properties.
+
 ## [0.75.2] — 2026-08-05
 
 ### Changed

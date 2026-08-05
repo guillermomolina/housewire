@@ -11508,6 +11508,23 @@
     return Math.max(1, rel.split("/").filter(Boolean).length);
   }
 
+  /** Minimum depth so a site place is visible on the canvas and in the outline. */
+  function depthRequiredForSitePlace(sitePlaceId) {
+    return placeDepthUnderCanvas(sitePlaceId, locationId || ".");
+  }
+
+  /** Deepen the view when a nested place would be hidden at the current depth. */
+  async function ensureDepthForSitePlace(sitePlaceId) {
+    const required = depthRequiredForSitePlace(sitePlaceId);
+    if (required <= depthLevel) {
+      updateDepthLabel();
+      renderOutline();
+      return false;
+    }
+    await setDepth(required);
+    return true;
+  }
+
   async function onOutlineClick(node) {
     if (node.kind === "element") {
       await focusOutlineElement(node);
@@ -12710,6 +12727,10 @@
     }
 
     try {
+      const requestDepth = Math.max(
+        depthLevel,
+        depthRequiredForSitePlace(nestSite) + 1
+      );
       const res = await api("/api/edit/reparent", {
         method: "POST",
         body: JSON.stringify({
@@ -12717,21 +12738,31 @@
           parent_id: nestSite,
           positions,
           location_id: locationId,
-          depth: depthLevel,
+          depth: requestDepth,
         }),
       });
-      if (res.graph) {
+      applyEditFlags(res);
+      const moved = res.moved || [];
+      let targetDepth = depthLevel;
+      for (const siteId of moved) {
+        targetDepth = Math.max(targetDepth, depthRequiredForSitePlace(siteId));
+      }
+      targetDepth = Math.max(targetDepth, depthRequiredForSitePlace(nestSite));
+      if (targetDepth > depthLevel) {
+        await ensureDepthForSitePlace(
+          moved[0] || nestSite
+        );
+      } else if (res.graph) {
         graph = res.graph;
         depthLevel = graph.depth || depthLevel;
         maxDepth = graph.max_depth || maxDepth;
         render();
+        updateDepthLabel();
       } else {
         await loadLocation({ fit: false });
       }
-      applyEditFlags(res);
       expandOutlineAncestors(nestSite);
       await loadOutline();
-      const moved = res.moved || [];
       const relIds = moved
         .map((id) => siteToCanvasRelative(id))
         .filter((id) => id);
@@ -12879,22 +12910,33 @@
     };
     endCatalogPlacementMode();
     setStatus(t("insert.placing"));
+    const depthBeforeInsert = depthLevel;
     try {
       const res = await api("/api/insert/catalog-item", {
         method: "POST",
         body: JSON.stringify(body),
       });
-      graph = res.graph;
-      depthLevel = Math.max(
-        needDepth,
-        graph.depth || depthLevel,
-        depthLevel
-      );
-      maxDepth = Math.max(graph.max_depth || maxDepth, depthLevel);
-      render();
-      updateDepthLabel();
-      await loadOutline();
+      applyEditFlags(res);
       const newId = res.result?.id;
+      const insertedSite = newId ? canvasToSiteId(newId) : null;
+      if (insertedSite) expandOutlineAncestors(insertedSite);
+      const targetDepth = insertedSite
+        ? depthRequiredForSitePlace(insertedSite)
+        : needDepth;
+      if (targetDepth > depthBeforeInsert) {
+        await ensureDepthForSitePlace(insertedSite);
+      } else {
+        graph = res.graph;
+        depthLevel = Math.max(
+          needDepth,
+          graph.depth || depthLevel,
+          targetDepth
+        );
+        maxDepth = Math.max(graph.max_depth || maxDepth, depthLevel);
+        render();
+        updateDepthLabel();
+      }
+      await loadOutline();
       if (newId) await selectNode(newId);
       setStatus(t("status.catalogAddedUnsaved"));
       scheduleStatusRefresh();
