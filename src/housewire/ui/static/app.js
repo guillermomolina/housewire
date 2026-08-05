@@ -135,6 +135,19 @@
   /** Separate generation for post-drag edge refinement. */
   let edgeRefreshGen = 0;
   let edgeRefreshRaf = 0;
+  /** ~one frame budget for conduit re-route slices after drag. */
+  const EDGE_REFRESH_BUDGET_MS = 6;
+  /**
+   * In-flight chunked tube refresh after drag/resize.
+   * @type {{
+   *   gen: number,
+   *   byId: Record<string, any>,
+   *   occupied: ReturnType<typeof createOccupiedIndex>,
+   *   index: number,
+   *   onDone: () => void,
+   * }|null}
+   */
+  let edgeRefreshJob = null;
   const DRAG_THRESHOLD = 4;
   const DBLCLICK_MS = 400;
   const ELEM_W = 72;
@@ -3461,12 +3474,15 @@
     if (renderPassRaf) {
       cancelAnimationFrame(renderPassRaf);
       renderPassRaf = 0;
+      // Tubes pass may have handed off an open geom cache to a cancelled rAF.
+      endRouteGeomCache();
     }
     return renderGen;
   }
 
   /**
-   * Queue the next paint pass; no-op if ``gen`` is already stale.
+   * Queue the next paint pass after the browser has painted the previous one.
+   * Double-rAF so places (or tubes) actually appear before the next heavy pass.
    * @param {number} gen
    * @param {() => void} fn
    */
@@ -3475,7 +3491,11 @@
     renderPassRaf = requestAnimationFrame(() => {
       renderPassRaf = 0;
       if (gen !== renderGen) return;
-      fn();
+      renderPassRaf = requestAnimationFrame(() => {
+        renderPassRaf = 0;
+        if (gen !== renderGen) return;
+        fn();
+      });
     });
   }
 
@@ -3486,11 +3506,102 @@
       cancelAnimationFrame(edgeRefreshRaf);
       edgeRefreshRaf = 0;
     }
+    if (edgeRefreshJob) {
+      endRouteGeomCache();
+      edgeRefreshJob = null;
+    }
     return edgeRefreshGen;
   }
 
   /**
-   * Re-route tubes immediately, then rebuild cables on the next frame.
+   * Run ``fn`` after the browser has painted (double-rAF).
+   * @param {number} gen
+   * @param {() => void} fn
+   */
+  function scheduleEdgeAfterPaint(gen, fn) {
+    edgeRefreshRaf = requestAnimationFrame(() => {
+      edgeRefreshRaf = 0;
+      if (gen !== edgeRefreshGen) return;
+      edgeRefreshRaf = requestAnimationFrame(() => {
+        edgeRefreshRaf = 0;
+        if (gen !== edgeRefreshGen) return;
+        fn();
+      });
+    });
+  }
+
+  /**
+   * Update one conduit item's SVG from a routed path.
+   * @param {(typeof edgePaths)[number]} item
+   * @param {{d:string,dCore?:string,segs:any[]}} routed
+   * @param {number} roadW
+   * @param {Record<string, any>} byId
+   */
+  function applyRoutedTubeVisual(item, routed, roadW, byId) {
+    item.dPaint = routed.d;
+    item.d = routed.dCore || routed.d;
+    const displayD = conduitDisplayD(routed.d, byId, item.edge);
+    for (const path of item.paths) path.setAttribute("d", displayD);
+    const outline = item.paths[0];
+    const tubeHit = item.paths.find((p) =>
+      p.classList?.contains("edge-tube-hit")
+    );
+    const tube = item.paths.find((p) => p.classList?.contains("edge-tube"));
+    const tubeCss = wireColorCss(item.edge.color || "GY");
+    if (outline && outline.classList?.contains("edge-tube-outline")) {
+      applyTubeOutlineVisibility(outline, tubeCss, roadW);
+    }
+    if (tubeHit) {
+      tubeHit.setAttribute("data-hit-visual", String(roadW));
+      tubeHit.style.strokeWidth = String(linkHitStrokeWorld(roadW));
+    }
+    if (tube) {
+      tube.setAttribute("data-core-d", item.d);
+      tube.style.strokeWidth = String(roadW);
+      tube.style.stroke = tubeCss;
+      tube.style.strokeOpacity = item.edge.color ? "0.85" : "0.25";
+    }
+  }
+
+  /** One time-sliced batch of conduit re-routes for ``edgeRefreshJob``. */
+  function refreshTubesChunk(gen) {
+    const job = edgeRefreshJob;
+    if (!job || job.gen !== gen || gen !== edgeRefreshGen || !graph) return;
+    const { byId, occupied } = job;
+    const t0 = performance.now();
+    while (job.index < edgePaths.length) {
+      const item = edgePaths[job.index];
+      job.index += 1;
+      const n = (item.edge.contains || []).length;
+      // Skip full cable layout here — hint widths; cables pass rebuilds layout.
+      const lanes = tubeLaneCount(item.edge, null);
+      const roadW = conduitRoadWidth(n, lanes);
+      const half = roadW / 2;
+      const routed = edgePathD(item.edge, byId, occupied, half);
+      if (routed) {
+        applyRoutedTubeVisual(item, routed, roadW, byId);
+        for (const s of routed.segs) occupied.push(s);
+      }
+      if (performance.now() - t0 >= EDGE_REFRESH_BUDGET_MS) break;
+    }
+    if (job.index < edgePaths.length) {
+      edgeRefreshRaf = requestAnimationFrame(() => {
+        edgeRefreshRaf = 0;
+        if (gen !== edgeRefreshGen) return;
+        refreshTubesChunk(gen);
+      });
+      return;
+    }
+    indexEdgePaths();
+    endRouteGeomCache();
+    const onDone = job.onDone;
+    edgeRefreshJob = null;
+    onDone();
+  }
+
+  /**
+   * After drag/resize: yield so the moved box paints, re-route tubes in
+   * frame-sized chunks, then rebuild cables on a later frame.
    * @param {{ skipConduits?: boolean }} [opts]
    */
   function scheduleProgressiveEdgeRefresh(opts) {
@@ -3498,16 +3609,41 @@
     // Abort any unfinished full progressive paint; transforms already match.
     bumpRenderGen();
     const gen = bumpEdgeRefreshGen();
+
     if (skipConduits) {
-      // Element-only: tubes stay; cables are the expensive step.
-      refreshEdges({ skipConduits: true });
+      scheduleEdgeAfterPaint(gen, () => {
+        if (gen !== edgeRefreshGen) return;
+        refreshEdges({ skipConduits: true });
+      });
       return;
     }
-    refreshEdges({ skipCables: true });
-    edgeRefreshRaf = requestAnimationFrame(() => {
-      edgeRefreshRaf = 0;
-      if (gen !== edgeRefreshGen) return;
-      refreshEdges({ skipConduits: true });
+
+    scheduleEdgeAfterPaint(gen, () => {
+      if (gen !== edgeRefreshGen || !graph) return;
+      // Drop stale strands while tubes catch up (avoids wrong overlay for 1–2s).
+      const cablesG = worldEl && worldEl.querySelector("g.cables");
+      if (cablesG && showElectrical) {
+        cablesG.innerHTML = "";
+        cablePaths = [];
+      }
+      const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+      const elemById = Object.fromEntries(
+        (graph.elements || []).map((e) => [e.id, e])
+      );
+      beginRouteGeomCache(byId, elemById);
+      edgeRefreshJob = {
+        gen,
+        byId,
+        occupied: createOccupiedIndex(),
+        index: 0,
+        onDone: () => {
+          scheduleEdgeAfterPaint(gen, () => {
+            if (gen !== edgeRefreshGen) return;
+            refreshEdges({ skipConduits: true });
+          });
+        },
+      };
+      refreshTubesChunk(gen);
     });
   }
 
@@ -6495,32 +6631,60 @@
   }
 
   /**
-   * Distinct-pin multi-lane inbox: pin → unique-depth stub on the pin column,
-   * H to the lane column, V to the mouth crossing.
+   * Distinct-pin multi-lane inbox: pin → unique-depth stub toward the mouth,
+   * H to the lane column, V to the mouth crossing (≤3 Manhattan segments).
    *
-   * Parallel H runs at lane-unique depths keep ≥LANE_PITCH separation even when
-   * pin order is reversed vs highway lane order (diagonals would cross).
+   * Stub direction follows the pin face when it points at the crossing; otherwise
+   * it flips (N terminals with a south mouth — Route_30). Depths stay inside the
+   * pin→crossing span so the bus cannot run out the opposite wall.
    */
-  function distinctPinLaneBus(att, face, crossing, laneDist, laneCount) {
-    const fo = faceOutwardDelta(face);
+  function distinctPinLaneBus(
+    att,
+    face,
+    crossing,
+    laneDist,
+    laneCount,
+    laneIndex
+  ) {
+    const fo0 = faceOutwardDelta(face);
+    let ux = fo0.x;
+    let uy = fo0.y;
+    const toCx = crossing.x - att.x;
+    const toCy = crossing.y - att.y;
+    if (ux * toCx + uy * toCy < -1e-6) {
+      ux = -ux;
+      uy = -uy;
+    }
     const n = Math.max(1, laneCount | 0);
-    const dist = Number(laneDist) || 0;
-    // Base past the pin cluster; laneDist shifts each strand onto its own depth.
-    const busDepth = TERMINAL_FAN_TIP + LANE_PITCH * (n + 2) + dist;
-    const rail = stubPoint(
-      { x: att.x, y: att.y },
-      fo.x,
-      fo.y,
-      busDepth
+    const i = Math.max(
+      0,
+      Math.min(n - 1, laneIndex != null ? laneIndex | 0 : 0)
     );
+    const along = ux * toCx + uy * toCy;
+    // Pack unique depths toward the mouth; keep ≥LANE_PITCH clear of the boca
+    // so H runs never sit on the mouth latitude.
+    let busDepth = TERMINAL_FAN_TIP + (n - 1 - i) * LANE_PITCH;
+    if (along > 4) {
+      const clear = Math.max(LANE_PITCH * 2, 10);
+      const hi = Math.max(6, along - clear);
+      const lo = Math.min(
+        TERMINAL_FAN_TIP,
+        Math.max(6, hi - (n - 1) * LANE_PITCH)
+      );
+      if (n <= 1) {
+        busDepth = Math.min(busDepth, hi);
+      } else {
+        busDepth = lo + ((n - 1 - i) / (n - 1)) * (hi - lo);
+      }
+    }
+    const rail = stubPoint({ x: att.x, y: att.y }, ux, uy, busDepth);
     /** @type {number[][]} */
     const pts = [
       [att.x, att.y],
       [rail.x, rail.y],
     ];
-    const ns = Math.abs(fo.y) >= Math.abs(fo.x);
+    const ns = Math.abs(uy) >= Math.abs(ux);
     if (ns) {
-      // N/S: H at unique rail.y, then V on lane column.
       if (Math.abs(rail.x - crossing.x) > 1e-6) {
         pts.push([crossing.x, rail.y]);
       }
@@ -6530,7 +6694,6 @@
         pts.push([crossing.x, crossing.y]);
       }
     } else {
-      // E/W: V at unique rail.x, then H on lane row.
       if (Math.abs(rail.y - crossing.y) > 1e-6) {
         pts.push([rail.x, crossing.y]);
       }
@@ -7009,10 +7172,17 @@
   }
 
   /** Remove short Z jogs (two bends with a short middle leg). */
-  function stripShortZJogs(pts, maxLeg = 28) {
+  function stripShortZJogs(pts, maxLeg = 28, protectPts) {
     if (!pts || pts.length < 4) {
       return pts ? pts.map((p) => [p[0], p[1]]) : [];
     }
+    const protect = (protectPts || [])
+      .map((q) =>
+        Array.isArray(q) ? { x: q[0], y: q[1] } : { x: q.x, y: q.y }
+      )
+      .filter((q) => q && Number.isFinite(q.x));
+    const nearProtect = (p) =>
+      protect.some((q) => Math.hypot(p[0] - q.x, p[1] - q.y) < 1.5);
     /** @type {number[][]} */
     let out = pts.map((p) => [p[0], p[1]]);
     let changed = true;
@@ -7023,6 +7193,7 @@
         const b = out[i];
         const c = out[i + 1];
         const d = out[i + 2];
+        if (nearProtect(b) || nearProtect(c) || nearProtect(d)) continue;
         const abx = b[0] - a[0];
         const aby = b[1] - a[1];
         const bcx = c[0] - b[0];
@@ -7038,12 +7209,29 @@
         if (Math.abs(bcx * cdy - bcy * cdx) < 1e-6) continue;
         const mid = Math.hypot(bcx, bcy);
         if (mid <= 1e-6 || mid > maxLeg) continue;
+        const abLen = Math.hypot(abx, aby);
+        const cdLen = Math.hypot(cdx, cdy);
+        // True Z: short lateral between two longer parallel runs. A long stub
+        // then H then short V into the mouth is an L-approach — do not collapse
+        // it onto the mouth latitude (Route_30 stacked H at the boca).
+        if (abLen <= mid || cdLen <= mid) continue;
         const abH = Math.abs(aby) < 1e-6;
         const cdH = Math.abs(cdy) < 1e-6;
         const bcH = Math.abs(bcy) < 1e-6;
         if (abH !== cdH || abH === bcH) continue;
         // Collapse b-c: connect a→d via one L through a corner that skips the Z.
         const corner = abH ? [d[0], a[1]] : [a[0], d[1]];
+        // Do not move a run onto a protected mouth latitude/column.
+        if (nearProtect(corner)) continue;
+        if (
+          protect.some((q) =>
+            abH
+              ? Math.abs(corner[1] - q.y) < 1e-6
+              : Math.abs(corner[0] - q.x) < 1e-6
+          )
+        ) {
+          continue;
+        }
         out = [...out.slice(0, i), corner, ...out.slice(i + 2)];
         changed = true;
         break;
@@ -7803,7 +7991,8 @@
           startFace,
           startCrossing,
           startLaneDist,
-          laneCountHint
+          laneCountHint,
+          laneIndexHint
         );
       } else {
         const startLead = pinToLanePts(
@@ -7827,9 +8016,17 @@
       }
       {
         const before = head.map((p) => [p[0], p[1]]);
-        head = stripShortZJogs(
-          stripOutAndBack(head, [startCrossing, startFanRev[0], ...startFan])
-        );
+        const mouthProtect = [startCrossing, startFanRev[0], ...startFan];
+        // Distinct-pin bus H depths must not be Z-collapsed onto the boca.
+        if (!(multiAtOpening && !(fromSlot.count > 1))) {
+          head = stripShortZJogs(
+            stripOutAndBack(head, mouthProtect),
+            28,
+            mouthProtect
+          );
+        } else {
+          head = stripOutAndBack(head, mouthProtect);
+        }
         // Do not let strip collapse an element-skirting detour (rule 17).
         if (
           startElemObs.length &&
@@ -7871,7 +8068,8 @@
           endFace,
           endCrossing,
           endLaneDist,
-          laneCountHint
+          laneCountHint,
+          laneIndexHint
         );
       } else {
         const endLead = pinToLanePts(
@@ -7898,9 +8096,16 @@
       }
       {
         const before = tailFromPin.map((p) => [p[0], p[1]]);
-        tailFromPin = stripShortZJogs(
-          stripOutAndBack(tailFromPin, [endCrossing, endFanTip, ...endFanFwd])
-        );
+        const mouthProtect = [endCrossing, endFanTip, ...endFanFwd];
+        if (!(multiAtOpening && !(toSlot.count > 1))) {
+          tailFromPin = stripShortZJogs(
+            stripOutAndBack(tailFromPin, mouthProtect),
+            28,
+            mouthProtect
+          );
+        } else {
+          tailFromPin = stripOutAndBack(tailFromPin, mouthProtect);
+        }
         if (
           endElemObs.length &&
           pathObstacleCost(tailFromPin, endElemObs) >
@@ -8365,9 +8570,11 @@
     try {
       /** @type {ReturnType<typeof createOccupiedIndex>} */
       const occupied = createOccupiedIndex();
-      const layoutForTubes = showElectrical
-        ? buildCableLayout(graph.cable_edges || [], elemById, byId)
-        : null;
+      // Tubes-only progressive pass skips packing layout (hint widths suffice).
+      const layoutForTubes =
+        showElectrical && !skipCables
+          ? buildCableLayout(graph.cable_edges || [], elemById, byId)
+          : null;
       if (!skipConduits) {
         for (const item of edgePaths) {
           const n = (item.edge.contains || []).length;
@@ -8376,32 +8583,8 @@
           const half = roadW / 2;
           const routed = edgePathD(item.edge, byId, occupied, half);
           if (routed) {
-            item.dPaint = routed.d;
-            item.d = routed.dCore || routed.d;
-            const displayD = conduitDisplayD(routed.d, byId, item.edge);
-            for (const path of item.paths) path.setAttribute("d", displayD);
+            applyRoutedTubeVisual(item, routed, roadW, byId);
             for (const s of routed.segs) occupied.push(s);
-            const outline = item.paths[0];
-            const tubeHit = item.paths.find((p) =>
-              p.classList?.contains("edge-tube-hit")
-            );
-            const tube = item.paths.find((p) =>
-              p.classList?.contains("edge-tube")
-            );
-            const tubeCss = wireColorCss(item.edge.color || "GY");
-            if (outline && outline.classList?.contains("edge-tube-outline")) {
-              applyTubeOutlineVisibility(outline, tubeCss, roadW);
-            }
-            if (tubeHit) {
-              tubeHit.setAttribute("data-hit-visual", String(roadW));
-              tubeHit.style.strokeWidth = String(linkHitStrokeWorld(roadW));
-            }
-            if (tube) {
-              tube.setAttribute("data-core-d", item.d);
-              tube.style.strokeWidth = String(roadW);
-              tube.style.stroke = tubeCss;
-              tube.style.strokeOpacity = item.edge.color ? "0.85" : "0.25";
-            }
           }
         }
         indexEdgePaths();
@@ -9037,17 +9220,7 @@
       (graph.elements || []).map((e) => [e.id, e])
     );
 
-    /** @type {ReturnType<typeof buildCableLayout>|null} */
-    let layout = null;
-    if (showElectrical) {
-      layout = buildCableLayout(graph.cable_edges || [], elemById, byId);
-      if (expandElementsForTerminalFans(layout, elemById)) {
-        measureVisibleSizes();
-        // Rebuild so attach points use the widened terminal spacing.
-        layout = buildCableLayout(graph.cable_edges || [], elemById, byId);
-      }
-    }
-
+    // Pass 0 — places only (no cable layout: that blocked first paint).
     clearSvg();
 
     worldEl = el("g", { id: "world" });
@@ -9066,7 +9239,6 @@
     worldEl.appendChild(elementsG);
     worldEl.appendChild(cablesG);
 
-    // Pass 0 — places (sync first paint).
     const byDepth = [...graph.nodes].sort(
       (a, b) => (a.parts?.length || 0) - (b.parts?.length || 0)
     );
@@ -9077,27 +9249,43 @@
       if (!childrenOf(node.id).length) paintNode(node, leavesG, byId);
     }
     updateDepthLabel();
+    // Force layout so the browser can paint boxes before the tubes pass.
+    void svg.getBoundingClientRect();
 
     scheduleRenderPass(gen, () => {
-      renderPassTubes(gen, byId, elemById, layout, edgesG, elementsG, cablesG);
+      renderPassTubes(gen, byId, elemById, edgesG, elementsG, cablesG);
     });
   }
 
   /**
-   * Pass 1 — conduits (after places).
+   * Pass 1 — conduits (after places). Builds cable layout here when Electrical
+   * is on so tube widths stay accurate without delaying the places paint.
    * @param {number} gen
    * @param {Record<string, any>} byId
    * @param {Record<string, any>} elemById
-   * @param {ReturnType<typeof buildCableLayout>|null} layout
    * @param {SVGGElement} edgesG
    * @param {SVGGElement} elementsG
    * @param {SVGGElement} cablesG
    */
-  function renderPassTubes(gen, byId, elemById, layout, edgesG, elementsG, cablesG) {
+  function renderPassTubes(gen, byId, elemById, edgesG, elementsG, cablesG) {
     if (gen !== renderGen || !graph || !worldEl) return;
+
+    /** @type {ReturnType<typeof buildCableLayout>|null} */
+    let layout = null;
+    if (showElectrical) {
+      layout = buildCableLayout(graph.cable_edges || [], elemById, byId);
+      if (expandElementsForTerminalFans(layout, elemById)) {
+        measureVisibleSizes();
+        layout = buildCableLayout(graph.cable_edges || [], elemById, byId);
+        // Places already painted; sync box sizes if fans grew elements' hosts.
+        updateNodeVisual(null, { refresh: false });
+      }
+    }
+
     beginRouteGeomCache(byId, elemById);
     /** @type {ReturnType<typeof createOccupiedIndex>} */
     let occupied = createOccupiedIndex();
+    let handOffCache = false;
     try {
       edgePaths = [];
       edgesG.innerHTML = "";
@@ -9154,19 +9342,31 @@
         });
       }
       indexEdgePaths();
+      void svg.getBoundingClientRect();
+
+      if (!showElectrical) {
+        renderExpandPass = 0;
+        updateDepthLabel();
+        return;
+      }
+
+      // Keep geom cache open for the electrical pass (same session as sync paint).
+      handOffCache = true;
+      scheduleRenderPass(gen, () => {
+        renderPassElectrical(
+          gen,
+          byId,
+          elemById,
+          layout,
+          occupied,
+          elementsG,
+          cablesG
+        );
+      });
+      if (gen !== renderGen) handOffCache = false;
     } finally {
-      endRouteGeomCache();
+      if (!handOffCache) endRouteGeomCache();
     }
-
-    if (!showElectrical) {
-      renderExpandPass = 0;
-      updateDepthLabel();
-      return;
-    }
-
-    scheduleRenderPass(gen, () => {
-      renderPassElectrical(gen, byId, elemById, layout, occupied, elementsG, cablesG);
-    });
   }
 
   /**
@@ -9188,9 +9388,10 @@
     elementsG,
     cablesG
   ) {
-    if (gen !== renderGen || !graph || !worldEl || !showElectrical) return;
-    beginRouteGeomCache(byId, elemById);
     try {
+      if (gen !== renderGen || !graph || !worldEl || !showElectrical) return;
+      // Cache should still be open from the tubes pass; refresh if cancelled.
+      if (!routeGeomCache) beginRouteGeomCache(byId, elemById);
       // Fan expand may have changed element sizes since pass 0; refresh layout.
       let cableLayout =
         layout || buildCableLayout(graph.cable_edges || [], elemById, byId);

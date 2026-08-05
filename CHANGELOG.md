@@ -8,6 +8,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.83.1] — 2026-08-05
+
+### Fixed
+
+- Progressive first paint no longer waits on ``buildCableLayout``: places draw
+  immediately, then conduits (layout + tubes), then elements/cables. Double-rAF
+  between passes so each layer can appear before the next heavy pass.
+- After drag/resize, the moved box paints first; conduits re-route in
+  ~6ms frame slices (stale cables cleared), then cables rebuild on a later
+  frame — no multi-second main-thread freeze before any update.
+- Progressive paint keeps the route geometry cache open from the conduit pass
+  into the electrical pass (and clears it if a newer render cancels the rAF).
+
 ## [0.83.0] — 2026-08-05
 
 ### Added
