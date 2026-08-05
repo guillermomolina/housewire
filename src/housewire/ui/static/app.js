@@ -3959,31 +3959,45 @@
     let bx = x2;
     let by = y2;
 
-    if (fromFace === "E") {
+    // Opposing face stubs that would cross in a tight gap (Route_14 Tube2):
+    // skip stubs and route mouth-to-mouth instead of an out-and-back C.
+    let stubFrom = fromFace;
+    let stubTo = toFace;
+    if (
+      (fromFace === "E" && toFace === "W" && x1 + STUB > x2 - STUB) ||
+      (fromFace === "W" && toFace === "E" && x1 - STUB < x2 + STUB) ||
+      (fromFace === "S" && toFace === "N" && y1 + STUB > y2 - STUB) ||
+      (fromFace === "N" && toFace === "S" && y1 - STUB < y2 + STUB)
+    ) {
+      stubFrom = null;
+      stubTo = null;
+    }
+
+    if (stubFrom === "E") {
       ax = x1 + STUB;
       pts.push([ax, ay]);
-    } else if (fromFace === "W") {
+    } else if (stubFrom === "W") {
       ax = x1 - STUB;
       pts.push([ax, ay]);
-    } else if (fromFace === "S") {
+    } else if (stubFrom === "S") {
       ay = y1 + STUB;
       pts.push([ax, ay]);
-    } else if (fromFace === "N") {
+    } else if (stubFrom === "N") {
       ay = y1 - STUB;
       pts.push([ax, ay]);
     }
-    if (toFace === "E") bx = x2 + STUB;
-    else if (toFace === "W") bx = x2 - STUB;
-    else if (toFace === "S") by = y2 + STUB;
-    else if (toFace === "N") by = y2 - STUB;
+    if (stubTo === "E") bx = x2 + STUB;
+    else if (stubTo === "W") bx = x2 - STUB;
+    else if (stubTo === "S") by = y2 + STUB;
+    else if (stubTo === "N") by = y2 - STUB;
 
     const mid = minBendOrtho(
       ax,
       ay,
       bx,
       by,
-      fromFace,
-      toFace,
+      stubFrom,
+      stubTo,
       DETOUR,
       STUB,
       LANE,
@@ -5026,6 +5040,26 @@
       };
     }
 
+    // Side openings: colinear mouths → straight mark-to-mark when clear
+    // (face stubs of 20px cross in tight gaps and force a C — Route_14 Tube2).
+    if (
+      Math.abs(m1.x - m2.x) < 1e-6 ||
+      Math.abs(m1.y - m2.y) < 1e-6
+    ) {
+      const pts = cleanOrthoPoly([
+        [m1.x, m1.y],
+        [m2.x, m2.y],
+      ]);
+      const stackEps = Math.max(LANE_GAP, half || 0);
+      if (
+        pts.length >= 2 &&
+        pathObstacleCost(pts, obstacles) <= 0 &&
+        pathStackConflictCost(pts, occupied, stackEps, half) <= 0
+      ) {
+        const d = pointsToPathD(pts);
+        return { d, dCore: d, segs: segsFromPoints(pts, half) };
+      }
+    }
     // Side openings: route between rendered mid-depth mouths so aligned boxes
     // keep straight tubes (no contour→mark L-jogs on the paint path).
     append(m1, m2, fromFace, toFace);

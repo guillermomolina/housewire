@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.82.2] — 2026-08-05
+
+### Fixed
+
+- Side-face conduits: prefer clear colinear mark-to-mark straight runs, and
+  skip opposing face stubs that would cross in a tight gap (Route_14 Tube2).
+
 ## [0.82.1] — 2026-08-05
 
 ### Fixed
