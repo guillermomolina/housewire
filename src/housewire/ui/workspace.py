@@ -9,7 +9,7 @@ from typing import Any
 
 import yaml
 
-from housewire.house import normalize_token
+from housewire.house import pascal_case_token
 from housewire.site.io import create_site_document, require_house_document, save_yaml
 from housewire.site.paths import find_site_yaml, is_yaml, list_root_yaml_files
 from housewire.site.session import SiteSession
@@ -264,7 +264,7 @@ class Workspace:
 
         The new document stays dirty until Save / Save as. Tab text is the
         YAML filename (technical stem + ``.yaml``). Root ``name``/``label``
-        follow ``locale`` (``es`` → ``Nuevo sitio`` / ``Nuevo_sitio.yaml``).
+        follow ``locale`` (``es`` → ``Nuevo sitio`` / ``NuevoSitio.yaml``).
         """
         loc = str(locale or "en").strip().lower()
         if loc.startswith("es"):
@@ -272,7 +272,7 @@ class Workspace:
         else:
             human = "New site"
         root_label = label or human
-        tech_id = normalize_token(root_label)
+        tech_id = pascal_case_token(root_label)
         yaml_name = f"{tech_id}.yaml"
         root = Path(tempfile.mkdtemp(prefix="housewire-new-"))
         self._browser_temps.append(root)

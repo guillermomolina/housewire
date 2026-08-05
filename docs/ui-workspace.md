@@ -10,7 +10,7 @@ directory around it when known:
 - optional leftover `$SITE/out/` directories (ignored; not part of the document)
 
 New sites use a technical YAML stem from the localized label
-(``New_site.yaml`` / ``Nuevo_sitio.yaml``) with matching root ``name``/``label``.
+(``NewSite.yaml`` / ``NuevoSitio.yaml``) with matching root ``name``/``label``.
 The tab shows the filename (with ``.yaml``) and stays dirty until Save.
 
 **Tabs = open files.** Each tab is one document. File → Open adds another tab

@@ -47,7 +47,7 @@
   let hasDocument = false;
   /** @type {string | null} */
   let activeDocId = null;
-  /** Active document YAML filename (e.g. Nuevo_sitio.yaml) for root Id display. */
+  /** Active document YAML filename (e.g. NuevoSitio.yaml) for root Id display. */
   let activeYamlName = null;
   /** @type {Record<string, FileSystemFileHandle>} */
   let fileHandles = {};
@@ -9492,7 +9492,7 @@
     return id;
   }
 
-  /** Root place path is ``.``; show the site YAML stem (``Nuevo_sitio``). */
+  /** Root place path is ``.``; show the site YAML stem (``NuevoSitio``). */
   function formatPlaceIdDisplay(id) {
     if (id && id !== ".") return id;
     const yaml = activeYamlName || "";

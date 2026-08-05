@@ -132,6 +132,31 @@ def normalize_token(value: str) -> str:
     return cleaned or "sin_nombre"
 
 
+def pascal_case_token(value: str) -> str:
+    """ASCII PascalCase id from a human label (``Nuevo sitio`` → ``NuevoSitio``)."""
+    ascii_value = (
+        unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+    )
+    words: list[str] = []
+    current: list[str] = []
+    for ch in ascii_value:
+        if ch.isalnum():
+            current.append(ch)
+        elif current:
+            words.append("".join(current))
+            current = []
+    if current:
+        words.append("".join(current))
+    if not words:
+        return "NewItem"
+    parts: list[str] = []
+    for word in words:
+        if not word:
+            continue
+        parts.append(word[0].upper() + word[1:].lower() if len(word) > 1 else word.upper())
+    return "".join(parts) or "NewItem"
+
+
 def is_technical_id(value: str) -> bool:
     """True if ``value`` is already a safe location/element id (no spaces)."""
     return bool(value) and value == normalize_token(value)

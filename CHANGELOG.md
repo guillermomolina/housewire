@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.75.1] — 2026-08-05
+
+### Fixed
+
+- File → New uses PascalCase YAML stems (``NuevoSitio.yaml`` / ``NewSite.yaml``)
+  instead of snake_case from localized labels.
+
 ## [0.75.0] — 2026-08-05
 
 ### Changed
