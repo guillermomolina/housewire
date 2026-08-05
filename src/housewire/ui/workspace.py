@@ -9,7 +9,7 @@ from typing import Any
 
 import yaml
 
-from housewire.site.io import require_house_document, save_yaml
+from housewire.site.io import create_site_document, require_house_document, save_yaml
 from housewire.site.paths import find_site_yaml, is_yaml, list_root_yaml_files
 from housewire.site.session import SiteSession
 
@@ -227,6 +227,22 @@ class Workspace:
         self._browser_temps.append(root)
         yaml_path = root / name
         save_yaml(yaml_path, data, backup=False)
+        return self.open_site(yaml_path, force=True, browser_origin=True)
+
+    def new_site(
+        self,
+        *,
+        type_id: str = "House",
+        label: str | None = None,
+    ) -> Document:
+        """Create an empty site (temp dir + ``housewire.yaml``) as a new tab."""
+        root = Path(tempfile.mkdtemp(prefix="housewire-new-"))
+        self._browser_temps.append(root)
+        yaml_path = create_site_document(
+            root,
+            type_id=type_id,
+            label=label,
+        )
         return self.open_site(yaml_path, force=True, browser_origin=True)
 
     def close(self, *, force: bool = False, doc_id: str | None = None) -> None:

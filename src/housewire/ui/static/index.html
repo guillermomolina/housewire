@@ -39,6 +39,10 @@
     <div class="menu" data-menu="file">
       <button type="button" class="menu-btn" id="menu-file-btn" aria-haspopup="true" aria-expanded="false"><span data-i18n="menu.file">File</span></button>
       <div class="menu-dropdown hidden" id="menu-file" role="menu">
+        <button type="button" role="menuitem" data-file-action="new">
+          <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-file-plus"></use></svg><span data-i18n="menu.file.new">New</span></span>
+          <span class="menu-shortcut">Ctrl+N</span>
+        </button>
         <button type="button" role="menuitem" data-file-action="open">
           <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-folder-open"></use></svg><span data-i18n="menu.file.open">Open…</span></span>
           <span class="menu-shortcut">Ctrl+O</span>
@@ -206,6 +210,9 @@
   </nav>
   <header class="toolbar" aria-label="Tools" data-i18n-aria="toolbar.aria">
     <div class="tool-group" title="File" data-i18n-title="menu.file">
+      <button type="button" class="tool-btn" id="btn-new" title="New (Ctrl+N)" data-i18n-title="tool.new" aria-label="New" data-i18n-aria="menu.file.new">
+        <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-file-plus"></use></svg>
+      </button>
       <button type="button" class="tool-btn" id="btn-open" title="Open (Ctrl+O)" data-i18n-title="tool.open" aria-label="Open" data-i18n-aria="menu.file.open">
         <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-folder-open"></use></svg>
       </button>

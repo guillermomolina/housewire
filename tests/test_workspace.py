@@ -48,6 +48,12 @@ class TestWorkspaceUnit(unittest.TestCase):
             self.assertEqual(ws.status()["document"]["name"], "site_b")
             self.assertEqual(len(ws.status()["documents"]), 2)
 
+            blank = ws.new_site(label="Blank")
+            self.assertTrue(blank.browser_origin)
+            self.assertEqual(blank.yaml_path.name, "housewire.yaml")
+            self.assertEqual(len(ws.status()["documents"]), 3)
+            self.assertEqual(ws.status()["dirty"], [])
+
     def test_open_custom_yaml_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "custom"
@@ -186,6 +192,16 @@ class TestWorkspaceApi(unittest.TestCase):
             exported = client.get("/api/workspace/yaml").json()
             self.assertEqual(exported["filename"], "from_browser.yml")
             self.assertIn("schema:", exported["content"])
+
+            # New empty site tab (no picker)
+            created = client.post("/api/workspace/new", json={})
+            self.assertEqual(created.status_code, 200)
+            new_body = created.json()
+            self.assertEqual(new_body["document"]["yaml"], "housewire.yaml")
+            self.assertTrue(new_body["document"]["browser_origin"])
+            self.assertEqual(new_body["dirty"], [])
+            yaml_text = client.get("/api/workspace/yaml").json()["content"]
+            self.assertIn("type: House", yaml_text)
 
 
 if __name__ == "__main__":

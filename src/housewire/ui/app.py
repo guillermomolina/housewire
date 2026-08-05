@@ -226,6 +226,21 @@ def create_app(site_root: Path | None = None) -> Any:
             raise HTTPException(code, msg) from exc
         return workspace.status()
 
+    @app.post("/api/workspace/new")
+    async def api_workspace_new(request: Request) -> dict[str, Any]:
+        """Create an empty House site as a new document tab (temp on server)."""
+        payload = await _json_body(request)
+        type_id = str(payload.get("type") or "House").strip() or "House"
+        label_raw = payload.get("label")
+        label = str(label_raw).strip() if label_raw else None
+        try:
+            workspace.new_site(type_id=type_id, label=label or None)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except FileExistsError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return workspace.status()
+
     @app.post("/api/workspace/activate")
     async def api_workspace_activate(request: Request) -> dict[str, Any]:
         payload = await _json_body(request)

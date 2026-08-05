@@ -10693,6 +10693,26 @@
     }
   }
 
+  async function fileNew() {
+    rememberCurrentDocView();
+    try {
+      const st = await api("/api/workspace/new", {
+        method: "POST",
+        body: "{}",
+      });
+      applyWorkspaceStatus(st);
+      dirtyLocal = false;
+      updateSaveButton(false);
+      await reloadAfterDocumentChange();
+      const name =
+        (st.document && (st.document.title || st.document.yaml)) ||
+        "housewire.yaml";
+      setStatus(`new site ${name}`);
+    } catch (err) {
+      setStatus(String(err.message || err));
+    }
+  }
+
   async function fileSaveAs() {
     let exported;
     try {
@@ -10821,7 +10841,8 @@
 
   async function handleFileAction(action) {
     closeFileMenu();
-    if (action === "open") await fileOpen();
+    if (action === "new") await fileNew();
+    else if (action === "open") await fileOpen();
     else if (action === "save") {
       try {
         await saveDocument();
@@ -11431,6 +11452,11 @@
       saveDocument().catch((err) => setStatus(String(err.message || err)));
       return;
     }
+    if (key === "n") {
+      ev.preventDefault();
+      fileNew().catch((err) => setStatus(String(err.message || err)));
+      return;
+    }
     if (key === "o") {
       ev.preventDefault();
       fileOpen().catch((err) => setStatus(String(err.message || err)));
@@ -11458,6 +11484,10 @@
       ev.preventDefault();
       redoEdit().catch((err) => setStatus(String(err.message || err)));
     }
+  });
+
+  document.getElementById("btn-new")?.addEventListener("click", () => {
+    fileNew().catch((err) => setStatus(String(err.message || err)));
   });
 
   document.getElementById("btn-open")?.addEventListener("click", () => {

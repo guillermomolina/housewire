@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.70.0] — 2026-08-05
+
+### Added
+
+- File → New and toolbar New (Ctrl+N): create an empty House site as a new
+  document tab (``POST /api/workspace/new``). Use Save as… to keep it on disk.
+
 ## [0.69.2] — 2026-08-05
 
 ### Fixed

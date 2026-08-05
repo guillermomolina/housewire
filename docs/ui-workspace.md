@@ -19,6 +19,7 @@ tabs. The last location/depth per open file is remembered while switching tabs.
 
 | Action | Meaning |
 |--------|---------|
+| New | Empty House site in a new tab (Ctrl+N); use Save as… to keep it |
 | Open… | Browser/OS file picker; opens a new document tab (Ctrl+O) |
 | Save | Persist the **active** document |
 | Save as… | Browser/OS save picker; opens the copy as another tab |
@@ -36,6 +37,7 @@ Workspace
 ## API surface
 
 - `GET /api/workspace` — `{ documents, active, document, dirty }`
+- `POST /api/workspace/new` — optional `{ "type", "label" }`; empty House tab (temp)
 - `POST /api/workspace/open` — `{ "path": "…" }` open/activate from server FS
 - `POST /api/workspace/open-content` — `{ "filename", "content" }` new tab from picker
 - `POST /api/workspace/activate` — `{ "id": "…" }` switch active tab
@@ -48,5 +50,5 @@ Workspace
 - `POST /api/edit/cut` — pack + cascade delete (one undo)
 - `POST /api/edit/paste` — `{ "parent_id", "payload", "location_id"?, "depth"? }`
 
-`housewire serve $SITE` may start with one site on disk; File → Open adds more
+`housewire serve $SITE` may start with one site on disk; File → New / Open adds more
 tabs beside it.

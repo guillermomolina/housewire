@@ -12,6 +12,7 @@
     en: {
       "app.aria": "Application",
       "menu.file": "File",
+      "menu.file.new": "New",
       "menu.file.open": "Open…",
       "menu.file.save": "Save",
       "menu.file.saveAs": "Save as…",
@@ -85,6 +86,7 @@
       "panel.props.cables": "Cables",
       "tabs.openFiles": "Open files",
       "aria.siteOutline": "Site outline",
+      "tool.new": "New (Ctrl+N)",
       "tool.open": "Open (Ctrl+O)",
       "tool.save": "Save (Ctrl+S)",
       "tool.undo": "Undo (Ctrl+Z)",
@@ -197,6 +199,7 @@
     es: {
       "app.aria": "Aplicación",
       "menu.file": "Archivo",
+      "menu.file.new": "Nuevo",
       "menu.file.open": "Abrir…",
       "menu.file.save": "Guardar",
       "menu.file.saveAs": "Guardar como…",
@@ -270,6 +273,7 @@
       "panel.props.cables": "Cables",
       "tabs.openFiles": "Archivos abiertos",
       "aria.siteOutline": "Esquema del sitio",
+      "tool.new": "Nuevo (Ctrl+N)",
       "tool.open": "Abrir (Ctrl+O)",
       "tool.save": "Guardar (Ctrl+S)",
       "tool.undo": "Deshacer (Ctrl+Z)",
