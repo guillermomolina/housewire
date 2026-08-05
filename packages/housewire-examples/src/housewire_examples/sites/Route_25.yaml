@@ -1,0 +1,32 @@
+schema: house/v2
+type: House
+name: Route_25
+label: Route 25 — ISO opening marks
+notes: >
+  Single JunctionBox with side + F/B grids for isometric opening-mark layout
+  invariants (mid-depth sides; F/B inside front∩back, no shared axes).
+elements:
+  Caja_de_derivacion:
+    type: JunctionBox
+    elements: {}
+    cables: {}
+    name: Caja de derivación
+    label: Caja de derivación
+    subtype: IP40
+    opening_grid:
+      N: 3
+      S: 3
+      E: 3
+      W: 3
+      F: 3x2
+      B: 3x2
+    install: Flush
+    view:
+      physical:
+        x: 254.0
+        y: 251.0
+        w: 382.0
+        h: 347.0
+    openings: []
+    mount: Wall
+cables: {}

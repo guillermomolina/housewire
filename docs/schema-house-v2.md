@@ -477,9 +477,12 @@ views:
   isometric bevel of the leaf place: near faces (**N**, **W**, **F**) use a
   bold mark; far faces (**S**, **E**, **B**) use a dashed / double outline.
   Hidden box edges (back face **B** and depth ribs on **E**/**S**) use the
-  same dashed stroke as far opening marks. Mark positions are visually offset
-  toward NW by face; routing mouths stay on the 2D contour. Every
-  `opening_grid` cell is shown (used or not).
+  same dashed stroke as far opening marks. Side marks sit on the mid-depth
+  axis between the front and back projected edges; **F**/**B** marks stay
+  inside the front∩back overlap and are separated by the same NW iso offset
+  as the front/back box vertices (``B = F + (ISO_DX, ISO_DY)``).
+  Side-conduit routing uses those painted mouths; plane bocas still cross the
+  2D contour. Every `opening_grid` cell is shown (used or not).
 - Omitted when unused; the UI does not require these fields.
 
 ### Mounting

@@ -8,6 +8,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.78.0] — 2026-08-05
+
+### Changed
+
+- Isometric side opening marks sit on the mid-depth axis between front and back
+  projected edges; F/B marks stay inside the front∩back overlap and are separated
+  by the same NW iso diagonal as the front/back box vertices. Side conduits route
+  mark-to-mark for straight runs.
+
+### Added
+
+- Example **Route_25** and live E2E asserting ISO opening-mark layout invariants.
+
 ## [0.77.17] — 2026-08-05
 
 ### Fixed

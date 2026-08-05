@@ -327,3 +327,234 @@ def assert_tubes_straight(
         if not (horiz or vert):
             bad.append((i, pts))
     test.assertEqual(bad, [], msg=f"non-straight tubes: {bad}")
+
+
+# Match src/housewire/ui/static/app.js isometric opening-mark constants.
+_ISO_DX = -20.0
+_ISO_DY = -20.0
+_ISO_MARK_SIDE_DEPTH_T = 0.5
+_OPENING_MARK_R = 5.0
+
+
+_DUMP_OPENINGS_JS = """() => {
+  const svg = document.getElementById('canvas');
+  if (!svg) return {err: 'no canvas'};
+  const nodes = [...svg.querySelectorAll('g.leaves > g.node, g.containers > g.node')];
+  const out = [];
+  for (const g of nodes) {
+    const box = g.querySelector(':scope > rect.node-box, :scope > rect');
+    if (!box) continue;
+    const w = Number(box.getAttribute('width') || 0);
+    const h = Number(box.getAttribute('height') || 0);
+    if (!w || !h) continue;
+    const marks = [...g.querySelectorAll('circle.opening-mark')].map(c => ({
+      id: c.getAttribute('data-opening') || '',
+      cx: Number(c.getAttribute('cx') || 0),
+      cy: Number(c.getAttribute('cy') || 0),
+      face: ((c.getAttribute('class') || '').match(/opening-face-([NSEWFB])/) || [])[1] || '',
+    }));
+    if (!marks.length) continue;
+    out.push({
+      id: g.getAttribute('data-id') || '',
+      w, h,
+      marks,
+    });
+  }
+  return {
+    ver: document.querySelector('script[src*="app.js"]')?.src || '',
+    nodes: out,
+  };
+}"""
+
+
+def dump_opening_marks(site: Path, *, wait_ms: int = 2000) -> dict:
+    """Start serve, load the site, return painted opening-mark geometry."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:  # pragma: no cover
+        raise unittest.SkipTest(f"playwright not installed: {exc}") from exc
+
+    port = free_port()
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "housewire",
+            "serve",
+            str(site),
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
+        cwd=str(REPO),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.time() + 20.0
+        while time.time() < deadline:
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.3):
+                    break
+            except OSError:
+                if proc.poll() is not None:
+                    raise unittest.SkipTest("housewire serve exited early")
+                time.sleep(0.15)
+        else:
+            raise unittest.SkipTest("housewire serve did not start")
+
+        with sync_playwright() as p:
+            try:
+                browser = p.chromium.launch()
+            except Exception as exc:  # pragma: no cover
+                msg = str(exc)
+                if "Executable doesn't exist" in msg or "playwright install" in msg:
+                    raise unittest.SkipTest(
+                        "Playwright Chromium missing; run: "
+                        ".venv/bin/playwright install chromium"
+                    ) from exc
+                raise
+            page = browser.new_page(viewport={"width": 1600, "height": 1000})
+            page.goto(f"http://127.0.0.1:{port}/", wait_until="networkidle")
+            page.wait_for_timeout(min(wait_ms, 500))
+            _prepare_route_canvas(page)
+            page.wait_for_timeout(wait_ms)
+            try:
+                page.wait_for_function(
+                    """() => document.querySelectorAll('circle.opening-mark').length > 0""",
+                    timeout=15000,
+                )
+            except Exception:
+                pass
+            data = page.evaluate(_DUMP_OPENINGS_JS)
+            browser.close()
+        return data
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+
+def assert_iso_opening_marks(
+    test: unittest.TestCase,
+    site_name: str,
+    *,
+    tol: float = 1.5,
+) -> None:
+    """Side marks on mid-depth axes; F/B inside front∩back and off shared axes."""
+    site = resolve_example_site(site_name)
+    if site is None or not site.is_file():
+        raise unittest.SkipTest(
+            f"{site_name} not found (install housewire-examples)"
+        )
+    data = dump_opening_marks(site)
+    test.assertNotIn("err", data, msg=data)
+    nodes = data.get("nodes") or []
+    test.assertGreaterEqual(len(nodes), 1, msg=data)
+
+    mid_t = _ISO_MARK_SIDE_DEPTH_T
+    mid_x = _ISO_DX * mid_t
+    mid_y = _ISO_DY * mid_t
+    issues: list[str] = []
+
+    for node in nodes:
+        w = float(node["w"])
+        h = float(node["h"])
+        ix0 = max(0.0, _ISO_DX)
+        iy0 = max(0.0, _ISO_DY)
+        ix1 = min(w, w + _ISO_DX)
+        iy1 = min(h, h + _ISO_DY)
+        # Circle centers must sit in the intersection; allow mark radius slack.
+        pad = _OPENING_MARK_R
+        fronts = [m for m in node["marks"] if m.get("face") == "F"]
+        backs = [m for m in node["marks"] if m.get("face") == "B"]
+        sides = {
+            face: [m for m in node["marks"] if m.get("face") == face]
+            for face in ("N", "S", "E", "W")
+        }
+
+        for face, marks in sides.items():
+            for m in marks:
+                cx, cy = float(m["cx"]), float(m["cy"])
+                oid = m.get("id") or "?"
+                if face in ("N", "S"):
+                    expect_y = mid_y if face == "N" else h + mid_y
+                    if abs(cy - expect_y) > tol:
+                        issues.append(
+                            f"{node.get('id')}.{oid}: side {face} cy={cy} "
+                            f"want mid-depth y={expect_y}"
+                        )
+                else:
+                    expect_x = mid_x if face == "W" else w + mid_x
+                    if abs(cx - expect_x) > tol:
+                        issues.append(
+                            f"{node.get('id')}.{oid}: side {face} cx={cx} "
+                            f"want mid-depth x={expect_x}"
+                        )
+
+        for m in fronts + backs:
+            cx, cy = float(m["cx"]), float(m["cy"])
+            oid = m.get("id") or "?"
+            if not (
+                ix0 + pad - tol <= cx <= ix1 - pad + tol
+                and iy0 + pad - tol <= cy <= iy1 - pad + tol
+            ):
+                issues.append(
+                    f"{node.get('id')}.{oid}: outside front∩back "
+                    f"[{ix0},{iy0}]–[{ix1},{iy1}] at ({cx},{cy})"
+                )
+
+        # Corresponding Frow-col / Brow-col pairs: same iso diagonal as NW verts.
+        expect_dx = _ISO_DX
+        expect_dy = _ISO_DY
+        expect_dist = (expect_dx * expect_dx + expect_dy * expect_dy) ** 0.5
+        by_cell: dict[str, dict[str, dict]] = {}
+        for m in fronts + backs:
+            oid = str(m.get("id") or "")
+            parts = oid.split("-", 1)
+            if len(parts) != 2 or len(parts[0]) < 2:
+                continue
+            face, cell = parts[0][0].upper(), parts[0][1:] + "-" + parts[1]
+            by_cell.setdefault(cell, {})[face] = m
+        for cell, pair in sorted(by_cell.items()):
+            fm, bm = pair.get("F"), pair.get("B")
+            if not fm or not bm:
+                issues.append(
+                    f"{node.get('id')}: missing F/B pair for cell {cell}"
+                )
+                continue
+            dx = float(bm["cx"]) - float(fm["cx"])
+            dy = float(bm["cy"]) - float(fm["cy"])
+            dist = (dx * dx + dy * dy) ** 0.5
+            if abs(dx - expect_dx) > tol or abs(dy - expect_dy) > tol:
+                issues.append(
+                    f"{node.get('id')}: F/B cell {cell} offset "
+                    f"({dx:.2f},{dy:.2f}) want ({expect_dx},{expect_dy})"
+                )
+            if abs(dist - expect_dist) > tol:
+                issues.append(
+                    f"{node.get('id')}: F/B cell {cell} diagonal "
+                    f"{dist:.2f} want {expect_dist:.2f}"
+                )
+            if abs(float(fm["cx"]) - float(bm["cx"])) <= tol:
+                issues.append(
+                    f"{node.get('id')}: F/B share x on cell {cell}"
+                )
+            if abs(float(fm["cy"]) - float(bm["cy"])) <= tol:
+                issues.append(
+                    f"{node.get('id')}: F/B share y on cell {cell}"
+                )
+
+        if not any(sides.values()):
+            issues.append(f"{node.get('id')}: no side opening marks painted")
+        if not fronts or not backs:
+            issues.append(
+                f"{node.get('id')}: need both F and B marks "
+                f"(F={len(fronts)}, B={len(backs)})"
+            )
+
+    test.assertEqual(issues, [], msg=f"site={site_name} ver={data.get('ver')} {issues}")

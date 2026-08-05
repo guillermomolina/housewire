@@ -2735,8 +2735,6 @@
   const ISO_MARK_FACE_MARGIN = OPENING_MARK_R + 6;
   /** F/B marks stay deeper inside their face than side marks (>= 1.5X). */
   const ISO_MARK_FB_INSET_FACTOR = 1.9;
-  /** Tiny anti-colinearity offset for F/B marks inside their faces. */
-  const ISO_MARK_FB_STAGGER = 3;
 
   /** True for faces treated as near/visible under a fixed NW camera. */
   function isoFaceNear(visualFace) {
@@ -2776,43 +2774,43 @@
     const visualFace = anchor.face || faceHint;
     const f = String(visualFace || "?").toUpperCase();
     const margin = ISO_MARK_FACE_MARGIN;
+    const w = nodeW(node);
+    const h = nodeH(node);
+    // Overlap of front [0,0]–[w,h] and back [ISO_DX,ISO_DY]–[w+ISO_DX,h+ISO_DY].
+    const ix0 = Math.max(0, ISO_DX);
+    const iy0 = Math.max(0, ISO_DY);
+    const ix1 = Math.min(w, w + ISO_DX);
+    const iy1 = Math.min(h, h + ISO_DY);
+    const insetX = Math.max(margin, Math.abs(ISO_DX) * ISO_MARK_FB_INSET_FACTOR);
+    const insetY = Math.max(margin, Math.abs(ISO_DY) * ISO_MARK_FB_INSET_FACTOR);
     let x = anchor.x;
     let y = anchor.y;
     if (f === "N" || f === "S" || f === "E" || f === "W") {
-      // Side marks move inward along the face normal so colinear boxes keep
-      // straight conduit runs (iso depth without lateral drift).
-      const oi = openingInwardDelta(f);
-      const depth = Math.hypot(ISO_DX, ISO_DY) * ISO_MARK_SIDE_DEPTH_T;
-      x += oi.x * depth;
-      y += oi.y * depth;
-    } else if (f === "B") {
-      // Back-face openings live on the projected back rectangle.
-      x += ISO_DX;
-      y += ISO_DY;
-    }
-    // Keep marks off face borders so circles do not touch box lines.
-    const w = nodeW(node);
-    const h = nodeH(node);
-    const insetX = Math.max(margin, Math.abs(ISO_DX) * ISO_MARK_FB_INSET_FACTOR);
-    const insetY = Math.max(margin, Math.abs(ISO_DY) * ISO_MARK_FB_INSET_FACTOR);
-    if (f === "F") {
-      x = Math.max(insetX, Math.min(w - insetX, x));
-      y = Math.max(insetY, Math.min(h - insetY, y));
-      x += ISO_MARK_FB_STAGGER;
-      y -= ISO_MARK_FB_STAGGER;
-      x = Math.max(insetX, Math.min(w - insetX, x));
-      y = Math.max(insetY, Math.min(h - insetY, y));
-    } else if (f === "B") {
-      x = Math.max(ISO_DX + insetX, Math.min(ISO_DX + w - insetX, x));
-      y = Math.max(ISO_DY + insetY, Math.min(ISO_DY + h - insetY, y));
-      x -= ISO_MARK_FB_STAGGER;
-      y += ISO_MARK_FB_STAGGER;
-      x = Math.max(ISO_DX + insetX, Math.min(ISO_DX + w - insetX, x));
-      y = Math.max(ISO_DY + insetY, Math.min(ISO_DY + h - insetY, y));
-    } else if (f === "N" || f === "S") {
-      x = Math.max(margin, Math.min(w - margin, x));
-    } else if (f === "E" || f === "W") {
-      y = Math.max(margin, Math.min(h - margin, y));
+      // Mid-depth axis between the front and back projected side edges.
+      const midX = ISO_DX * ISO_MARK_SIDE_DEPTH_T;
+      const midY = ISO_DY * ISO_MARK_SIDE_DEPTH_T;
+      x += midX;
+      y += midY;
+      if (f === "N" || f === "S") {
+        x = Math.max(midX + margin, Math.min(w + midX - margin, x));
+        y = f === "N" ? midY : h + midY;
+      } else {
+        y = Math.max(midY + margin, Math.min(h + midY - margin, y));
+        x = f === "W" ? midX : w + midX;
+      }
+    } else if (f === "F" || f === "B") {
+      // Pair F and B by the same iso diagonal as NW front↔back vertices:
+      // B = F + (ISO_DX, ISO_DY), both clamped so the pair fits in front∩back.
+      const loX = ix0 + insetX - ISO_DX;
+      const hiX = ix1 - insetX;
+      const loY = iy0 + insetY - ISO_DY;
+      const hiY = iy1 - insetY;
+      x = Math.max(loX, Math.min(hiX, x));
+      y = Math.max(loY, Math.min(hiY, y));
+      if (f === "B") {
+        x += ISO_DX;
+        y += ISO_DY;
+      }
     }
     return {
       x,
@@ -4623,57 +4621,69 @@
       } else {
         append(cur, a2, curFace, toFace);
       }
-    } else {
-      append(a1, a2, fromFace, toFace);
-    }
-    let pts = stripOutAndBack(
-      chain || [
+      let pts = stripOutAndBack(
+        chain || [
+          [a1.x, a1.y],
+          [a2.x, a2.y],
+        ]
+      );
+      if (pts.length) {
+        pts[0] = [a1.x, a1.y];
+        pts[pts.length - 1] = [a2.x, a2.y];
+      }
+      const corePts = cleanOrthoPoly(pts.map((p) => [p[0], p[1]]));
+      if (corePts.length < 2) return null;
+      const dCore = pointsToPathD(corePts);
+      if (fromInset && pts.length) {
+        const head = renderedMarkHeadPts(m1, a1, fromFace, fromPlane);
+        if (head.length >= 2) {
+          pts = mergeOrthoPolys(head, pts) || pts;
+        }
+      }
+      if (toInset && pts.length) {
+        const tail = renderedMarkTailPts(a2, m2, toFace, toPlane);
+        if (tail.length >= 2) {
+          pts = mergeOrthoPolys(pts, tail) || pts;
+        }
+      }
+      pts = stripOutAndBack(pts, [
+        [m1.x, m1.y],
+        [m2.x, m2.y],
         [a1.x, a1.y],
         [a2.x, a2.y],
+      ]);
+      if (fromInset && pts.length) pts[0] = [m1.x, m1.y];
+      if (toInset && pts.length) pts[pts.length - 1] = [m2.x, m2.y];
+      pts = cleanOrthoPoly(pts);
+      if (pts.length < 2) return null;
+      return {
+        d: pointsToPathD(pts),
+        dCore,
+        segs: segsFromPoints(pts, half),
+      };
+    }
+
+    // Side openings: route between rendered mid-depth mouths so aligned boxes
+    // keep straight tubes (no contour→mark L-jogs on the paint path).
+    append(m1, m2, fromFace, toFace);
+    let pts = stripOutAndBack(
+      chain || [
+        [m1.x, m1.y],
+        [m2.x, m2.y],
+      ],
+      [
+        [m1.x, m1.y],
+        [m2.x, m2.y],
       ]
     );
     if (pts.length) {
-      pts[0] = [a1.x, a1.y];
-      pts[pts.length - 1] = [a2.x, a2.y];
-    }
-    const corePts = cleanOrthoPoly(
-      pts.map((p) => [p[0], p[1]])
-    );
-    if (corePts.length < 2) return null;
-    const dCore = pointsToPathD(corePts);
-    // Ortho links from contour anchors to rendered marks (iso offset).
-    if (fromInset && pts.length) {
-      const head = renderedMarkHeadPts(m1, a1, fromFace, fromPlane);
-      if (head.length >= 2) {
-        pts = mergeOrthoPolys(head, pts) || pts;
-      }
-    }
-    if (toInset && pts.length) {
-      const tail = renderedMarkTailPts(a2, m2, toFace, toPlane);
-      if (tail.length >= 2) {
-        pts = mergeOrthoPolys(pts, tail) || pts;
-      }
-    }
-    const protectMouths = [
-      [m1.x, m1.y],
-      [m2.x, m2.y],
-      [a1.x, a1.y],
-      [a2.x, a2.y],
-    ];
-    pts = stripOutAndBack(pts, protectMouths);
-    if (fromInset && pts.length) {
       pts[0] = [m1.x, m1.y];
-    }
-    if (toInset && pts.length) {
       pts[pts.length - 1] = [m2.x, m2.y];
     }
     pts = cleanOrthoPoly(pts);
     if (pts.length < 2) return null;
-    return {
-      d: pointsToPathD(pts),
-      dCore,
-      segs: segsFromPoints(pts, half),
-    };
+    const d = pointsToPathD(pts);
+    return { d, dCore: d, segs: segsFromPoints(pts, half) };
   }
 
   function elementAbsXY(elem, placeById) {
