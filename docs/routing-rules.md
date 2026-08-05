@@ -33,6 +33,10 @@ on the whole chain) must not undo mouth transit or collapse lanes.
    (no peeling through the tube wall).
 4. **Parallel lanes** — Multiple strands in one conduit use separated
    offsets (`laneDist`); they must not stack on the same mid-run centerline.
+   When a hop runs **opposite** the conduit edge direction, reverse the
+   centerline for routing but **negate** `laneDist` so `offsetOrthoPts`
+   normals stay on the same world side of the tube (otherwise some strands
+   stack and others leave empty slots).
 5. **Raw centerline** — Hop exterior follows the conduit path; do not drop
    tube segments that skim place borders (`exteriorPathD` must not truncate
    bocas).

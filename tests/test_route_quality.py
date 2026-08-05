@@ -596,6 +596,36 @@ class TestConductorPaletteContrast(unittest.TestCase):
             places=5,
         )
 
+    def test_reversed_centerline_needs_negated_lane_dist(self) -> None:
+        """Opposite hop direction flips offsetOrtho normals — negate dist.
+
+        Forward +d and reverse −d must land on the same world side so mixed
+        hop orientations in one conduit do not stack / leave holes.
+        """
+        from housewire.ui.route_quality import offset_ortho
+
+        center = [(100.0, 0.0), (100.0, 200.0), (40.0, 200.0), (40.0, 400.0)]
+        dist = 15.0
+        forward = offset_ortho(center, dist)
+        reversed_pts = list(reversed(center))
+        # Bug: same-sign dist on reversed path → opposite world side.
+        wrong = offset_ortho(reversed_pts, dist)
+        # Fix: negate dist when the hop centerline was reversed.
+        fixed = offset_ortho(reversed_pts, -dist)
+        # Compare midpoints of the long vertical at x=100.
+        def x_at_y(pts: list, y: float) -> float:
+            for i in range(len(pts) - 1):
+                x0, y0 = pts[i]
+                x1, y1 = pts[i + 1]
+                if abs(x0 - x1) < 1e-6 and min(y0, y1) <= y <= max(y0, y1):
+                    return x0
+            raise AssertionError(f"no vertical at y={y}")
+
+        self.assertAlmostEqual(x_at_y(forward, 100.0), 100.0 - dist, places=5)
+        self.assertAlmostEqual(x_at_y(fixed, 100.0), 100.0 - dist, places=5)
+        self.assertNotAlmostEqual(x_at_y(wrong, 100.0), 100.0 - dist, places=5)
+        self.assertAlmostEqual(x_at_y(wrong, 100.0), 100.0 + dist, places=5)
+
 
 class TestCrossingsAndJacketGaps(unittest.TestCase):
     def test_crossing_lanes_at_corner_detected(self) -> None:

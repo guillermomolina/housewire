@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.78.1] — 2026-08-05
+
+### Fixed
+
+- Multi-hop cables that traverse a conduit opposite its from→to no longer
+  mirror lane offsets: reversed hop centerlines negate ``laneDist`` so strands
+  keep a stable side of the tube (fixes empty slots / stacked wires in mixed
+  orientation bundles).
 
 ## [0.78.0] — 2026-08-05
 

@@ -6674,16 +6674,30 @@
     return out || null;
   }
 
-  /** Exact tube geometry for a hop (anchor core — parallel lanes, not painted caps). */
-  function hopTubePathD(hop) {
+  /** Exact tube geometry for a hop (anchor core — parallel lanes, not painted caps).
+   *  ``reversed`` is true when the hop runs opposite the conduit edge from→to;
+   *  callers must negate laneDist in that case so offsetOrthoPts normals stay
+   *  on the same world side of the tube.
+   */
+  function hopTubePathInfo(hop) {
     const item =
       (hop.conduit && edgePathsByConduitId.get(hop.conduit)) ||
       edgePaths.find((e) => e.edge && e.edge.id === hop.conduit);
     if (!item || !item.d) return null;
     const e = item.edge;
-    if (e.from === hop.from && e.to === hop.to) return item.d;
-    if (e.from === hop.to && e.to === hop.from) return reversePathD(item.d);
+    if (e.from === hop.from && e.to === hop.to) {
+      return { d: item.d, reversed: false };
+    }
+    if (e.from === hop.to && e.to === hop.from) {
+      return { d: reversePathD(item.d), reversed: true };
+    }
     return null;
+  }
+
+  /** @deprecated use hopTubePathInfo */
+  function hopTubePathD(hop) {
+    const info = hopTubePathInfo(hop);
+    return info ? info.d : null;
   }
 
   /**
@@ -6699,7 +6713,7 @@
     const c2 = elementCenter(b, placeById);
     const fromSlot = opts?.fromSlot || { slot: 0, count: 1 };
     const toSlot = opts?.toSlot || { slot: 0, count: 1 };
-    const laneDistFallback = opts?.laneDist || 0;
+    const laneDistFallback = opts?.laneDist ?? 0;
     const laneCountHint = Math.max(
       1,
       fromSlot.count | 0,
@@ -6711,7 +6725,8 @@
     const toPin = opts?.toPin != null ? opts.toPin : edge.to_pin;
     const laneDistFor = (conduitId) => {
       if (conduitId && typeof laneDistForConduit === "function") {
-        return laneDistForConduit(conduitId) || 0;
+        const d = laneDistForConduit(conduitId);
+        return d == null || Number.isNaN(d) ? 0 : d;
       }
       return laneDistFallback;
     };
@@ -6922,13 +6937,13 @@
               )
             : [];
         }
-        const tubeD = hopTubePathD(hop);
+        const tubeInfo = hopTubePathInfo(hop);
         let ext = null;
-        if (tubeD) {
+        if (tubeInfo) {
           // Keep the conduit centerline intact. ``exteriorPathD`` drops any
           // segment that skims a place border and was truncating bocas
           // (Test_01 lamp vertical never reached the painted tube end).
-          ext = tubeD;
+          ext = tubeInfo.d;
         } else {
           const opA = isPlaneOpeningId(hop.from_opening)
             ? planeContourEntryAbs(
@@ -6983,7 +6998,11 @@
         if (ext) {
           // Offset each hop with that conduit's local lane pack (not one
           // end-to-end laneDist for the whole multi-hop chain).
-          const hopDist = laneDistFor(hop.conduit);
+          // Reversed hops flip segment normals in offsetOrthoPts — negate
+          // so lanes keep a stable world-side of the tube (avoids stacking
+          // some strands and leaving empty slots for others).
+          let hopDist = laneDistFor(hop.conduit);
+          if (tubeInfo && tubeInfo.reversed) hopDist = -hopDist;
           for (const sub of pathDToSubpaths(ext)) {
             if (sub.length >= 2) {
               exteriors.push(parallel(sub.map((p) => [p[0], p[1]]), hopDist));
