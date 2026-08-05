@@ -2779,9 +2779,12 @@
     let x = anchor.x;
     let y = anchor.y;
     if (f === "N" || f === "S" || f === "E" || f === "W") {
-      // Side openings sit midway between front and back projected contours.
-      x += ISO_DX * ISO_MARK_SIDE_DEPTH_T;
-      y += ISO_DY * ISO_MARK_SIDE_DEPTH_T;
+      // Side marks move inward along the face normal so colinear boxes keep
+      // straight conduit runs (iso depth without lateral drift).
+      const oi = openingInwardDelta(f);
+      const depth = Math.hypot(ISO_DX, ISO_DY) * ISO_MARK_SIDE_DEPTH_T;
+      x += oi.x * depth;
+      y += oi.y * depth;
     } else if (f === "B") {
       // Back-face openings live on the projected back rectangle.
       x += ISO_DX;
@@ -7326,23 +7329,23 @@
   }
 
   /**
-   * Tube geometry: clip through leaf interiors, but keep B/F endpoint places
-   * so the tube reaches the plane boca.
+   * Tube geometry: clip through leaf interiors, but keep both endpoint places
+   * (side and B/F bocas) so the tube stays visible into each opening.
    */
   function conduitDisplayD(fullD, byId, edge) {
     if (!fullD) return "";
     /** @type {string[]} */
     const keep = [];
-    if (edge && isPlaneOpeningId(edge.from_opening) && edge.from) {
-      keep.push(edge.from);
-    }
-    if (edge && isPlaneOpeningId(edge.to_opening) && edge.to) {
-      keep.push(edge.to);
-    }
+    if (edge?.from) keep.push(edge.from);
+    if (edge?.to) keep.push(edge.to);
     // inset 0: do not leave a border corridor that paints tube into the leaf
     // toward terminal strips on side-opening ends.
     const leafObs = placeObstacles(byId, keep, 0);
-    return exteriorPathD(fullD, leafObs) || "";
+    const clipped = exteriorPathD(fullD, leafObs);
+    if (clipped) return clipped;
+    // Mis-routes that pierce unrelated boxes may clip to nothing; still show
+    // the routed path rather than a ghost conduit with an empty ``d``.
+    return fullD;
   }
 
   function appendCableVisuals(cablesG, edge, placeById, elemById, occupied, layout) {

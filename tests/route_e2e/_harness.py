@@ -291,3 +291,31 @@ def assert_site_routes_ok(
         [],
         msg=f"site={site_name} ver={data.get('ver')} issues={issues}",
     )
+
+
+def assert_tubes_straight(
+    test: unittest.TestCase,
+    site_name: str,
+    *,
+    expected: int,
+    tol: float = 3.0,
+) -> None:
+    """Each painted tube centerline must be a single horizontal or vertical run."""
+    site = resolve_example_site(site_name)
+    if site is None or not site.is_file():
+        raise unittest.SkipTest(
+            f"{site_name} not found (install housewire-examples)"
+        )
+    data = dump_live_canvas(site, require_tubes=True)
+    test.assertNotIn("err", data, msg=data)
+    tubes = [t for t in (data.get("tubes") or []) if len(t) >= 2]
+    test.assertEqual(len(tubes), expected, msg=data)
+    bad: list[tuple[int, list]] = []
+    for i, pts in enumerate(tubes):
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        horiz = max(xs) - min(xs) < tol
+        vert = max(ys) - min(ys) < tol
+        if not (horiz or vert):
+            bad.append((i, pts))
+    test.assertEqual(bad, [], msg=f"non-straight tubes: {bad}")

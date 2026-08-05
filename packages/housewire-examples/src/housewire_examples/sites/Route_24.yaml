@@ -1,0 +1,199 @@
+schema: house/v2
+type: House
+name: Route_24
+label: Route 24 cross
+elements:
+  Caja_de_mecanismo:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo
+    label: Caja de mecanismo
+    subtype: OneGang
+    opening_grid:
+      NS: 1
+      WE: 1
+      B: 1
+    view:
+      physical:
+        x: 400.0
+        y: 192.0
+        w: 240.0
+        h: 160.0
+  Caja_de_mecanismo_1:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo 1
+    label: Caja de mecanismo 1
+    subtype: OneGang
+    opening_grid:
+      NS: 1
+      WE: 1
+      B: 1
+    view:
+      physical:
+        x: 112.0
+        y: 400.0
+        w: 240.0
+        h: 160.0
+  Caja_de_mecanismo_2:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo 2
+    label: Caja de mecanismo 2
+    subtype: OneGang
+    opening_grid:
+      NS: 1
+      WE: 1
+      B: 1
+    view:
+      physical:
+        x: 400.0
+        y: 400.0
+        w: 240.0
+        h: 160.0
+  Caja_de_mecanismo_3:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo 3
+    label: Caja de mecanismo 3
+    subtype: OneGang
+    opening_grid:
+      NS: 1
+      WE: 1
+      B: 1
+    view:
+      physical:
+        x: 688.0
+        y: 400.0
+        w: 240.0
+        h: 160.0
+  Caja_de_mecanismo_4:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo 4
+    label: Caja de mecanismo 4
+    subtype: OneGang
+    opening_grid:
+      NS: 1
+      WE: 1
+      B: 1
+    view:
+      physical:
+        x: 400.0
+        y: 608.0
+        w: 240.0
+        h: 160.0
+cables:
+  OPEN_Linea_01_1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    subtype: Power
+    notes: 'status: open; leaves Caja_de_mecanismo_2.N1'
+  OPEN_Linea_01_2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    subtype: Power
+    notes: 'status: open; leaves Caja_de_mecanismo_2.N1'
+  OPEN_Linea_01:
+    type: Cable
+    contains:
+    - OPEN_Linea_01_1
+    - OPEN_Linea_01_2
+    color: BK
+    subtype: Power
+    notes: 'status: claimed; leaves Caja_de_mecanismo_2.N1; enters Caja_de_mecanismo.S1'
+  Conducto_OPEN_Linea_01_01:
+    type: Conduit
+    from: Caja_de_mecanismo_2.N1
+    to: Caja_de_mecanismo.S1
+    contains:
+    - OPEN_Linea_01
+    subtype: Tube
+  OPEN_Linea_02_1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    subtype: Power
+    notes: 'status: open; leaves Caja_de_mecanismo_2.S1'
+  OPEN_Linea_02_2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    subtype: Power
+    notes: 'status: open; leaves Caja_de_mecanismo_2.S1'
+  OPEN_Linea_02:
+    type: Cable
+    contains:
+    - OPEN_Linea_02_1
+    - OPEN_Linea_02_2
+    color: BK
+    subtype: Power
+    notes: 'status: claimed; leaves Caja_de_mecanismo_2.S1; enters Caja_de_mecanismo_4.N1'
+  Conducto_OPEN_Linea_02_01:
+    type: Conduit
+    from: Caja_de_mecanismo_2.S1
+    to: Caja_de_mecanismo_4.N1
+    contains:
+    - OPEN_Linea_02
+    subtype: Tube
+  OPEN_Linea_03_1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    subtype: Power
+    notes: 'status: open; leaves Caja_de_mecanismo_2.E1'
+  OPEN_Linea_03_2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    subtype: Power
+    notes: 'status: open; leaves Caja_de_mecanismo_2.E1'
+  OPEN_Linea_03:
+    type: Cable
+    contains:
+    - OPEN_Linea_03_1
+    - OPEN_Linea_03_2
+    color: BK
+    subtype: Power
+    notes: 'status: claimed; leaves Caja_de_mecanismo_2.E1; enters Caja_de_mecanismo_3.W1'
+  Conducto_OPEN_Linea_03_01:
+    type: Conduit
+    from: Caja_de_mecanismo_2.E1
+    to: Caja_de_mecanismo_3.W1
+    contains:
+    - OPEN_Linea_03
+    subtype: Tube
+  OPEN_Linea_04_1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    subtype: Power
+    notes: 'status: open; leaves Caja_de_mecanismo_1.E1'
+  OPEN_Linea_04_2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    subtype: Power
+    notes: 'status: open; leaves Caja_de_mecanismo_1.E1'
+  OPEN_Linea_04:
+    type: Cable
+    contains:
+    - OPEN_Linea_04_1
+    - OPEN_Linea_04_2
+    color: BK
+    subtype: Power
+    notes: 'status: claimed; leaves Caja_de_mecanismo_1.E1; enters Caja_de_mecanismo_2.W1'
+  Conducto_OPEN_Linea_04_01:
+    type: Conduit
+    from: Caja_de_mecanismo_1.E1
+    to: Caja_de_mecanismo_2.W1
+    contains:
+    - OPEN_Linea_04
+    subtype: Tube

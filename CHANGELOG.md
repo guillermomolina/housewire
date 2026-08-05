@@ -8,6 +8,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.16] — 2026-08-05
+
+### Fixed
+
+- Conduit tube display keeps both endpoint boxes unclipped so straight runs
+  (e.g. cross layouts) paint visible ``edge-tube`` geometry instead of empty paths.
+
+### Added
+
+- Example site **Route_24** (four aligned DeviceBoxes, cross conduits) and live
+  E2E test asserting four straight painted tubes.
+
 ## [0.77.15] — 2026-08-05
 
 ### Fixed
