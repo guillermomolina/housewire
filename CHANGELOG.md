@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.10] — 2026-08-05
+
+### Changed
+
+- Increased isometric depth and pushed front/back opening marks further inward
+  to keep clearer separation from side openings and face borders.
+
 ## [0.77.9] — 2026-08-05
 
 ### Fixed

@@ -2726,15 +2726,15 @@
 
   const PLANE_R = 6;
   /** NW isometric extrusion (SVG up-left); deep enough for full mouth circles. */
-  const ISO_DX = -16;
-  const ISO_DY = -16;
+  const ISO_DX = -20;
+  const ISO_DY = -20;
   const OPENING_MARK_R = 5;
   /** Side marks depth position between front(0) and back(1) projected faces. */
   const ISO_MARK_SIDE_DEPTH_T = 0.5;
   /** Keep marks clear from any projected rectangle border. */
   const ISO_MARK_FACE_MARGIN = OPENING_MARK_R + 6;
   /** F/B marks stay deeper inside their face than side marks (>= 1.5X). */
-  const ISO_MARK_FB_INSET_FACTOR = 1.5;
+  const ISO_MARK_FB_INSET_FACTOR = 1.9;
   /** Tiny anti-colinearity offset for F/B marks inside their faces. */
   const ISO_MARK_FB_STAGGER = 3;
 
