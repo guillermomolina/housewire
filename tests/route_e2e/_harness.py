@@ -412,6 +412,40 @@ def assert_no_foreign_mouth_skim(
     test.assertEqual(skim, [], msg=f"tube skims foreign mouth: {skim}")
 
 
+def assert_no_strand_lane_overlap(
+    test: unittest.TestCase,
+    data: dict,
+) -> None:
+    """Fail when strands that share a tube run closer than lane pitch."""
+    from housewire.ui.route_quality import (
+        match_strand_to_tube,
+        strands_overlap,
+        dedupe_identical_polylines,
+    )
+
+    tubes = [
+        t
+        for t in (data.get("tube_cores") or data.get("tubes") or [])
+        if len(t) >= 2
+    ]
+    strands = dedupe_identical_polylines(data.get("strands") or [])
+    if len(strands) < 2 or not tubes:
+        return
+    by_tube: dict[int, list] = {}
+    for pts in strands:
+        ti, _ = match_strand_to_tube(pts, tubes)
+        if ti < 0:
+            continue
+        by_tube.setdefault(ti, []).append(pts)
+    bad: list[str] = []
+    for ti, polys in sorted(by_tube.items()):
+        if len(polys) < 2:
+            continue
+        if strands_overlap(polys):
+            bad.append(f"tube[{ti}]: strands overlap (lane separation too small)")
+    test.assertEqual(bad, [], msg=f"strand lane overlap: {bad}")
+
+
 def assert_tube_geometry_ok(test: unittest.TestCase, data: dict) -> None:
     """Shared tube geometry gates: no colinear stack, no foreign-mouth skim."""
     assert_no_colinear_tube_overlap(test, data)

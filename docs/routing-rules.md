@@ -188,3 +188,4 @@ Live E2E coverage:
 | `Route_26` | Straight back-face conduits (no vertices) |
 | `Route_27` | L-shaped back-face conduits (one corner) |
 | `Route_28` | Back-face L would stack — use C/U instead |
+| `Route_29` | Three conductors in one N↔N tube — no strand lane stack |

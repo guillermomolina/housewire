@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.82.7] — 2026-08-05
+
+### Added
+
+- Route_29 example + E2E: three conductors in one N↔N conduit must keep lane
+  separation (``assert_no_strand_lane_overlap``).
+
 ## [0.82.6] — 2026-08-05
 
 ### Fixed

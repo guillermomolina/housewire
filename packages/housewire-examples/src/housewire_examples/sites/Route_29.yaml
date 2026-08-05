@@ -1,0 +1,88 @@
+schema: house/v2
+type: House
+name: Route_29
+label: Route 29 — three conductors in one N↔N conduit
+notes: >
+  One Tube between north openings of two DeviceBoxes carries three parallel
+  Conductors. With Electrical on, strand lanes must stay separated through
+  the tube and inbox approaches (no colinear stack on a shared horizontal).
+
+elements:
+  Caja_de_mecanismo:
+    type: DeviceBox
+    elements:
+      Regleta_bornes:
+        type: TerminalStrip
+        label: Regleta / bornes
+        view:
+          electrical:
+            x: 107.64453125
+            y: 45.78515625
+        name: Regleta / bornes
+    cables: {}
+    name: Caja de mecanismo
+    label: Caja de mecanismo
+    subtype: OneGang
+    opening_grid:
+      NS: 1
+      WE: 1
+      B: 1
+    view:
+      physical:
+        x: 488.0
+        y: 228.0
+        w: 240.0
+        h: 160.0
+  Caja_de_mecanismo_1:
+    type: DeviceBox
+    elements:
+      Regleta_bornes_1:
+        type: TerminalStrip
+        label: Regleta / bornes 1
+        view:
+          electrical:
+            x: 94.45703125
+            y: 48.3671875
+        name: Regleta / bornes 1
+    cables: {}
+    name: Caja de mecanismo 1
+    label: Caja de mecanismo 1
+    subtype: OneGang
+    opening_grid:
+      NS: 1
+      WE: 1
+      B: 1
+    view:
+      physical:
+        x: 91.0
+        y: 212.0
+        w: 240.0
+        h: 160.0
+cables:
+  Conducto_OPEN_Linea_01_01:
+    type: Conduit
+    from: Caja_de_mecanismo_1.N1
+    to: Caja_de_mecanismo.N1
+    contains:
+    - Conductor
+    - Conductor_2
+    - Conductor_3
+    subtype: Tube
+  Conductor:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Caja_de_mecanismo_1/Regleta_bornes_1.N1
+    to: Caja_de_mecanismo/Regleta_bornes.N1
+  Conductor_2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Caja_de_mecanismo_1/Regleta_bornes_1.N2
+    to: Caja_de_mecanismo/Regleta_bornes.N2
+  Conductor_3:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Caja_de_mecanismo_1/Regleta_bornes_1.N3
+    to: Caja_de_mecanismo/Regleta_bornes.N3
