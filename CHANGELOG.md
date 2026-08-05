@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.12] — 2026-08-05
+
+### Fixed
+
+- Isometric box wireframe lines now use neutral node-stroke gray instead of the
+  global edge blue, improving depth perception in both dark and light themes.
+
 ## [0.77.11] — 2026-08-05
 
 ### Changed
