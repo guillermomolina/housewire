@@ -28,6 +28,11 @@ only—not siblings at ancestor levels. Moving **up** the breadcrumb adds one
 to depth per level (keeping Electrical as set); entering a container still
 resets depth to 1 for that view.
 
+**Chrome layout:** file **tabs** sit above the menu bar; the toolbar holds file
+and edit actions only. **Depth**, **Electrical**, **fit**, and **zoom** live on
+the status strip under the canvas (not under the outline or inspector). That
+strip also shows the active filename, save state, and transient messages.
+
 | Action | Meaning |
 |--------|---------|
 | New | Empty House site in a new dirty tab (Ctrl+N); localized title/filename; use Save as… to keep it |

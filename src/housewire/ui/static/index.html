@@ -31,6 +31,7 @@
   <link rel="stylesheet" href="/static/app.css?v=__VERSION__" />
 </head>
 <body>
+  <div id="view-tabs" class="view-tabs" role="tablist" aria-label="Open files" data-i18n-aria="tabs.openFiles"></div>
   <nav class="menubar" aria-label="Application" data-i18n-aria="app.aria">
     <a class="brand" href="/" title="HouseWire">
       <img class="brand-logo" src="/static/logo.svg" width="22" height="22" alt="" />
@@ -246,33 +247,7 @@
         <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-layout-grid"></use></svg>
       </button>
     </div>
-    <div class="tool-sep" aria-hidden="true"></div>
-    <div class="tool-group" title="View" data-i18n-title="menu.view">
-      <button type="button" class="tool-btn" id="btn-zoom-out" title="Zoom out" data-i18n-title="tool.zoomOut" aria-label="Zoom out" data-i18n-aria="menu.view.zoomOut">
-        <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-zoom-out"></use></svg>
-      </button>
-      <button type="button" class="tool-btn" id="btn-zoom-reset" title="Fit" data-i18n-title="tool.fit" aria-label="Fit" data-i18n-aria="menu.view.fit">
-        <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-maximize-2"></use></svg>
-      </button>
-      <button type="button" class="tool-btn" id="btn-zoom-in" title="Zoom in" data-i18n-title="tool.zoomIn" aria-label="Zoom in" data-i18n-aria="menu.view.zoomIn">
-        <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-zoom-in"></use></svg>
-      </button>
-      <span class="tool-sep tool-sep-inline" aria-hidden="true"></span>
-      <span class="tool-depth-cluster">
-        <button type="button" class="tool-btn" id="btn-depth-out" title="Depth out (Alt+wheel)" data-i18n-title="tool.depthOut" aria-label="Depth out" data-i18n-aria="menu.view.depthOut">
-          <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-minus"></use></svg>
-        </button>
-        <span id="depth-label" class="depth-label" title="Depth" data-i18n-title="tool.depth">1/1</span>
-        <button type="button" class="tool-btn" id="btn-depth-in" title="Depth in (Alt+wheel)" data-i18n-title="tool.depthIn" aria-label="Depth in" data-i18n-aria="menu.view.depthIn">
-          <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-plus"></use></svg>
-        </button>
-        <button type="button" class="tool-btn" id="btn-electrical" title="Electrical layer" data-i18n-title="tool.electrical" aria-label="Electrical" data-i18n-aria="menu.view.electrical" aria-pressed="false">
-          <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-zap"></use></svg>
-        </button>
-      </span>
-    </div>
   </header>
-  <div id="view-tabs" class="view-tabs" role="tablist" aria-label="Open files" data-i18n-aria="tabs.openFiles"></div>
   <div class="workspace">
     <aside id="nav-tree" class="nav-tree" aria-label="Site outline" data-i18n-aria="aria.siteOutline">
       <div class="panel-head">
@@ -316,10 +291,52 @@
     </aside>
     <div id="resizer-outline" class="panel-resizer left" role="separator" aria-orientation="vertical" aria-label="Resize outline"></div>
     <button type="button" class="panel-expand left hidden" id="btn-expand-outline" title="Show sidebar" data-i18n-title="panel.nav.show" aria-controls="nav-tree"><span data-i18n="panel.nav">Sidebar</span></button>
-    <main id="viewport">
-      <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
-      <div id="marquee" class="marquee hidden" aria-hidden="true"></div>
-    </main>
+    <div id="canvas-column" class="canvas-column">
+      <main id="viewport">
+        <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div id="marquee" class="marquee hidden" aria-hidden="true"></div>
+      </main>
+      <footer class="canvas-statusbar" aria-label="Canvas status" data-i18n-aria="status.canvasBar">
+        <div id="status-doc" class="canvas-status-doc" aria-live="polite"></div>
+        <div id="status" class="canvas-status-msg" aria-live="polite"></div>
+        <div class="canvas-status-view">
+          <span class="canvas-status-depth" title="Depth" data-i18n-title="tool.depth">
+            <button type="button" class="canvas-status-btn" id="btn-depth-out" title="Depth out (Alt+wheel)" data-i18n-title="tool.depthOut" aria-label="Depth out" data-i18n-aria="menu.view.depthOut">
+              <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-minus"></use></svg>
+            </button>
+            <span id="depth-label" class="depth-label">1/1</span>
+            <button type="button" class="canvas-status-btn" id="btn-depth-in" title="Depth in (Alt+wheel)" data-i18n-title="tool.depthIn" aria-label="Depth in" data-i18n-aria="menu.view.depthIn">
+              <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-plus"></use></svg>
+            </button>
+          </span>
+          <button type="button" class="canvas-status-btn" id="btn-electrical" title="Electrical layer" data-i18n-title="tool.electrical" aria-label="Electrical" data-i18n-aria="menu.view.electrical" aria-pressed="false">
+            <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-zap"></use></svg>
+          </button>
+          <button type="button" class="canvas-status-btn" id="btn-zoom-reset" title="Fit" data-i18n-title="tool.fit" aria-label="Fit" data-i18n-aria="menu.view.fit">
+            <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-maximize-2"></use></svg>
+          </button>
+          <div class="canvas-status-zoom" title="Canvas zoom" data-i18n-title="status.zoom">
+            <button type="button" class="canvas-status-btn" id="status-zoom-out" aria-label="Zoom out" data-i18n-aria="menu.view.zoomOut">
+              <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-zoom-out"></use></svg>
+            </button>
+            <input
+              type="range"
+              id="zoom-slider"
+              min="5"
+              max="300"
+              step="1"
+              value="100"
+              aria-label="Zoom"
+              data-i18n-aria="status.zoom"
+            />
+            <button type="button" class="canvas-status-btn" id="status-zoom-in" aria-label="Zoom in" data-i18n-aria="menu.view.zoomIn">
+              <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-zoom-in"></use></svg>
+            </button>
+            <span id="zoom-label" class="zoom-label">100%</span>
+          </div>
+        </div>
+      </footer>
+    </div>
     <button type="button" class="panel-expand right hidden" id="btn-expand-inspector" title="Show properties" data-i18n-title="panel.properties.show" aria-controls="side-panel"><span data-i18n="panel.properties">Properties</span></button>
     <div id="resizer-inspector" class="panel-resizer right" role="separator" aria-orientation="vertical" aria-label="Resize properties"></div>
     <aside id="side-panel" class="side-panel">
@@ -349,27 +366,6 @@
       </div>
     </aside>
   </div>
-  <footer class="statusbar">
-    <div id="status" class="statusbar-msg" aria-live="polite"></div>
-    <div class="statusbar-zoom" title="Canvas zoom" data-i18n-title="status.zoom">
-      <button type="button" class="statusbar-zoom-btn" id="status-zoom-out" aria-label="Zoom out">
-        <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-zoom-out"></use></svg>
-      </button>
-      <input
-        type="range"
-        id="zoom-slider"
-        min="5"
-        max="300"
-        step="1"
-        value="100"
-        aria-label="Zoom"
-      />
-      <button type="button" class="statusbar-zoom-btn" id="status-zoom-in" aria-label="Zoom in">
-        <svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-zoom-in"></use></svg>
-      </button>
-      <span id="zoom-label" class="zoom-label">100%</span>
-    </div>
-  </footer>
   <div id="app-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-modal-dismiss></div>
     <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="app-modal-title" aria-describedby="app-modal-message">

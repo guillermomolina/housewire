@@ -493,6 +493,26 @@
     if (menuSaveAs) menuSaveAs.disabled = !hasDocument;
     if (menuClose) menuClose.disabled = !hasDocument;
     updateDeleteButtons();
+    updateDocStatusStrip();
+  }
+
+  function updateDocStatusStrip() {
+    const el = document.getElementById("status-doc");
+    if (!el) return;
+    if (!hasDocument || !activeYamlName) {
+      el.textContent = "";
+      el.title = "";
+      return;
+    }
+    const state = dirtyLocal ? t("status.unsaved") : t("status.savedOk");
+    el.textContent = `${activeYamlName} · ${state}`;
+    const loc =
+      locationId && locationId !== "." && locationId !== ""
+        ? String(locationId)
+        : "";
+    el.title = loc
+      ? `${activeYamlName} · ${state} · ${loc}`
+      : `${activeYamlName} · ${state}`;
   }
 
   function applyWorkspaceStatus(st) {
@@ -519,6 +539,7 @@
     applyEditFlags(st);
     updateFileMenuState({ dirty: dirtyLocal });
     renderDocTabs(st);
+    updateDocStatusStrip();
     return st;
   }
 
@@ -10514,17 +10535,11 @@
     try {
       const st = applyWorkspaceStatus(await api("/api/workspace"));
       if (!hasDocument) {
+        updateDocStatusStrip();
         return;
       }
       const n = (st.dirty || []).length;
       const dirty = n > 0 || dirtyLocal;
-      setStatus(
-        n
-          ? t("status.dirty", { n })
-          : dirtyLocal
-            ? t("status.layoutPending")
-            : t("status.savedOk")
-      );
       updateFileMenuState({ dirty });
     } catch {
       /* ignore */
@@ -11749,6 +11764,7 @@
       setStatus(`auto-placed ${bits.join(" + ")} missing x/y · unsaved`);
     }
     renderOutline();
+    updateDocStatusStrip();
   }
 
   async function setDepth(next) {
@@ -12346,12 +12362,6 @@
     closeAllMenus();
   });
 
-  document.getElementById("btn-zoom-in")?.addEventListener("click", () => {
-    zoomIn();
-  });
-  document.getElementById("btn-zoom-out")?.addEventListener("click", () => {
-    zoomOut();
-  });
   document.getElementById("btn-zoom-reset")?.addEventListener("click", () => {
     fitView();
   });

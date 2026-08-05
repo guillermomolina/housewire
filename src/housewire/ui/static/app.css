@@ -772,21 +772,39 @@ button:hover {
   color: var(--accent);
 }
 
-.statusbar {
+.canvas-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.canvas-statusbar {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
   flex-shrink: 0;
   width: 100%;
-  min-height: 1.75rem;
-  padding: 0.2rem 0.65rem 0.2rem 0.85rem;
+  min-height: 1.85rem;
+  padding: 0.15rem 0.5rem 0.15rem 0.65rem;
   border-top: 1px solid var(--border);
   background: var(--panel);
   font-size: 0.78rem;
   color: var(--muted);
 }
 
-.statusbar-msg {
+.canvas-status-doc {
+  flex-shrink: 0;
+  max-width: 38%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.canvas-status-msg {
   flex: 1;
   min-width: 0;
   white-space: nowrap;
@@ -794,36 +812,63 @@ button:hover {
   text-overflow: ellipsis;
 }
 
-.statusbar-zoom {
+.canvas-status-view {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
   flex-shrink: 0;
 }
 
-.statusbar-zoom-btn {
+.canvas-status-depth {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.canvas-status-depth .depth-label {
+  min-width: 2.5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.canvas-status-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.45rem;
-  height: 1.45rem;
+  width: 1.55rem;
+  height: 1.55rem;
   padding: 0;
   background: transparent;
   color: var(--muted);
   border: 1px solid transparent;
   border-radius: 4px;
-  font-size: 0.7rem;
   cursor: pointer;
 }
 
-.statusbar-zoom-btn:hover {
+.canvas-status-btn:hover {
   color: var(--text);
   background: var(--bg);
   border-color: var(--border);
 }
 
+.canvas-status-btn[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.canvas-status-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.15rem;
+  padding-left: 0.35rem;
+  border-left: 1px solid var(--border);
+}
+
 #zoom-slider {
-  width: 7.5rem;
+  width: 5.5rem;
   height: 0.35rem;
   margin: 0;
   accent-color: var(--edge);
@@ -831,7 +876,7 @@ button:hover {
 }
 
 .zoom-label {
-  min-width: 2.6rem;
+  min-width: 2.5rem;
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--text);
@@ -1292,6 +1337,7 @@ button:hover {
   position: relative;
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   cursor: default;
   background:

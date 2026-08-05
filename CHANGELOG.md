@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.0] — 2026-08-05
+
+### Changed
+
+- UI chrome: file tabs above the menu bar; view controls (depth, Electrical,
+  fit, zoom) and canvas messages move to a status strip under the canvas.
+  The active filename and save state show on that strip.
+
 ## [0.76.5] — 2026-08-05
 
 ### Changed
