@@ -1240,6 +1240,14 @@ button:hover {
   outline: 1px solid var(--selection);
 }
 
+.outline-item.outline-crumb {
+  color: var(--muted);
+}
+
+.outline-item.outline-crumb .outline-label {
+  font-weight: 500;
+}
+
 .outline-item.element {
   color: var(--element);
 }

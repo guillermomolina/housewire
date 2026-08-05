@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.76.0] — 2026-08-05
+
+### Changed
+
+- Outline inside a nested canvas location shows a clickable breadcrumb from
+  site root to the current view, then content under that location (depth and
+  Electrical rules unchanged). Path rows stay visible even when collapsed.
+
 ## [0.75.3] — 2026-08-05
 
 ### Fixed

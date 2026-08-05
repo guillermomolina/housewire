@@ -11166,6 +11166,7 @@
     if (!id) return;
     if (resetDepth) depthLevel = DEPTH_DEFAULT;
     locationId = id;
+    expandOutlineAncestors(id);
     rememberCurrentDocView();
     await loadLocation({ fit });
   }
@@ -11196,8 +11197,27 @@
     return placeSiteId.startsWith(`${canvas}/`);
   }
 
+  /** Site ids from root (``.``) down to the current canvas location. */
+  function canvasLocationPathIds() {
+    const canvas = String(locationId || ".").trim() || ".";
+    if (canvas === ".") return ["."];
+    const segments = canvas.split("/").filter(Boolean);
+    const ids = ["."];
+    for (let i = 0; i < segments.length; i++) {
+      ids.push(segments.slice(0, i + 1).join("/"));
+    }
+    return ids;
+  }
+
+  function isOnCanvasLocationPath(placeSiteId) {
+    if (!placeSiteId) return false;
+    return canvasLocationPathIds().includes(placeSiteId);
+  }
+
   function isOutlinePlaceVisibleById(placeSiteId) {
     if (!placeSiteId) return false;
+    // Breadcrumb: ancestors on the path to the current canvas (click to go up).
+    if (isOnCanvasLocationPath(placeSiteId)) return true;
     if (!outlinePlaceUnderCanvas(placeSiteId)) return false;
     const rel = placeDepthUnderCanvas(placeSiteId, locationId || ".");
     return rel <= depthLevel;
@@ -11251,6 +11271,7 @@
   }
 
   function isOutlineHidden(node) {
+    if (node && isOnCanvasLocationPath(node.id)) return false;
     let parent = outlineParentId(node);
     while (parent) {
       if (collapsedOutline.has(parent)) return true;
@@ -11287,9 +11308,17 @@
     for (const node of outlineNodes) {
       if (!isOutlineNodeVisible(node)) continue;
       if (isOutlineHidden(node)) continue;
+      const onPath =
+        node.kind === "place" && isOnCanvasLocationPath(node.id);
+      const canvasHere = locationId || ".";
+      const isCanvasRoot =
+        node.id === canvasHere ||
+        (node.id === "." && (canvasHere === "." || canvasHere === ""));
       const row = document.createElement("div");
       row.className =
-        "outline-item" + (node.kind === "element" ? " element" : "");
+        "outline-item" +
+        (node.kind === "element" ? " element" : "") +
+        (onPath && !isCanvasRoot ? " outline-crumb" : "");
       row.dataset.kind = node.kind || "place";
       row.dataset.id = node.id;
       if (node.parent) row.dataset.parent = node.parent;
