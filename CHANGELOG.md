@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.68.6] — 2026-08-05
+
+### Fixed
+
+- Live route E2E: harness turns Electrical on and deepens to max depth before
+  dumping the canvas (defaults are depth 1 / electrical off, which left
+  strands empty). Route_19 hub uses E1–E3 so each tube has its own opening.
+
 ## [0.68.5] — 2026-08-05
 
 ### Fixed

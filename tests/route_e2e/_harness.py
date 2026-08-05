@@ -104,6 +104,55 @@ def free_port() -> int:
         return int(s.getsockname()[1])
 
 
+def _prepare_route_canvas(page) -> None:
+    """Enable Electrical and deepen so tubes/strands/elements are painted.
+
+    Session defaults are depth 1 + electrical off (quiet editing view); live
+    route E2E needs the full nested diagram with cables visible.
+    """
+    page.wait_for_selector("#btn-electrical", timeout=15000)
+    page.wait_for_function(
+        """() => {
+          const d = document.getElementById('depth-label');
+          const btn = document.getElementById('btn-electrical');
+          return Boolean(
+            d && /\\d+\\/\\d+/.test((d.textContent || '').trim())
+            && btn && btn.getAttribute('aria-pressed') != null
+          );
+        }""",
+        timeout=15000,
+    )
+    el_btn = page.locator("#btn-electrical")
+    if el_btn.get_attribute("aria-pressed") != "true":
+        el_btn.click()
+        page.wait_for_function(
+            """() => {
+              const btn = document.getElementById('btn-electrical');
+              return btn && btn.getAttribute('aria-pressed') === 'true';
+            }""",
+            timeout=5000,
+        )
+    for _ in range(24):
+        depth_in = page.locator("#btn-depth-in")
+        if depth_in.is_disabled():
+            break
+        before = page.locator("#depth-label").inner_text()
+        depth_in.click()
+        try:
+            page.wait_for_function(
+                """(prev) => {
+                  const d = document.getElementById('depth-label');
+                  const btn = document.getElementById('btn-depth-in');
+                  const text = (d && d.textContent) || '';
+                  return text !== prev || Boolean(btn && btn.disabled);
+                }""",
+                before,
+                timeout=8000,
+            )
+        except Exception:
+            break
+
+
 def dump_live_canvas(
     site: Path,
     *,
@@ -159,6 +208,8 @@ def dump_live_canvas(
                 raise
             page = browser.new_page(viewport={"width": 1600, "height": 1000})
             page.goto(f"http://127.0.0.1:{port}/", wait_until="networkidle")
+            page.wait_for_timeout(min(wait_ms, 500))
+            _prepare_route_canvas(page)
             page.wait_for_timeout(wait_ms)
             # Wait until the canvas has painted tubes and/or strands (avoids
             # empty dumps when outline/graph finishes after networkidle).

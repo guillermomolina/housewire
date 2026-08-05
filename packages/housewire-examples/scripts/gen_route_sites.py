@@ -1293,8 +1293,8 @@ def route_19() -> str:
         """  Hub:
     type: JunctionBox
     label: Hub
-    openings: [E1]
-    opening_grid: {E: 1}
+    openings: [E1, E2, E3]
+    opening_grid: {E: 3}
     elements:
       Strip:
         type: TerminalStrip
@@ -1375,13 +1375,13 @@ cables:
   T2:
     type: Conduit
     subtype: Tube
-    from: Hub.E1
+    from: Hub.E2
     to: Mid.W1
     contains: [C2]
   T3:
     type: Conduit
     subtype: Tube
-    from: Hub.E1
+    from: Hub.E3
     to: Bot.W1
     contains: [C3]
 """,
