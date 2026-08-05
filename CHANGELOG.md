@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.82.1] — 2026-08-05
+
+### Fixed
+
+- Plane-to-plane routing: when mark-to-mark L is blocked, try a ≤3-segment
+  C/U via ``orthoRoute`` before contour+iso stubs (Route_28 Linea_03).
+
 ## [0.82.0] — 2026-08-05
 
 ### Added

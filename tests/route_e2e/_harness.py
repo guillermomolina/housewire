@@ -435,12 +435,14 @@ def assert_tubes_avoid_l_overlap(
     *,
     expected: int,
     min_extra_bend_tubes: int = 1,
+    max_segments_when_extra: int = 3,
 ) -> None:
     """Site cannot keep every tube as a single L without stacking.
 
-    Live cores must not colinear-overlap, and at least
-    ``min_extra_bend_tubes`` cores must have ≥2 bends (C/U fallback when the
-    mark-to-mark L shortcut would stack on prior tubes).
+    Live tubes must not colinear-overlap, and at least
+    ``min_extra_bend_tubes`` painted paths must have ≥2 bends (C/U fallback).
+    Those detours must stay within ``max_segments_when_extra`` segments
+    (mark-to-mark C/U, not contour+iso stub chains).
     """
     from housewire.ui.route_quality import tubes_colinear_overlap
 
@@ -451,17 +453,16 @@ def assert_tubes_avoid_l_overlap(
         )
     data = dump_live_canvas(site, require_tubes=True)
     test.assertNotIn("err", data, msg=data)
-    raw = data.get("tube_cores") or data.get("tubes") or []
+    # Prefer painted paths: mark-to-mark C/U must not grow iso stubs.
+    raw = data.get("tubes") or data.get("tube_cores") or []
     tubes = [t for t in raw if len(t) >= 2]
     test.assertEqual(len(tubes), expected, msg=data)
     halves = data.get("halves") or []
     if halves and len(halves) == len(data.get("tubes") or []):
-        # Align halves with non-empty cores the same way as assert_site_routes_ok.
         raw_paint = data.get("tubes") or []
-        raw_cores = data.get("tube_cores") or raw_paint
         halves = [
             h
-            for t, h in zip(raw_cores, halves, strict=False)
+            for t, h in zip(raw_paint, halves, strict=False)
             if len(t) >= 2
         ]
     overlap = tubes_colinear_overlap(
@@ -470,7 +471,22 @@ def assert_tubes_avoid_l_overlap(
     )
     test.assertEqual(overlap, [], msg=f"colinear tube overlap: {overlap}")
 
-    multi = sum(1 for pts in tubes if _ortho_bend_count(pts) >= 2)
+    multi = 0
+    for pts in tubes:
+        clean = _clean_ortho_pts(pts)
+        bends = _ortho_bend_count(clean)
+        if bends < 2:
+            continue
+        multi += 1
+        segs = max(0, len(clean) - 1)
+        test.assertLessEqual(
+            segs,
+            max_segments_when_extra,
+            msg=(
+                f"extra-bend tube has {segs} segments "
+                f"(max {max_segments_when_extra}): {clean}"
+            ),
+        )
     test.assertGreaterEqual(
         multi,
         min_extra_bend_tubes,

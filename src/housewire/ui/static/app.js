@@ -4882,15 +4882,34 @@
         const d = pointsToPathD(pts);
         return { d, dCore: d, segs: segsFromPoints(pts, half) };
       }
-      // Offset B/F mouths: prefer a single Manhattan L (one corner) mark-to-mark
-      // when both L orientations clear place obstacles and prior tubes
-      // (no colinear stack — Route_28 needs C/U when L paths would overlap).
+      // Offset B/F mouths: prefer mark-to-mark Manhattan with few bends —
+      // L (one corner) first, then C/U (two corners / three segments) via
+      // orthoRoute — before contour stubs (Route_28 Linea_03).
       if (
         fromPlane &&
         toPlane &&
         Math.abs(m1.x - m2.x) >= 1e-6 &&
         Math.abs(m1.y - m2.y) >= 1e-6
       ) {
+        const stackEps = Math.max(LANE_GAP, half || 0);
+        const pathLen = (pts) => {
+          let len = 0;
+          for (let i = 1; i < pts.length; i++) {
+            len += Math.hypot(
+              pts[i][0] - pts[i - 1][0],
+              pts[i][1] - pts[i - 1][1]
+            );
+          }
+          return len;
+        };
+        const acceptMarkPath = (pts) => {
+          if (!pts || pts.length < 2) return false;
+          if (pathObstacleCost(pts, obstacles) > 0) return false;
+          if (pathStackConflictCost(pts, occupied, stackEps, half) > 0) {
+            return false;
+          }
+          return true;
+        };
         const lCandidates = [
           cleanOrthoPoly([
             [m1.x, m1.y],
@@ -4903,30 +4922,40 @@
             [m2.x, m2.y],
           ]),
         ];
-        const stackEps = Math.max(LANE_GAP, half || 0);
-        /** @type {{pts:number[][], cost:number, len:number}[]} */
+        /** @type {{pts:number[][], len:number}[]} */
         const scored = [];
         for (const pts of lCandidates) {
           if (pts.length < 3) continue;
-          const cost = pathObstacleCost(pts, obstacles);
-          if (cost > 0) continue;
-          if (pathStackConflictCost(pts, occupied, stackEps, half) > 0) {
-            continue;
-          }
-          let len = 0;
-          for (let i = 1; i < pts.length; i++) {
-            len += Math.hypot(
-              pts[i][0] - pts[i - 1][0],
-              pts[i][1] - pts[i - 1][1]
-            );
-          }
-          scored.push({ pts, cost, len });
+          if (!acceptMarkPath(pts)) continue;
+          scored.push({ pts, len: pathLen(pts) });
         }
-        scored.sort((a, b) => a.len - b.len || a.cost - b.cost);
+        scored.sort((a, b) => a.len - b.len);
         if (scored.length) {
           const pts = scored[0].pts;
           const d = pointsToPathD(pts);
           return { d, dCore: d, segs: segsFromPoints(pts, half) };
+        }
+        // L blocked (stack/obstacle): try ≤3-segment mark-to-mark C/U.
+        const cPts = cleanOrthoPoly(
+          orthoRoute(
+            m1,
+            m2,
+            null,
+            null,
+            occupied,
+            obstacles,
+            stayBounds,
+            hugRects,
+            half
+          )
+        );
+        if (
+          cPts.length >= 3 &&
+          polyBends(cPts) <= 2 &&
+          acceptMarkPath(cPts)
+        ) {
+          const d = pointsToPathD(cPts);
+          return { d, dCore: d, segs: segsFromPoints(cPts, half) };
         }
       }
       // Cross the contour at a nudged entry so B-approach does not sit on N1.
