@@ -2769,7 +2769,7 @@
     return Boolean(grid && typeof grid === "object" && Object.keys(grid).length);
   }
 
-  /** Local mark position for 3D paint (routing mouths stay on contour anchors). */
+  /** Local mark position for 3D paint and conduit mouth alignment. */
   function openingMarkLocal(node, openingId, byId) {
     const faceHint = String(openingId || "?").match(/^[NSEWFB]/i)?.[0] || "?";
     const anchor = openingAnchorLocal(node, openingId, faceHint, byId);
@@ -2818,6 +2818,17 @@
       near: isoFaceNear(f),
       mouthX: anchor.x,
       mouthY: anchor.y,
+    };
+  }
+
+  /** Absolute position of the rendered opening mark (same as painted mouth). */
+  function openingMarkAbs(node, openingId, face, byId) {
+    const a = absXY(node, byId);
+    const mark = openingMarkLocal(node, openingId, byId);
+    return {
+      x: a.x + mark.x,
+      y: a.y + mark.y,
+      face: mark.face || String(face || "").toUpperCase(),
     };
   }
 
@@ -2964,13 +2975,11 @@
   }
 
   /**
-   * Contour mouth / true boca for a conduit end.
-   * Side openings sit on the border. B/F plane cells are the interior boca
-   * (tube continues into the place); contour crossing uses
-   * ``planeContourEntryAbs`` so the entry can be nudged off N1/S1/….
+   * Rendered conduit mouth for a conduit end.
+   * Keep this aligned with the painted opening mark to avoid visual mismatch.
    */
   function openingMouthAbs(node, openingId, face, byId) {
-    return openingAnchorAbs(node, openingId, face, byId);
+    return openingMarkAbs(node, openingId, face, byId);
   }
 
   function isPlaneOpeningId(openingId) {

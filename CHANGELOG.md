@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.13] — 2026-08-05
+
+### Fixed
+
+- Conduit endpoints now align to the rendered opening-mark positions, removing
+  visual drift between conduit mouths and opening circles in isometric view.
+
 ## [0.77.12] — 2026-08-05
 
 ### Fixed
