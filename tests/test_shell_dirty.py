@@ -193,7 +193,11 @@ class TestShellDirtyBuffer(unittest.TestCase):
         self.assertEqual(mech["install"], "Surface")
         self.assertEqual(mech["mount"], "Wall")
         self.assertEqual(mech["openings"], ["N1"])
-        self.assertEqual(mech["opening_grid"], {"N": 1})
+        # DeviceBox catalog defaults (NS/WE/B) plus explicit --set opening_grid.N=1
+        self.assertEqual(
+            mech["opening_grid"],
+            {"NS": 1, "WE": 1, "B": 1, "N": 1},
+        )
         code = self._run(s, "set notes 'desde shell'")
         self.assertEqual(code, 0)
         self.assertEqual(mech["notes"], "desde shell")
