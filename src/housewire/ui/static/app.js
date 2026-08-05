@@ -11170,9 +11170,40 @@
     }
   }
 
+  /** Site ids from root (``.``) down to a canvas location id. */
+  function sitePathIds(siteId) {
+    const canvas = String(siteId || ".").trim() || ".";
+    if (canvas === ".") return ["."];
+    const segments = canvas.split("/").filter(Boolean);
+    const ids = ["."];
+    for (let i = 0; i < segments.length; i++) {
+      ids.push(segments.slice(0, i + 1).join("/"));
+    }
+    return ids;
+  }
+
+  /** How many canvas levels up ``toId`` is from ``fromId`` (same branch only). */
+  function canvasLevelsUp(fromId, toId) {
+    const from = fromId || ".";
+    const to = toId || ".";
+    if (from === to) return 0;
+    if (to !== "." && !from.startsWith(`${to}/`)) return 0;
+    const path = sitePathIds(from);
+    const fromIdx = path.indexOf(from);
+    const toIdx = path.indexOf(to);
+    if (fromIdx < 0 || toIdx < 0 || toIdx >= fromIdx) return 0;
+    return fromIdx - toIdx;
+  }
+
   async function setCanvasLocation(id, { resetDepth = true, fit = true } = {}) {
     if (!id) return;
-    if (resetDepth) depthLevel = DEPTH_DEFAULT;
+    const prev = locationId;
+    if (resetDepth) {
+      depthLevel = DEPTH_DEFAULT;
+    } else {
+      const up = canvasLevelsUp(prev, id);
+      if (up > 0) depthLevel = depthLevel + up;
+    }
     locationId = id;
     expandOutlineAncestors(id);
     rememberCurrentDocView();
@@ -11207,14 +11238,7 @@
 
   /** Site ids from root (``.``) down to the current canvas location. */
   function canvasLocationPathIds() {
-    const canvas = String(locationId || ".").trim() || ".";
-    if (canvas === ".") return ["."];
-    const segments = canvas.split("/").filter(Boolean);
-    const ids = ["."];
-    for (let i = 0; i < segments.length; i++) {
-      ids.push(segments.slice(0, i + 1).join("/"));
-    }
-    return ids;
+    return sitePathIds(locationId);
   }
 
   function isOnCanvasLocationPath(placeSiteId) {
@@ -11582,7 +11606,7 @@
     // properties even if outline selectable flags lag behind locations API.
     if (placeId === ".") {
       if (locationId !== ".") {
-        await setCanvasLocation(".");
+        await setCanvasLocation(".", { resetDepth: false });
       }
       highlightOutline(".");
       clearSelectionState();
@@ -11592,7 +11616,8 @@
     }
     if (node.selectable) {
       if (locationId !== placeId) {
-        await setCanvasLocation(placeId);
+        const goingUp = canvasLevelsUp(locationId, placeId) > 0;
+        await setCanvasLocation(placeId, { resetDepth: !goingUp });
       }
       highlightOutline(placeId);
       clearSelectionState();

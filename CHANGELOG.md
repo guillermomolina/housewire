@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.76.4] — 2026-08-05
+
+### Changed
+
+- Outline breadcrumb navigation upward increases depth by one per level
+  instead of resetting it, so the expanded nesting stays visible from
+  shallower canvas locations.
+
 ## [0.76.3] — 2026-08-05
 
 ### Fixed

@@ -24,7 +24,9 @@ The outline tree is filtered to match the current canvas depth and Electrical
 state. When the canvas is **inside** a place (Outline → selectable box), the
 outline shows a **breadcrumb** from site root (``.``) to that location (click
 any segment to go up) plus places and elements **under** the current location
-only—not siblings at ancestor levels.
+only—not siblings at ancestor levels. Moving **up** the breadcrumb adds one
+to depth per level (keeping Electrical as set); entering a container still
+resets depth to 1 for that view.
 
 | Action | Meaning |
 |--------|---------|
