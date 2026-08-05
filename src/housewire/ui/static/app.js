@@ -2729,49 +2729,11 @@
   const ISO_DX = -16;
   const ISO_DY = -16;
   const OPENING_MARK_R = 5;
-  /** Pull marks off the edge stroke into the face interior. */
-  const OPENING_FACE_INSET = OPENING_MARK_R + 2;
 
   /** True for faces treated as near/visible under a fixed NW camera. */
   function isoFaceNear(visualFace) {
     const f = String(visualFace || "").toUpperCase();
     return f === "N" || f === "W" || f === "F";
-  }
-
-  /**
-   * Visual offset for an opening mark on a face (routing mouths stay unshifted).
-   * N most NW … B most recessed. Depth scales leave room for inset circles.
-   */
-  function isoOffsetForVisualFace(visualFace) {
-    const f = String(visualFace || "").toUpperCase();
-    // Mid-bevel for N/W so the whole circle sits on the extruded face.
-    const scales = {
-      N: 0.55,
-      W: 0.55,
-      F: 0.2,
-      E: 0.12,
-      S: 0.12,
-      B: 0.85,
-    };
-    const s = scales[f] != null ? scales[f] : 0.35;
-    return {
-      dx: ISO_DX * s,
-      dy: ISO_DY * s,
-      near: isoFaceNear(f),
-      face: f,
-    };
-  }
-
-  /** Inset from the contour edge toward the interior of that face. */
-  function faceInteriorInset(visualFace) {
-    const d = OPENING_FACE_INSET;
-    const f = String(visualFace || "").toUpperCase();
-    if (f === "N") return { dx: 0, dy: d };
-    if (f === "S") return { dx: 0, dy: -d };
-    if (f === "W") return { dx: d, dy: 0 };
-    if (f === "E") return { dx: -d, dy: 0 };
-    // F/B already sit on the plane; slight NW bias is enough via iso.
-    return { dx: 0, dy: 0 };
   }
 
   /** All opening cell ids for a place: opening_grid cells ∪ declared openings. */
@@ -2799,18 +2761,43 @@
     return Boolean(grid && typeof grid === "object" && Object.keys(grid).length);
   }
 
-  /** Local mark position = 2D mouth + face inset + iso offset (paint/sync/hit). */
+  /** Local mark position for 3D paint (routing mouths stay on contour anchors). */
   function openingMarkLocal(node, openingId, byId) {
     const faceHint = String(openingId || "?").match(/^[NSEWFB]/i)?.[0] || "?";
     const anchor = openingAnchorLocal(node, openingId, faceHint, byId);
     const visualFace = anchor.face || faceHint;
-    const iso = isoOffsetForVisualFace(visualFace);
-    const inset = faceInteriorInset(visualFace);
+    const f = String(visualFace || "?").toUpperCase();
+    const margin = OPENING_MARK_R + 6;
+    let x = anchor.x;
+    let y = anchor.y;
+    if (f === "N" || f === "S" || f === "E" || f === "W") {
+      // Side openings sit midway between front and back projected contours.
+      x += ISO_DX * 0.5;
+      y += ISO_DY * 0.5;
+    } else if (f === "B") {
+      // Back-face openings live on the projected back rectangle.
+      x += ISO_DX;
+      y += ISO_DY;
+    }
+    // Keep marks off face borders so circles do not touch box lines.
+    const w = nodeW(node);
+    const h = nodeH(node);
+    if (f === "F") {
+      x = Math.max(margin, Math.min(w - margin, x));
+      y = Math.max(margin, Math.min(h - margin, y));
+    } else if (f === "B") {
+      x = Math.max(ISO_DX + margin, Math.min(ISO_DX + w - margin, x));
+      y = Math.max(ISO_DY + margin, Math.min(ISO_DY + h - margin, y));
+    } else if (f === "N" || f === "S") {
+      x = Math.max(margin, Math.min(w - margin, x));
+    } else if (f === "E" || f === "W") {
+      y = Math.max(margin, Math.min(h - margin, y));
+    }
     return {
-      x: anchor.x + inset.dx + iso.dx,
-      y: anchor.y + inset.dy + iso.dy,
-      face: visualFace,
-      near: iso.near,
+      x,
+      y,
+      face: f,
+      near: isoFaceNear(f),
       mouthX: anchor.x,
       mouthY: anchor.y,
     };
@@ -2824,15 +2811,26 @@
     return `M 0 0 L ${ISO_DX} ${ISO_DY} L ${ISO_DX} ${h + ISO_DY} L 0 ${h} Z`;
   }
 
-  /** Dashed hidden edges: back face (B) + depth ribs (E/S sides). */
+  /** Solid visible edges on the projected back/top-left side. */
+  function nodeIsoVisibleWireD(w, h) {
+    const dx = ISO_DX;
+    const dy = ISO_DY;
+    return (
+      `M ${dx} ${dy} H ${w + dx} ` +
+      `M ${dx} ${dy} V ${h + dy} ` +
+      `M 0 0 L ${dx} ${dy} ` +
+      `M 0 ${h} L ${dx} ${h + dy}`
+    );
+  }
+
+  /** Dashed hidden edges: right/bottom of back face + right depth ribs. */
   function nodeIsoHiddenWireD(w, h) {
     const dx = ISO_DX;
     const dy = ISO_DY;
     return (
-      `M ${dx} ${dy} H ${w + dx} V ${h + dy} H ${dx} Z ` +
+      `M ${w + dx} ${dy} V ${h + dy} H ${dx} ` +
       `M ${w} 0 L ${w + dx} ${dy} ` +
-      `M ${w} ${h} L ${w + dx} ${h + dy} ` +
-      `M 0 ${h} L ${dx} ${h + dy}`
+      `M ${w} ${h} L ${w + dx} ${h + dy}`
     );
   }
 
@@ -2845,6 +2843,12 @@
       el("path", {
         class: "node-iso-face node-iso-west",
         d: nodeIsoWestPathD(w, h),
+      })
+    );
+    iso.appendChild(
+      el("path", {
+        class: "node-iso-visible",
+        d: nodeIsoVisibleWireD(w, h),
       })
     );
     iso.appendChild(
@@ -2862,6 +2866,7 @@
     if (!iso) return;
     const top = iso.querySelector("path.node-iso-top");
     const west = iso.querySelector("path.node-iso-west");
+    const visible = iso.querySelector("path.node-iso-visible");
     let hidden = iso.querySelector("path.node-iso-hidden");
     if (!hidden) {
       hidden = iso.querySelector("path.node-iso-far");
@@ -2869,6 +2874,7 @@
     }
     if (top) top.setAttribute("d", nodeIsoTopPathD(w, h));
     if (west) west.setAttribute("d", nodeIsoWestPathD(w, h));
+    if (visible) visible.setAttribute("d", nodeIsoVisibleWireD(w, h));
     if (hidden) hidden.setAttribute("d", nodeIsoHiddenWireD(w, h));
   }
 
@@ -2904,13 +2910,6 @@
     return margin + ((index - 1) / (count - 1)) * span;
   }
 
-  /**
-   * B/F bocas are never drawn on the geometric center of the place (even a
-   * lone B1-1), so the tube/marker stay clear of the middle and of typical
-   * side openings. Bias toward local NW (smaller x/y).
-   */
-  const PLANE_CENTER_BIAS = 18;
-
   /** Local coords for B/F openings on a face grid, almost touching the border. */
   function planeAnchorLocal(node, openingId, face, byId) {
     const w = nodeW(node);
@@ -2928,14 +2927,6 @@
     if (flips.ns) row = rows + 1 - row;
     let x = planeCellCenter(w, cols, col, PLANE_R);
     let y = planeCellCenter(h, rows, row, PLANE_R);
-    const margin = PLANE_R + 5;
-    // Always offset a cell that would sit on the place center.
-    if (Math.abs(x - w / 2) < 1e-6) {
-      x = Math.max(margin, w / 2 - PLANE_CENTER_BIAS);
-    }
-    if (Math.abs(y - h / 2) < 1e-6) {
-      y = Math.max(margin, h / 2 - PLANE_CENTER_BIAS);
-    }
     return { x, y };
   }
 

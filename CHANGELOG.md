@@ -8,6 +8,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.6] — 2026-08-05
+
+### Fixed
+
+- Isometric box projection now classifies visible/hidden back edges correctly
+  (top-left visible, right/bottom hidden), and opening mark offsets are
+  repositioned: side marks sit midway between front/back faces; F/B marks stay
+  inside their projected rectangles with border-safe spacing.
+
 ## [0.77.5] — 2026-08-05
 
 ### Changed

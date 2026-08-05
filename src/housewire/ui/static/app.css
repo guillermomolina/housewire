@@ -2231,6 +2231,14 @@ button:hover {
   stroke-linejoin: miter;
 }
 
+.node-iso-visible {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1.2;
+  stroke-linejoin: miter;
+  stroke-linecap: butt;
+}
+
 .node-iso-hidden,
 .node-iso-far {
   fill: none;
