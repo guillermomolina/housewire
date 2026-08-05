@@ -8753,14 +8753,32 @@
         /** @type {HTMLInputElement|null} */
         let rowsInput = null;
         colsInput.addEventListener("change", () => {
-          const cols = Math.max(0, parseInt(colsInput.value, 10) || 0);
-          const rows = isPlane
-            ? Math.max(0, parseInt(rowsInput?.value || "0", 10) || 0)
-            : cols > 0
-              ? 1
-              : 0;
+          let cols = Math.max(0, parseInt(colsInput.value, 10) || 0);
+          let rows;
+          if (isPlane) {
+            rows = Math.max(0, parseInt(rowsInput?.value || "0", 10) || 0);
+            // F/B need both axes. Spinning one side up from empty left the other
+            // at 0 and the change handler cleared the face (looked like a snap
+            // back to 0). Bootstrap the unset axis to 1; clearing either axis
+            // on an existing grid drops the whole face.
+            const had =
+              Boolean(expanded[face]) &&
+              expanded[face][0] >= 1 &&
+              expanded[face][1] >= 1;
+            if (cols < 1 || rows < 1) {
+              if (!had) {
+                if (cols >= 1) rows = 1;
+                else if (rows >= 1) cols = 1;
+              } else {
+                cols = 0;
+                rows = 0;
+              }
+            }
+          } else {
+            rows = cols > 0 ? 1 : 0;
+          }
           if (cols < 1 || rows < 1) delete expanded[face];
-          else expanded[face] = [cols, rows || 1];
+          else expanded[face] = [cols, rows];
           const allowed = new Set(
             listFaceCellIds(face, expanded[face]?.[0] || 0, expanded[face]?.[1] || 0)
           );

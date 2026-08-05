@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.73.3] — 2026-08-05
+
+### Fixed
+
+- Front/back opening grid: bumping columns or rows from 0 no longer snaps
+  back to empty (the unset axis defaults to 1).
+
 ## [0.73.2] — 2026-08-05
 
 ### Changed
