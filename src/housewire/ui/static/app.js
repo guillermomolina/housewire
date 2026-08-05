@@ -10920,7 +10920,12 @@
   }
 
   async function refreshDocumentLabel() {
-    // File identity is shown in view tabs; no separate header label.
+    // Tabs show file name + dirty bullet; keep them in sync after save/open.
+    try {
+      applyWorkspaceStatus(await api("/api/workspace"));
+    } catch {
+      /* ignore */
+    }
   }
 
   function renderDocTabs(st) {

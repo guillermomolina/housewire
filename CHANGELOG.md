@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.69.2] — 2026-08-05
+
+### Fixed
+
+- After Save, the tab title no longer keeps the dirty bullet (``•``) when the
+  document is clean; view tabs refresh from workspace status again.
+
 ## [0.69.1] — 2026-08-05
 
 ### Changed
