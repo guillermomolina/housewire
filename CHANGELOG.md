@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.68.3] — 2026-08-05
+
+### Fixed
+
+- Conduit selection with Electrical layer off: ``.edge-tube`` no longer steals
+  clicks from the wider ``.edge-tube-hit`` target (same pattern as cable
+  strands/jackets).
+
 ## [0.68.2] — 2026-08-05
 
 ### Fixed

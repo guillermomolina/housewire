@@ -1898,8 +1898,8 @@ button:hover {
   stroke-opacity: 0.25;
   stroke-linecap: round;
   stroke-linejoin: round;
-  pointer-events: stroke;
-  cursor: pointer;
+  /* Hits go to .edge-tube-hit (wider pad); visual stroke must not steal clicks. */
+  pointer-events: none;
 }
 
 .edge-tube.selected,
