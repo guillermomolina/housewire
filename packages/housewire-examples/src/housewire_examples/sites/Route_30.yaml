@@ -1,0 +1,135 @@
+schema: house/v2
+type: House
+name: Route_30
+label: Route 30 — nine conductors in one aligned S↔N conduit
+notes: 'Two large, X-aligned DeviceBoxes with a clear vertical gap; facing openings
+  (upper S1 ↔ lower N1) leave a straight tube. Nine BN conductors ride one Tube. With
+  Electrical on: the conduit must be a single segment, and each mouth↔terminal-strip
+  inbox must use at most three Manhattan segments.
+
+  '
+elements:
+  Caja_de_mecanismo:
+    type: DeviceBox
+    elements:
+      Regleta_bornes:
+        type: TerminalStrip
+        label: Regleta / bornes
+        view:
+          electrical:
+            x: 310.0
+            y: 0.0
+        name: Regleta / bornes
+        terminal_grid:
+          NS: 9
+    cables: {}
+    name: Caja de mecanismo
+    label: Caja de mecanismo
+    subtype: OneGang
+    opening_grid:
+      NS: 1
+      WE: 1
+      B: 1
+    view:
+      physical:
+        x: 80.0
+        y: 40.0
+        w: 520.0
+        h: 320.0
+  Caja_de_mecanismo_1:
+    type: DeviceBox
+    elements:
+      Regleta_bornes_1:
+        type: TerminalStrip
+        label: Regleta / bornes 1
+        view:
+          electrical:
+            x: 310.0
+            y: 220.0
+        name: Regleta / bornes 1
+        terminal_grid:
+          NS: 9
+    cables: {}
+    name: Caja de mecanismo 1
+    label: Caja de mecanismo 1
+    subtype: OneGang
+    opening_grid:
+      NS: 1
+      WE: 1
+      B: 1
+    view:
+      physical:
+        x: 80.0
+        y: 750.0
+        w: 520.0
+        h: 320.0
+cables:
+  Conducto_OPEN_Linea_01_01:
+    type: Conduit
+    from: Caja_de_mecanismo_1.N1
+    to: Caja_de_mecanismo.S1
+    contains:
+    - Conductor_1
+    - Conductor_2
+    - Conductor_3
+    - Conductor_4
+    - Conductor_5
+    - Conductor_6
+    - Conductor_7
+    - Conductor_8
+    - Conductor_9
+    subtype: Tube
+  Conductor_1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Caja_de_mecanismo_1/Regleta_bornes_1.N1
+    to: Caja_de_mecanismo/Regleta_bornes.N1
+  Conductor_2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Caja_de_mecanismo_1/Regleta_bornes_1.N2
+    to: Caja_de_mecanismo/Regleta_bornes.N2
+  Conductor_3:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Caja_de_mecanismo_1/Regleta_bornes_1.N3
+    to: Caja_de_mecanismo/Regleta_bornes.N3
+  Conductor_4:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Caja_de_mecanismo_1/Regleta_bornes_1.N4
+    to: Caja_de_mecanismo/Regleta_bornes.N4
+  Conductor_5:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Caja_de_mecanismo_1/Regleta_bornes_1.N5
+    to: Caja_de_mecanismo/Regleta_bornes.N5
+  Conductor_6:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Caja_de_mecanismo_1/Regleta_bornes_1.N6
+    to: Caja_de_mecanismo/Regleta_bornes.N6
+  Conductor_7:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Caja_de_mecanismo_1/Regleta_bornes_1.N7
+    to: Caja_de_mecanismo/Regleta_bornes.N7
+  Conductor_8:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Caja_de_mecanismo_1/Regleta_bornes_1.N8
+    to: Caja_de_mecanismo/Regleta_bornes.N8
+  Conductor_9:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    from: Caja_de_mecanismo_1/Regleta_bornes_1.N9
+    to: Caja_de_mecanismo/Regleta_bornes.N9

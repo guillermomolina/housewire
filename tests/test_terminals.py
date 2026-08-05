@@ -124,6 +124,29 @@ class TestTerminalGrid(unittest.TestCase):
         self.assertEqual(grid["N"], (6, 1))
         self.assertEqual(cells["N6"], ["N6", "S6"])
 
+    def test_wide_instance_grid_fills_missing_inout_cells(self) -> None:
+        """Catalog N1..N3 + instance NS:9 still yields N5→[N5,S5] for routing."""
+        catalog = {
+            "TerminalStrip": {
+                "terminal_grid": {"NS": 3},
+                "terminals": {
+                    "N1": {"direction": "InOut"},
+                    "N2": {"direction": "InOut"},
+                    "N3": {"direction": "InOut"},
+                },
+            }
+        }
+        terminals, grid, cells = element_terminal_layout(
+            {"type": "TerminalStrip", "terminal_grid": {"NS": 9}},
+            catalog,
+        )
+        self.assertEqual(grid["N"], (9, 1))
+        self.assertEqual(grid["S"], (9, 1))
+        self.assertEqual(cells["N1"], ["N1", "S1"])
+        self.assertEqual(cells["N5"], ["N5", "S5"])
+        self.assertEqual(cells["N9"], ["N9", "S9"])
+        self.assertEqual(len(terminals), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

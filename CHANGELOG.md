@@ -8,6 +8,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.84.0] — 2026-08-05
+
+### Added
+
+- Route_30 example + live E2E: nine BN conductors in one aligned S↔N tube —
+  straight conduit, mouth↔pin inbox ≤3 Manhattan segments, no element pierce,
+  lane separation with crossings allowed.
+- Wide InOut terminal grids fill missing entry-face cell pairs (e.g. ``N5→[N5,S5]``)
+  so the UI can attach on the face toward the boca.
+- Route E2E helpers: inbox segment budget and strand-through-element checks.
+
+### Fixed
+
+- Distinct-pin multi-conductor inbox skirts element obstacles (rule 17) instead
+  of routing through them; ``stripShortZJogs`` no longer collapses L-approaches
+  onto protected mouth latitudes.
+- ``resolveElementAttach`` for InOut NS/WE picks the cell facing the mouth
+  (upper strip attaches on S when the boca is south).
+
 ## [0.83.1] — 2026-08-05
 
 ### Fixed

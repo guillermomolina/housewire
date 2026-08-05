@@ -5670,6 +5670,10 @@
   /**
    * Attach for a connection pin when ``terminal_grid`` is known; otherwise
    * fall back to fanned mid-face slots. Returns ``{x,y,face}``.
+   *
+   * InOut NS/WE pins may attach on either face of the same index; pick the
+   * cell that faces ``toward`` (mouth) so inbox stays ≤3 segments instead of
+   * wrapping around the strip (Route_30 north box → south terminals).
    */
   function resolveElementAttach(
     elem,
@@ -5680,15 +5684,35 @@
     slotCount = 1
   ) {
     let cell = pickPinCell(elem, pin, toward, placeById);
-    // Face-cell pin ids (N2, S1, …) attach even if instance terminals omitted
-    // them from terminal_pins while the catalog grid still paints the cell.
-    if (!cell && pin && cellIdOnElementGrid(elem, pin)) {
-      cell = String(pin);
+    if (!cell && pin) {
+      const pinS = String(pin);
+      /** @type {string[]} */
+      const cells = [];
+      if (cellIdOnElementGrid(elem, pinS)) cells.push(pinS);
+      const opp = oppositeTerminalCellId(pinS);
+      if (opp && cellIdOnElementGrid(elem, opp)) cells.push(opp);
+      if (cells.length) {
+        cell = pickPinCell(
+          { ...elem, terminal_pins: { [pinS]: cells } },
+          pinS,
+          toward,
+          placeById
+        );
+      }
     }
     if (cell) return terminalCellAnchor(elem, cell, placeById);
     const pt = elementAttachPoint(elem, toward, placeById, slot, slotCount);
     const face = elementAttachFace(elem, toward, placeById);
     return { x: pt.x, y: pt.y, face };
+  }
+
+  /** ``N2`` → ``S2`` when the pin is a side face cell. */
+  function oppositeTerminalCellId(cellId) {
+    const side = parseSideOpening(cellId);
+    if (!side) return null;
+    const opp = { N: "S", S: "N", W: "E", E: "W" }[side.face];
+    if (!opp) return null;
+    return `${opp}${side.index}`;
   }
 
   const INBOX_STUB = 14;
@@ -6631,12 +6655,51 @@
   }
 
   /**
+   * Via beside blocking element(s) for a multi-lane inbox skirt (rule 17).
+   * Left pins go left of the obstacle, right pins go right; lanes stay pitched.
+   */
+  function laneSkirtVia(att, tip, crossing, obstacles, laneIndex, laneCount) {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    let any = false;
+    const pad = LANE_PITCH;
+    for (const r of obstacles || []) {
+      if (!r) continue;
+      // Corridor tip→crossing vs rect (axis-aligned bounds test).
+      const x0 = Math.min(tip.x, crossing.x) - pad;
+      const x1 = Math.max(tip.x, crossing.x) + pad;
+      const y0 = Math.min(tip.y, crossing.y) - pad;
+      const y1 = Math.max(tip.y, crossing.y) + pad;
+      if (r.x + r.w < x0 || r.x > x1 || r.y + r.h < y0 || r.y > y1) continue;
+      any = true;
+      minX = Math.min(minX, r.x);
+      maxX = Math.max(maxX, r.x + r.w);
+      minY = Math.min(minY, r.y);
+      maxY = Math.max(maxY, r.y + r.h);
+    }
+    if (!any) {
+      return { x: crossing.x, y: crossing.y };
+    }
+    const cx = (minX + maxX) / 2;
+    const n = Math.max(1, laneCount | 0);
+    const i = Math.max(0, Math.min(n - 1, laneIndex | 0));
+    const margin = LANE_PITCH * 2;
+    const goLeft = att.x <= cx;
+    const viaX = goLeft
+      ? minX - margin - (n - 1 - i) * LANE_PITCH
+      : maxX + margin + i * LANE_PITCH;
+    let viaY = (minY + maxY) / 2 + (i - (n - 1) / 2) * LANE_PITCH;
+    viaY = Math.max(minY - margin, Math.min(maxY + margin, viaY));
+    return { x: viaX, y: viaY };
+  }
+
+  /**
    * Distinct-pin multi-lane inbox: pin → unique-depth stub toward the mouth,
-   * H to the lane column, V to the mouth crossing (≤3 Manhattan segments).
-   *
-   * Stub direction follows the pin face when it points at the crossing; otherwise
-   * it flips (N terminals with a south mouth — Route_30). Depths stay inside the
-   * pin→crossing span so the bus cannot run out the opposite wall.
+   * H to the lane column, V to the mouth crossing (≤3 Manhattan segments when
+   * clear). When that bus would pierce an element (rule 17), leave the pin
+   * outward and skirt beside the obstacle on a lane-unique via.
    */
   function distinctPinLaneBus(
     att,
@@ -6644,7 +6707,8 @@
     crossing,
     laneDist,
     laneCount,
-    laneIndex
+    laneIndex,
+    obstacles
   ) {
     const fo0 = faceOutwardDelta(face);
     let ux = fo0.x;
@@ -6679,7 +6743,7 @@
     }
     const rail = stubPoint({ x: att.x, y: att.y }, ux, uy, busDepth);
     /** @type {number[][]} */
-    const pts = [
+    let pts = [
       [att.x, att.y],
       [rail.x, rail.y],
     ];
@@ -6711,7 +6775,91 @@
     ) {
       pts.push([crossing.x, crossing.y]);
     }
-    return cleanOrthoPoly(pts);
+    pts = cleanOrthoPoly(pts);
+    if (!obstacles || !obstacles.length) return pts;
+    if (pathObstacleCost(pts, obstacles) <= 0) return pts;
+
+    // Rule 17: leave the pin along the face outward, then skirt the element.
+    const foOut = faceOutwardDelta(face);
+    let tip = stubPoint(
+      { x: att.x, y: att.y },
+      foOut.x,
+      foOut.y,
+      TERMINAL_FAN_TIP
+    );
+    // If the tip still sits in an obstacle, push further out.
+    for (let k = 0; k < 4; k++) {
+      let inside = false;
+      for (const r of obstacles) {
+        if (
+          tip.x > r.x &&
+          tip.x < r.x + r.w &&
+          tip.y > r.y &&
+          tip.y < r.y + r.h
+        ) {
+          inside = true;
+          break;
+        }
+      }
+      if (!inside) break;
+      tip = stubPoint(tip, foOut.x, foOut.y, LANE_PITCH * 2);
+    }
+    const via = laneSkirtVia(
+      att,
+      tip,
+      crossing,
+      obstacles,
+      i,
+      n
+    );
+    const leg1 = orthoRoute(
+      tip,
+      via,
+      null,
+      null,
+      null,
+      obstacles,
+      null,
+      null
+    );
+    const leg2 = orthoRoute(
+      via,
+      { x: crossing.x, y: crossing.y },
+      null,
+      null,
+      null,
+      obstacles,
+      null,
+      null
+    );
+    /** @type {number[][]} */
+    let skirt = [
+      [att.x, att.y],
+      [tip.x, tip.y],
+    ];
+    if (leg1 && leg1.length) {
+      skirt = mergeOrthoPolys(skirt, leg1) || skirt.concat(leg1);
+    } else {
+      skirt.push([via.x, via.y]);
+    }
+    if (leg2 && leg2.length) {
+      skirt = mergeOrthoPolys(skirt, leg2) || skirt.concat(leg2);
+    } else {
+      skirt.push([crossing.x, crossing.y]);
+    }
+    if (
+      Math.hypot(
+        skirt[skirt.length - 1][0] - crossing.x,
+        skirt[skirt.length - 1][1] - crossing.y
+      ) > 1e-6
+    ) {
+      skirt.push([crossing.x, crossing.y]);
+    }
+    skirt = cleanOrthoPoly(skirt);
+    if (pathObstacleCost(skirt, obstacles) <= pathObstacleCost(pts, obstacles)) {
+      return skirt;
+    }
+    return pts;
   }
 
   /**
@@ -7884,6 +8032,7 @@
       const startFace =
         startAtt.face || elementAttachFace(a, startOp, placeById);
       const endFace = endAtt.face || elementAttachFace(b, endOp, placeById);
+      // Inbox must skirt element bodies (rule 17) — never route through them.
       const startElemObs = elementObstacles(elemById, placeById, null, 2);
       const endElemObs = elementObstacles(elemById, placeById, null, 2);
 
@@ -7992,7 +8141,8 @@
           startCrossing,
           startLaneDist,
           laneCountHint,
-          laneIndexHint
+          laneIndexHint,
+          startElemObs
         );
       } else {
         const startLead = pinToLanePts(
@@ -8069,7 +8219,8 @@
           endCrossing,
           endLaneDist,
           laneCountHint,
-          laneIndexHint
+          laneIndexHint,
+          endElemObs
         );
       } else {
         const endLead = pinToLanePts(

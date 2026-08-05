@@ -72,6 +72,7 @@ export HOUSEWIRE_E2E_SITE=/path/to/any-site.yaml
 | `Route_20` | Full-stress twin of Route_21 |
 | `Route_21` | Reference panel + room (routing E2E) |
 | `Route_22`… | Targeted regressions (see `docs/routing-rules.md`) |
+| `Route_30` | Nine BN in one aligned S↔N tube (inbox ≤3, straight core) |
 
 Regenerate Route_01…Route_20 fixtures (not Route_21+):
 

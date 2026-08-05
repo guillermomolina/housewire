@@ -447,6 +447,90 @@ def assert_no_strand_lane_overlap(
     test.assertEqual(bad, [], msg=f"strand lane overlap: {bad}")
 
 
+def assert_no_strand_through_elements(
+    test: unittest.TestCase,
+    data: dict,
+) -> None:
+    """Fail when a mid-run strand pierces an element box (rule 17)."""
+    from housewire.ui.route_quality import (
+        assess_bundle,
+        dedupe_identical_polylines,
+    )
+
+    strands = dedupe_identical_polylines(data.get("strands") or [])
+    elems = data.get("elements") or []
+    rects = [
+        (float(e["x"]), float(e["y"]), float(e["w"]), float(e["h"]))
+        for e in elems
+        if e.get("w") and e.get("h")
+    ]
+    if len(strands) < 1 or not rects:
+        return
+    issues = assess_bundle(
+        strands,
+        element_rects=rects,
+        allow_crossings=True,
+        allow_z=True,
+        allow_c=True,
+    )
+    through = [i for i in issues if "through element" in i]
+    test.assertEqual(through, [], msg=f"strands pierce elements: {through}")
+
+
+def assert_inbox_at_most_segments(
+    test: unittest.TestCase,
+    data: dict,
+    *,
+    max_segments: int = 3,
+) -> None:
+    """Each mouth↔pin approach (outside the tube core) has ≤ ``max_segments``."""
+    from housewire.ui.route_quality import (
+        match_strand_to_tube,
+        dedupe_identical_polylines,
+    )
+
+    tubes = [
+        _clean_ortho_pts(t)
+        for t in (data.get("tube_cores") or data.get("tubes") or [])
+        if len(t) >= 2
+    ]
+    strands = [
+        _clean_ortho_pts(s)
+        for s in dedupe_identical_polylines(data.get("strands") or [])
+    ]
+    if not tubes or not strands:
+        return
+    bad: list[str] = []
+    for si, pts in enumerate(strands):
+        if len(pts) < 2:
+            continue
+        ti, _ = match_strand_to_tube(pts, tubes)
+        if ti < 0:
+            continue
+        tube = tubes[ti]
+        t0, t1 = tube[0], tube[-1]
+
+        def closest_i(pt: list[float]) -> int:
+            return min(
+                range(len(pts)),
+                key=lambda i: (pts[i][0] - pt[0]) ** 2 + (pts[i][1] - pt[1]) ** 2,
+            )
+
+        i0, i1 = closest_i(t0), closest_i(t1)
+        lo, hi = (i0, i1) if i0 <= i1 else (i1, i0)
+        head = pts[: lo + 1]
+        tail = pts[hi:]
+        for label, side in (("head", head), ("tail", tail)):
+            clean = _clean_ortho_pts(side)
+            segs = max(0, len(clean) - 1)
+            if segs > max_segments:
+                bad.append(
+                    f"strand[{si}] {label}: {segs} segments "
+                    f"(max {max_segments}): {clean}"
+                )
+    test.assertEqual(bad, [], msg=f"inbox segment budget: {bad}")
+
+
 def assert_tube_geometry_ok(test: unittest.TestCase, data: dict) -> None:
     """Shared tube geometry gates: no colinear stack, no foreign-mouth skim."""
     assert_no_colinear_tube_overlap(test, data)

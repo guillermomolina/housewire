@@ -256,4 +256,18 @@ def element_terminal_layout(
                 terminals.pop(pin, None)
                 continue
     cells = pin_to_cells(terminals, grid)
+    # Instance grids wider than the catalog (e.g. NS:9 vs catalog N1..N3)
+    # still need InOut cell pairs so routing can attach on the face toward
+    # the mouth (Route_30: upper strip uses S* when the boca is south).
+    entry, exit_ = _axis_faces(grid)
+    if entry and entry in grid:
+        cols, rows = int(grid[entry][0]), int(grid[entry][1])
+        for idx in range(1, cols * rows + 1):
+            pin = f"{entry}{idx}"
+            if pin in cells:
+                continue
+            pair = [pin]
+            if exit_ and exit_ in grid:
+                pair.append(f"{exit_}{idx}")
+            cells[pin] = pair
     return terminals, grid, cells
