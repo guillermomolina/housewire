@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.5] — 2026-08-05
+
+### Changed
+
+- Header now has a clearer visual separation between the menu area and the
+  open-file tabs (divider, spacing, and subtle tab strip tint).
+
 ## [0.77.4] — 2026-08-05
 
 ### Fixed
