@@ -8,6 +8,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.15] — 2026-08-05
+
+### Fixed
+
+- Conduit routing keeps a stable core between contour anchors and adds
+  face-aligned ortho links to rendered inset marks (no endpoint snap that
+  creates diagonals or drops routes).
+
+
 ## [0.77.14] — 2026-08-05
 
 ### Fixed

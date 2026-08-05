@@ -4524,14 +4524,23 @@
     const toFace = routeFace(b, edge.to_opening, edge.to_opening?.[0], byId);
     const fromPlane = isPlaneOpeningId(edge.from_opening);
     const toPlane = isPlaneOpeningId(edge.to_opening);
-    // Side mouths on the border; B/F mouths are the interior plane cell (boca).
-    const p1 = openingMouthAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
-    const p2 = openingMouthAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
+    // Rendered mouths may sit inside projected boxes (iso), not strictly on
+    // contour anchors.
+    const m1 = openingMouthAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
+    const m2 = openingMouthAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
+    const a1 = openingAnchorAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
+    const a2 = openingAnchorAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
+    const fromInset = Math.hypot(m1.x - a1.x, m1.y - a1.y) > 1e-6;
+    const toInset = Math.hypot(m2.x - a2.x, m2.y - a2.y) > 1e-6;
     // Allow the route to enter leaves whose end is a B/F boca.
     /** @type {string[]} */
     const exclude = [];
     if (fromPlane) exclude.push(a.id);
     if (toPlane) exclude.push(b.id);
+    // When the rendered mouth is inset (iso side/front/back mark), allow the
+    // path to enter that endpoint box so the conduit reaches the visible boca.
+    if (fromInset && !exclude.includes(a.id)) exclude.push(a.id);
+    if (toInset && !exclude.includes(b.id)) exclude.push(b.id);
     const obstacles = placeObstacles(byId, exclude);
     const hugRects = placeBorderRects(byId);
     /** @type {{x:number,y:number,w:number,h:number}|null} */
@@ -4586,7 +4595,7 @@
     };
     if (fromPlane || toPlane) {
       // Cross the contour at a nudged entry so B-approach does not sit on N1.
-      let cur = p1;
+      let cur = a1;
       let curFace = fromFace;
       if (fromPlane) {
         const entry = planeContourEntryAbs(
@@ -4595,7 +4604,7 @@
           edge.from_opening?.[0],
           byId
         );
-        appendInside(p1, entry);
+        appendInside(a1, entry);
         cur = entry;
         curFace = fromFace;
       }
@@ -4607,25 +4616,38 @@
           byId
         );
         append(cur, entry, curFace, toFace);
-        appendInside(entry, p2);
+        appendInside(entry, a2);
       } else {
-        append(cur, p2, curFace, toFace);
+        append(cur, a2, curFace, toFace);
       }
     } else {
-      append(p1, p2, fromFace, toFace);
+      append(a1, a2, fromFace, toFace);
     }
-    const pts = stripOutAndBack(
+    let pts = stripOutAndBack(
       chain || [
-        [p1.x, p1.y],
-        [p2.x, p2.y],
+        [a1.x, a1.y],
+        [a2.x, a2.y],
       ]
     );
-    // Keep conduit endpoints locked to rendered mouth positions even after
-    // route simplification removes tiny out-and-back detours.
     if (pts.length) {
-      pts[0] = [p1.x, p1.y];
-      pts[pts.length - 1] = [p2.x, p2.y];
+      pts[0] = [a1.x, a1.y];
+      pts[pts.length - 1] = [a2.x, a2.y];
     }
+    // Ortho links from contour anchors to rendered marks (iso offset).
+    if (fromInset && pts.length) {
+      const head = renderedMarkHeadPts(m1, a1, fromFace, fromPlane);
+      if (head.length >= 2) {
+        pts = mergeOrthoPolys(head, pts) || pts;
+      }
+    }
+    if (toInset && pts.length) {
+      const tail = renderedMarkTailPts(a2, m2, toFace, toPlane);
+      if (tail.length >= 2) {
+        pts = mergeOrthoPolys(pts, tail) || pts;
+      }
+    }
+    pts = cleanOrthoPoly(pts);
+    if (pts.length < 2) return null;
     return { d: pointsToPathD(pts), segs: segsFromPoints(pts, half) };
   }
 
@@ -5000,6 +5022,44 @@
       (toward.y - fromPt.y) * faceDelta.y;
     if (along > 1e-6) return Math.min(max, Math.max(0, along - 0.5));
     return max;
+  }
+
+  /** Ortho link from contour anchor to rendered inset mark on a side face. */
+  function insetMarkLinkPts(anchor, mark, face) {
+    const oi = openingInwardDelta(face);
+    const ax = anchor.x;
+    const ay = anchor.y;
+    const mx = mark.x;
+    const my = mark.y;
+    if (Math.hypot(mx - ax, my - ay) < 1.5) {
+      return [
+        [ax, ay],
+        [mx, my],
+      ];
+    }
+    if (oi.y !== 0) {
+      return [
+        [ax, ay],
+        [mx, ay],
+        [mx, my],
+      ];
+    }
+    return [
+      [ax, ay],
+      [ax, my],
+      [mx, my],
+    ];
+  }
+
+  function renderedMarkHeadPts(mark, anchor, face, isPlane) {
+    if (isPlane) return orthoPtsPrefer(mark, anchor, anchor);
+    const link = insetMarkLinkPts(anchor, mark, face);
+    return link.slice().reverse();
+  }
+
+  function renderedMarkTailPts(anchor, mark, face, isPlane) {
+    if (isPlane) return orthoPtsPrefer(anchor, mark, mark);
+    return insetMarkLinkPts(anchor, mark, face);
   }
 
   /**
