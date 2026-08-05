@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.70.1] — 2026-08-05
+
+### Fixed
+
+- Icon sprite fetch is cache-busted with the package version so new symbols
+  (e.g. File → New ``file-plus``) appear after upgrades; added missing
+  ``folder-plus`` sprite used by Insert → Container.
+
 ## [0.70.0] — 2026-08-05
 
 ### Added

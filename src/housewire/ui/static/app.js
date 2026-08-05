@@ -262,7 +262,12 @@
   /** Inject Lucide sprite once so <use href="#icon-…"> resolves in-document. */
   function ensureIconSprite() {
     if (document.getElementById("hw-icon-sprite")) return Promise.resolve();
-    return fetch("/static/icons.svg")
+    const scriptSrc =
+      document.querySelector('script[src*="app.js"]')?.getAttribute("src") ||
+      "";
+    const verMatch = scriptSrc.match(/[?&]v=([^&]+)/);
+    const ver = verMatch ? `?v=${encodeURIComponent(verMatch[1])}` : "";
+    return fetch(`/static/icons.svg${ver}`)
       .then((r) => {
         if (!r.ok) throw new Error(`icons.svg ${r.status}`);
         return r.text();
