@@ -24,3 +24,6 @@ quality detectors, or live route E2E:
    conduits route around leaf locations — do not pierce box interiors.
 7. After routing changes, run relevant `tests/route_e2e` / `test_route_quality`
    and fix failures against the documented invariants.
+8. If the user states a **segment budget** for a named conduit, add a failing
+   E2E assert for that tube (see `conduit-segment-budget-tests` rule) — do not
+   ship the routing fix without that check.

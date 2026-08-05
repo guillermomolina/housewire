@@ -582,9 +582,16 @@ def assert_named_tube_segment_count(
     data: dict,
     *,
     title_substr: str,
-    segments: int,
+    segments: int | None = None,
+    max_segments: int | None = None,
 ) -> None:
-    """Assert the painted tube whose title contains ``title_substr`` has N segments."""
+    """Assert the painted tube whose title contains ``title_substr``.
+
+    Pass ``segments`` for an exact count, and/or ``max_segments`` for an
+    upper bound (fewer segments allowed). At least one must be set.
+    """
+    if segments is None and max_segments is None:
+        raise ValueError("pass segments and/or max_segments")
     titles = data.get("tube_titles") or []
     raw = data.get("tubes") or []
     hits = [
@@ -595,15 +602,31 @@ def assert_named_tube_segment_count(
     test.assertEqual(
         len(hits),
         1,
-        msg=f"expected one tube matching {title_substr!r}, got {hits!r} titles={titles}",
+        msg=(
+            f"expected one tube matching {title_substr!r}, "
+            f"got {hits!r} titles={titles}"
+        ),
     )
     clean = _clean_ortho_pts(hits[0][1])
     segs = max(0, len(clean) - 1)
-    test.assertEqual(
-        segs,
-        segments,
-        msg=f"{title_substr}: expected {segments} segments, got {segs}: {clean}",
-    )
+    if max_segments is not None:
+        test.assertLessEqual(
+            segs,
+            max_segments,
+            msg=(
+                f"{title_substr}: expected ≤{max_segments} segments, "
+                f"got {segs}: {clean}"
+            ),
+        )
+    if segments is not None:
+        test.assertEqual(
+            segs,
+            segments,
+            msg=(
+                f"{title_substr}: expected {segments} segments, "
+                f"got {segs}: {clean}"
+            ),
+        )
 
 
 # Match src/housewire/ui/static/app.js isometric opening-mark constants.
