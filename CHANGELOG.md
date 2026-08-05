@@ -8,6 +8,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.82.5] — 2026-08-05
+
+### Fixed
+
+- Plane↔plane mark-to-mark routing treats other bocas on the endpoint boxes as
+  obstacles so a tube cannot skim a foreign mouth mid-run (Route_28
+  ``Conducto_OPEN_Linea_03_01`` vs B2-1). Side↔plane shortcuts stay unchanged
+  so Route_21 lamp L/strands are preserved.
+
+### Added
+
+- Route quality + E2E: ``tubes_skim_foreign_mouths`` / ``assert_tube_geometry_ok``
+  (colinear stack + foreign-mouth skim) on every live geometry suite.
+
 ## [0.82.4] — 2026-08-05
 
 ### Changed

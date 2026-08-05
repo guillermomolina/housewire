@@ -3827,6 +3827,34 @@
     return cost;
   }
 
+  /**
+   * Small rects around opening mouths that are not this edge's endpoints.
+   * Keeps mark-to-mark routes from riding through a neighbor boca on the
+   * same box (Route_28). Optional ``nodeIds`` limits to those nodes.
+   */
+  function foreignMouthObstacleRects(byId, excludeKeys, pad, nodeIds) {
+    const r = Math.max(4, Number(pad) || OPENING_MARK_R);
+    /** @type {{x:number,y:number,w:number,h:number}[]} */
+    const rects = [];
+    for (const node of Object.values(byId || {})) {
+      if (!node || !node.id || !nodeHasOpeningMarks(node)) continue;
+      if (nodeIds && !nodeIds.has(node.id)) continue;
+      for (const oid of openingCellsForNode(node)) {
+        const key = `${node.id}\0${oid}`;
+        if (excludeKeys && excludeKeys.has(key)) continue;
+        const m = openingMouthAbs(node, oid, oid?.[0], byId);
+        if (!m) continue;
+        rects.push({
+          x: m.x - r,
+          y: m.y - r,
+          w: 2 * r,
+          h: 2 * r,
+        });
+      }
+    }
+    return rects;
+  }
+
   /** Soft cost for vertices that leave a parent content rect (same-room tubes). */
   function pathOutsideBoundsCost(pts, bounds) {
     if (!bounds || !pts || !pts.length) return 0;
@@ -4829,7 +4857,25 @@
     // path to enter that endpoint box so the conduit reaches the visible boca.
     if (fromInset && !exclude.includes(a.id)) exclude.push(a.id);
     if (toInset && !exclude.includes(b.id)) exclude.push(b.id);
+    // Foreign bocas on endpoint boxes (mark-to-mark, plane↔plane only):
+    // reject L/C that skim a neighbor mouth on the same JB (Route_28 Linea_03
+    // vs B2-1). Side↔plane (Route_21 lamp) keeps placeObstacles alone so the
+    // preferred L is not flipped onto a strand-hostile corridor.
+    const mouthPad = Math.max(OPENING_MARK_R, half || 0) + LANE_GAP;
+    const mouthObs =
+      fromPlane && toPlane
+        ? foreignMouthObstacleRects(
+            byId,
+            new Set([
+              `${a.id}\0${edge.from_opening}`,
+              `${b.id}\0${edge.to_opening}`,
+            ]),
+            mouthPad,
+            new Set([a.id, b.id])
+          )
+        : [];
     const obstacles = placeObstacles(byId, exclude);
+    const markObstacles = obstacles.concat(mouthObs);
     const hugRects = placeBorderRects(byId);
     /** @type {{x:number,y:number,w:number,h:number}|null} */
     let stayBounds = null;
@@ -4892,9 +4938,19 @@
           [m1.x, m1.y],
           [m2.x, m2.y],
         ]);
-        if (pts.length < 2) return null;
-        const d = pointsToPathD(pts);
-        return { d, dCore: d, segs: segsFromPoints(pts, half) };
+        if (
+          pts.length >= 2 &&
+          pathObstacleCost(pts, markObstacles) <= 0 &&
+          pathStackConflictCost(
+            pts,
+            occupied,
+            Math.max(LANE_GAP, half || 0),
+            half
+          ) <= 0
+        ) {
+          const d = pointsToPathD(pts);
+          return { d, dCore: d, segs: segsFromPoints(pts, half) };
+        }
       }
       // Offset B/F mouths: prefer mark-to-mark Manhattan with few bends —
       // L (one corner) first, then C/U (two corners / three segments) via
@@ -4929,7 +4985,7 @@
               if (leg < minLeg - 1e-6) return false;
             }
           }
-          if (pathObstacleCost(pts, obstacles) > 0) return false;
+          if (pathObstacleCost(pts, markObstacles) > 0) return false;
           if (pathStackConflictCost(pts, occupied, stackEps, half) > 0) {
             return false;
           }
@@ -4968,7 +5024,7 @@
             null,
             null,
             occupied,
-            obstacles,
+            markObstacles,
             stayBounds,
             hugRects,
             half

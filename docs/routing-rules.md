@@ -121,7 +121,9 @@ an inbox path from the boca to the pin. Intermediate `Cable` sheaths
       strands of A on A’s own tube is correct. Mark-to-mark Manhattan
       shortcuts (L, then ≤3-segment C/U) apply for plane↔plane and
       side↔plane bocas when clear of obstacles/stacks; only then fall
-      through to contour stubs (see Route_21, Route_28).
+      through to contour stubs (see Route_21, Route_28). A tube mid-run must
+      not skim a **foreign opening mouth** on the endpoint boxes
+      (plane↔plane mark-to-mark; pad ≈ mark radius + half-width).
     - **Inbox** — Same-box cables stay inside the host place content box;
       the place grows to fit the cable envelope when needed. Prefer short
       runs (including crossings) over long outside loops.
@@ -162,7 +164,8 @@ site, dumps `path.edge-tube` and colored strands, then runs
 | Opening parallel | `multi-cable strands meet` / `meet at mouth` |
 | Tube packing | `tube underfilled` |
 | Conduit stack | `tubes colinear-overlap` — asserted in every live geometry E2E via
-  ``assert_no_colinear_tube_overlap`` / ``assert_site_routes_ok`` |
+  ``assert_tube_geometry_ok`` / ``assert_site_routes_ok`` |
+| Foreign mouth | `skims foreign mouth` — tube mid-run must not hit another boca |
 | Through element | `through element` |
 | Out-and-back | `out-and-back` |
 

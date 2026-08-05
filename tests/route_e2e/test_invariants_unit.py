@@ -160,6 +160,63 @@ class TestLiveCanvasInvariantsUnit(unittest.TestCase):
             [],
         )
 
+    def test_tube_skimming_foreign_mouth_flagged(self) -> None:
+        """A tube mid-run must not pass through another opening mark."""
+        from housewire.ui.route_quality import tubes_skim_foreign_mouths
+
+        # Horizontal run through (100,100) while ends are at x=0 and x=200.
+        tube = [(0.0, 100.0), (200.0, 100.0)]
+        mouths = [
+            {"x": 0.0, "y": 100.0, "key": "start"},
+            {"x": 200.0, "y": 100.0, "key": "end"},
+            {"x": 100.0, "y": 100.0, "key": "foreign"},
+        ]
+        issues = tubes_skim_foreign_mouths(
+            [tube],
+            mouths,
+            tube_half_widths=[8.75],
+            tube_endpoint_keys=[{"start", "end"}],
+        )
+        self.assertTrue(any("foreign mouth" in x for x in issues), msg=issues)
+        clear = tubes_skim_foreign_mouths(
+            [tube],
+            [
+                {"x": 0.0, "y": 100.0, "key": "start"},
+                {"x": 200.0, "y": 100.0, "key": "end"},
+                {"x": 100.0, "y": 140.0, "key": "foreign"},
+            ],
+            tube_half_widths=[8.75],
+            tube_endpoint_keys=[{"start", "end"}],
+        )
+        self.assertEqual(clear, [])
+
+    def test_tube_skimming_foreign_mouth_flagged(self) -> None:
+        """A tube mid-run must not pass through another opening mark."""
+        from housewire.ui.route_quality import tubes_skim_foreign_mouths
+
+        # Horizontal run through (100,100) while ends are at x=0 and x=200.
+        tube = [(0.0, 100.0), (200.0, 100.0)]
+        issues = tubes_skim_foreign_mouths(
+            [tube],
+            [
+                (0.0, 100.0),
+                (200.0, 100.0),
+                (100.0, 100.0),  # foreign mouth on the centerline
+            ],
+            tube_half_widths=[8.75],
+        )
+        self.assertTrue(any("foreign mouth" in x for x in issues), msg=issues)
+        clear = tubes_skim_foreign_mouths(
+            [tube],
+            [
+                (0.0, 100.0),
+                (200.0, 100.0),
+                (100.0, 140.0),  # clear of the run
+            ],
+            tube_half_widths=[8.75],
+        )
+        self.assertEqual(clear, [])
+
     def test_crossing_conduits_not_colinear_overlap(self) -> None:
         from housewire.ui.route_quality import tubes_colinear_overlap
 

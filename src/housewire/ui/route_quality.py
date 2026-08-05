@@ -1506,6 +1506,68 @@ def tubes_colinear_overlap(
     return issues
 
 
+def _point_to_poly_dist(poly: Poly, point: Point) -> float:
+    if len(poly) < 2:
+        if not poly:
+            return float("inf")
+        return _dist(
+            (float(point[0]), float(point[1])),
+            (float(poly[0][0]), float(poly[0][1])),
+        )
+    p = (float(point[0]), float(point[1]))
+    best = float("inf")
+    for i in range(len(poly) - 1):
+        d = _seg_dist(
+            p,
+            (float(poly[i][0]), float(poly[i][1])),
+            (float(poly[i + 1][0]), float(poly[i + 1][1])),
+        )
+        if d < best:
+            best = d
+    return best
+
+
+def tubes_skim_foreign_mouths(
+    tubes: Sequence[Poly],
+    mouths: Sequence[Point],
+    *,
+    tube_half_widths: Sequence[float] | None = None,
+    mouth_radius: float = 5.0,
+    end_slack: float = 14.0,
+) -> list[str]:
+    """Flag conduits whose mid-run passes through a foreign opening mouth.
+
+    Own endpoints are exempt (``end_slack``). Clearance is
+    ``half_width + mouth_radius``.
+    """
+    issues: list[str] = []
+    if len(tubes) < 1 or not mouths:
+        return issues
+    halves = list(tube_half_widths or [])
+    while len(halves) < len(tubes):
+        halves.append(8.75)
+    mouth_pts = [(float(m[0]), float(m[1])) for m in mouths if m is not None]
+    for i, tube in enumerate(tubes):
+        if len(tube) < 2:
+            continue
+        clear = float(halves[i]) + float(mouth_radius)
+        a = (float(tube[0][0]), float(tube[0][1]))
+        b = (float(tube[-1][0]), float(tube[-1][1]))
+        for mx, my in mouth_pts:
+            if _dist((mx, my), a) <= end_slack:
+                continue
+            if _dist((mx, my), b) <= end_slack:
+                continue
+            d = _point_to_poly_dist(tube, (mx, my))
+            if d < clear - 1e-6:
+                issues.append(
+                    f"tube[{i}] skims foreign mouth at "
+                    f"({mx:.1f},{my:.1f}) d≈{d:.1f}px "
+                    f"(need ≥{clear:.1f}px)"
+                )
+    return issues
+
+
 def tube_packing_underfill(
     tube: Poly,
     strands: Sequence[Poly],
@@ -2197,6 +2259,18 @@ def assess_live_canvas(
 
     for msg in tubes_colinear_overlap(
         tubes, tube_half_widths=halves, min_overlap=24.0
+    ):
+        issues.append(msg)
+
+    # Tube endpoints double as opening mouths for skim checks.
+    mouth_pts: list[Point] = []
+    for t in tubes:
+        if len(t) < 2:
+            continue
+        mouth_pts.append((float(t[0][0]), float(t[0][1])))
+        mouth_pts.append((float(t[-1][0]), float(t[-1][1])))
+    for msg in tubes_skim_foreign_mouths(
+        tubes, mouth_pts, tube_half_widths=halves
     ):
         issues.append(msg)
 

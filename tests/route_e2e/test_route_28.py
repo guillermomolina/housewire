@@ -5,7 +5,7 @@ import unittest
 
 from tests.route_e2e._harness import (
     assert_named_tube_segment_count,
-    assert_no_colinear_tube_overlap,
+    assert_tube_geometry_ok,
     assert_tubes_avoid_l_overlap,
 )
 
@@ -21,7 +21,7 @@ class TestRoute28(unittest.TestCase):
             max_segments_when_extra=3,
         )
         # Explicit no-stack check (also inside assert_tubes_avoid_l_overlap).
-        assert_no_colinear_tube_overlap(self, data)
+        assert_tube_geometry_ok(self, data)
         # Conducto_OPEN_Linea_03_01 is the C/U detour — exactly three segments.
         assert_named_tube_segment_count(
             self,
