@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.76.5] — 2026-08-05
+
+### Changed
+
+- Conductor wiring uses dedicated cursors for the first and second terminal
+  pick; resize/move cursors no longer override terminal selection on hover.
+
 ## [0.76.4] — 2026-08-05
 
 ### Changed

@@ -2065,6 +2065,48 @@ button:hover {
   pointer-events: auto;
 }
 
+/* Fixed cursors while picking conductor endpoints (do not inherit move/resize). */
+#viewport.wiring-conductor-from:not(.pan-ready):not(.panning),
+#viewport.wiring-conductor-from:not(.pan-ready):not(.panning) .node-box,
+#viewport.wiring-conductor-from:not(.pan-ready):not(.panning) .element-box,
+#viewport.wiring-conductor-from:not(.pan-ready):not(.panning) .element-terminal,
+#viewport.wiring-conductor-from:not(.pan-ready):not(.panning) .opening-mark,
+#viewport.wiring-conductor-from:not(.pan-ready):not(.panning) .opening-label {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='5' fill='none' stroke='%232563eb' stroke-width='2'/%3E%3Cpath stroke='%232563eb' stroke-width='2' stroke-linecap='round' d='M12 3v3M12 18v3M3 12h3M18 12h3'/%3E%3C/svg%3E")
+      12 12,
+    crosshair !important;
+}
+
+#viewport.wiring-conductor-to:not(.pan-ready):not(.panning),
+#viewport.wiring-conductor-to:not(.pan-ready):not(.panning) .node-box,
+#viewport.wiring-conductor-to:not(.pan-ready):not(.panning) .element-box,
+#viewport.wiring-conductor-to:not(.pan-ready):not(.panning) .element-terminal,
+#viewport.wiring-conductor-to:not(.pan-ready):not(.panning) .opening-mark,
+#viewport.wiring-conductor-to:not(.pan-ready):not(.panning) .opening-label {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='9' cy='12' r='4' fill='none' stroke='%232563eb' stroke-width='2'/%3E%3Ccircle cx='15' cy='12' r='4' fill='none' stroke='%232563eb' stroke-width='2'/%3E%3Cpath stroke='%232563eb' stroke-width='2' stroke-linecap='round' d='M11 12h2'/%3E%3C/svg%3E")
+      12 12,
+    cell !important;
+}
+
+#viewport.wiring-conduit-from:not(.pan-ready):not(.panning),
+#viewport.wiring-conduit-from:not(.pan-ready):not(.panning) .node-box,
+#viewport.wiring-conduit-from:not(.pan-ready):not(.panning) .element-box {
+  cursor: crosshair !important;
+}
+
+#viewport.wiring-conduit-to:not(.pan-ready):not(.panning),
+#viewport.wiring-conduit-to:not(.pan-ready):not(.panning) .node-box,
+#viewport.wiring-conduit-to:not(.pan-ready):not(.panning) .element-box {
+  cursor: cell !important;
+}
+
+#viewport.wiring-conductor-from .element-terminal,
+#viewport.wiring-conductor-to .element-terminal {
+  cursor: inherit;
+}
+
 /* Link hits sit above place openings; disable them while picking endpoints. */
 #viewport.wiring-conduit .edge-tube-hit,
 #viewport.wiring-conduit .cable-strand-hit,

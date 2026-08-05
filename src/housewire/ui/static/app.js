@@ -1415,9 +1415,39 @@
 
   function setWiringMode(mode) {
     wiringMode = mode;
-    if (viewport) {
-      viewport.classList.toggle("wiring-conduit", mode?.kind === "conduit");
-      viewport.classList.toggle("wiring-conductor", mode?.kind === "conductor");
+    syncWiringCursorUi();
+  }
+
+  function syncWiringCursorUi() {
+    if (!viewport) return;
+    const mode = wiringMode;
+    viewport.classList.toggle("wiring-conduit", mode?.kind === "conduit");
+    viewport.classList.toggle("wiring-conductor", mode?.kind === "conductor");
+    viewport.classList.toggle(
+      "wiring-conductor-from",
+      mode?.kind === "conductor" && !mode?.from
+    );
+    viewport.classList.toggle(
+      "wiring-conductor-to",
+      mode?.kind === "conductor" && Boolean(mode?.from)
+    );
+    viewport.classList.toggle(
+      "wiring-conduit-from",
+      mode?.kind === "conduit" && !mode?.from
+    );
+    viewport.classList.toggle(
+      "wiring-conduit-to",
+      mode?.kind === "conduit" && Boolean(mode?.from)
+    );
+    if (mode) {
+      viewport.classList.remove(
+        "resize-ns",
+        "resize-ew",
+        "resize-nesw",
+        "resize-nwse"
+      );
+      viewport.style.cursor = "";
+      if (svg) svg.style.cursor = "";
     }
   }
 
@@ -1545,6 +1575,7 @@
     const ref = openingRefForNode(nodeId, openingId);
     if (!wiringMode.from) {
       wiringMode = { kind: "conduit", from: ref };
+      syncWiringCursorUi();
       setStatus(t("status.wiringConduitTo", { from: ref }));
       return true;
     }
@@ -1563,6 +1594,7 @@
     const ref = terminalRefForElem(elem, terminalId);
     if (!wiringMode.from) {
       wiringMode = { kind: "conductor", from: ref };
+      syncWiringCursorUi();
       setStatus(t("status.wiringConductorTo", { from: ref }));
       return true;
     }
@@ -1816,6 +1848,10 @@
 
   function setResizeHoverCursor(handle, hitEl) {
     if (!viewport) return;
+    if (wiringMode?.kind === "conductor" || wiringMode?.kind === "conduit") {
+      if (hitEl) hitEl.style.cursor = "";
+      return;
+    }
     if (panDrag || marquee || (drag && drag.moved)) return;
     // Alt/Space pan takes the cursor; do not paint resize over grab.
     if (isPanModifierHeld()) {
