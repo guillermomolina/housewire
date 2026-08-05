@@ -10872,6 +10872,11 @@
       });
       applyWorkspaceStatus(st);
       await reloadAfterDocumentChange();
+      // New empty site: select the root place and show its properties.
+      highlightOutline(".");
+      clearSelectionState();
+      setSelectedVisual();
+      await fillPlaceInspector(".");
       const name =
         (st.document && (st.document.yaml || st.document.title)) ||
         t("file.newSiteTitle");

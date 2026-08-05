@@ -8,6 +8,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.76.1] — 2026-08-05
+
+### Fixed
+
+- File → New selects the site root and shows its properties by default.
+
 ## [0.76.0] — 2026-08-05
 
 ### Changed
