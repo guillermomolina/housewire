@@ -2849,41 +2849,50 @@
   }
 
   function appendNodeIsoBevel(g, w, h) {
-    const iso = el("g", { class: "node-iso", "aria-hidden": "true" });
-    iso.appendChild(
+    const faces = el("g", {
+      class: "node-iso node-iso-faces",
+      "aria-hidden": "true",
+    });
+    faces.appendChild(
       el("path", { class: "node-iso-face node-iso-top", d: nodeIsoTopPathD(w, h) })
     );
-    iso.appendChild(
+    faces.appendChild(
       el("path", {
         class: "node-iso-face node-iso-west",
         d: nodeIsoWestPathD(w, h),
       })
     );
-    iso.appendChild(
+    const wires = el("g", {
+      class: "node-iso node-iso-wires",
+      "aria-hidden": "true",
+    });
+    wires.appendChild(
       el("path", {
         class: "node-iso-visible",
         d: nodeIsoVisibleWireD(w, h),
       })
     );
-    iso.appendChild(
+    wires.appendChild(
       el("path", {
         class: "node-iso-hidden",
         d: nodeIsoHiddenWireD(w, h),
       })
     );
-    g.appendChild(iso);
-    return iso;
+    g.appendChild(faces);
+    g.appendChild(wires);
+    return { faces, wires };
   }
 
   function syncNodeIsoBevel(g, w, h) {
-    const iso = g.querySelector("g.node-iso");
-    if (!iso) return;
-    const top = iso.querySelector("path.node-iso-top");
-    const west = iso.querySelector("path.node-iso-west");
-    const visible = iso.querySelector("path.node-iso-visible");
-    let hidden = iso.querySelector("path.node-iso-hidden");
+    const faces = g.querySelector("g.node-iso-faces");
+    const wires = g.querySelector("g.node-iso-wires");
+    if (!faces || !wires) return;
+    const top = faces.querySelector("path.node-iso-top");
+    const west = faces.querySelector("path.node-iso-west");
+    const visible = wires.querySelector("path.node-iso-visible");
+    let hidden = wires.querySelector("path.node-iso-hidden");
     if (!hidden) {
-      hidden = iso.querySelector("path.node-iso-far");
+      hidden = wires.querySelector("path.node-iso-far");
       if (hidden) hidden.setAttribute("class", "node-iso-hidden");
     }
     if (top) top.setAttribute("d", nodeIsoTopPathD(w, h));
@@ -7618,7 +7627,7 @@
     const placeMap = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
 
     if (!showOpenings) {
-      g.querySelector("g.node-iso")?.remove();
+      g.querySelectorAll("g.node-iso").forEach((n) => n.remove());
       g.querySelectorAll("[data-opening]").forEach((n) => n.remove());
       if (box) {
         box.classList.remove("iso-box");
@@ -7631,8 +7640,14 @@
       box.classList.add("iso-box");
       box.setAttribute("rx", "0");
     }
-    if (!g.querySelector("g.node-iso")) appendNodeIsoBevel(g, w, h);
-    else syncNodeIsoBevel(g, w, h);
+    if (!g.querySelector("g.node-iso-faces") || !g.querySelector("g.node-iso-wires")) {
+      appendNodeIsoBevel(g, w, h);
+    } else {
+      syncNodeIsoBevel(g, w, h);
+    }
+    // Keep projected wireframe above the front face rect.
+    const wireLayer = g.querySelector("g.node-iso-wires");
+    if (wireLayer) g.appendChild(wireLayer);
 
     const want = openingCellsForNode(node);
     const wantSet = new Set(want);
@@ -7793,6 +7808,8 @@
       rx: showOpenings ? 0 : 6,
     });
     g.appendChild(box);
+    const wireLayer = g.querySelector("g.node-iso-wires");
+    if (wireLayer) g.appendChild(wireLayer);
     const fullLabel = node.display_label || node.label || node.display_name || node.name || node.id;
     const canvasName =
       (node.display_name || node.name || node.id) +

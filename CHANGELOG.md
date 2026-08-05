@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.8] — 2026-08-05
+
+### Fixed
+
+- Isometric back-wireframe lines are now painted above the front face so dashed
+  hidden segments remain visible; selected places tint the wireframe in
+  selection color for clearer contrast.
+
 ## [0.77.7] — 2026-08-05
 
 ### Fixed

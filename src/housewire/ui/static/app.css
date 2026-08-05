@@ -2249,6 +2249,11 @@ button:hover {
   stroke-linecap: butt;
 }
 
+.node-box.selected ~ .node-iso-wires .node-iso-visible,
+.node-box.selected ~ .node-iso-wires .node-iso-hidden {
+  stroke: var(--selection);
+}
+
 /* Match far bevel: square F face when the iso bevel is shown. */
 .node-box.iso-box {
   rx: 0;
