@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.71.0] — 2026-08-05
+
+### Added
+
+- New places apply catalog type/subtype defaults (e.g. JunctionBox
+  ``opening_grid`` and ``install``) when those fields are omitted.
+
 ## [0.70.2] — 2026-08-05
 
 ### Fixed

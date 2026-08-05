@@ -84,6 +84,19 @@ class TestDirectoryLocation(unittest.TestCase):
             self.assertNotIn("subtype", panel)
             self.assertEqual(panel["label"], "Cuadro General")
 
+    def test_junction_box_catalog_opening_grid_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = init_site(root, type_id="House")
+            add_place(doc, "Caja", type_id="JunctionBox", label="Caja")
+            box = doc["elements"]["Caja"]
+            self.assertEqual(box["subtype"], "IP40")
+            self.assertEqual(
+                box["opening_grid"],
+                {"NS": 2, "WE": 2, "B": "2x2"},
+            )
+            self.assertEqual(box["install"], "Flush")
+
     def test_create_location_normalizes_spaced_name(self) -> None:
         from housewire.house import location_id_from_name
 

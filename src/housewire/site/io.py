@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,8 @@ from housewire.house import (
     assert_supported_schema,
     is_house_document,
     is_place_type,
+    load_catalog,
+    _catalog_defaults_for_subtype,
 )
 
 HOUSEWIRE_YAML = "housewire.yaml"
@@ -63,6 +66,46 @@ def create_empty_house_file(path: Path) -> dict[str, Any]:
     return doc
 
 
+def apply_place_catalog_defaults(
+    entry: dict[str, Any],
+    *,
+    type_id: str | None = None,
+    subtype: str | None = None,
+) -> None:
+    """Copy catalog ``defaults`` onto a place map (skip keys already set).
+
+    Merges type-level and subtype-level defaults (e.g. JunctionBox
+    ``opening_grid``, IP40 ``install``). Does not overwrite explicit fields.
+    """
+    tid = str(type_id or entry.get("type") or "").strip()
+    if not tid:
+        return
+    try:
+        catalog = load_catalog()
+    except FileNotFoundError:
+        return
+    type_def = catalog.get(tid)
+    if not isinstance(type_def, dict):
+        return
+    eff_subtype = subtype if subtype is not None else entry.get("subtype")
+    if eff_subtype is None or str(eff_subtype).strip() == "":
+        base = type_def.get("defaults")
+        if isinstance(base, dict) and base.get("subtype") is not None:
+            eff_subtype = str(base["subtype"]).strip() or None
+            if eff_subtype and "subtype" not in entry:
+                entry["subtype"] = eff_subtype
+    defaults = _catalog_defaults_for_subtype(
+        type_def,
+        str(eff_subtype).strip() if eff_subtype is not None else None,
+    )
+    for key, value in defaults.items():
+        if key == "subtype":
+            continue
+        if key in entry:
+            continue
+        entry[key] = copy.deepcopy(value)
+
+
 def create_inline_location(
     parent_place: dict[str, Any],
     name: str,
@@ -76,7 +119,8 @@ def create_inline_location(
     """Create an inline place under ``parent_place['elements'][name]``.
 
     ``name`` is the technical id (map key). Optional ``working_name`` is YAML
-    ``name:`` (canvas); ``label`` is human text.
+    ``name:`` (canvas); ``label`` is human text. Catalog type/subtype defaults
+    (e.g. ``opening_grid``, ``install``) are applied when not overridden.
     """
     if not is_place_type(type_id):
         raise ValueError(
@@ -103,6 +147,7 @@ def create_inline_location(
         entry["subtype"] = subtype
     if notes:
         entry["notes"] = notes
+    apply_place_catalog_defaults(entry, type_id=type_id, subtype=subtype)
     elements[name] = entry
     return entry
 

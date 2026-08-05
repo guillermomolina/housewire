@@ -153,7 +153,7 @@ elements:
         subtype: IP40
         notes: "100x100"
         mount: Ceiling
-        opening_grid: { NS: 2, WE: 2, B: 1 }
+        opening_grid: { NS: 2, WE: 2, B: 2x2 }
         openings: [B1-1, N1]
         elements:
           Regleta_1:
