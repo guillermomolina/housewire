@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.68.4] — 2026-08-05
+
+### Fixed
+
+- Properties openings/terminals editor stays expanded after a field save
+  (inspector rebuild no longer collapses the face-grid ``<details>``).
+
 ## [0.68.3] — 2026-08-05
 
 ### Fixed

@@ -8092,6 +8092,29 @@
 
   /** @type {{kind:"place"|"element", placeId:string, element?:string}|null} */
   let propsTarget = null;
+  /** Keep openings/terminals <details> open across inspector rebuilds. */
+  let propsFaceEditorOpen = false;
+  /** @type {string|null} */
+  let propsFaceEditorKey = null;
+
+  function propsFaceEditorStorageKey() {
+    if (!propsTarget) return null;
+    if (propsTarget.kind === "element") {
+      return `e:${propsTarget.placeId || "."}/${propsTarget.element || ""}`;
+    }
+    if (propsTarget.kind === "place") {
+      return `p:${propsTarget.placeId || "."}`;
+    }
+    return null;
+  }
+
+  function syncPropsFaceEditorKey() {
+    const key = propsFaceEditorStorageKey();
+    if (key !== propsFaceEditorKey) {
+      propsFaceEditorKey = key;
+      propsFaceEditorOpen = false;
+    }
+  }
   let propsSaveTimer = null;
   /** JSON snapshot of editable props when the panel was built (skip no-op saves). */
   let propsFieldsBaseline = null;
@@ -8387,7 +8410,8 @@
     /** @type {Record<string, object>} */
     const usedMeta = { ...(opts.usedMap || {}) };
     const occupied = opts.occupied || new Set();
-    let editorOpen = false;
+    syncPropsFaceEditorKey();
+    let editorOpen = propsFaceEditorOpen;
 
     const dt = document.createElement("dt");
     dt.dataset.labelKey = labelKey;
@@ -8395,6 +8419,7 @@
 
     const details = document.createElement("details");
     details.className = "props-face-editor";
+    if (editorOpen) details.open = true;
 
     const summary = document.createElement("summary");
     summary.className = "props-face-summary";
@@ -8612,6 +8637,7 @@
 
     details.addEventListener("toggle", () => {
       editorOpen = details.open;
+      propsFaceEditorOpen = details.open;
     });
 
     syncHidden();
@@ -9271,6 +9297,8 @@
     if (!id || !locationId) {
       propsTarget = null;
       propsFieldsBaseline = null;
+      propsFaceEditorKey = null;
+      propsFaceEditorOpen = false;
       empty.classList.remove("hidden");
       panel.classList.add("hidden");
       return;
