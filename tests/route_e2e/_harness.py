@@ -307,8 +307,13 @@ def assert_tubes_straight(
     *,
     expected: int,
     tol: float = 3.0,
+    max_points: int | None = None,
 ) -> None:
-    """Each painted tube centerline must be a single horizontal or vertical run."""
+    """Each painted tube centerline must be a single horizontal or vertical run.
+
+    When ``max_points`` is set (e.g. 2), reject intermediate vertices even if
+    the polyline stays axis-aligned.
+    """
     site = resolve_example_site(site_name)
     if site is None or not site.is_file():
         raise unittest.SkipTest(
@@ -325,6 +330,9 @@ def assert_tubes_straight(
         horiz = max(xs) - min(xs) < tol
         vert = max(ys) - min(ys) < tol
         if not (horiz or vert):
+            bad.append((i, pts))
+            continue
+        if max_points is not None and len(pts) > max_points:
             bad.append((i, pts))
     test.assertEqual(bad, [], msg=f"non-straight tubes: {bad}")
 

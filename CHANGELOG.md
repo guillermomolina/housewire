@@ -7,6 +7,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+
+## [0.79.0] — 2026-08-05
+
+### Added
+
+- Example **Route_26** (aligned back-face openings) and E2E asserting four
+  single-segment straight conduits (no intermediate vertices).
+- When both conduit ends are colinear plane bocas (B/F), route mark-to-mark as
+  one H/V segment instead of contour stubs.
+
 ## [0.78.1] — 2026-08-05
 
 ### Fixed

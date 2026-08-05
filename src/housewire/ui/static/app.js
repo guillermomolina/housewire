@@ -4595,6 +4595,20 @@
         : part.map((p) => [p[0], p[1]]);
     };
     if (fromPlane || toPlane) {
+      // Colinear B/F mouths: paint a single H/V segment (no contour stubs).
+      if (
+        fromPlane &&
+        toPlane &&
+        (Math.abs(m1.x - m2.x) < 1e-6 || Math.abs(m1.y - m2.y) < 1e-6)
+      ) {
+        const pts = cleanOrthoPoly([
+          [m1.x, m1.y],
+          [m2.x, m2.y],
+        ]);
+        if (pts.length < 2) return null;
+        const d = pointsToPathD(pts);
+        return { d, dCore: d, segs: segsFromPoints(pts, half) };
+      }
       // Cross the contour at a nudged entry so B-approach does not sit on N1.
       let cur = a1;
       let curFace = fromFace;
