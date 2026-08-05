@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.76.2] — 2026-08-05
+
+### Fixed
+
+- Nested catalog insert no longer stuck at depth 1/1: ``setDepth`` no longer
+  caps against stale ``maxDepth`` before reload, and insert syncs max depth
+  from the server then selects the new place.
+
 ## [0.76.1] — 2026-08-05
 
 ### Fixed
