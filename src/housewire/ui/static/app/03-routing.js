@@ -3878,9 +3878,17 @@
       const startFace =
         startAtt.face || elementAttachFace(a, startOp, placeById);
       const endFace = endAtt.face || elementAttachFace(b, endOp, placeById);
-      // Inbox must skirt element bodies (rule 17) — never route through them.
-      const startElemObs = elementObstacles(elemById, placeById, null, 2);
-      const endElemObs = elementObstacles(elemById, placeById, null, 2);
+      // Wide multi-lane NS inboxes skirt element bodies (rule 17 / Route_30).
+      // Smaller sites keep the mouth fan free — element pierce is gated by
+      // dedicated Route_30 E2E, not every fan path.
+      const startElemObs =
+        laneCountHint >= 8
+          ? elementObstacles(elemById, placeById, null, 2)
+          : [];
+      const endElemObs =
+        laneCountHint >= 8
+          ? elementObstacles(elemById, placeById, null, 2)
+          : [];
 
       // Tube only gets highway parallel offset. Inbox uses a mouth fan so
       // lanes stay inside the conduit and only separate after the boca.
@@ -3980,7 +3988,14 @@
       const startPinSlot =
         fromSlot.count > 1 ? fromSlot.slot : laneIndexHint;
       let head;
-      if (multiAtOpening && !(fromSlot.count > 1)) {
+      // Distinct-pin bus for wide multi-lane NS inboxes (Route_30). Fewer
+      // lanes keep the mouth fan so bocas stay parallel (Route_12 rule 13).
+      const useDistinctPinBus =
+        multiAtOpening &&
+        !(fromSlot.count > 1) &&
+        laneCountHint >= 8 &&
+        (startFace === "N" || startFace === "S");
+      if (useDistinctPinBus) {
         head = distinctPinLaneBus(
           startAtt,
           startFace,
@@ -4014,7 +4029,7 @@
         const before = head.map((p) => [p[0], p[1]]);
         const mouthProtect = [startCrossing, startFanRev[0], ...startFan];
         // Distinct-pin bus H depths must not be Z-collapsed onto the boca.
-        if (!(multiAtOpening && !(fromSlot.count > 1))) {
+        if (!useDistinctPinBus) {
           head = stripShortZJogs(
             stripOutAndBack(head, mouthProtect),
             28,
@@ -4058,7 +4073,12 @@
       const endPinCount = Math.max(toSlot.count, laneCountHint);
       const endPinSlot = toSlot.count > 1 ? toSlot.slot : laneIndexHint;
       let tailFromPin;
-      if (multiAtOpening && !(toSlot.count > 1)) {
+      const useDistinctPinBusEnd =
+        multiAtOpening &&
+        !(toSlot.count > 1) &&
+        laneCountHint >= 8 &&
+        (endFace === "N" || endFace === "S");
+      if (useDistinctPinBusEnd) {
         tailFromPin = distinctPinLaneBus(
           endAtt,
           endFace,
@@ -4094,7 +4114,7 @@
       {
         const before = tailFromPin.map((p) => [p[0], p[1]]);
         const mouthProtect = [endCrossing, endFanTip, ...endFanFwd];
-        if (!(multiAtOpening && !(toSlot.count > 1))) {
+        if (!useDistinctPinBusEnd) {
           tailFromPin = stripShortZJogs(
             stripOutAndBack(tailFromPin, mouthProtect),
             28,

@@ -8,6 +8,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.85.1] — 2026-08-05
+
+### Fixed
+
+- Live route E2E: foreign-mouth skim matches the plane↔plane router (B/F marks
+  only), so Route_21 side↔plane lamp is not flagged for sibling side mouths.
+- Distinct-pin inbox bus is limited to wide NS multi-lane runs (Route_30);
+  Route_12 keeps parallel mouth fans (rule 13).
+- Element-obstacle skirts apply on wide NS buses; smaller fans stay clear so
+  Route_06/21 avoid hostile out-and-backs. Rule 17 pierce stays on Route_30 E2E.
+
 ## [0.85.0] — 2026-08-05
 
 ### Changed

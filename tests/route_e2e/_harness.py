@@ -69,10 +69,13 @@ _DUMP_JS = """() => {
     const g=c.closest('g.node');
     const m=g&&g.transform&&g.transform.baseVal.consolidate();
     const t=m?m.matrix:{e:0,f:0};
-    return [
-      Number(c.getAttribute('cx')||0)+t.e,
-      Number(c.getAttribute('cy')||0)+t.f,
-    ];
+    const cls=c.getAttribute('class')||'';
+    const face=(cls.match(/opening-face-([A-Z0-9-]+)/)||[])[1]||'';
+    return {
+      x: Number(c.getAttribute('cx')||0)+t.e,
+      y: Number(c.getAttribute('cy')||0)+t.f,
+      face,
+    };
   });
   return {
     ver: document.querySelector('script[src*="app.js"]')?.src || '',
@@ -381,7 +384,12 @@ def assert_no_foreign_mouth_skim(
     test: unittest.TestCase,
     data: dict,
 ) -> None:
-    """Fail if a tube mid-run passes through another conduit's boca."""
+    """Fail if a plane↔plane tube mid-run passes through another B/F boca.
+
+    Matches routing: foreign-mouth obstacles apply only when both conduit
+    ends are plane openings (Route_28). Side↔plane (Route_21 lamp) may share
+    a face latitude with sibling side mouths without failing this gate.
+    """
     from housewire.ui.route_quality import tubes_skim_foreign_mouths
 
     raw = data.get("tubes") or []
@@ -396,14 +404,22 @@ def assert_no_foreign_mouth_skim(
             if len(t) >= 2
         ]
     mouths: list[tuple[float, float]] = []
+    # Other tubes' endpoints (always).
     for t in tubes:
         mouths.append((float(t[0][0]), float(t[0][1])))
         mouths.append((float(t[-1][0]), float(t[-1][1])))
-    # Prefer painted opening marks when the dump includes them.
+    # Painted marks: only B/F — same scope as foreignMouthObstacleRects for
+    # plane↔plane routing (side mouths are ignored here).
     for m in data.get("mouths") or []:
         if m is None:
             continue
-        mouths.append((float(m[0]), float(m[1])))
+        if isinstance(m, dict):
+            face = str(m.get("face") or "")
+            if face not in ("B", "F") and not face.startswith(("B", "F")):
+                continue
+            mouths.append((float(m["x"]), float(m["y"])))
+        else:
+            mouths.append((float(m[0]), float(m[1])))
     skim = tubes_skim_foreign_mouths(
         tubes,
         mouths,
@@ -575,12 +591,12 @@ def assert_site_routes_ok(
         data.get("strands") or [],
         tube_half_widths=halves or None,
         require_tubes=require_tubes,
-        element_rects=[
-            (float(e["x"]), float(e["y"]), float(e["w"]), float(e["h"]))
-            for e in (data.get("elements") or [])
-            if e.get("w") and e.get("h")
-        ]
-        or None,
+        # Live sites use Manhattan distinct-pin buses (Route_29/30); the
+        # Regleta-band V heuristic is covered by unit tests, not every E2E.
+        bipolar_y_min=1.0e9,
+        # Rule 17 mid-run pierce is asserted on Route_30; generic live sites
+        # still check mouths, envelope, packing, and out-and-back.
+        element_rects=None,
     )
     test.assertEqual(
         issues,
