@@ -8,6 +8,24 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.83.0] — 2026-08-05
+
+### Added
+
+- Progressive layout paint: places first, then conduits, then elements/cables
+  (``requestAnimationFrame`` passes with a generation token so a newer render
+  aborts stale work). After drag/resize, tubes refresh immediately and cables
+  catch up on the next frame.
+
+### Fixed
+
+- Multi-conductor distinct-pin inbox (Route_29): unique-depth Manhattan bus
+  from pin column to highway lane so strands keep lane pitch instead of
+  stacking on a shared horizontal.
+- ``strands_overlap`` ignores proper segment crossings by default (U-turn
+  lane flip may cross in the inbox); still rejects parallel / colinear
+  stacks. Route_29 E2E documents that crossings are allowed.
+
 ## [0.82.7] — 2026-08-05
 
 ### Added

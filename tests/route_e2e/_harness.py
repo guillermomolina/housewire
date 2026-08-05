@@ -416,7 +416,7 @@ def assert_no_strand_lane_overlap(
     test: unittest.TestCase,
     data: dict,
 ) -> None:
-    """Fail when strands that share a tube run closer than lane pitch."""
+    """Fail when co-tube strands stack closer than lane pitch (crossings OK)."""
     from housewire.ui.route_quality import (
         match_strand_to_tube,
         strands_overlap,
@@ -441,7 +441,8 @@ def assert_no_strand_lane_overlap(
     for ti, polys in sorted(by_tube.items()):
         if len(polys) < 2:
             continue
-        if strands_overlap(polys):
+        # Crossings OK (U-turn lane flip); reject parallel / colinear stacks.
+        if strands_overlap(polys, allow_crossings=True):
             bad.append(f"tube[{ti}]: strands overlap (lane separation too small)")
     test.assertEqual(bad, [], msg=f"strand lane overlap: {bad}")
 

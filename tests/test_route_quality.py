@@ -26,6 +26,7 @@ from housewire.ui.route_quality import (
     parallel_highway_bundle,
     perpendicular_shared_terminal_entry,
     polyline_hugs_rect_border,
+    segments_cross,
     shared_terminal_entry_is_v,
     strands_overlap,
 )
@@ -113,6 +114,15 @@ class TestRouteQualityDetectors(unittest.TestCase):
         b = [(0.0, 1.0), (80.0, 1.0)]
         self.assertLess(1.0, MIN_LANE_SEPARATION)
         self.assertTrue(strands_overlap([a, b]))
+
+    def test_proper_crossing_is_not_lane_overlap(self) -> None:
+        # Inbox X after a U-turn lane flip: zero distance at the cross, but
+        # not a parallel stack.
+        a = [(0.0, 0.0), (0.0, 40.0), (40.0, 40.0)]
+        b = [(20.0, 20.0), (20.0, 60.0)]
+        self.assertTrue(segments_cross(a[1], a[2], b[0], b[1]))
+        self.assertFalse(strands_overlap([a, b], allow_crossings=True))
+        self.assertTrue(strands_overlap([a, b], allow_crossings=False))
 
     def test_screenshot_style_terminal_z_is_detected(self) -> None:
         z = [

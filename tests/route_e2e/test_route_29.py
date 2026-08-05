@@ -13,10 +13,11 @@ from tests.route_e2e._harness import (
 
 class TestRoute29(unittest.TestCase):
     def test_three_conductors_in_one_tube_do_not_overlap(self) -> None:
-        """Three BN conductors share one N↔N tube; strands must stay parallel.
+        """Three BN conductors share one N↔N tube; strands must not stack.
 
-        Electrical on: inbox/mouth approaches must not collapse onto a shared
-        horizontal (colinear strand stack).
+        Electrical on: inbox/mouth approaches must keep lane separation.
+        Crossings after a U-turn lane flip are allowed; a colinear / parallel
+        stack on a shared horizontal is not.
         """
         site = resolve_example_site("Route_29")
         if site is None or not site.is_file():

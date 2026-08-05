@@ -562,11 +562,17 @@ def strands_overlap(
     min_separation: float = MIN_LANE_SEPARATION,
     ignore_near: Sequence[Point] | None = None,
     ignore_radius: float = 16.0,
+    allow_crossings: bool = True,
 ) -> bool:
     """True when any two strands run closer than ``min_separation``.
 
     Short segments near ``ignore_near`` (mouth stubs / pin meets) are skipped
     so legal boca/pin coincidence is not scored as a mid-run overlap.
+
+    Proper segment crossings (X / T through a neighbor lane) are ignored by
+    default: strands may cross in an inbox after a U-turn lane flip; what we
+    reject is a parallel / colinear stack. Use ``allow_crossings=False`` only
+    when a zero-distance crossing should count as overlap.
     """
     anchors = [(float(p[0]), float(p[1])) for p in (ignore_near or [])]
 
@@ -601,6 +607,8 @@ def strands_overlap(
             best = float("inf")
             for a0, a1 in segs[i]:
                 for b0, b1 in segs[j]:
+                    if allow_crossings and segments_cross(a0, a1, b0, b1):
+                        continue
                     best = min(best, _seg_seg_distance(a0, a1, b0, b1))
             if best < min_separation:
                 return True

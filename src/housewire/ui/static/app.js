@@ -124,6 +124,17 @@
   let renderExpandPass = 0;
   /** @type {Record<string, number[][][]>|null} */
   let inboxCablePtsByParent = null;
+  /**
+   * Progressive paint generation: bump to cancel in-flight rAF passes.
+   * Full ``render()`` and progressive edge refresh share this so a new paint
+   * aborts an unfinished one.
+   */
+  let renderGen = 0;
+  /** Scheduled progressive-pass rAF handle (0 when idle). */
+  let renderPassRaf = 0;
+  /** Separate generation for post-drag edge refinement. */
+  let edgeRefreshGen = 0;
+  let edgeRefreshRaf = 0;
   const DRAG_THRESHOLD = 4;
   const DBLCLICK_MS = 400;
   const ELEM_W = 72;
@@ -3444,6 +3455,62 @@
     cablePaths = [];
   }
 
+  /** Cancel in-flight progressive ``render()`` passes. */
+  function bumpRenderGen() {
+    renderGen += 1;
+    if (renderPassRaf) {
+      cancelAnimationFrame(renderPassRaf);
+      renderPassRaf = 0;
+    }
+    return renderGen;
+  }
+
+  /**
+   * Queue the next paint pass; no-op if ``gen`` is already stale.
+   * @param {number} gen
+   * @param {() => void} fn
+   */
+  function scheduleRenderPass(gen, fn) {
+    if (gen !== renderGen) return;
+    renderPassRaf = requestAnimationFrame(() => {
+      renderPassRaf = 0;
+      if (gen !== renderGen) return;
+      fn();
+    });
+  }
+
+  /** Cancel in-flight progressive edge refresh after drag/resize. */
+  function bumpEdgeRefreshGen() {
+    edgeRefreshGen += 1;
+    if (edgeRefreshRaf) {
+      cancelAnimationFrame(edgeRefreshRaf);
+      edgeRefreshRaf = 0;
+    }
+    return edgeRefreshGen;
+  }
+
+  /**
+   * Re-route tubes immediately, then rebuild cables on the next frame.
+   * @param {{ skipConduits?: boolean }} [opts]
+   */
+  function scheduleProgressiveEdgeRefresh(opts) {
+    const skipConduits = !!(opts && opts.skipConduits);
+    // Abort any unfinished full progressive paint; transforms already match.
+    bumpRenderGen();
+    const gen = bumpEdgeRefreshGen();
+    if (skipConduits) {
+      // Element-only: tubes stay; cables are the expensive step.
+      refreshEdges({ skipConduits: true });
+      return;
+    }
+    refreshEdges({ skipCables: true });
+    edgeRefreshRaf = requestAnimationFrame(() => {
+      edgeRefreshRaf = 0;
+      if (gen !== edgeRefreshGen) return;
+      refreshEdges({ skipConduits: true });
+    });
+  }
+
   function el(name, attrs, text) {
     const node = document.createElementNS(ns, name);
     if (attrs) {
@@ -4394,8 +4461,12 @@
    * ``toward`` (optional): pin / attach inside the place. If the nominal
    * opening inward points away from it (common for plane bocas B/F), flip
    * so the fan never goes back into the tube corridor.
+   *
+   * ``depthBias`` (optional): when ``laneDist≈0`` (crossing already offset),
+   * still push a unique tip depth so multi-lane inboxes do not share one
+   * stub-Y horizontal (Route_29).
    */
-  function mouthFanPts(mouth, face, laneDist, toward) {
+  function mouthFanPts(mouth, face, laneDist, toward, depthBias) {
     const mx = Array.isArray(mouth) ? mouth[0] : mouth.x;
     const my = Array.isArray(mouth) ? mouth[1] : mouth.y;
     let oi = openingInwardDelta(face);
@@ -4415,23 +4486,36 @@
         }
       }
     }
+    const latDist = Number(laneDist) || 0;
+    const bias = Number(depthBias) || 0;
+    const latX = -oi.y;
+    const latY = oi.x;
+    // Multi-lane unique tip: put the stub itself at a lane-unique depth so
+    // joinLeadToFanTip H runs sit on distinct latitudes without a tip→stub→mouth
+    // Z that stripShortZJogs would collapse (Route_29).
+    if (Math.abs(latDist) < 1e-9 && Math.abs(bias) > 1e-9) {
+      const stubDepth = INBOX_STUB + Math.max(LANE_PITCH, bias);
+      const deep = stubPoint({ x: mx, y: my }, oi.x, oi.y, stubDepth);
+      return [
+        [mx, my],
+        [deep.x, deep.y],
+      ];
+    }
     const stub = stubPoint({ x: mx, y: my }, oi.x, oi.y, INBOX_STUB);
     /** @type {number[][]} */
     const pts = [
       [mx, my],
       [stub.x, stub.y],
     ];
-    if (Math.abs(laneDist) < 1e-9) return pts;
-    const latX = -oi.y;
-    const latY = oi.x;
+    if (Math.abs(latDist) < 1e-9) return pts;
     // Always deeper into the box than the stub (never back toward the boca).
     // Negative lanes get an extra half-pitch so tip latitudes stay unique.
     const depthAlong =
-      Math.abs(laneDist) +
-      (laneDist < 0 ? Math.max(6, (STRAND_WIDTH + LANE_GAP) * 0.5) : 0);
+      Math.abs(latDist) +
+      (latDist < 0 ? Math.max(6, (STRAND_WIDTH + LANE_GAP) * 0.5) : 0);
     pts.push([
-      stub.x + latX * laneDist + oi.x * depthAlong,
-      stub.y + latY * laneDist + oi.y * depthAlong,
+      stub.x + latX * latDist + oi.x * depthAlong,
+      stub.y + latY * latDist + oi.y * depthAlong,
     ]);
     return pts;
   }
@@ -6411,6 +6495,63 @@
   }
 
   /**
+   * Distinct-pin multi-lane inbox: pin → unique-depth stub on the pin column,
+   * H to the lane column, V to the mouth crossing.
+   *
+   * Parallel H runs at lane-unique depths keep ≥LANE_PITCH separation even when
+   * pin order is reversed vs highway lane order (diagonals would cross).
+   */
+  function distinctPinLaneBus(att, face, crossing, laneDist, laneCount) {
+    const fo = faceOutwardDelta(face);
+    const n = Math.max(1, laneCount | 0);
+    const dist = Number(laneDist) || 0;
+    // Base past the pin cluster; laneDist shifts each strand onto its own depth.
+    const busDepth = TERMINAL_FAN_TIP + LANE_PITCH * (n + 2) + dist;
+    const rail = stubPoint(
+      { x: att.x, y: att.y },
+      fo.x,
+      fo.y,
+      busDepth
+    );
+    /** @type {number[][]} */
+    const pts = [
+      [att.x, att.y],
+      [rail.x, rail.y],
+    ];
+    const ns = Math.abs(fo.y) >= Math.abs(fo.x);
+    if (ns) {
+      // N/S: H at unique rail.y, then V on lane column.
+      if (Math.abs(rail.x - crossing.x) > 1e-6) {
+        pts.push([crossing.x, rail.y]);
+      }
+      if (Math.abs(rail.y - crossing.y) > 1e-6) {
+        pts.push([crossing.x, crossing.y]);
+      } else if (pts.length === 2 && Math.abs(rail.x - crossing.x) > 1e-6) {
+        pts.push([crossing.x, crossing.y]);
+      }
+    } else {
+      // E/W: V at unique rail.x, then H on lane row.
+      if (Math.abs(rail.y - crossing.y) > 1e-6) {
+        pts.push([rail.x, crossing.y]);
+      }
+      if (Math.abs(rail.x - crossing.x) > 1e-6) {
+        pts.push([crossing.x, crossing.y]);
+      } else if (pts.length === 2 && Math.abs(rail.y - crossing.y) > 1e-6) {
+        pts.push([crossing.x, crossing.y]);
+      }
+    }
+    if (
+      Math.hypot(
+        pts[pts.length - 1][0] - crossing.x,
+        pts[pts.length - 1][1] - crossing.y
+      ) > 1e-6
+    ) {
+      pts.push([crossing.x, crossing.y]);
+    }
+    return cleanOrthoPoly(pts);
+  }
+
+  /**
    * Lead from a terminal pin into a nearby lane point.
    *
    * Rules:
@@ -6419,7 +6560,7 @@
    *   pin is the diagonal (pin→tip). Never stub-then-90° at the pin. After
    *   the tip, Manhattan only (caller bridges tip→spine with orthoJoinEnd).
    */
-  function pinToLanePts(pin, face, lanePt, slot = 0, slotCount = 1) {
+  function pinToLanePts(pin, face, lanePt, slot = 0, slotCount = 1, sharedPinFan = false) {
     const p = {
       x: Array.isArray(pin) ? pin[0] : pin.x,
       y: Array.isArray(pin) ? pin[1] : pin.y,
@@ -6434,13 +6575,11 @@
     const s = Math.max(0, Math.min(nSlots - 1, slot | 0));
     const multiCable = nSlots > 1;
 
-    if (multiCable && (fo.x || fo.y)) {
+    if (multiCable && sharedPinFan && (fo.x || fo.y)) {
       // V leg touches the pin: pin → tip (one short diagonal). Opposite slots
       // fan to opposite laterals so both arms of the V are diagonal — never
       // one diagonal and one vertical. A short rail past the tip keeps the
       // strand on its lateral until the spine join (meet only at the pin).
-      // Never overshoot the lane target along the face normal — that forced
-      // an up-then-down join (diamond / out-and-back into the pin).
       const nx = -fo.y;
       const ny = fo.x;
       const mid = (nSlots - 1) / 2;
@@ -6475,9 +6614,31 @@
       ];
     }
 
+    if (multiCable && (fo.x || fo.y)) {
+      // Distinct pins + shared tube: unique stub depths, then diagonal to the
+      // lane tip (Manhattan H crosses neighbors; same-depth diagonals cross).
+      const alongToLane =
+        (t.x - p.x) * fo.x + (t.y - p.y) * fo.y;
+      let stubDepth =
+        Math.max(6, TERMINAL_FAN_TIP * 0.5) + (nSlots - 1 - s) * LANE_PITCH;
+      if (alongToLane > 4) {
+        stubDepth = Math.min(stubDepth, Math.max(6, alongToLane - 2));
+      }
+      const rail = stubPoint(p, fo.x, fo.y, stubDepth);
+      return [
+        [p.x, p.y],
+        [rail.x, rail.y],
+      ];
+    }
+
+    /**
+     * Stub only for a single cable. Callers bridge to the lane/fan tip with
+     * ``joinLeadToFanTip`` (column-first) or ``joinAvoid`` / ``mergeLeadToSpine``.
+     * Completing the join here via ``orthoJoinEnd`` crawls on stub-Y and
+     * stacks multi-lane inboxes on one shared horizontal (Route_29).
+     */
     /** @type {number[][]} */
     const pts = [[p.x, p.y]];
-    let from = p;
     if (fo.x || fo.y) {
       const along = (t.x - p.x) * fo.x + (t.y - p.y) * fo.y;
       if (along > 2) {
@@ -6486,29 +6647,27 @@
           const stub = stubPoint(p, fo.x, fo.y, want);
           if (Math.hypot(stub.x - p.x, stub.y - p.y) > 1e-6) {
             pts.push([stub.x, stub.y]);
-            from = stub;
           }
         }
       }
     }
-    if (Math.hypot(from.x - t.x, from.y - t.y) < 1e-6) return pts;
-    if (Math.abs(from.x - t.x) < 1e-6 || Math.abs(from.y - t.y) < 1e-6) {
-      pts.push([t.x, t.y]);
-      return pts;
-    }
-    return orthoJoinEnd(pts, t, face);
+    return pts;
   }
 
   /**
    * Join a terminal lead (pin→…→rail) to a mouth-fan tip without collapsing
    * onto a shared horizontal at rail-Y (Test_01 y=420 trunk).
-   * Always travel on the pin-face column/row first (N/S → rail.x, E/W →
-   * rail.y), then across at the fan-tip latitude — never pick the axis by
-   * which delta is larger (that recreated the shared rail-Y crawl).
+   *
+   * Default (single cable): column/row-first (N/S → rail.x, E/W → rail.y),
+   * then across at the fan-tip latitude.
+   *
+   * Multi-lane (``hFirst``): H at rail latitude first, then V on the tip
+   * column — requires unique rail latitudes (pin V-fan) so H runs do not
+   * cross neighbor pin-columns (Route_29).
    * When the simple join would pierce a foreign element (rule 17), detour
    * with ``orthoRoute`` instead.
    */
-  function joinLeadToFanTip(lead, fanTip, face, obstacles) {
+  function joinLeadToFanTip(lead, fanTip, face, obstacles, hFirst) {
     if (!lead || lead.length < 1) {
       return fanTip ? [[fanTip[0], fanTip[1]]] : [];
     }
@@ -6521,7 +6680,11 @@
     const bridge = [[rail[0], rail[1]]];
     const fo = faceOutwardDelta(face || "N");
     const ns = Math.abs(fo.y) >= Math.abs(fo.x);
-    if (ns) {
+    if (hFirst) {
+      // Diagonal rail → fan tip. Distinct-pin multi-lane cannot Manhattan-H
+      // without crossing neighbor pin/lane columns (Route_29).
+      bridge.push([fanTip[0], fanTip[1]]);
+    } else if (ns) {
       // N/S pin: stay on rail.x down/up to tip.y, then across.
       if (Math.abs(rail[1] - fanTip[1]) > 1e-6) {
         bridge.push([rail[0], fanTip[1]]);
@@ -7166,7 +7329,7 @@
 
   /**
    * Base polylines for a cable edge.
-   * @param {{fromSlot?:{slot:number,count:number}, toSlot?:{slot:number,count:number}, laneDist?:number, laneDistForConduit?:(conduitId:string)=>number, fromPin?:string|null, toPin?:string|null}|undefined} opts
+   * @param {{fromSlot?:{slot:number,count:number}, toSlot?:{slot:number,count:number}, laneDist?:number, laneIndex?:number, laneCount?:number, laneDistForConduit?:(conduitId:string)=>number, fromPin?:string|null, toPin?:string|null}|undefined} opts
    * @returns {number[][][]}
    */
   function cableBaseSubpaths(edge, placeById, elemById, occupied, opts) {
@@ -7183,6 +7346,13 @@
       fromSlot.count | 0,
       toSlot.count | 0,
       opts?.laneCount | 0
+    );
+    const laneIndexHint = Math.max(
+      0,
+      Math.min(
+        laneCountHint - 1,
+        opts?.laneIndex != null ? opts.laneIndex | 0 : fromSlot.slot | 0
+      )
     );
     const laneDistForConduit = opts?.laneDistForConduit;
     const fromPin = opts?.fromPin != null ? opts.fromPin : edge.from_pin;
@@ -7577,8 +7747,11 @@
       // snap tube ends to the painted boca for clean transit.
       const startLaneDist = laneDistFor(first.conduit);
       const endLaneDist = laneDistFor(last.conduit);
+      // Center highway lane has dist≈0 — still multi when siblings share the tube.
       const multiAtOpening =
-        Math.abs(startLaneDist) >= 1e-9 || Math.abs(endLaneDist) >= 1e-9;
+        laneCountHint > 1 ||
+        Math.abs(startLaneDist) >= 1e-9 ||
+        Math.abs(endLaneDist) >= 1e-9;
       if (!multiAtOpening) {
         tube = convergeLaneToMouth(tube, tubeStartOp, true);
         tube = convergeLaneToMouth(tube, tubeEndOp, false);
@@ -7598,28 +7771,59 @@
         y: tube[tube.length - 1][1],
       };
 
-      // Fan from the lane crossing. Multi-cable already carries lateral in the
-      // crossing (laneDist=0 here); single-cable may still use laneDist=0.
+      // Fan from the lane crossing. Multi-cable: unique stub depths per lane
+      // so pin→tip diagonals stay separated (Route_29).
+      const fanDepthBias = (dist) =>
+        multiAtOpening ? dist + LANE_PITCH * 3 : 0;
       const startFan = mouthFanPts(
         startCrossing,
         startMouthFace,
         0,
-        startAtt
+        startAtt,
+        fanDepthBias(startLaneDist)
       );
-      const endFan = mouthFanPts(endCrossing, endMouthFace, 0, endAtt);
-      // Toward mouth: fan → stub → crossing. Join lead to fan tip via
-      // joinLeadToFanTip (column-first) so lanes do not share rail-Y.
+      const endFan = mouthFanPts(
+        endCrossing,
+        endMouthFace,
+        0,
+        endAtt,
+        fanDepthBias(endLaneDist)
+      );
+      // Toward mouth: fan → stub → crossing. Multi-lane with distinct pins:
+      // unique-depth Manhattan bus (pin column → H → lane column → V). Shared
+      // bus depth / diagonals cross when pin order ≠ lane order (Route_29).
       const startFanRev = startFan.slice().reverse();
-      const startLead = pinToLanePts(
-        [startAtt.x, startAtt.y],
-        startFace,
-        startFanRev[0],
-        fromSlot.slot,
-        fromSlot.count
-      );
-      let head = joinLeadToFanTip(startLead, startFanRev[0], startFace, startElemObs);
-      if (startFanRev.length > 1) {
-        head = mergeOrthoPolys(head, startFanRev.slice(1)) || head;
+      const startPinCount = Math.max(fromSlot.count, laneCountHint);
+      const startPinSlot =
+        fromSlot.count > 1 ? fromSlot.slot : laneIndexHint;
+      let head;
+      if (multiAtOpening && !(fromSlot.count > 1)) {
+        head = distinctPinLaneBus(
+          startAtt,
+          startFace,
+          startCrossing,
+          startLaneDist,
+          laneCountHint
+        );
+      } else {
+        const startLead = pinToLanePts(
+          [startAtt.x, startAtt.y],
+          startFace,
+          startFanRev[0],
+          startPinSlot,
+          startPinCount,
+          fromSlot.count > 1
+        );
+        head = joinLeadToFanTip(
+          startLead,
+          startFanRev[0],
+          startFace,
+          startElemObs,
+          false
+        );
+        if (startFanRev.length > 1) {
+          head = mergeOrthoPolys(head, startFanRev.slice(1)) || head;
+        }
       }
       {
         const before = head.map((p) => [p[0], p[1]]);
@@ -7658,19 +7862,39 @@
 
       const endFanFwd = endFan.map((p) => [p[0], p[1]]);
       const endFanTip = endFanFwd[endFanFwd.length - 1];
-      const endLead = pinToLanePts(
-        [endAtt.x, endAtt.y],
-        endFace,
-        endFanTip,
-        toSlot.slot,
-        toSlot.count
-      );
-      // pin → … → fan tip → stub → crossing, then reverse to crossing→…→pin.
-      let tailFromPin = joinLeadToFanTip(endLead, endFanTip, endFace, endElemObs);
-      const fanToMouth = endFanFwd.slice().reverse(); // fan, stub, crossing
-      if (fanToMouth.length > 1) {
-        tailFromPin =
-          mergeOrthoPolys(tailFromPin, fanToMouth.slice(1)) || tailFromPin;
+      const endPinCount = Math.max(toSlot.count, laneCountHint);
+      const endPinSlot = toSlot.count > 1 ? toSlot.slot : laneIndexHint;
+      let tailFromPin;
+      if (multiAtOpening && !(toSlot.count > 1)) {
+        tailFromPin = distinctPinLaneBus(
+          endAtt,
+          endFace,
+          endCrossing,
+          endLaneDist,
+          laneCountHint
+        );
+      } else {
+        const endLead = pinToLanePts(
+          [endAtt.x, endAtt.y],
+          endFace,
+          endFanTip,
+          endPinSlot,
+          endPinCount,
+          toSlot.count > 1
+        );
+        // pin → … → fan tip → stub → crossing, then reverse to crossing→…→pin.
+        tailFromPin = joinLeadToFanTip(
+          endLead,
+          endFanTip,
+          endFace,
+          endElemObs,
+          false
+        );
+        const fanToMouth = endFanFwd.slice().reverse(); // fan, stub, crossing
+        if (fanToMouth.length > 1) {
+          tailFromPin =
+            mergeOrthoPolys(tailFromPin, fanToMouth.slice(1)) || tailFromPin;
+        }
       }
       {
         const before = tailFromPin.map((p) => [p[0], p[1]]);
@@ -8076,6 +8300,7 @@
         fromSlot: fromT,
         toSlot: toT,
         laneDist: highwayLaneOffset(lane.index, lane.count),
+        laneIndex: lane.index,
         laneCount: lane.count,
         laneDistForConduit: layout
           ? (cid) => {
@@ -8124,12 +8349,14 @@
 
   /**
    * Re-route conduits and/or rebuild cable SVG.
-   * @param {{ skipConduits?: boolean }} [opts] When skipConduits, reuse existing
-   *   tube ``d`` (element-only drag) and only rebuild cable layers.
+   * @param {{ skipConduits?: boolean, skipCables?: boolean }} [opts]
+   *   skipConduits: reuse tube ``d`` (element-only drag) and only rebuild cables.
+   *   skipCables: update tubes only (progressive post-drag first pass).
    */
   function refreshEdges(opts) {
     if (!graph) return;
     const skipConduits = !!(opts && opts.skipConduits);
+    const skipCables = !!(opts && opts.skipCables);
     const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
     const elemById = Object.fromEntries(
       (graph.elements || []).map((e) => [e.id, e])
@@ -8190,6 +8417,7 @@
           }
         }
       }
+      if (skipCables) return;
       // Rebuild cable layers (jacket + strands) from scratch.
       const cablesG = worldEl && worldEl.querySelector("g.cables");
       if (cablesG && showElectrical) {
@@ -8375,9 +8603,13 @@
       updateElementVisual(e, byId);
     }
     if (refresh) {
-      refreshEdges(
-        opts && opts.skipConduits ? { skipConduits: true } : undefined
-      );
+      const edgeOpts =
+        opts && opts.skipConduits ? { skipConduits: true } : undefined;
+      if (opts && opts.progressive) {
+        scheduleProgressiveEdgeRefresh(edgeOpts);
+      } else {
+        refreshEdges(edgeOpts);
+      }
     }
   }
 
@@ -8794,6 +9026,9 @@
 
   function render() {
     if (!graph) return;
+    // Invalidate unfinished progressive paint and post-drag edge refine.
+    bumpEdgeRefreshGen();
+    const gen = bumpRenderGen();
     ensurePositions();
     measureVisibleSizes();
 
@@ -8819,8 +9054,7 @@
     applyWorldTransform();
     svg.appendChild(worldEl);
 
-    // Containers → leaves → conduits → elements → cables (cables on top so
-    // in-box tails stay visible over tube caps).
+    // Layer order: containers → leaves → conduits → elements → cables.
     const containersG = el("g", { class: "containers" });
     const leavesG = el("g", { class: "leaves" });
     const edgesG = el("g", { class: "edges" });
@@ -8832,17 +9066,41 @@
     worldEl.appendChild(elementsG);
     worldEl.appendChild(cablesG);
 
-    beginRouteGeomCache(byId, elemById);
-    try {
-      const byDepth = [...graph.nodes].sort(
-        (a, b) => (a.parts?.length || 0) - (b.parts?.length || 0)
-      );
-      for (const node of byDepth) {
-        if (childrenOf(node.id).length) paintNode(node, containersG, byId);
-      }
+    // Pass 0 — places (sync first paint).
+    const byDepth = [...graph.nodes].sort(
+      (a, b) => (a.parts?.length || 0) - (b.parts?.length || 0)
+    );
+    for (const node of byDepth) {
+      if (childrenOf(node.id).length) paintNode(node, containersG, byId);
+    }
+    for (const node of graph.nodes) {
+      if (!childrenOf(node.id).length) paintNode(node, leavesG, byId);
+    }
+    updateDepthLabel();
 
-      /** @type {ReturnType<typeof createOccupiedIndex>} */
-      const occupied = createOccupiedIndex();
+    scheduleRenderPass(gen, () => {
+      renderPassTubes(gen, byId, elemById, layout, edgesG, elementsG, cablesG);
+    });
+  }
+
+  /**
+   * Pass 1 — conduits (after places).
+   * @param {number} gen
+   * @param {Record<string, any>} byId
+   * @param {Record<string, any>} elemById
+   * @param {ReturnType<typeof buildCableLayout>|null} layout
+   * @param {SVGGElement} edgesG
+   * @param {SVGGElement} elementsG
+   * @param {SVGGElement} cablesG
+   */
+  function renderPassTubes(gen, byId, elemById, layout, edgesG, elementsG, cablesG) {
+    if (gen !== renderGen || !graph || !worldEl) return;
+    beginRouteGeomCache(byId, elemById);
+    /** @type {ReturnType<typeof createOccupiedIndex>} */
+    let occupied = createOccupiedIndex();
+    try {
+      edgePaths = [];
+      edgesG.innerHTML = "";
       for (const edge of graph.edges) {
         const n = (edge.contains || []).length;
         const lanes = tubeLaneCount(edge, layout);
@@ -8860,7 +9118,6 @@
           : String(edgeName || "");
         const displayD = conduitDisplayD(dPaint, byId, edge);
         const tubeCss = wireColorCss(edge.color || "GY");
-        // Rim only when the tube would blend into the canvas background.
         const tubeOutline = el("path", {
           class: "edge-tube-outline",
           d: displayD,
@@ -8889,54 +9146,96 @@
         edgesG.appendChild(tubeOutline);
         edgesG.appendChild(tubeHit);
         edgesG.appendChild(tube);
-        // Keep full ``d`` for cable hop overlays; display uses clipped geometry.
-        // ``d``: anchor core for cable hops; ``dPaint``: mouths for SVG tubes.
-        edgePaths.push({ edge, paths: [tubeOutline, tubeHit, tube], d: dCore, dPaint });
+        edgePaths.push({
+          edge,
+          paths: [tubeOutline, tubeHit, tube],
+          d: dCore,
+          dPaint,
+        });
       }
       indexEdgePaths();
+    } finally {
+      endRouteGeomCache();
+    }
 
-      for (const node of graph.nodes) {
-        if (!childrenOf(node.id).length) paintNode(node, leavesG, byId);
+    if (!showElectrical) {
+      renderExpandPass = 0;
+      updateDepthLabel();
+      return;
+    }
+
+    scheduleRenderPass(gen, () => {
+      renderPassElectrical(gen, byId, elemById, layout, occupied, elementsG, cablesG);
+    });
+  }
+
+  /**
+   * Pass 2 — elements + cables (Electrical on).
+   * @param {number} gen
+   * @param {Record<string, any>} byId
+   * @param {Record<string, any>} elemById
+   * @param {ReturnType<typeof buildCableLayout>|null} layout
+   * @param {ReturnType<typeof createOccupiedIndex>} occupied
+   * @param {SVGGElement} elementsG
+   * @param {SVGGElement} cablesG
+   */
+  function renderPassElectrical(
+    gen,
+    byId,
+    elemById,
+    layout,
+    occupied,
+    elementsG,
+    cablesG
+  ) {
+    if (gen !== renderGen || !graph || !worldEl || !showElectrical) return;
+    beginRouteGeomCache(byId, elemById);
+    try {
+      // Fan expand may have changed element sizes since pass 0; refresh layout.
+      let cableLayout =
+        layout || buildCableLayout(graph.cable_edges || [], elemById, byId);
+      if (expandElementsForTerminalFans(cableLayout, elemById)) {
+        measureVisibleSizes();
+        for (const e of graph.elements || []) {
+          updateElementVisual(e, byId);
+        }
+        cableLayout = buildCableLayout(graph.cable_edges || [], elemById, byId);
       }
 
-      if (showElectrical) {
-        for (const elem of graph.elements || []) {
-          if (elem.parent && !byId[elem.parent]) continue;
-          // Like depth: interior elements only when the place is a leaf in view.
-          if (elem.parent && childrenOf(elem.parent).length) continue;
-          paintElement(elem, elementsG, byId);
-        }
+      elementsG.innerHTML = "";
+      for (const elem of graph.elements || []) {
+        if (elem.parent && !byId[elem.parent]) continue;
+        if (elem.parent && childrenOf(elem.parent).length) continue;
+        paintElement(elem, elementsG, byId);
       }
 
-      // Cables: white jacket + colored strands (above tubes + elements).
-      if (showElectrical && layout) {
-        inboxCablePtsByParent = {};
-        for (const edge of graph.cable_edges || []) {
-          const item = appendCableVisuals(
-            cablesG,
-            edge,
-            byId,
-            elemById,
-            occupied,
-            layout
-          );
-          if (item) cablePaths.push(item);
-        }
-        if (
-          renderExpandPass < 1 &&
-          expandPlacesForInboxCables(inboxCablePtsByParent, byId)
-        ) {
-          // Grow boxes in-place and re-route tubes/cables only — avoid a second
-          // full clearSvg + paint of every node (old recursive render()).
-          inboxCablePtsByParent = null;
-          renderExpandPass += 1;
-          updateNodeVisual(null);
-          renderExpandPass = 0;
-          updateDepthLabel();
-          return;
-        }
+      cablesG.innerHTML = "";
+      cablePaths = [];
+      inboxCablePtsByParent = {};
+      for (const edge of graph.cable_edges || []) {
+        const item = appendCableVisuals(
+          cablesG,
+          edge,
+          byId,
+          elemById,
+          occupied,
+          cableLayout
+        );
+        if (item) cablePaths.push(item);
+      }
+      if (
+        renderExpandPass < 1 &&
+        expandPlacesForInboxCables(inboxCablePtsByParent, byId)
+      ) {
         inboxCablePtsByParent = null;
+        renderExpandPass += 1;
+        // Grow boxes and progressive re-route — avoid blocking full clearSvg.
+        updateNodeVisual(null, { progressive: true });
+        renderExpandPass = 0;
+        updateDepthLabel();
+        return;
       }
+      inboxCablePtsByParent = null;
       renderExpandPass = 0;
       updateDepthLabel();
     } finally {
@@ -10750,7 +11049,7 @@
       // Full paint when electrical is on so terminal fans / inbox expansion
       // and cable attach points match the new box size.
       if (showElectrical) render();
-      else updateNodeVisual(null);
+      else updateNodeVisual(null, { progressive: true });
       await syncInspectorFromSelection();
       try {
         const payload = {};
@@ -10893,10 +11192,10 @@
         }
       }
     }
-    updateNodeVisual(
-      null,
-      onlyElements && !hostsChanged ? { skipConduits: true } : undefined
-    );
+    updateNodeVisual(null, {
+      progressive: true,
+      ...(onlyElements && !hostsChanged ? { skipConduits: true } : {}),
+    });
     await syncInspectorFromSelection();
     try {
       const placePositions = {};
