@@ -112,6 +112,8 @@
   let editClipboardMode = null;
   /** Session default: physical places/conduits only (no elements/cables). */
   let showElectrical = false;
+  /** Depth before toggling Electrical on (restored when toggling off). */
+  let depthBeforeElectrical = null;
   let outlineNodes = [];
   let canvasLocations = [];
   let collapsedOutline = new Set();
@@ -182,8 +184,7 @@
       if (n.kind !== "place" || (n.depth || 0) < 1) continue;
       const hasKid = list.some((c) => {
         if (outlineParentId(c) !== n.id) return false;
-        if (c.kind === "element" && !showElectrical) return false;
-        return true;
+        return isOutlineNodeVisible(c);
       });
       if (hasKid) set.add(n.id);
     }
@@ -1424,13 +1425,13 @@
     setStatus(t("status.wiringCancelled"));
   }
 
-  function beginWiringGesture(kind) {
+  async function beginWiringGesture(kind) {
     if (!hasDocument || !locationId) {
       setStatus(t("status.needDocument"));
       return;
     }
     if (kind === "conductor" && !showElectrical) {
-      setElectrical(true);
+      await setElectrical(true);
     }
     setWiringMode({ kind, from: null });
     setStatus(
@@ -10653,8 +10654,11 @@
     renderPaletteSideList();
   }
 
-  function setElectrical(on) {
-    showElectrical = Boolean(on);
+  async function setElectrical(on) {
+    const want = Boolean(on);
+    const turningOn = want && !showElectrical;
+    const turningOff = !want && showElectrical;
+    showElectrical = want;
     syncElectricalUi();
     if (!showElectrical && selectedId) {
       const isElem = (graph?.elements || []).some((e) => e.id === selectedId);
@@ -10664,10 +10668,34 @@
       endCatalogPlacementMode();
       if (wiringMode?.kind === "conductor") cancelWiringMode();
     }
-    render();
-    renderOutline();
+    if (turningOn) {
+      depthBeforeElectrical = depthLevel;
+      const target = Math.max(maxDepth, 1);
+      if (depthLevel < target) {
+        await setDepth(target);
+      } else {
+        render();
+        renderOutline();
+      }
+    } else if (turningOff) {
+      const restore = depthBeforeElectrical;
+      depthBeforeElectrical = null;
+      if (restore != null && restore !== depthLevel) {
+        const capped = Math.min(
+          Math.max(1, restore),
+          Math.max(maxDepth, 1)
+        );
+        await setDepth(capped);
+      } else {
+        render();
+        renderOutline();
+      }
+    } else {
+      render();
+      renderOutline();
+    }
     rememberCurrentDocView();
-    syncInspectorFromSelection().catch((err) =>
+    await syncInspectorFromSelection().catch((err) =>
       setStatus(String(err.message || err))
     );
   }
@@ -11160,11 +11188,65 @@
     return node.id.slice(0, node.id.lastIndexOf("/"));
   }
 
+  /** True when ``placeSiteId`` is on or under the current canvas location. */
+  function outlinePlaceUnderCanvas(placeSiteId) {
+    const canvas = locationId || ".";
+    if (canvas === "." || canvas === "") return true;
+    if (placeSiteId === canvas) return true;
+    return placeSiteId.startsWith(`${canvas}/`);
+  }
+
+  function isOutlinePlaceVisibleById(placeSiteId) {
+    if (!placeSiteId) return false;
+    if (!outlinePlaceUnderCanvas(placeSiteId)) return false;
+    const rel = placeDepthUnderCanvas(placeSiteId, locationId || ".");
+    return rel <= depthLevel;
+  }
+
+  /** Place has no child place visible at the current depth (canvas leaf). */
+  function isOutlinePlaceLeafInView(placeSiteId) {
+    return !outlineNodes.some(
+      (n) =>
+        n.kind === "place" &&
+        n.id !== placeSiteId &&
+        isOutlinePlaceVisibleById(n.id) &&
+        outlineParentId(n) === placeSiteId
+    );
+  }
+
+  function isOutlinePlaceChainVisible(placeSiteId) {
+    if (!isOutlinePlaceVisibleById(placeSiteId)) return false;
+    let cur = placeSiteId;
+    while (cur && cur !== ".") {
+      const parent = cur.includes("/")
+        ? cur.slice(0, cur.lastIndexOf("/"))
+        : ".";
+      if (!isOutlinePlaceVisibleById(parent)) return false;
+      if (parent === ".") break;
+      cur = parent;
+    }
+    return true;
+  }
+
+  /** Same visibility rules as the physical canvas (depth + electrical + leaves). */
+  function isOutlineNodeVisible(node) {
+    if (!node) return false;
+    if (node.kind === "place") {
+      return isOutlinePlaceChainVisible(node.id);
+    }
+    if (node.kind === "element") {
+      if (!showElectrical) return false;
+      const parent = node.parent;
+      if (!parent || !isOutlinePlaceChainVisible(parent)) return false;
+      return isOutlinePlaceLeafInView(parent);
+    }
+    return true;
+  }
+
   function outlineHasKids(nodeId) {
     return outlineNodes.some((n) => {
       if (outlineParentId(n) !== nodeId) return false;
-      if (n.kind === "element" && !showElectrical) return false;
-      return true;
+      return isOutlineNodeVisible(n);
     });
   }
 
@@ -11203,7 +11285,7 @@
     if (!host) return;
     host.innerHTML = "";
     for (const node of outlineNodes) {
-      if (node.kind === "element" && !showElectrical) continue;
+      if (!isOutlineNodeVisible(node)) continue;
       if (isOutlineHidden(node)) continue;
       const row = document.createElement("div");
       row.className =
@@ -11501,7 +11583,7 @@
       await setDepth(needDepth);
     }
     if (!showElectrical) {
-      setElectrical(true);
+      await setElectrical(true);
     }
     const rel = siteToCanvasRelative(node.id);
     if (rel) {
@@ -11545,12 +11627,14 @@
     if (bits.length) {
       setStatus(`auto-placed ${bits.join(" + ")} missing x/y · unsaved`);
     }
+    renderOutline();
   }
 
   async function setDepth(next) {
     const capped = Math.min(Math.max(1, next), Math.max(maxDepth, 1));
     if (capped === depthLevel && graph) {
       updateDepthLabel();
+      renderOutline();
       return;
     }
     depthLevel = capped;
@@ -11560,7 +11644,9 @@
   syncElectricalUi();
 
   document.getElementById("btn-electrical")?.addEventListener("click", () => {
-    setElectrical(!showElectrical);
+    setElectrical(!showElectrical).catch((err) =>
+      setStatus(String(err.message || err))
+    );
   });
 
   document.getElementById("btn-auto-force")?.addEventListener("click", () => {
@@ -11853,9 +11939,13 @@
         if (action === "element" || action === "container") {
           openTypePickerFromInsert(action).catch((err) => insertMsg(String(err.message || err), true));
         } else if (action === "conduit") {
-          beginWiringGesture("conduit");
+          beginWiringGesture("conduit").catch((err) =>
+            setStatus(String(err.message || err))
+          );
         } else if (action === "conductor") {
-          beginWiringGesture("conductor");
+          beginWiringGesture("conductor").catch((err) =>
+            setStatus(String(err.message || err))
+          );
         } else if (action === "cable") {
           beginSheathFromSelection().catch((err) =>
             setStatus(String(err.message || err))
@@ -11996,7 +12086,9 @@
       const action = item.getAttribute("data-view-action");
       if (action === "electrical") {
         closeAllMenus();
-        setElectrical(!showElectrical);
+        setElectrical(!showElectrical).catch((err) =>
+          setStatus(String(err.message || err))
+        );
         return;
       }
       if (action === "theme-dark" || action === "theme-light") {

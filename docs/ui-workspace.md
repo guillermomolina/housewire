@@ -18,6 +18,10 @@ The tab shows the filename (with ``.yaml``) and stays dirty until Save.
 
 Canvas location (which place is drawn) is chosen from the **Outline**, not from
 tabs. The last location/depth per open file is remembered while switching tabs.
+**Depth** controls nested place expansion; **Electrical** toggles elements and
+cables (and sets depth to max while on, restoring the prior depth when off).
+The outline tree is filtered to match the current canvas depth and Electrical
+state.
 
 | Action | Meaning |
 |--------|---------|

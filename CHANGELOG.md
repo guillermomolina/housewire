@@ -8,6 +8,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.75.0] — 2026-08-05
+
+### Changed
+
+- Outline visibility matches canvas depth and the Electrical layer (elements
+  only on leaf places when Electrical is on).
+- Turning Electrical on sets depth to the maximum for the current location;
+  turning it off restores the previous depth.
+
 ## [0.74.0] — 2026-08-05
 
 ### Changed

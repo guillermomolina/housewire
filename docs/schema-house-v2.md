@@ -464,11 +464,15 @@ views:
   levels are drawn inside parent boxes; it does not change representation.
 - **Electrical** toolbar toggle (session UI state; not persisted) shows or hides
   elements and cables on the physical canvas. Default session start is **off**
-  (places and conduits only) at **depth 1**. Element boxes enlarge their host
-  place (like nested locations) only while the electrical layer is on; elements
-  draw only when the place is a leaf in the current depth view. Cables ride on
-  conduit paths when visible. With electrical off, conduit tube width ignores
-  cable packing (thin tubes).
+  (places and conduits only) at **depth 1**. Turning **Electrical on** jumps
+  depth to the maximum for the current canvas location; turning it **off**
+  restores the previous depth. The **outline** lists the same places and
+  elements the canvas can show at the current depth (elements only on leaf
+  places when Electrical is on). Element boxes enlarge their host place (like
+  nested locations) only while the electrical layer is on; elements draw only
+  when the place is a leaf in the current depth view. Cables ride on conduit
+  paths when visible. With electrical off, conduit tube width ignores cable
+  packing (thin tubes).
 - Back openings (`B…`) and side openings are drawn as circles on a light NW
   isometric bevel of the leaf place: near faces (**N**, **W**, **F**) use a
   bold mark; far faces (**S**, **E**, **B**) use a dashed / double outline.
