@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.68.2] — 2026-08-05
+
+### Fixed
+
+- Clipboard pack/copy: unpack the four-tuple from ``_expand_deletion_sets``
+  (places, elements, ids, cables) so File → Copy / paste APIs work again.
+
 ## [0.68.1] — 2026-08-05
 
 ### Fixed

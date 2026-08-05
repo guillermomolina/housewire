@@ -423,7 +423,7 @@ def pack_selection(doc: dict[str, Any], ids: list[str]) -> dict[str, Any]:
     if not ids:
         raise ValueError("ids must not be empty")
     catalog = load_catalog()
-    selected_places, selected_elements, _ = _expand_deletion_sets(doc, ids)
+    selected_places, selected_elements, _, _ = _expand_deletion_sets(doc, ids)
     if not selected_places and not selected_elements:
         raise ValueError("Nothing to copy")
     known = _known_place_paths(doc)
