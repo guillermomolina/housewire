@@ -8,6 +8,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.68.5] — 2026-08-05
+
+### Fixed
+
+- Insert Conduit / Conductor: openings and terminals accept clicks again while
+  wiring (``pointer-events`` were always off). Link hit strokes are ignored
+  during the gesture so tubes do not steal the endpoint click; side openings
+  get a mouth hit circle.
+
 ## [0.68.4] — 2026-08-05
 
 ### Fixed

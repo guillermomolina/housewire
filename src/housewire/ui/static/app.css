@@ -2010,13 +2010,26 @@ button:hover {
 #viewport.wiring-conduit .opening-front,
 #viewport.wiring-conduit .opening-back,
 #viewport.wiring-conduit .opening-front-mark,
-#viewport.wiring-conduit .opening-back-mark {
+#viewport.wiring-conduit .opening-back-mark,
+#viewport.wiring-conduit .opening-side-mark {
   stroke: var(--accent, #3b82f6);
+  pointer-events: auto;
 }
 
 #viewport.wiring-conductor .element-terminal {
   stroke: var(--accent, #3b82f6);
   fill: color-mix(in srgb, var(--accent, #3b82f6) 35%, var(--node));
+  pointer-events: auto;
+}
+
+/* Link hits sit above place openings; disable them while picking endpoints. */
+#viewport.wiring-conduit .edge-tube-hit,
+#viewport.wiring-conduit .cable-strand-hit,
+#viewport.wiring-conduit .cable-jacket-hit,
+#viewport.wiring-conductor .edge-tube-hit,
+#viewport.wiring-conductor .cable-strand-hit,
+#viewport.wiring-conductor .cable-jacket-hit {
+  pointer-events: none;
 }
 
 .cable-edge {
@@ -2062,6 +2075,13 @@ button:hover {
 .opening-side {
   fill: var(--opening);
   font-size: 8px;
+  pointer-events: none;
+}
+
+.opening-side-mark {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 1;
   pointer-events: none;
 }
 

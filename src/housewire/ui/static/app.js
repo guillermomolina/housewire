@@ -7382,6 +7382,11 @@
         }
         continue;
       }
+      const mark = g.querySelector(`circle.opening-side-mark${sel}`);
+      if (mark) {
+        mark.setAttribute("cx", String(anchor.x));
+        mark.setAttribute("cy", String(anchor.y));
+      }
       const text = g.querySelector(`text.opening-side${sel}`);
       if (!text) continue;
       const labelX =
@@ -7536,6 +7541,16 @@
           visualFace === "W" ? 4 : visualFace === "E" ? w - 4 : anchor.x;
         const labelY =
           visualFace === "N" ? 10 : visualFace === "S" ? h - 3 : anchor.y + 3;
+        // Invisible hit target at the mouth (label text alone is too small).
+        g.appendChild(
+          el("circle", {
+            class: "opening-side-mark",
+            "data-opening": op.id,
+            cx: anchor.x,
+            cy: anchor.y,
+            r: PLANE_R,
+          })
+        );
         g.appendChild(
           el(
             "text",
