@@ -1,0 +1,196 @@
+schema: house/v2
+type: House
+name: Route_27
+label: Route 27 — L-shaped back-face conduits
+notes: >
+  JunctionBox with B 2x2 and four DeviceBoxes offset so each back-face
+  conduit is a single Manhattan L (one corner) between painted mouths.
+
+elements:
+  Caja_de_derivacion:
+    type: JunctionBox
+    elements: {}
+    cables: {}
+    name: Caja de derivación
+    label: Caja de derivación
+    subtype: IP40
+    opening_grid:
+      B: 2x2
+    install: Flush
+    mount: Wall
+    openings: []
+    view:
+      physical:
+        x: 400.0
+        y: 400.0
+        w: 234.0
+        h: 196.0
+  Caja_de_mecanismo_3:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo 3
+    label: West
+    subtype: OneGang
+    opening_grid:
+      B: 1
+    install: Surface
+    mount: Wall
+    openings: []
+    view:
+      physical:
+        x: 104.18814111957796
+        y: 464.80777952813605
+        w: 240.0
+        h: 160.0
+  Caja_de_mecanismo_2:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo 2
+    label: North
+    subtype: OneGang
+    opening_grid:
+      B: 1
+    install: Surface
+    mount: Wall
+    openings: []
+    view:
+      physical:
+        x: 291.5543614449002
+        y: 62.89601223622508
+        w: 240.0
+        h: 160.0
+  Caja_de_mecanismo_1:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo 1
+    label: East
+    subtype: OneGang
+    opening_grid:
+      B: 1
+    install: Surface
+    mount: Wall
+    openings: []
+    view:
+      physical:
+        x: 724.7689258499414
+        y: 300.5329553780773
+        w: 240.0
+        h: 160.0
+  Caja_de_mecanismo:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo
+    label: South
+    subtype: OneGang
+    opening_grid:
+      B: 1
+    install: Surface
+    mount: Wall
+    openings: []
+    view:
+      physical:
+        x: 426.17385331184056
+        y: 683.6962613569755
+        w: 240.0
+        h: 160.0
+cables:
+  OPEN_Linea_01_1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    subtype: Power
+  OPEN_Linea_01_2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    subtype: Power
+  OPEN_Linea_01:
+    type: Cable
+    contains:
+    - OPEN_Linea_01_1
+    - OPEN_Linea_01_2
+    color: BK
+    subtype: Power
+  Conducto_OPEN_Linea_01_01:
+    type: Conduit
+    from: Caja_de_mecanismo_3.B1-1
+    to: Caja_de_derivacion.B1-1
+    contains:
+    - OPEN_Linea_01
+    subtype: Tube
+  OPEN_Linea_02_1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    subtype: Power
+  OPEN_Linea_02_2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    subtype: Power
+  OPEN_Linea_02:
+    type: Cable
+    contains:
+    - OPEN_Linea_02_1
+    - OPEN_Linea_02_2
+    color: BK
+    subtype: Power
+  Conducto_OPEN_Linea_02_01:
+    type: Conduit
+    from: Caja_de_mecanismo_2.B1-1
+    to: Caja_de_derivacion.B1-2
+    contains:
+    - OPEN_Linea_02
+    subtype: Tube
+  OPEN_Linea_03_1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    subtype: Power
+  OPEN_Linea_03_2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    subtype: Power
+  OPEN_Linea_03:
+    type: Cable
+    contains:
+    - OPEN_Linea_03_1
+    - OPEN_Linea_03_2
+    color: BK
+    subtype: Power
+  Conducto_OPEN_Linea_03_01:
+    type: Conduit
+    from: Caja_de_mecanismo_1.B1-1
+    to: Caja_de_derivacion.B2-2
+    contains:
+    - OPEN_Linea_03
+    subtype: Tube
+  OPEN_Linea_04_1:
+    type: Conductor
+    section: 1.5 mm2
+    color: BN
+    subtype: Power
+  OPEN_Linea_04_2:
+    type: Conductor
+    section: 1.5 mm2
+    color: BU
+    subtype: Power
+  OPEN_Linea_04:
+    type: Cable
+    contains:
+    - OPEN_Linea_04_1
+    - OPEN_Linea_04_2
+    color: BK
+    subtype: Power
+  Conducto_OPEN_Linea_04_01:
+    type: Conduit
+    from: Caja_de_derivacion.B2-1
+    to: Caja_de_mecanismo.B1-1
+    contains:
+    - OPEN_Linea_04
+    subtype: Tube

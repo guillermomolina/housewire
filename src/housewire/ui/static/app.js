@@ -4813,6 +4813,48 @@
         const d = pointsToPathD(pts);
         return { d, dCore: d, segs: segsFromPoints(pts, half) };
       }
+      // Offset B/F mouths: prefer a single Manhattan L (one corner) mark-to-mark
+      // when both L orientations clear endpoint-excluded obstacles.
+      if (
+        fromPlane &&
+        toPlane &&
+        Math.abs(m1.x - m2.x) >= 1e-6 &&
+        Math.abs(m1.y - m2.y) >= 1e-6
+      ) {
+        const lCandidates = [
+          cleanOrthoPoly([
+            [m1.x, m1.y],
+            [m2.x, m1.y],
+            [m2.x, m2.y],
+          ]),
+          cleanOrthoPoly([
+            [m1.x, m1.y],
+            [m1.x, m2.y],
+            [m2.x, m2.y],
+          ]),
+        ];
+        /** @type {{pts:number[][], cost:number, len:number}[]} */
+        const scored = [];
+        for (const pts of lCandidates) {
+          if (pts.length < 3) continue;
+          const cost = pathObstacleCost(pts, obstacles);
+          if (cost > 0) continue;
+          let len = 0;
+          for (let i = 1; i < pts.length; i++) {
+            len += Math.hypot(
+              pts[i][0] - pts[i - 1][0],
+              pts[i][1] - pts[i - 1][1]
+            );
+          }
+          scored.push({ pts, cost, len });
+        }
+        scored.sort((a, b) => a.len - b.len || a.cost - b.cost);
+        if (scored.length) {
+          const pts = scored[0].pts;
+          const d = pointsToPathD(pts);
+          return { d, dCore: d, segs: segsFromPoints(pts, half) };
+        }
+      }
       // Cross the contour at a nudged entry so B-approach does not sit on N1.
       let cur = a1;
       let curFace = fromFace;

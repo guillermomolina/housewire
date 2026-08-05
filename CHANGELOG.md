@@ -8,6 +8,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.81.0] — 2026-08-05
+
+### Added
+
+- Example **Route_27** (offset back-face openings) and E2E asserting four
+  Manhattan L conduits (exactly one corner / ≤3 path points).
+- When both conduit ends are non-colinear plane bocas (B/F), prefer a clear
+  mark-to-mark Manhattan L instead of contour stubs with extra bends.
+
 ## [0.80.0] — 2026-08-05
 
 ### Added

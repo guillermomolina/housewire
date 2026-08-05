@@ -301,6 +301,50 @@ def assert_site_routes_ok(
     )
 
 
+def _clean_ortho_pts(
+    pts: list[list[float]], *, tol: float = 1e-3
+) -> list[list[float]]:
+    """Drop duplicates and collinear midpoints (Manhattan)."""
+    if len(pts) < 2:
+        return [list(p) for p in pts]
+    out: list[list[float]] = [[float(pts[0][0]), float(pts[0][1])]]
+    for raw in pts[1:]:
+        p = [float(raw[0]), float(raw[1])]
+        if abs(p[0] - out[-1][0]) < tol and abs(p[1] - out[-1][1]) < tol:
+            continue
+        out.append(p)
+    if len(out) < 3:
+        return out
+    cleaned: list[list[float]] = [out[0]]
+    for i in range(1, len(out) - 1):
+        ax, ay = cleaned[-1]
+        bx, by = out[i]
+        cx, cy = out[i + 1]
+        colinear = (abs(ax - bx) < tol and abs(bx - cx) < tol) or (
+            abs(ay - by) < tol and abs(by - cy) < tol
+        )
+        if not colinear:
+            cleaned.append(out[i])
+    cleaned.append(out[-1])
+    return cleaned
+
+
+def _ortho_bend_count(pts: list[list[float]], *, tol: float = 1e-3) -> int:
+    """Number of direction changes in a cleaned Manhattan polyline."""
+    clean = _clean_ortho_pts(pts, tol=tol)
+    bends = 0
+    for i in range(2, len(clean)):
+        dx0 = clean[i - 1][0] - clean[i - 2][0]
+        dy0 = clean[i - 1][1] - clean[i - 2][1]
+        dx1 = clean[i][0] - clean[i - 1][0]
+        dy1 = clean[i][1] - clean[i - 1][1]
+        horiz0 = abs(dy0) < tol
+        horiz1 = abs(dy1) < tol
+        if horiz0 != horiz1:
+            bends += 1
+    return bends
+
+
 def assert_tubes_straight(
     test: unittest.TestCase,
     site_name: str,
@@ -335,6 +379,54 @@ def assert_tubes_straight(
         if max_points is not None and len(pts) > max_points:
             bad.append((i, pts))
     test.assertEqual(bad, [], msg=f"non-straight tubes: {bad}")
+
+
+def assert_tubes_l_shape(
+    test: unittest.TestCase,
+    site_name: str,
+    *,
+    expected: int,
+    tol: float = 3.0,
+    max_points: int = 3,
+) -> None:
+    """Each painted tube is a Manhattan L: one corner, no extra vertices.
+
+    Rejects straight H/V runs and polylines with more than one bend (or more
+    than ``max_points`` after collapsing collinear points).
+    """
+    site = resolve_example_site(site_name)
+    if site is None or not site.is_file():
+        raise unittest.SkipTest(
+            f"{site_name} not found (install housewire-examples)"
+        )
+    data = dump_live_canvas(site, require_tubes=True)
+    test.assertNotIn("err", data, msg=data)
+    # Prefer anchor cores (no iso mouth stubs); fall back to painted paths.
+    raw = data.get("tube_cores") or data.get("tubes") or []
+    tubes = [t for t in raw if len(t) >= 2]
+    test.assertEqual(len(tubes), expected, msg=data)
+    bad: list[tuple[int, str, list]] = []
+    for i, pts in enumerate(tubes):
+        clean = _clean_ortho_pts(pts)
+        xs = [p[0] for p in clean]
+        ys = [p[1] for p in clean]
+        horiz = max(xs) - min(xs) < tol
+        vert = max(ys) - min(ys) < tol
+        if horiz or vert:
+            bad.append((i, "straight", clean))
+            continue
+        # Every segment must be axis-aligned.
+        for a, b in zip(clean, clean[1:], strict=False):
+            if abs(a[0] - b[0]) >= tol and abs(a[1] - b[1]) >= tol:
+                bad.append((i, "diagonal", clean))
+                break
+        else:
+            bends = _ortho_bend_count(clean)
+            if bends != 1:
+                bad.append((i, f"bends={bends}", clean))
+            elif len(clean) > max_points:
+                bad.append((i, f"points={len(clean)}", clean))
+    test.assertEqual(bad, [], msg=f"non-L tubes: {bad}")
 
 
 # Match src/housewire/ui/static/app.js isometric opening-mark constants.
