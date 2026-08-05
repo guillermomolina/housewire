@@ -38,7 +38,13 @@ _DUMP_JS = """() => {
   }
   const tubes=[...svg.querySelectorAll('path.edge-tube')].map(el=>{
     const sw=parseFloat(getComputedStyle(el).strokeWidth)||17.5;
-    return {pts:parse(el.getAttribute('d')), half:sw/2};
+    const core = el.getAttribute('data-core-d');
+    const painted = el.getAttribute('d') || '';
+    return {
+      pts: parse(painted),
+      corePts: parse(core || painted),
+      half: sw/2,
+    };
   });
   const strands=[...svg.querySelectorAll('path')]
     .filter(el=>parseFloat(el.getAttribute('stroke-width')||0)>=2
@@ -60,6 +66,7 @@ _DUMP_JS = """() => {
   return {
     ver: document.querySelector('script[src*="app.js"]')?.src || '',
     tubes: tubes.map(t=>t.pts),
+    tube_cores: tubes.map(t=>t.corePts),
     halves: tubes.map(t=>t.half),
     strands: strands.map(s=>s.pts),
     strokes: strands.map(s=>s.stroke),
@@ -265,13 +272,14 @@ def assert_site_routes_ok(
     )
     if require_tubes:
         test.assertGreaterEqual(len(data.get("tubes") or []), 1, msg=data)
-    tubes = [t for t in (data.get("tubes") or []) if len(t) >= 2]
+    raw_cores = data.get("tube_cores") or data.get("tubes") or []
+    tubes = [t for t in raw_cores if len(t) >= 2]
     halves = data.get("halves") or []
     # Keep half-widths aligned with non-empty tubes.
     if halves and len(halves) == len(data.get("tubes") or []):
         halves = [
             h
-            for t, h in zip(data.get("tubes") or [], halves, strict=False)
+            for t, h in zip(raw_cores, halves, strict=False)
             if len(t) >= 2
         ]
     issues = assess_live_site(

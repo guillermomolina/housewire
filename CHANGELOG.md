@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.17] — 2026-08-05
+
+### Fixed
+
+- Cable hops use anchor-to-anchor conduit cores so parallel lanes no longer
+  pick up iso inset jogs (strand out-and-back); painted tubes still reach
+  opening marks. E2E quality checks read ``data-core-d`` for mouth matching.
+
 ## [0.77.16] — 2026-08-05
 
 ### Fixed

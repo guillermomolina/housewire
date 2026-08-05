@@ -4636,6 +4636,11 @@
       pts[0] = [a1.x, a1.y];
       pts[pts.length - 1] = [a2.x, a2.y];
     }
+    const corePts = cleanOrthoPoly(
+      pts.map((p) => [p[0], p[1]])
+    );
+    if (corePts.length < 2) return null;
+    const dCore = pointsToPathD(corePts);
     // Ortho links from contour anchors to rendered marks (iso offset).
     if (fromInset && pts.length) {
       const head = renderedMarkHeadPts(m1, a1, fromFace, fromPlane);
@@ -4649,9 +4654,26 @@
         pts = mergeOrthoPolys(pts, tail) || pts;
       }
     }
+    const protectMouths = [
+      [m1.x, m1.y],
+      [m2.x, m2.y],
+      [a1.x, a1.y],
+      [a2.x, a2.y],
+    ];
+    pts = stripOutAndBack(pts, protectMouths);
+    if (fromInset && pts.length) {
+      pts[0] = [m1.x, m1.y];
+    }
+    if (toInset && pts.length) {
+      pts[pts.length - 1] = [m2.x, m2.y];
+    }
     pts = cleanOrthoPoly(pts);
     if (pts.length < 2) return null;
-    return { d: pointsToPathD(pts), segs: segsFromPoints(pts, half) };
+    return {
+      d: pointsToPathD(pts),
+      dCore,
+      segs: segsFromPoints(pts, half),
+    };
   }
 
   function elementAbsXY(elem, placeById) {
@@ -6642,7 +6664,7 @@
     return out || null;
   }
 
-  /** Exact tube geometry for a hop (same path as the conduit edge). */
+  /** Exact tube geometry for a hop (anchor core — parallel lanes, not painted caps). */
   function hopTubePathD(hop) {
     const item =
       (hop.conduit && edgePathsByConduitId.get(hop.conduit)) ||
@@ -7459,7 +7481,7 @@
         if (item && item.d) {
           const { midOff, jw } = jacketMetrics(edge.conduit);
           paintJacketD(
-            conduitDisplayD(item.d, placeById, item.edge),
+            conduitDisplayD(item.dPaint || item.d, placeById, item.edge),
             midOff,
             jw
           );
@@ -7634,7 +7656,8 @@
           const half = roadW / 2;
           const routed = edgePathD(item.edge, byId, occupied, half);
           if (routed) {
-            item.d = routed.d;
+            item.dPaint = routed.d;
+            item.d = routed.dCore || routed.d;
             const displayD = conduitDisplayD(routed.d, byId, item.edge);
             for (const path of item.paths) path.setAttribute("d", displayD);
             for (const s of routed.segs) occupied.push(s);
@@ -7654,6 +7677,7 @@
               tubeHit.style.strokeWidth = String(linkHitStrokeWorld(roadW));
             }
             if (tube) {
+              tube.setAttribute("data-core-d", item.d);
               tube.style.strokeWidth = String(roadW);
               tube.style.stroke = tubeCss;
               tube.style.strokeOpacity = item.edge.color ? "0.85" : "0.25";
@@ -8309,14 +8333,15 @@
         const half = roadW / 2;
         const routed = edgePathD(edge, byId, occupied, half);
         if (!routed) continue;
-        const d = routed.d;
+        const dPaint = routed.d;
+        const dCore = routed.dCore || dPaint;
         for (const s of routed.segs) occupied.push(s);
         const contains = (edge.contains || []).join(", ");
         const edgeName = edge.name || edge.id;
         const title = contains
           ? `${edgeName}: ${contains}`
           : String(edgeName || "");
-        const displayD = conduitDisplayD(d, byId, edge);
+        const displayD = conduitDisplayD(dPaint, byId, edge);
         const tubeCss = wireColorCss(edge.color || "GY");
         // Rim only when the tube would blend into the canvas background.
         const tubeOutline = el("path", {
@@ -8338,6 +8363,7 @@
           d: displayD,
           "data-link-id": edge.id,
           "data-link-kind": "conduit",
+          "data-core-d": dCore,
         });
         tube.style.stroke = tubeCss;
         tube.style.strokeWidth = String(roadW);
@@ -8347,7 +8373,8 @@
         edgesG.appendChild(tubeHit);
         edgesG.appendChild(tube);
         // Keep full ``d`` for cable hop overlays; display uses clipped geometry.
-        edgePaths.push({ edge, paths: [tubeOutline, tubeHit, tube], d });
+        // ``d``: anchor core for cable hops; ``dPaint``: mouths for SVG tubes.
+        edgePaths.push({ edge, paths: [tubeOutline, tubeHit, tube], d: dCore, dPaint });
       }
       indexEdgePaths();
 
