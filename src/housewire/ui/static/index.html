@@ -108,29 +108,29 @@
             <span class="menu-caret" aria-hidden="true"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-chevron-right"></use></svg></span>
           </button>
           <div class="menu-flyout hidden" id="menu-insert" role="menu">
-            <button type="button" role="menuitem" data-insert-action="socket">
+            <button type="button" role="menuitem" data-insert-action="socket" data-needs-electrical>
               <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-plug"></use></svg><span data-i18n="menu.insert.socket">Socket…</span></span>
             </button>
-            <button type="button" role="menuitem" data-insert-action="lamp">
+            <button type="button" role="menuitem" data-insert-action="lamp" data-needs-electrical>
               <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-lightbulb"></use></svg><span data-i18n="menu.insert.lamp">Lamp…</span></span>
             </button>
-            <button type="button" role="menuitem" data-insert-action="feed">
+            <button type="button" role="menuitem" data-insert-action="feed" data-needs-electrical>
               <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-arrow-left-right"></use></svg><span data-i18n="menu.insert.feed">Feed…</span></span>
             </button>
             <hr class="menu-sep" />
-            <button type="button" role="menuitem" data-insert-action="element">
+            <button type="button" role="menuitem" data-insert-action="element" data-needs-electrical>
               <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-box"></use></svg><span data-i18n="menu.insert.element">Element…</span></span>
             </button>
             <button type="button" role="menuitem" data-insert-action="container">
               <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-folder-plus"></use></svg><span data-i18n="menu.insert.container">Container…</span></span>
             </button>
-            <button type="button" role="menuitem" data-insert-action="cable">
+            <button type="button" role="menuitem" data-insert-action="cable" data-needs-electrical>
               <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-link"></use></svg><span data-i18n="menu.insert.cable">Cable…</span></span>
             </button>
             <button type="button" role="menuitem" data-insert-action="conduit">
               <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-grip-horizontal"></use></svg><span data-i18n="menu.insert.conduit">Conduit…</span></span>
             </button>
-            <button type="button" role="menuitem" data-insert-action="conductor">
+            <button type="button" role="menuitem" data-insert-action="conductor" data-needs-electrical>
               <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-zap"></use></svg><span data-i18n="menu.insert.conductor">Conductor…</span></span>
             </button>
           </div>
@@ -304,7 +304,7 @@
               <h4 data-i18n="palette.containers">Containers</h4>
               <div id="palette-list-containers" class="palette-list"></div>
             </div>
-            <div class="palette-group">
+            <div class="palette-group" id="palette-group-elements">
               <h4 data-i18n="palette.elements">Elements</h4>
               <div id="palette-list-elements" class="palette-list"></div>
             </div>

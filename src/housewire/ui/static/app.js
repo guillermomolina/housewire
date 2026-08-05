@@ -10632,6 +10632,21 @@
     if (btn) btn.setAttribute("aria-pressed", showElectrical ? "true" : "false");
     const mi = document.getElementById("menu-electrical");
     if (mi) mi.setAttribute("aria-checked", showElectrical ? "true" : "false");
+    const needHint = t("palette.needsElectrical");
+    document.querySelectorAll("[data-needs-electrical]").forEach((el) => {
+      el.disabled = !showElectrical;
+      if (showElectrical) {
+        el.removeAttribute("title");
+      } else {
+        el.title = needHint;
+      }
+    });
+    const elemGroup = document.getElementById("palette-group-elements");
+    if (elemGroup) {
+      elemGroup.classList.toggle("is-electrical-off", !showElectrical);
+      elemGroup.title = showElectrical ? "" : needHint;
+    }
+    renderPaletteSideList();
   }
 
   function setElectrical(on) {
@@ -10640,6 +10655,10 @@
     if (!showElectrical && selectedId) {
       const isElem = (graph?.elements || []).some((e) => e.id === selectedId);
       if (isElem) clearSelectionState();
+    }
+    if (!showElectrical) {
+      endCatalogPlacementMode();
+      if (wiringMode?.kind === "conductor") cancelWiringMode();
     }
     render();
     renderOutline();
@@ -12437,6 +12456,14 @@
   }
 
   function beginCatalogPlacement(draft) {
+    if (
+      draft &&
+      draft.kind === "ElementType" &&
+      !showElectrical
+    ) {
+      setStatus(t("palette.needsElectrical"));
+      return;
+    }
     pendingCatalogPlacement = draft;
     placementDrag = null;
     clearPlacementGhost();
@@ -13009,14 +13036,16 @@
     const q = qEl ? qEl.value : "";
     const containers = paletteRows("PlaceType", q);
     const elements = paletteRows("ElementType", q);
-    const render = (hostId, rows) => {
+    const elemsEnabled = showElectrical;
+    const needHint = t("palette.needsElectrical");
+    const render = (hostId, rows, { asElements = false } = {}) => {
       const host = document.getElementById(hostId);
       if (!host) return;
       host.innerHTML = "";
       for (const row of rows) {
         const btn = document.createElement("button");
         btn.type = "button";
-        const isElem = row.kind === "ElementType";
+        const isElem = row.kind === "ElementType" || asElements;
         btn.className = "palette-item" + (isElem ? " element" : "");
         const fallback = isElem ? "box" : "folder-open";
         const icon = iconElement(
@@ -13032,22 +13061,35 @@
         idEl.className = "palette-item-id";
         idEl.textContent = catalogTypeKey(row);
         btn.appendChild(idEl);
-        btn.title = [row.label || catalogTypeKey(row), catalogTypeKey(row)].filter(Boolean).join(" · ");
-        btn.addEventListener("click", () => {
-          pendingCatalogInsert = {
-            type_id: catalogTypeKey(row),
-            subtype: "",
-            source_kind: row.kind || "",
-          };
-          resetCatalogInsertForm();
-          prefillCatalogInsertFromRow(row, "");
-          openInsertModal("catalog-item");
-        });
+        const baseTitle = [row.label || catalogTypeKey(row), catalogTypeKey(row)]
+          .filter(Boolean)
+          .join(" · ");
+        if (isElem && !elemsEnabled) {
+          btn.disabled = true;
+          btn.title = needHint;
+        } else {
+          btn.title = baseTitle;
+          btn.addEventListener("click", () => {
+            pendingCatalogInsert = {
+              type_id: catalogTypeKey(row),
+              subtype: "",
+              source_kind: row.kind || "",
+            };
+            resetCatalogInsertForm();
+            prefillCatalogInsertFromRow(row, "");
+            openInsertModal("catalog-item");
+          });
+        }
         host.appendChild(btn);
       }
     };
     render("palette-list-containers", containers);
-    render("palette-list-elements", elements);
+    render("palette-list-elements", elements, { asElements: true });
+    const elemGroup = document.getElementById("palette-group-elements");
+    if (elemGroup) {
+      elemGroup.classList.toggle("is-electrical-off", !elemsEnabled);
+      elemGroup.title = elemsEnabled ? "" : needHint;
+    }
   }
 
   function initLeftNavAccordion() {
@@ -13188,6 +13230,10 @@
   }
 
   async function openTypePickerFromInsert(kind) {
+    if (kind === "element" && !showElectrical) {
+      setStatus(t("palette.needsElectrical"));
+      return;
+    }
     await loadPaletteCatalog();
     const sel = document.getElementById("insert-type-id");
     if (!sel) return;

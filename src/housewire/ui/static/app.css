@@ -1045,6 +1045,25 @@ button:hover {
   border-color: transparent;
 }
 
+.palette-item:disabled,
+.palette-item.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.palette-item:disabled:hover,
+.palette-item.is-disabled:hover {
+  background: transparent;
+}
+
+.palette-group.is-electrical-off {
+  opacity: 0.55;
+}
+
+.palette-group.is-electrical-off h4::after {
+  content: "";
+}
+
 .palette-item .palette-item-icon {
   width: 0.85rem;
   height: 0.85rem;

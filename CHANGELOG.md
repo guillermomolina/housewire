@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.73.5] — 2026-08-05
+
+### Changed
+
+- With the electrical layer off, palette Element types and Insert menu entries
+  for elements/cables/conductors are disabled (grayed) until Electrical is on.
+
 ## [0.73.4] — 2026-08-05
 
 ### Fixed
