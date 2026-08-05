@@ -2729,6 +2729,12 @@
   const ISO_DX = -16;
   const ISO_DY = -16;
   const OPENING_MARK_R = 5;
+  /** Side marks depth position between front(0) and back(1) projected faces. */
+  const ISO_MARK_SIDE_DEPTH_T = 0.5;
+  /** Keep marks clear from any projected rectangle border. */
+  const ISO_MARK_FACE_MARGIN = OPENING_MARK_R + 6;
+  /** Tiny anti-colinearity offset for F/B marks inside their faces. */
+  const ISO_MARK_FB_STAGGER = 3;
 
   /** True for faces treated as near/visible under a fixed NW camera. */
   function isoFaceNear(visualFace) {
@@ -2767,13 +2773,13 @@
     const anchor = openingAnchorLocal(node, openingId, faceHint, byId);
     const visualFace = anchor.face || faceHint;
     const f = String(visualFace || "?").toUpperCase();
-    const margin = OPENING_MARK_R + 6;
+    const margin = ISO_MARK_FACE_MARGIN;
     let x = anchor.x;
     let y = anchor.y;
     if (f === "N" || f === "S" || f === "E" || f === "W") {
       // Side openings sit midway between front and back projected contours.
-      x += ISO_DX * 0.5;
-      y += ISO_DY * 0.5;
+      x += ISO_DX * ISO_MARK_SIDE_DEPTH_T;
+      y += ISO_DY * ISO_MARK_SIDE_DEPTH_T;
     } else if (f === "B") {
       // Back-face openings live on the projected back rectangle.
       x += ISO_DX;
@@ -2785,7 +2791,15 @@
     if (f === "F") {
       x = Math.max(margin, Math.min(w - margin, x));
       y = Math.max(margin, Math.min(h - margin, y));
+      x += ISO_MARK_FB_STAGGER;
+      y -= ISO_MARK_FB_STAGGER;
+      x = Math.max(margin, Math.min(w - margin, x));
+      y = Math.max(margin, Math.min(h - margin, y));
     } else if (f === "B") {
+      x = Math.max(ISO_DX + margin, Math.min(ISO_DX + w - margin, x));
+      y = Math.max(ISO_DY + margin, Math.min(ISO_DY + h - margin, y));
+      x -= ISO_MARK_FB_STAGGER;
+      y += ISO_MARK_FB_STAGGER;
       x = Math.max(ISO_DX + margin, Math.min(ISO_DX + w - margin, x));
       y = Math.max(ISO_DY + margin, Math.min(ISO_DY + h - margin, y));
     } else if (f === "N" || f === "S") {

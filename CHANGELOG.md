@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.7] — 2026-08-05
+
+### Fixed
+
+- Isometric opening-mark placement is now easier to tune via explicit
+  constants, with side marks fixed at the exact mid-depth plane and F/B marks
+  slightly staggered inside their own faces to avoid colinearity.
+
 ## [0.77.6] — 2026-08-05
 
 ### Fixed
