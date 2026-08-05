@@ -7,6 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Route E2E: collapsed Route_01…Route_20 per-site modules into
+  ``test_route_smoke`` (Route_01, 03, 06, 07, 12). YAML demos remain;
+  targeted suites from Route_21+ are unchanged.
+
 
 ## [0.79.0] — 2026-08-05
 

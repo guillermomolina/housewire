@@ -71,13 +71,16 @@ export HOUSEWIRE_E2E_SITE=/path/to/any-site.yaml
 | `Route_19` | Staggered heights |
 | `Route_20` | Full-stress twin of Route_21 |
 | `Route_21` | Reference panel + room (routing E2E) |
+| `Route_22`… | Targeted regressions (see `docs/routing-rules.md`) |
 
-Regenerate Route_01…Route_20 fixtures (not Route_21):
+Regenerate Route_01…Route_20 fixtures (not Route_21+):
 
 ```bash
 python packages/housewire-examples/scripts/gen_route_sites.py
 ```
 
-Live E2E modules: `tests/route_e2e/test_route_01.py` … `test_route_21.py`
-(requires Chromium: `make install` or `make test-route-e2e`).
+Live E2E: smoke for early fixtures in `tests/route_e2e/test_route_smoke.py`
+(Route_01, 03, 06, 07, 12); targeted sites from Route_21+ have their own
+modules (plus `test_conduit_*`, `test_element_avoidance`). Requires Chromium
+(`make install` or `make test-route-e2e`).
 Routing rules: [`docs/routing-rules.md`](../../docs/routing-rules.md).

@@ -165,15 +165,15 @@ site, dumps `path.edge-tube` and colored strands, then runs
 Sites without conduits (same-box only, e.g. `Route_01`) skip tube
 mouth/envelope checks and still flag out-and-back / empty canvas problems.
 
-| Site | Focus |
+Live E2E coverage:
+
+| Site / suite | Focus |
 |------|--------|
+| `test_route_smoke` | Compact early fixtures: `Route_01`, `03`, `06`, `07`, `12` |
+| `Route_01`…`Route_20` YAML | Example demos (not each one a separate E2E module) |
 | `Route_21` | Panel + room (reference regression) |
-| `Route_01` | Same-box link, no conduit |
-| `Route_02`–`Route_04` | Single / twin conductors, L-path |
-| `Route_05`–`Route_07` | Switch drop, lamp plane boca, bipolar V |
-| `Route_08`–`Route_12` | Strip feeds, earth, parallel tubes |
-| `Route_13` | Full Route_21 twin |
-| `Route_14`–`Route_17` | Chains, rooms, dense strip, parallel fan-out |
-| `Route_18`–`Route_20` | Multi-cable / Route_21-class stress |
 | `Route_22` | Same-box cable must skirt foreign elements |
 | `Route_23` | Prefer conduit × over long C-detour |
+| `Route_24` | Straight side-face cross conduits |
+| `Route_25` | ISO opening-mark layout |
+| `Route_26` | Straight back-face conduits (no vertices) |
