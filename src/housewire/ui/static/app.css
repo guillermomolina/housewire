@@ -1904,12 +1904,14 @@ button:hover {
 
 .edge-tube.selected,
 .cable-strand-hit.selected + .cable-strand,
-.cable-jacket.selected {
+.cable-jacket.selected,
+.cable-jacket-hit.selected + .cable-jacket {
   stroke: var(--selection) !important;
   stroke-opacity: 1 !important;
 }
 
-.edge-tube-hit {
+.edge-tube-hit,
+.cable-jacket-hit {
   fill: none;
   stroke: transparent;
   stroke-linecap: round;
@@ -1958,14 +1960,14 @@ button:hover {
 .cable-strand-hit {
   fill: none;
   stroke: transparent;
-  stroke-width: 8;
   stroke-linejoin: round;
   stroke-linecap: round;
   pointer-events: stroke;
   cursor: pointer;
 }
 
-.cable-strand-hit.selected {
+.cable-strand-hit.selected,
+.cable-jacket-hit.selected {
   stroke: color-mix(in srgb, var(--selection) 35%, transparent);
 }
 

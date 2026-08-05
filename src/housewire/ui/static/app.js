@@ -129,6 +129,13 @@
   const EDGE_AUTOPAN_MAX_PX = 18;
   /** Hit margin for resize edges/corners in screen pixels. */
   const RESIZE_HIT_PX = 7;
+  /**
+   * Minimum link pick thickness in screen pixels (tubes, strands, jackets).
+   * World stroke grows when zoomed out so Route-scale views stay clickable.
+   */
+  const LINK_HIT_PX = 16;
+  /** Extra world padding beyond the painted stroke when zoomed in. */
+  const LINK_HIT_PAD = 4;
   /** Must stay in sync with housewire.ui.route_quality highway constants. */
   const STRAND_WIDTH = 2.5;
   const LANE_GAP = STRAND_WIDTH;
@@ -1704,6 +1711,35 @@
     return RESIZE_HIT_PX / Math.max(scale, 0.05);
   }
 
+  /** World-space stroke width so a painted link stays easy to click at any zoom. */
+  function linkHitStrokeWorld(visualW) {
+    const visual = Math.max(0, Number(visualW) || 0);
+    return Math.max(
+      visual + LINK_HIT_PAD,
+      LINK_HIT_PX / Math.max(scale, 0.05)
+    );
+  }
+
+  function syncLinkHitStrokes() {
+    document
+      .querySelectorAll(".edge-tube-hit, .cable-strand-hit, .cable-jacket-hit")
+      .forEach((el) => {
+        const visual = Number(el.getAttribute("data-hit-visual") || 0);
+        el.style.strokeWidth = String(linkHitStrokeWorld(visual));
+      });
+  }
+
+  function bindLinkHit(el, linkId, kind) {
+    el.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0 || shouldPanPointer(ev)) return;
+      ev.stopPropagation();
+      ev.preventDefault();
+      selectLink(linkId, kind).catch((err) =>
+        setStatus(String(err.message || err))
+      );
+    });
+  }
+
   /**
    * @param {number} lx local x in box
    * @param {number} ly local y in box
@@ -2914,6 +2950,7 @@
         `translate(${panX},${panY}) scale(${scale})`
       );
     }
+    syncLinkHitStrokes();
     syncZoomUi();
   }
 
@@ -7016,9 +7053,20 @@
             );
             if (rim) paths.push(rim);
           }
+          const jacketHit = el("path", {
+            class: "cable-jacket-hit",
+            d: jd,
+            "data-link-id": edge.id,
+            "data-link-kind": "cable",
+            "data-hit-visual": String(jwStroke),
+          });
+          jacketHit.style.strokeWidth = String(linkHitStrokeWorld(jwStroke));
+          bindLinkHit(jacketHit, edge.id, "cable");
           const jacket = el("path", {
             class: "cable-jacket",
             d: jd,
+            "data-link-id": edge.id,
+            "data-link-kind": "cable",
           });
           jacket.style.stroke = jacketCss;
           jacket.style.strokeWidth = String(jwStroke);
@@ -7031,8 +7079,9 @@
               `${edgeName}${colors.length ? ` [${colors.join(",")}]` : ""} jacket ${edge.jacket_color}`
             )
           );
+          cablesG.appendChild(jacketHit);
           cablesG.appendChild(jacket);
-          paths.push(jacket);
+          paths.push(jacketHit, jacket);
         }
       };
       const jacketMetrics = (cid) => {
@@ -7078,9 +7127,11 @@
       }
     }
 
-    const paintStrand = (d, code, title) => {
+    const paintStrand = (d, code, title, linkId, kind) => {
       if (!d) return;
       const key = String(code || "").toUpperCase();
+      const pickId = linkId || edge.id;
+      const pickKind = kind || "cable";
       // Immediate container: jacket if present, else conduit, else canvas.
       const container = strokeContainerForCableEdge(edge);
       if (key === "GNYE") {
@@ -7110,17 +7161,12 @@
         const hit = el("path", {
           class: "cable-strand-hit",
           d,
-          "data-link-id": edge.id,
-          "data-link-kind": "cable",
+          "data-link-id": pickId,
+          "data-link-kind": pickKind,
+          "data-hit-visual": String(STRAND_WIDTH),
         });
-        hit.addEventListener("pointerdown", (ev) => {
-          if (ev.button !== 0 || shouldPanPointer(ev)) return;
-          ev.stopPropagation();
-          ev.preventDefault();
-          selectLink(edge.id, "cable").catch((err) =>
-            setStatus(String(err.message || err))
-          );
-        });
+        hit.style.strokeWidth = String(linkHitStrokeWorld(STRAND_WIDTH));
+        bindLinkHit(hit, pickId, pickKind);
         cablesG.appendChild(hit);
         cablesG.appendChild(gn);
         cablesG.appendChild(ye);
@@ -7147,23 +7193,19 @@
       const hit = el("path", {
         class: "cable-strand-hit",
         d,
-        "data-link-id": edge.id,
-        "data-link-kind": "cable",
+        "data-link-id": pickId,
+        "data-link-kind": pickKind,
+        "data-hit-visual": String(STRAND_WIDTH),
       });
-      hit.addEventListener("pointerdown", (ev) => {
-        if (ev.button !== 0 || shouldPanPointer(ev)) return;
-        ev.stopPropagation();
-        ev.preventDefault();
-        selectLink(edge.id, "cable").catch((err) =>
-          setStatus(String(err.message || err))
-        );
-      });
+      hit.style.strokeWidth = String(linkHitStrokeWorld(STRAND_WIDTH));
+      bindLinkHit(hit, pickId, pickKind);
       cablesG.appendChild(hit);
       cablesG.appendChild(strand);
       paths.push(hit, strand);
     };
 
     // Colored strands: true parallel lanes on the highway.
+    const conductors = edge.conductors || [];
     for (const wi of wireIdx) {
       const code = colors[wi] || colors[0] || "GY";
       const fromT = layout
@@ -7189,11 +7231,16 @@
         fromPin: cableWirePin(edge, wi, "from"),
         toPin: cableWirePin(edge, wi, "to"),
       });
+      const conductorId = conductors[wi] || edge.id;
+      const strandKind =
+        conductors[wi] && conductors[wi] !== edge.id ? "conductor" : "cable";
       for (const sub of strandSubs) {
         paintStrand(
           pointsToPathD(sub),
           code,
-          `${edgeName} · ${code}${edge.via ? ` (${edge.via})` : ""}`
+          `${edgeName} · ${code}${edge.via ? ` (${edge.via})` : ""}`,
+          conductorId,
+          strandKind
         );
         // Later same-box / free-space strands avoid stacking on this run.
         for (const s of segsFromPoints(sub, STRAND_WIDTH / 2)) {
@@ -7252,10 +7299,19 @@
             for (const path of item.paths) path.setAttribute("d", displayD);
             for (const s of routed.segs) occupied.push(s);
             const outline = item.paths[0];
-            const tube = item.paths[1] || item.paths[0];
+            const tubeHit = item.paths.find((p) =>
+              p.classList?.contains("edge-tube-hit")
+            );
+            const tube = item.paths.find((p) =>
+              p.classList?.contains("edge-tube")
+            );
             const tubeCss = wireColorCss(item.edge.color || "GY");
-            if (outline && item.paths.length > 1) {
+            if (outline && outline.classList?.contains("edge-tube-outline")) {
               applyTubeOutlineVisibility(outline, tubeCss, roadW);
+            }
+            if (tubeHit) {
+              tubeHit.setAttribute("data-hit-visual", String(roadW));
+              tubeHit.style.strokeWidth = String(linkHitStrokeWorld(roadW));
             }
             if (tube) {
               tube.style.strokeWidth = String(roadW);
@@ -7915,16 +7971,10 @@
           d: displayD,
           "data-link-id": edge.id,
           "data-link-kind": "conduit",
+          "data-hit-visual": String(roadW),
         });
-        tubeHit.style.strokeWidth = String(Math.max(roadW + 6, 10));
-        tubeHit.addEventListener("pointerdown", (ev) => {
-          if (ev.button !== 0 || shouldPanPointer(ev)) return;
-          ev.stopPropagation();
-          ev.preventDefault();
-          selectLink(edge.id, "conduit").catch((err) =>
-            setStatus(String(err.message || err))
-          );
-        });
+        tubeHit.style.strokeWidth = String(linkHitStrokeWorld(roadW));
+        bindLinkHit(tubeHit, edge.id, "conduit");
         const tube = el("path", {
           class: "edge-tube",
           d: displayD,

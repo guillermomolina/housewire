@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.68.0] — 2026-08-05
+
+### Changed
+
+- Link picking: tube, strand, and sheath hit strokes stay at least ~16px on
+  screen and grow with zoom-out, so cables remain clickable on wide sites
+  (e.g. Route_21 overview).
+- Clicking a sheath jacket selects the Cable; clicking a colored strand
+  selects that Conductor when it differs from the sheath.
+
+### Fixed
+
+- Conduit refresh no longer applied the painted tube width to the hit layer.
+
 ## [0.67.1] — 2026-08-04
 
 ### Changed
