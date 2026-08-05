@@ -4,6 +4,8 @@
 
 # HouseWire
 
+[![CI](https://github.com/guillermomolina/housewire/actions/workflows/ci.yml/badge.svg)](https://github.com/guillermomolina/housewire/actions/workflows/ci.yml)
+
 Document electrical installations in YAML (`schema: house/v2`) and edit them
 with the interactive UI and shell (physical canvas + electrical wiring).
 

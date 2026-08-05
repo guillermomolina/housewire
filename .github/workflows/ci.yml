@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+
+jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            packages/housewire-examples/pyproject.toml
+
+      - name: Install package and extras
+        run: |
+          python -m pip install -U pip
+          python -m pip install -e packages/housewire-examples
+          python -m pip install -e '.[dev,ui,examples,catalog]'
+
+      - name: Run unit tests
+        run: python -m pytest tests --ignore=tests/route_e2e -q
+
+  route-e2e:
+    name: Route E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            packages/housewire-examples/pyproject.toml
+
+      - name: Install package and extras
+        run: |
+          python -m pip install -U pip
+          python -m pip install -e packages/housewire-examples
+          python -m pip install -e '.[dev,ui,examples,catalog]'
+
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: .playwright-browsers
+          key: playwright-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run live route E2E
+        # Two workers: GitHub-hosted runners are 2-core; full suite ~1 min locally ×4.
+        run: python -m pytest tests/route_e2e -v -n 2 --dist loadfile
