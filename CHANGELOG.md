@@ -8,6 +8,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.86.0] — 2026-08-05
+
+### Fixed
+
+- Electrical stays off unless depth is max (e.g. 3/3): depth-out turns it off,
+  session restore never leaves Electrical on at 1/x, and saved views only
+  persist Electrical when already at max depth. Default boot remains depth 1.
+- Post-drag refine clears stale cables immediately, re-routes tubes in frame
+  slices, then rebuilds cables in later slices (no single sync
+  ``refreshEdges`` dump after the tube pass). Resize also uses progressive
+  refine instead of a full ``render()``.
+
 ## [0.85.1] — 2026-08-05
 
 ### Fixed

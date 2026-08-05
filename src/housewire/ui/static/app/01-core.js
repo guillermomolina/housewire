@@ -141,13 +141,18 @@
   /** ~one frame budget for conduit re-route slices after drag. */
   const EDGE_REFRESH_BUDGET_MS = 6;
   /**
-   * In-flight chunked tube refresh after drag/resize.
+   * In-flight chunked tube/cable refresh after drag/resize.
    * @type {{
+   *   kind: "tubes"|"cables",
    *   gen: number,
-   *   byId: Record<string, any>,
+   *   byId?: Record<string, any>,
+   *   elemById?: Record<string, any>,
    *   occupied: ReturnType<typeof createOccupiedIndex>,
+   *   layout?: ReturnType<typeof buildCableLayout>|null,
+   *   cablesG?: SVGGElement,
+   *   edges?: any[],
    *   index: number,
-   *   onDone: () => void,
+   *   onDone?: () => void,
    * }|null}
    */
   let edgeRefreshJob = null;

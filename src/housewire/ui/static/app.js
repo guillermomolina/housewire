@@ -145,13 +145,18 @@
   /** ~one frame budget for conduit re-route slices after drag. */
   const EDGE_REFRESH_BUDGET_MS = 6;
   /**
-   * In-flight chunked tube refresh after drag/resize.
+   * In-flight chunked tube/cable refresh after drag/resize.
    * @type {{
+   *   kind: "tubes"|"cables",
    *   gen: number,
-   *   byId: Record<string, any>,
+   *   byId?: Record<string, any>,
+   *   elemById?: Record<string, any>,
    *   occupied: ReturnType<typeof createOccupiedIndex>,
+   *   layout?: ReturnType<typeof buildCableLayout>|null,
+   *   cablesG?: SVGGElement,
+   *   edges?: any[],
    *   index: number,
-   *   onDone: () => void,
+   *   onDone?: () => void,
    * }|null}
    */
   let edgeRefreshJob = null;
@@ -3577,7 +3582,15 @@
   /** One time-sliced batch of conduit re-routes for ``edgeRefreshJob``. */
   function refreshTubesChunk(gen) {
     const job = edgeRefreshJob;
-    if (!job || job.gen !== gen || gen !== edgeRefreshGen || !graph) return;
+    if (
+      !job ||
+      job.kind !== "tubes" ||
+      job.gen !== gen ||
+      gen !== edgeRefreshGen ||
+      !graph
+    ) {
+      return;
+    }
     const { byId, occupied } = job;
     const t0 = performance.now();
     while (job.index < edgePaths.length) {
@@ -3611,8 +3624,102 @@
   }
 
   /**
+   * Seed occupied segments from current tube paths (for cable rebuild).
+   * @param {ReturnType<typeof buildCableLayout>|null} layout
+   */
+  function occupiedFromEdgePaths(layout) {
+    const occupied = createOccupiedIndex();
+    for (const item of edgePaths) {
+      if (!item.d) continue;
+      const n = (item.edge.contains || []).length;
+      const lanes = tubeLaneCount(item.edge, layout);
+      const roadW = conduitRoadWidth(n, lanes);
+      const half = roadW / 2;
+      for (const sub of pathDToSubpaths(item.d)) {
+        for (const s of segsFromPoints(sub, half)) occupied.push(s);
+      }
+    }
+    return occupied;
+  }
+
+  /** Time-sliced cable SVG rebuild (after tubes are already updated). */
+  function refreshCablesChunk(gen) {
+    const job = edgeRefreshJob;
+    if (
+      !job ||
+      job.kind !== "cables" ||
+      job.gen !== gen ||
+      gen !== edgeRefreshGen ||
+      !graph
+    ) {
+      return;
+    }
+    const { byId, elemById, occupied, layout, cablesG, edges } = job;
+    const t0 = performance.now();
+    while (job.index < edges.length) {
+      const edge = edges[job.index];
+      job.index += 1;
+      const item = appendCableVisuals(
+        cablesG,
+        edge,
+        byId,
+        elemById,
+        occupied,
+        layout
+      );
+      if (item) cablePaths.push(item);
+      if (performance.now() - t0 >= EDGE_REFRESH_BUDGET_MS) break;
+    }
+    if (job.index < edges.length) {
+      edgeRefreshRaf = requestAnimationFrame(() => {
+        edgeRefreshRaf = 0;
+        if (gen !== edgeRefreshGen) return;
+        refreshCablesChunk(gen);
+      });
+      return;
+    }
+    endRouteGeomCache();
+    edgeRefreshJob = null;
+  }
+
+  /**
+   * Rebuild cables after a paint yield; layout runs here (tubes already visible).
+   * @param {number} gen
+   */
+  function startProgressiveCableRebuild(gen) {
+    scheduleEdgeAfterPaint(gen, () => {
+      if (gen !== edgeRefreshGen || !graph) return;
+      if (!showElectrical) return;
+      const cablesG = worldEl && worldEl.querySelector("g.cables");
+      if (!cablesG) return;
+      const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+      const elemById = Object.fromEntries(
+        (graph.elements || []).map((e) => [e.id, e])
+      );
+      beginRouteGeomCache(byId, elemById);
+      // Expensive: deferred until tubes are on screen.
+      const layout = buildCableLayout(graph.cable_edges || [], elemById, byId);
+      const occupied = occupiedFromEdgePaths(layout);
+      cablesG.innerHTML = "";
+      cablePaths = [];
+      edgeRefreshJob = {
+        kind: "cables",
+        gen,
+        byId,
+        elemById,
+        occupied,
+        layout,
+        cablesG,
+        edges: graph.cable_edges || [],
+        index: 0,
+      };
+      refreshCablesChunk(gen);
+    });
+  }
+
+  /**
    * After drag/resize: yield so the moved box paints, re-route tubes in
-   * frame-sized chunks, then rebuild cables on a later frame.
+   * frame-sized chunks, then rebuild cables in later frame slices.
    * @param {{ skipConduits?: boolean }} [opts]
    */
   function scheduleProgressiveEdgeRefresh(opts) {
@@ -3621,37 +3728,34 @@
     bumpRenderGen();
     const gen = bumpEdgeRefreshGen();
 
+    // Drop stale strands immediately so a long refine does not show wrong cables.
+    const cablesG = worldEl && worldEl.querySelector("g.cables");
+    if (cablesG && showElectrical) {
+      cablesG.innerHTML = "";
+      cablePaths = [];
+    }
+
     if (skipConduits) {
-      scheduleEdgeAfterPaint(gen, () => {
-        if (gen !== edgeRefreshGen) return;
-        refreshEdges({ skipConduits: true });
-      });
+      startProgressiveCableRebuild(gen);
       return;
     }
 
     scheduleEdgeAfterPaint(gen, () => {
       if (gen !== edgeRefreshGen || !graph) return;
-      // Drop stale strands while tubes catch up (avoids wrong overlay for 1–2s).
-      const cablesG = worldEl && worldEl.querySelector("g.cables");
-      if (cablesG && showElectrical) {
-        cablesG.innerHTML = "";
-        cablePaths = [];
-      }
       const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
       const elemById = Object.fromEntries(
         (graph.elements || []).map((e) => [e.id, e])
       );
       beginRouteGeomCache(byId, elemById);
       edgeRefreshJob = {
+        kind: "tubes",
         gen,
         byId,
         occupied: createOccupiedIndex(),
         index: 0,
         onDone: () => {
-          scheduleEdgeAfterPaint(gen, () => {
-            if (gen !== edgeRefreshGen) return;
-            refreshEdges({ skipConduits: true });
-          });
+          if (!showElectrical) return;
+          startProgressiveCableRebuild(gen);
         },
       };
       refreshTubesChunk(gen);
@@ -11437,10 +11541,8 @@
         placeParents,
         elementParents,
       });
-      // Full paint when electrical is on so terminal fans / inbox expansion
-      // and cable attach points match the new box size.
-      if (showElectrical) render();
-      else updateNodeVisual(null, { progressive: true });
+      // Progressive refine (tubes then cables) — avoid blocking full clearSvg.
+      updateNodeVisual(null, { progressive: true });
       await syncInspectorFromSelection();
       try {
         const payload = {};
@@ -11907,10 +12009,12 @@
 
   function rememberCurrentDocView() {
     if (!activeDocId) return;
+    const atMax = depthLevel >= Math.max(maxDepth, 1);
     docViews[activeDocId] = {
       locationId,
       depthLevel,
-      showElectrical: Boolean(showElectrical),
+      // Never persist electrical-on for a shallow depth (invalid on restore).
+      showElectrical: Boolean(showElectrical) && atMax,
       panX,
       panY,
       scale,
@@ -12048,6 +12152,25 @@
       elemGroup.title = insertEnabled ? "" : needHint;
     }
     renderPaletteSideList();
+  }
+
+  /**
+   * Electrical is only valid at max depth. Returns true if it was turned off.
+   * @param {{ repaint?: boolean }} [opts]
+   */
+  function enforceElectricalDepthInvariant(opts) {
+    const repaint = !opts || opts.repaint !== false;
+    if (!showElectrical) return false;
+    if (depthLevel >= Math.max(maxDepth, 1)) return false;
+    showElectrical = false;
+    depthBeforeElectrical = null;
+    syncElectricalUi();
+    if (repaint && graph) {
+      render();
+      renderOutline();
+    }
+    rememberCurrentDocView();
+    return true;
   }
 
   async function setElectrical(on) {
@@ -12485,11 +12608,10 @@
     const data = await api("/api/locations");
     canvasLocations = data.locations || [];
     const saved = activeDocId ? docViews[activeDocId] : null;
-    // Restore electrical before outline so element rows match the canvas view.
-    if (saved && typeof saved.showElectrical === "boolean") {
-      showElectrical = saved.showElectrical;
-      syncElectricalUi();
-    }
+    // Load physical view first; restore electrical only if depth is max after load.
+    const wantElectrical = Boolean(saved && saved.showElectrical);
+    showElectrical = false;
+    syncElectricalUi();
     await loadOutline();
     let target =
       (saved &&
@@ -12500,8 +12622,12 @@
       canvasLocations.find((r) => r.selectable !== false && r.id === ".") ||
       canvasLocations.find((r) => r.selectable !== false);
     if (target) {
-      if (saved && saved.depthLevel) depthLevel = saved.depthLevel;
-      else depthLevel = DEPTH_DEFAULT;
+      // Default boot: depth 1. Restore a saved depth only when it is a number.
+      if (saved && Number.isFinite(saved.depthLevel) && saved.depthLevel >= 1) {
+        depthLevel = Math.floor(saved.depthLevel);
+      } else {
+        depthLevel = DEPTH_DEFAULT;
+      }
       const hasCamera =
         saved &&
         Number.isFinite(saved.panX) &&
@@ -12512,6 +12638,16 @@
         fit: !hasCamera,
       });
       if (hasCamera) applySavedCamera(saved);
+      // Electrical only at max depth (e.g. 3/3). Never leave it on at 1/x.
+      if (
+        wantElectrical &&
+        depthLevel >= Math.max(maxDepth, 1)
+      ) {
+        await setElectrical(true);
+      } else {
+        enforceElectricalDepthInvariant({ repaint: false });
+        syncElectricalUi();
+      }
     } else {
       setStatus(t("status.noLocations"));
     }
@@ -13124,8 +13260,15 @@
       renderOutline();
       return;
     }
+    // Electrical only at max depth: drop it before loading a shallower view.
+    if (showElectrical && wanted < Math.max(maxDepth, 1)) {
+      showElectrical = false;
+      depthBeforeElectrical = null;
+      syncElectricalUi();
+    }
     depthLevel = wanted;
     await loadLocation({ fit: false });
+    enforceElectricalDepthInvariant({ repaint: true });
   }
 
   syncElectricalUi();

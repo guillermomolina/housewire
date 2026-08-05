@@ -587,7 +587,15 @@
   /** One time-sliced batch of conduit re-routes for ``edgeRefreshJob``. */
   function refreshTubesChunk(gen) {
     const job = edgeRefreshJob;
-    if (!job || job.gen !== gen || gen !== edgeRefreshGen || !graph) return;
+    if (
+      !job ||
+      job.kind !== "tubes" ||
+      job.gen !== gen ||
+      gen !== edgeRefreshGen ||
+      !graph
+    ) {
+      return;
+    }
     const { byId, occupied } = job;
     const t0 = performance.now();
     while (job.index < edgePaths.length) {
@@ -621,8 +629,102 @@
   }
 
   /**
+   * Seed occupied segments from current tube paths (for cable rebuild).
+   * @param {ReturnType<typeof buildCableLayout>|null} layout
+   */
+  function occupiedFromEdgePaths(layout) {
+    const occupied = createOccupiedIndex();
+    for (const item of edgePaths) {
+      if (!item.d) continue;
+      const n = (item.edge.contains || []).length;
+      const lanes = tubeLaneCount(item.edge, layout);
+      const roadW = conduitRoadWidth(n, lanes);
+      const half = roadW / 2;
+      for (const sub of pathDToSubpaths(item.d)) {
+        for (const s of segsFromPoints(sub, half)) occupied.push(s);
+      }
+    }
+    return occupied;
+  }
+
+  /** Time-sliced cable SVG rebuild (after tubes are already updated). */
+  function refreshCablesChunk(gen) {
+    const job = edgeRefreshJob;
+    if (
+      !job ||
+      job.kind !== "cables" ||
+      job.gen !== gen ||
+      gen !== edgeRefreshGen ||
+      !graph
+    ) {
+      return;
+    }
+    const { byId, elemById, occupied, layout, cablesG, edges } = job;
+    const t0 = performance.now();
+    while (job.index < edges.length) {
+      const edge = edges[job.index];
+      job.index += 1;
+      const item = appendCableVisuals(
+        cablesG,
+        edge,
+        byId,
+        elemById,
+        occupied,
+        layout
+      );
+      if (item) cablePaths.push(item);
+      if (performance.now() - t0 >= EDGE_REFRESH_BUDGET_MS) break;
+    }
+    if (job.index < edges.length) {
+      edgeRefreshRaf = requestAnimationFrame(() => {
+        edgeRefreshRaf = 0;
+        if (gen !== edgeRefreshGen) return;
+        refreshCablesChunk(gen);
+      });
+      return;
+    }
+    endRouteGeomCache();
+    edgeRefreshJob = null;
+  }
+
+  /**
+   * Rebuild cables after a paint yield; layout runs here (tubes already visible).
+   * @param {number} gen
+   */
+  function startProgressiveCableRebuild(gen) {
+    scheduleEdgeAfterPaint(gen, () => {
+      if (gen !== edgeRefreshGen || !graph) return;
+      if (!showElectrical) return;
+      const cablesG = worldEl && worldEl.querySelector("g.cables");
+      if (!cablesG) return;
+      const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
+      const elemById = Object.fromEntries(
+        (graph.elements || []).map((e) => [e.id, e])
+      );
+      beginRouteGeomCache(byId, elemById);
+      // Expensive: deferred until tubes are on screen.
+      const layout = buildCableLayout(graph.cable_edges || [], elemById, byId);
+      const occupied = occupiedFromEdgePaths(layout);
+      cablesG.innerHTML = "";
+      cablePaths = [];
+      edgeRefreshJob = {
+        kind: "cables",
+        gen,
+        byId,
+        elemById,
+        occupied,
+        layout,
+        cablesG,
+        edges: graph.cable_edges || [],
+        index: 0,
+      };
+      refreshCablesChunk(gen);
+    });
+  }
+
+  /**
    * After drag/resize: yield so the moved box paints, re-route tubes in
-   * frame-sized chunks, then rebuild cables on a later frame.
+   * frame-sized chunks, then rebuild cables in later frame slices.
    * @param {{ skipConduits?: boolean }} [opts]
    */
   function scheduleProgressiveEdgeRefresh(opts) {
@@ -631,37 +733,34 @@
     bumpRenderGen();
     const gen = bumpEdgeRefreshGen();
 
+    // Drop stale strands immediately so a long refine does not show wrong cables.
+    const cablesG = worldEl && worldEl.querySelector("g.cables");
+    if (cablesG && showElectrical) {
+      cablesG.innerHTML = "";
+      cablePaths = [];
+    }
+
     if (skipConduits) {
-      scheduleEdgeAfterPaint(gen, () => {
-        if (gen !== edgeRefreshGen) return;
-        refreshEdges({ skipConduits: true });
-      });
+      startProgressiveCableRebuild(gen);
       return;
     }
 
     scheduleEdgeAfterPaint(gen, () => {
       if (gen !== edgeRefreshGen || !graph) return;
-      // Drop stale strands while tubes catch up (avoids wrong overlay for 1–2s).
-      const cablesG = worldEl && worldEl.querySelector("g.cables");
-      if (cablesG && showElectrical) {
-        cablesG.innerHTML = "";
-        cablePaths = [];
-      }
       const byId = Object.fromEntries(graph.nodes.map((n) => [n.id, n]));
       const elemById = Object.fromEntries(
         (graph.elements || []).map((e) => [e.id, e])
       );
       beginRouteGeomCache(byId, elemById);
       edgeRefreshJob = {
+        kind: "tubes",
         gen,
         byId,
         occupied: createOccupiedIndex(),
         index: 0,
         onDone: () => {
-          scheduleEdgeAfterPaint(gen, () => {
-            if (gen !== edgeRefreshGen) return;
-            refreshEdges({ skipConduits: true });
-          });
+          if (!showElectrical) return;
+          startProgressiveCableRebuild(gen);
         },
       };
       refreshTubesChunk(gen);

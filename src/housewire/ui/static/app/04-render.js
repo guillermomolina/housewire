@@ -2453,10 +2453,8 @@
         placeParents,
         elementParents,
       });
-      // Full paint when electrical is on so terminal fans / inbox expansion
-      // and cable attach points match the new box size.
-      if (showElectrical) render();
-      else updateNodeVisual(null, { progressive: true });
+      // Progressive refine (tubes then cables) — avoid blocking full clearSvg.
+      updateNodeVisual(null, { progressive: true });
       await syncInspectorFromSelection();
       try {
         const payload = {};
@@ -2923,10 +2921,12 @@
 
   function rememberCurrentDocView() {
     if (!activeDocId) return;
+    const atMax = depthLevel >= Math.max(maxDepth, 1);
     docViews[activeDocId] = {
       locationId,
       depthLevel,
-      showElectrical: Boolean(showElectrical),
+      // Never persist electrical-on for a shallow depth (invalid on restore).
+      showElectrical: Boolean(showElectrical) && atMax,
       panX,
       panY,
       scale,
@@ -3064,6 +3064,25 @@
       elemGroup.title = insertEnabled ? "" : needHint;
     }
     renderPaletteSideList();
+  }
+
+  /**
+   * Electrical is only valid at max depth. Returns true if it was turned off.
+   * @param {{ repaint?: boolean }} [opts]
+   */
+  function enforceElectricalDepthInvariant(opts) {
+    const repaint = !opts || opts.repaint !== false;
+    if (!showElectrical) return false;
+    if (depthLevel >= Math.max(maxDepth, 1)) return false;
+    showElectrical = false;
+    depthBeforeElectrical = null;
+    syncElectricalUi();
+    if (repaint && graph) {
+      render();
+      renderOutline();
+    }
+    rememberCurrentDocView();
+    return true;
   }
 
   async function setElectrical(on) {

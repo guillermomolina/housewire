@@ -387,11 +387,10 @@
     const data = await api("/api/locations");
     canvasLocations = data.locations || [];
     const saved = activeDocId ? docViews[activeDocId] : null;
-    // Restore electrical before outline so element rows match the canvas view.
-    if (saved && typeof saved.showElectrical === "boolean") {
-      showElectrical = saved.showElectrical;
-      syncElectricalUi();
-    }
+    // Load physical view first; restore electrical only if depth is max after load.
+    const wantElectrical = Boolean(saved && saved.showElectrical);
+    showElectrical = false;
+    syncElectricalUi();
     await loadOutline();
     let target =
       (saved &&
@@ -402,8 +401,12 @@
       canvasLocations.find((r) => r.selectable !== false && r.id === ".") ||
       canvasLocations.find((r) => r.selectable !== false);
     if (target) {
-      if (saved && saved.depthLevel) depthLevel = saved.depthLevel;
-      else depthLevel = DEPTH_DEFAULT;
+      // Default boot: depth 1. Restore a saved depth only when it is a number.
+      if (saved && Number.isFinite(saved.depthLevel) && saved.depthLevel >= 1) {
+        depthLevel = Math.floor(saved.depthLevel);
+      } else {
+        depthLevel = DEPTH_DEFAULT;
+      }
       const hasCamera =
         saved &&
         Number.isFinite(saved.panX) &&
@@ -414,6 +417,16 @@
         fit: !hasCamera,
       });
       if (hasCamera) applySavedCamera(saved);
+      // Electrical only at max depth (e.g. 3/3). Never leave it on at 1/x.
+      if (
+        wantElectrical &&
+        depthLevel >= Math.max(maxDepth, 1)
+      ) {
+        await setElectrical(true);
+      } else {
+        enforceElectricalDepthInvariant({ repaint: false });
+        syncElectricalUi();
+      }
     } else {
       setStatus(t("status.noLocations"));
     }
@@ -1026,8 +1039,15 @@
       renderOutline();
       return;
     }
+    // Electrical only at max depth: drop it before loading a shallower view.
+    if (showElectrical && wanted < Math.max(maxDepth, 1)) {
+      showElectrical = false;
+      depthBeforeElectrical = null;
+      syncElectricalUi();
+    }
     depthLevel = wanted;
     await loadLocation({ fit: false });
+    enforceElectricalDepthInvariant({ repaint: true });
   }
 
   syncElectricalUi();
