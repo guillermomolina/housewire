@@ -233,8 +233,14 @@ def create_app(site_root: Path | None = None) -> Any:
         type_id = str(payload.get("type") or "House").strip() or "House"
         label_raw = payload.get("label")
         label = str(label_raw).strip() if label_raw else None
+        locale_raw = payload.get("locale")
+        if locale_raw is None or not str(locale_raw).strip():
+            locale_raw = request.headers.get("accept-language") or "en"
+        locale = str(locale_raw).strip()
         try:
-            workspace.new_site(type_id=type_id, label=label or None)
+            workspace.new_site(
+                type_id=type_id, label=label or None, locale=locale
+            )
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         except FileExistsError as exc:

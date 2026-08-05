@@ -30,6 +30,8 @@ class Document:
     session: SiteSession
     # True when opened from browser file content (temp site on the server).
     browser_origin: bool = False
+    # Optional tab label (e.g. localized "New site"); falls back to YAML name.
+    display_title: str | None = None
 
     @property
     def yaml_path(self) -> Path:
@@ -37,6 +39,8 @@ class Document:
 
     @property
     def title(self) -> str:
+        if self.display_title:
+            return self.display_title
         return self.yaml_path.name
 
 
@@ -234,16 +238,34 @@ class Workspace:
         *,
         type_id: str = "House",
         label: str | None = None,
+        locale: str | None = None,
     ) -> Document:
-        """Create an empty site (temp dir + ``housewire.yaml``) as a new tab."""
+        """Create an empty site tab (temp dir + localized YAML name).
+
+        The new document is marked dirty until Save / Save as. Tab title and
+        suggested filename follow ``locale`` (``es`` → Nuevo sitio /
+        ``nuevo-sitio.yaml``).
+        """
+        loc = str(locale or "en").strip().lower()
+        if loc.startswith("es"):
+            yaml_name = "nuevo-sitio.yaml"
+            title = "Nuevo sitio"
+        else:
+            yaml_name = "new-site.yaml"
+            title = "New site"
         root = Path(tempfile.mkdtemp(prefix="housewire-new-"))
         self._browser_temps.append(root)
         yaml_path = create_site_document(
             root,
             type_id=type_id,
-            label=label,
+            label=label or title,
+            yaml_name=yaml_name,
         )
-        return self.open_site(yaml_path, force=True, browser_origin=True)
+        doc = self.open_site(yaml_path, force=True, browser_origin=True)
+        registered = self.documents[doc.id]
+        registered.display_title = title
+        registered.session.mark_dirty(yaml_path)
+        return registered
 
     def close(self, *, force: bool = False, doc_id: str | None = None) -> None:
         """Unload one document tab (active if ``doc_id`` omitted)."""

@@ -7502,22 +7502,89 @@
 
   function syncOpeningMarks(node) {
     const g = nodesById[node.id];
-    if (!g || !nodeHasOpeningMarks(node)) return;
+    if (!g) return;
+    const hasKids = childrenOf(node.id).length > 0;
+    const showOpenings = !hasKids && nodeHasOpeningMarks(node);
     const w = nodeW(node);
     const h = nodeH(node);
+    const box = g.querySelector(".node-box");
     const placeMap = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
-    syncNodeIsoBevel(g, w, h);
-    for (const oid of openingCellsForNode(node)) {
+
+    if (!showOpenings) {
+      g.querySelector("g.node-iso")?.remove();
+      g.querySelectorAll("[data-opening]").forEach((n) => n.remove());
+      if (box) {
+        box.classList.remove("iso-box");
+        box.setAttribute("rx", "6");
+      }
+      return;
+    }
+
+    if (box) {
+      box.classList.add("iso-box");
+      box.setAttribute("rx", "0");
+    }
+    if (!g.querySelector("g.node-iso")) appendNodeIsoBevel(g, w, h);
+    else syncNodeIsoBevel(g, w, h);
+
+    const want = openingCellsForNode(node);
+    const wantSet = new Set(want);
+    g.querySelectorAll("[data-opening]").forEach((elOp) => {
+      const oid = elOp.getAttribute("data-opening");
+      if (!oid || !wantSet.has(oid)) elOp.remove();
+    });
+
+    const ordered = [...want].sort((a, b) => {
+      const ma = openingMarkLocal(node, a, placeMap);
+      const mb = openingMarkLocal(node, b, placeMap);
+      if (ma.near !== mb.near) return ma.near ? 1 : -1;
+      return 0;
+    });
+    for (const oid of ordered) {
       const mark = openingMarkLocal(node, oid, placeMap);
-      const sel = `[data-opening="${CSS.escape(String(oid))}"]`;
-      g.querySelectorAll(`circle${sel}`).forEach((circle) => {
+      const nearFar = mark.near ? "opening-near" : "opening-far";
+      const faceClass = `opening-face-${mark.face || "X"}`;
+      let circle = g.querySelector(`circle[data-opening="${CSS.escape(String(oid))}"]`);
+      if (!circle) {
+        circle = el("circle", {
+          class: `opening-mark ${nearFar} ${faceClass}`,
+          "data-opening": oid,
+          cx: mark.x,
+          cy: mark.y,
+          r: OPENING_MARK_R,
+        });
+        circle.appendChild(el("title", null, oid));
+        circle.addEventListener("pointerdown", (ev) => {
+          if (onWiringOpeningClick(node.id, oid, ev)) return;
+        });
+        g.appendChild(circle);
+      } else {
+        circle.setAttribute("class", `opening-mark ${nearFar} ${faceClass}`);
         circle.setAttribute("cx", String(mark.x));
         circle.setAttribute("cy", String(mark.y));
-      });
-      const text = g.querySelector(`text.opening-label${sel}`);
-      if (text) {
+      }
+      let text = g.querySelector(`text.opening-label[data-opening="${CSS.escape(String(oid))}"]`);
+      if (!text) {
+        text = el(
+          "text",
+          {
+            class: `opening-label ${nearFar} ${faceClass}`,
+            "data-opening": oid,
+            x: mark.x,
+            y: mark.y + 3,
+            "text-anchor": "middle",
+          },
+          oid
+        );
+        text.addEventListener("pointerdown", (ev) => {
+          if (onWiringOpeningClick(node.id, oid, ev)) return;
+        });
+        g.appendChild(text);
+      } else {
+        text.setAttribute("class", `opening-label ${nearFar} ${faceClass}`);
         text.setAttribute("x", String(mark.x));
         text.setAttribute("y", String(mark.y + 3));
+        text.textContent = oid;
       }
     }
   }
@@ -8539,7 +8606,10 @@
     usedInput.dataset.propJson = usedKey;
 
     function syncHidden() {
-      gridInput.value = JSON.stringify(compactFaceGridForSave(expanded));
+      const compact = compactFaceGridForSave(expanded);
+      gridInput.value = JSON.stringify(
+        Object.keys(compact).length ? compact : null
+      );
       if (mode === "openings") {
         usedInput.value = JSON.stringify([...used].sort());
       } else {
@@ -10701,18 +10771,17 @@
   async function fileNew() {
     rememberCurrentDocView();
     try {
+      const locale = I18n.getLocale ? I18n.getLocale() : "en";
       const st = await api("/api/workspace/new", {
         method: "POST",
-        body: "{}",
+        body: JSON.stringify({ locale }),
       });
       applyWorkspaceStatus(st);
-      dirtyLocal = false;
-      updateSaveButton(false);
       await reloadAfterDocumentChange();
       const name =
         (st.document && (st.document.title || st.document.yaml)) ||
-        "housewire.yaml";
-      setStatus(`new site ${name}`);
+        t("file.newSiteTitle");
+      setStatus(t("status.newSite", { name }));
     } catch (err) {
       setStatus(String(err.message || err));
     }

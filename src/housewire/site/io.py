@@ -192,10 +192,14 @@ def create_site_document(
     notes: str | None = None,
     label: str | None = None,
     working_name: str | None = None,
+    yaml_name: str | None = None,
 ) -> Path:
-    """Create the default site YAML (``housewire.yaml``) at ``site_root``."""
+    """Create a site YAML (default ``housewire.yaml``) at ``site_root``."""
     site_root.mkdir(parents=True, exist_ok=True)
-    yaml_path = site_root / HOUSEWIRE_YAML
+    name = Path(yaml_name or HOUSEWIRE_YAML).name
+    if not name.lower().endswith((".yaml", ".yml")):
+        name = f"{name}.yaml"
+    yaml_path = site_root / name
     if yaml_path.exists():
         raise FileExistsError(f"Already exists: {yaml_path}")
     doc = build_location_document(

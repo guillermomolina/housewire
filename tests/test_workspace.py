@@ -48,11 +48,16 @@ class TestWorkspaceUnit(unittest.TestCase):
             self.assertEqual(ws.status()["document"]["name"], "site_b")
             self.assertEqual(len(ws.status()["documents"]), 2)
 
-            blank = ws.new_site(label="Blank")
+            blank = ws.new_site(label="Blank", locale="en")
             self.assertTrue(blank.browser_origin)
-            self.assertEqual(blank.yaml_path.name, "housewire.yaml")
+            self.assertEqual(blank.yaml_path.name, "new-site.yaml")
+            self.assertEqual(blank.title, "New site")
             self.assertEqual(len(ws.status()["documents"]), 3)
-            self.assertEqual(ws.status()["dirty"], [])
+            self.assertTrue(ws.status()["dirty"])
+            es = ws.new_site(locale="es")
+            self.assertEqual(es.yaml_path.name, "nuevo-sitio.yaml")
+            self.assertEqual(es.title, "Nuevo sitio")
+            self.assertTrue(es.session.dirty_paths())
 
     def test_open_custom_yaml_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -194,12 +199,16 @@ class TestWorkspaceApi(unittest.TestCase):
             self.assertIn("schema:", exported["content"])
 
             # New empty site tab (no picker)
-            created = client.post("/api/workspace/new", json={})
+            created = client.post(
+                "/api/workspace/new", json={"locale": "es"}
+            )
             self.assertEqual(created.status_code, 200)
             new_body = created.json()
-            self.assertEqual(new_body["document"]["yaml"], "housewire.yaml")
+            self.assertEqual(new_body["document"]["yaml"], "nuevo-sitio.yaml")
+            self.assertEqual(new_body["document"]["title"], "Nuevo sitio")
             self.assertTrue(new_body["document"]["browser_origin"])
-            self.assertEqual(new_body["dirty"], [])
+            self.assertTrue(new_body["dirty"])
+            self.assertTrue(new_body["document"]["dirty"])
             yaml_text = client.get("/api/workspace/yaml").json()["content"]
             self.assertIn("type: House", yaml_text)
 

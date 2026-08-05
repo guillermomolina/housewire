@@ -8,6 +8,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.72.0] — 2026-08-05
+
+### Changed
+
+- File → New creates a dirty tab titled ``New site`` / ``Nuevo sitio`` with
+  localized YAML name (``new-site.yaml`` / ``nuevo-sitio.yaml``).
+
+### Fixed
+
+- Clearing or adding place openings toggles the flat vs isometric box style
+  (and mouth marks) on the canvas; empty ``opening_grid`` is removed from YAML.
+
 ## [0.71.0] — 2026-08-05
 
 ### Added

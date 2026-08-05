@@ -19,7 +19,7 @@ tabs. The last location/depth per open file is remembered while switching tabs.
 
 | Action | Meaning |
 |--------|---------|
-| New | Empty House site in a new tab (Ctrl+N); use Save as… to keep it |
+| New | Empty House site in a new dirty tab (Ctrl+N); localized title/filename; use Save as… to keep it |
 | Open… | Browser/OS file picker; opens a new document tab (Ctrl+O) |
 | Save | Persist the **active** document |
 | Save as… | Browser/OS save picker; opens the copy as another tab |

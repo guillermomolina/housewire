@@ -760,8 +760,13 @@ def update_place_properties(
             if key in target:
                 abm.unset_field(target, key)
             continue
-        if key in {"opening_grid", "terminal_grid"} and not isinstance(raw, dict):
-            raise ValueError(f"{key} must be a map")
+        if key in {"opening_grid", "terminal_grid"}:
+            if not isinstance(raw, dict):
+                raise ValueError(f"{key} must be a map")
+            if not raw:
+                if key in target:
+                    abm.unset_field(target, key)
+                continue
         if key == "openings" and not isinstance(raw, list):
             raise ValueError("openings must be a list of ids")
         if key == "terminals" and not isinstance(raw, dict):
