@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.72.1] — 2026-08-05
+
+### Changed
+
+- Default catalog ``0.17.0``: new ``DeviceBox`` places get
+  ``opening_grid`` ``NS: 1``, ``WE: 1``, ``B: 1``.
+
 ## [0.72.0] — 2026-08-05
 
 ### Changed

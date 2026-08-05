@@ -97,6 +97,18 @@ class TestDirectoryLocation(unittest.TestCase):
             )
             self.assertEqual(box["install"], "Flush")
 
+    def test_device_box_catalog_opening_grid_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = init_site(root, type_id="House")
+            add_place(doc, "Mecanismo", type_id="DeviceBox", label="Mecanismo")
+            box = doc["elements"]["Mecanismo"]
+            self.assertEqual(box["subtype"], "OneGang")
+            self.assertEqual(
+                box["opening_grid"],
+                {"NS": 1, "WE": 1, "B": 1},
+            )
+
     def test_create_location_normalizes_spaced_name(self) -> None:
         from housewire.house import location_id_from_name
 
