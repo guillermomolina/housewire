@@ -2627,10 +2627,12 @@
   }
 
   const PLANE_R = 6;
-  /** NW isometric extrusion (SVG up-left) for leaf place bevel + mouth marks. */
-  const ISO_DX = -8;
-  const ISO_DY = -8;
+  /** NW isometric extrusion (SVG up-left); deep enough for full mouth circles. */
+  const ISO_DX = -16;
+  const ISO_DY = -16;
   const OPENING_MARK_R = 5;
+  /** Pull marks off the edge stroke into the face interior. */
+  const OPENING_FACE_INSET = OPENING_MARK_R + 2;
 
   /** True for faces treated as near/visible under a fixed NW camera. */
   function isoFaceNear(visualFace) {
@@ -2640,25 +2642,38 @@
 
   /**
    * Visual offset for an opening mark on a face (routing mouths stay unshifted).
-   * N most NW … B most recessed.
+   * N most NW … B most recessed. Depth scales leave room for inset circles.
    */
   function isoOffsetForVisualFace(visualFace) {
     const f = String(visualFace || "").toUpperCase();
+    // Mid-bevel for N/W so the whole circle sits on the extruded face.
     const scales = {
-      N: 1.0,
-      W: 0.78,
-      F: 0.62,
-      E: 0.28,
-      S: 0.22,
-      B: 0.06,
+      N: 0.55,
+      W: 0.55,
+      F: 0.2,
+      E: 0.12,
+      S: 0.12,
+      B: 0.85,
     };
-    const s = scales[f] != null ? scales[f] : 0.4;
+    const s = scales[f] != null ? scales[f] : 0.35;
     return {
       dx: ISO_DX * s,
       dy: ISO_DY * s,
       near: isoFaceNear(f),
       face: f,
     };
+  }
+
+  /** Inset from the contour edge toward the interior of that face. */
+  function faceInteriorInset(visualFace) {
+    const d = OPENING_FACE_INSET;
+    const f = String(visualFace || "").toUpperCase();
+    if (f === "N") return { dx: 0, dy: d };
+    if (f === "S") return { dx: 0, dy: -d };
+    if (f === "W") return { dx: d, dy: 0 };
+    if (f === "E") return { dx: -d, dy: 0 };
+    // F/B already sit on the plane; slight NW bias is enough via iso.
+    return { dx: 0, dy: 0 };
   }
 
   /** All opening cell ids for a place: opening_grid cells ∪ declared openings. */
@@ -2686,15 +2701,16 @@
     return Boolean(grid && typeof grid === "object" && Object.keys(grid).length);
   }
 
-  /** Local mark position = 2D mouth + iso offset (for paint / sync / hit). */
+  /** Local mark position = 2D mouth + face inset + iso offset (paint/sync/hit). */
   function openingMarkLocal(node, openingId, byId) {
     const faceHint = String(openingId || "?").match(/^[NSEWFB]/i)?.[0] || "?";
     const anchor = openingAnchorLocal(node, openingId, faceHint, byId);
     const visualFace = anchor.face || faceHint;
     const iso = isoOffsetForVisualFace(visualFace);
+    const inset = faceInteriorInset(visualFace);
     return {
-      x: anchor.x + iso.dx,
-      y: anchor.y + iso.dy,
+      x: anchor.x + inset.dx + iso.dx,
+      y: anchor.y + inset.dy + iso.dy,
       face: visualFace,
       near: iso.near,
       mouthX: anchor.x,
@@ -7605,10 +7621,11 @@
         "node-box" +
         (selectedIds.has(node.id) ? " selected" : "") +
         (hasKids ? " container" : "") +
-        (node.expandable ? " expandable" : ""),
+        (node.expandable ? " expandable" : "") +
+        (showOpenings ? " iso-box" : ""),
       width: w,
       height: h,
-      rx: 6,
+      rx: showOpenings ? 0 : 6,
     });
     g.appendChild(box);
     const fullLabel = node.display_label || node.label || node.display_name || node.name || node.id;
@@ -7643,17 +7660,6 @@
         const mark = openingMarkLocal(node, oid, byId);
         const nearFar = mark.near ? "opening-near" : "opening-far";
         const faceClass = `opening-face-${mark.face || "X"}`;
-        if (!mark.near) {
-          g.appendChild(
-            el("circle", {
-              class: `opening-mark-ring opening-far ${faceClass}`,
-              "data-opening": oid,
-              cx: mark.x,
-              cy: mark.y,
-              r: OPENING_MARK_R + 2,
-            })
-          );
-        }
         const circle = el("circle", {
           class: `opening-mark ${nearFar} ${faceClass}`,
           "data-opening": oid,

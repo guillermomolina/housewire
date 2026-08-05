@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.69.1] — 2026-08-05
+
+### Changed
+
+- Opening iso bevel: deeper NW extrusion, square corners on F and far edges,
+  mouth marks inset into each face, far mouths use a single bold dashed stroke
+  (no double ring).
+
 ## [0.69.0] — 2026-08-05
 
 ### Added
