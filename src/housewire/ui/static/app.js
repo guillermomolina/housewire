@@ -12374,7 +12374,10 @@
       return hay.includes(needle);
     });
     rows.sort((a, b) =>
-      String(a.label || catalogTypeKey(a) || "").localeCompare(String(b.label || catalogTypeKey(b) || ""))
+      String(catalogTypeKey(a) || "").localeCompare(
+        String(catalogTypeKey(b) || ""),
+        "en"
+      )
     );
     return rows;
   }

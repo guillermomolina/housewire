@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.73.2] — 2026-08-05
+
+### Changed
+
+- Insert palette lists types alphabetically by technical type id so order is
+  stable across locales.
+
 ## [0.73.1] — 2026-08-05
 
 ### Fixed
