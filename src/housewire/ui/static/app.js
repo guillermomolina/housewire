@@ -11426,6 +11426,18 @@
 
   async function focusOutlinePlace(node) {
     const placeId = node.id;
+    // Site root is always the canvas for an empty (or root) view — show its
+    // properties even if outline selectable flags lag behind locations API.
+    if (placeId === ".") {
+      if (locationId !== ".") {
+        await setCanvasLocation(".");
+      }
+      highlightOutline(".");
+      clearSelectionState();
+      setSelectedVisual();
+      await fillPlaceInspector(".");
+      return;
+    }
     if (node.selectable) {
       if (locationId !== placeId) {
         await setCanvasLocation(placeId);

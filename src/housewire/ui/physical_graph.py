@@ -912,6 +912,10 @@ def list_site_outline(
         if any(_is_descendant(parts, other["parts"]) for other in places.values()):
             selectable.add(loc_id)
 
+    # Empty site (House with no child places): root is still a canvas location.
+    if "." in places and not selectable:
+        selectable.add(".")
+
     children: dict[str | None, list[str]] = {}
     for loc_id, info in places.items():
         parts = info["parts"]

@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.73.6] — 2026-08-05
+
+### Fixed
+
+- Empty new sites mark the outline root as selectable so clicking it shows
+  House properties (same as the canvas locations list).
+
 ## [0.73.5] — 2026-08-05
 
 ### Changed

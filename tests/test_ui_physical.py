@@ -361,6 +361,12 @@ class TestPhysicalGraph(unittest.TestCase):
             self.assertEqual(len(locations), 1)
             self.assertEqual(locations[0]["id"], ".")
             self.assertTrue(locations[0]["selectable"])
+            outline = list_site_outline(root)
+            root_row = next(r for r in outline if r["id"] == ".")
+            self.assertTrue(
+                root_row["selectable"],
+                "empty site root must be selectable so outline click shows props",
+            )
             graph = build_physical_graph(root, ".", depth=1)
             self.assertEqual(graph["nodes"], [])
             self.assertEqual(graph["elements"], [])

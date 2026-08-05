@@ -216,6 +216,12 @@ class TestWorkspaceApi(unittest.TestCase):
             self.assertIn("type: House", yaml_text)
             self.assertIn("name: Nuevo sitio", yaml_text)
             self.assertIn("label: Nuevo sitio", yaml_text)
+            outline = client.get("/api/outline").json()["nodes"]
+            root_row = next(n for n in outline if n["id"] == ".")
+            self.assertTrue(root_row.get("selectable"))
+            place = client.get("/api/place", params={"location": ".", "id": "."})
+            self.assertEqual(place.status_code, 200, place.text)
+            self.assertEqual(place.json().get("type"), "House")
 
 
 if __name__ == "__main__":
