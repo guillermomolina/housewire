@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.76.3] — 2026-08-05
+
+### Fixed
+
+- Selecting a single place box enables element entries in the palette and
+  Insert menu; starting an insert turns the electrical layer on when needed.
+
 ## [0.76.2] — 2026-08-05
 
 ### Fixed

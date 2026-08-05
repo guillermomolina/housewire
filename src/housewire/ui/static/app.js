@@ -1308,6 +1308,7 @@
     selectedId = null;
     clearLinkSelection();
     updateDeleteButtons();
+    syncElectricalUi();
   }
 
   function setSelectedVisual() {
@@ -1386,6 +1387,7 @@
     }
     setSelectedVisual();
     updateDeleteButtons();
+    syncElectricalUi();
     if (ensureVisible && selectedId) {
       ensureIdVisible(selectedId);
       highlightOutlineSelection({ scrollTo: selectedId });
@@ -8258,8 +8260,8 @@
 
   function placeShowsElementsInView(placeRelId) {
     if (!showElectrical || !graph) return false;
-    // Canvas root elements use parent=null and stay visible even with children.
     if (!placeRelId || placeRelId === ".") return true;
+    if (selectedIds.size === 1 && selectedId === placeRelId) return true;
     return childrenOf(placeRelId).length === 0;
   }
 
@@ -10638,9 +10640,10 @@
     const mi = document.getElementById("menu-electrical");
     if (mi) mi.setAttribute("aria-checked", showElectrical ? "true" : "false");
     const needHint = t("palette.needsElectrical");
+    const insertEnabled = elementsInsertEnabled();
     document.querySelectorAll("[data-needs-electrical]").forEach((el) => {
-      el.disabled = !showElectrical;
-      if (showElectrical) {
+      el.disabled = !insertEnabled;
+      if (insertEnabled) {
         el.removeAttribute("title");
       } else {
         el.title = needHint;
@@ -10648,8 +10651,8 @@
     });
     const elemGroup = document.getElementById("palette-group-elements");
     if (elemGroup) {
-      elemGroup.classList.toggle("is-electrical-off", !showElectrical);
-      elemGroup.title = showElectrical ? "" : needHint;
+      elemGroup.classList.toggle("is-electrical-off", !insertEnabled);
+      elemGroup.title = insertEnabled ? "" : needHint;
     }
     renderPaletteSideList();
   }
@@ -11993,23 +11996,33 @@
         if (insertItem.disabled) return;
         closeAllMenus();
         const action = insertItem.getAttribute("data-insert-action");
-        if (action === "element" || action === "container") {
-          openTypePickerFromInsert(action).catch((err) => insertMsg(String(err.message || err), true));
-        } else if (action === "conduit") {
-          beginWiringGesture("conduit").catch((err) =>
-            setStatus(String(err.message || err))
-          );
-        } else if (action === "conductor") {
-          beginWiringGesture("conductor").catch((err) =>
-            setStatus(String(err.message || err))
-          );
-        } else if (action === "cable") {
-          beginSheathFromSelection().catch((err) =>
-            setStatus(String(err.message || err))
-          );
-        } else {
-          openInsertModal(action);
-        }
+        const needsElec = insertItem.hasAttribute("data-needs-electrical");
+        const runInsert = async () => {
+          if (needsElec) {
+            if (!elementsInsertEnabled()) {
+              setStatus(t("palette.needsElectrical"));
+              return;
+            }
+            if (!showElectrical) await setElectrical(true);
+          }
+          if (action === "element" || action === "container") {
+            await openTypePickerFromInsert(action);
+          } else if (action === "conduit") {
+            await beginWiringGesture("conduit");
+          } else if (action === "conductor") {
+            await beginWiringGesture("conductor");
+          } else if (action === "cable") {
+            await beginSheathFromSelection();
+          } else {
+            openInsertModal(action);
+          }
+        };
+        runInsert().catch((err) => {
+          if (String(err.message || err) !== "electrical required") {
+            insertMsg(String(err.message || err), true);
+            setStatus(String(err.message || err));
+          }
+        });
         return;
       }
       const subTrigger = ev.target.closest(".menu-submenu-trigger");
@@ -12514,6 +12527,28 @@
     return ".";
   }
 
+  function isSingleSelectedPlace() {
+    if (selectedIds.size !== 1 || !selectedId) return false;
+    if ((graph?.elements || []).some((e) => e.id === selectedId)) return false;
+    return (graph?.nodes || []).some((n) => n.id === selectedId);
+  }
+
+  /** Element insert in palette / Insert menu (electrical on, or one place selected). */
+  function elementsInsertEnabled() {
+    if (!hasDocument || !locationId) return false;
+    if (showElectrical) return true;
+    return isSingleSelectedPlace();
+  }
+
+  async function ensureElectricalForElementInsert() {
+    if (showElectrical) return;
+    if (!isSingleSelectedPlace()) {
+      setStatus(t("palette.needsElectrical"));
+      throw new Error("electrical required");
+    }
+    await setElectrical(true);
+  }
+
   async function loadPaletteCatalog(force) {
     if (paletteCatalog && !force) return paletteCatalog;
     const data = await api("/api/catalog");
@@ -12626,14 +12661,13 @@
     el.classList.toggle("is-error", Boolean(isError && text));
   }
 
-  function beginCatalogPlacement(draft) {
-    if (
-      draft &&
-      draft.kind === "ElementType" &&
-      !showElectrical
-    ) {
-      setStatus(t("palette.needsElectrical"));
-      return;
+  async function beginCatalogPlacement(draft) {
+    if (draft && draft.kind === "ElementType") {
+      try {
+        await ensureElectricalForElementInsert();
+      } catch {
+        return;
+      }
     }
     pendingCatalogPlacement = draft;
     placementDrag = null;
@@ -13227,7 +13261,7 @@
       name: String(data.name || "").trim() || token,
       label: String(data.label || "").trim() || String(data.name || "").trim() || token,
       notes: data.notes || "",
-    });
+    }).catch((err) => insertMsg(String(err.message || err), true));
     form.reset();
     resetCatalogInsertForm();
   }
@@ -13237,7 +13271,7 @@
     const q = qEl ? qEl.value : "";
     const containers = paletteRows("PlaceType", q);
     const elements = paletteRows("ElementType", q);
-    const elemsEnabled = showElectrical;
+    const elemsEnabled = elementsInsertEnabled();
     const needHint = t("palette.needsElectrical");
     const render = (hostId, rows, { asElements = false } = {}) => {
       const host = document.getElementById(hostId);
@@ -13271,14 +13305,24 @@
         } else {
           btn.title = baseTitle;
           btn.addEventListener("click", () => {
-            pendingCatalogInsert = {
-              type_id: catalogTypeKey(row),
-              subtype: "",
-              source_kind: row.kind || "",
+            const open = async () => {
+              if (isElem) {
+                try {
+                  await ensureElectricalForElementInsert();
+                } catch {
+                  return;
+                }
+              }
+              pendingCatalogInsert = {
+                type_id: catalogTypeKey(row),
+                subtype: "",
+                source_kind: row.kind || "",
+              };
+              resetCatalogInsertForm();
+              prefillCatalogInsertFromRow(row, "");
+              openInsertModal("catalog-item");
             };
-            resetCatalogInsertForm();
-            prefillCatalogInsertFromRow(row, "");
-            openInsertModal("catalog-item");
+            open().catch((err) => setStatus(String(err.message || err)));
           });
         }
         host.appendChild(btn);
@@ -13431,9 +13475,12 @@
   }
 
   async function openTypePickerFromInsert(kind) {
-    if (kind === "element" && !showElectrical) {
+    if (kind === "element" && !elementsInsertEnabled()) {
       setStatus(t("palette.needsElectrical"));
       return;
+    }
+    if (kind === "element" && !showElectrical) {
+      await setElectrical(true);
     }
     await loadPaletteCatalog();
     const sel = document.getElementById("insert-type-id");
