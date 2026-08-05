@@ -4899,13 +4899,15 @@
       // Offset B/F mouths: prefer mark-to-mark Manhattan with few bends —
       // L (one corner) first, then C/U (two corners / three segments) via
       // orthoRoute — before contour stubs (Route_28 Linea_03).
+      // Also side↔plane (Route_21 Conducto_lampara N→B).
       if (
-        fromPlane &&
-        toPlane &&
+        (fromPlane || toPlane) &&
         Math.abs(m1.x - m2.x) >= 1e-6 &&
         Math.abs(m1.y - m2.y) >= 1e-6
       ) {
         const stackEps = Math.max(LANE_GAP, half || 0);
+        const bothPlane = fromPlane && toPlane;
+        const minLeg = bothPlane ? 0 : Math.max(8, LANE_PITCH);
         const pathLen = (pts) => {
           let len = 0;
           for (let i = 1; i < pts.length; i++) {
@@ -4918,6 +4920,15 @@
         };
         const acceptMarkPath = (pts) => {
           if (!pts || pts.length < 2) return false;
+          if (minLeg > 0) {
+            for (let i = 1; i < pts.length; i++) {
+              const leg = Math.hypot(
+                pts[i][0] - pts[i - 1][0],
+                pts[i][1] - pts[i - 1][1]
+              );
+              if (leg < minLeg - 1e-6) return false;
+            }
+          }
           if (pathObstacleCost(pts, obstacles) > 0) return false;
           if (pathStackConflictCost(pts, occupied, stackEps, half) > 0) {
             return false;

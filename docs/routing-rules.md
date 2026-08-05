@@ -118,10 +118,10 @@ an inbox path from the boca to the pin. Intermediate `Cable` sheaths
       ``halfWidth_a + halfWidth_b + laneGap`` apart. Perpendicular crossings
       are allowed and **preferred** over a long C-detour around the other
       tube. Strands of conduit A sitting on conduit B’s stroke is wrong;
-      strands of A on A’s own tube is correct. The mark-to-mark Manhattan
-      shortcut for plane bocas (B/F) tries L first, then a ≤3-segment C/U
-      when L would stack; only then fall through to contour stubs
-      (see Route_28).
+      strands of A on A’s own tube is correct. Mark-to-mark Manhattan
+      shortcuts (L, then ≤3-segment C/U) apply for plane↔plane and
+      side↔plane bocas when clear of obstacles/stacks; only then fall
+      through to contour stubs (see Route_21, Route_28).
     - **Inbox** — Same-box cables stay inside the host place content box;
       the place grows to fit the cable envelope when needed. Prefer short
       runs (including crossings) over long outside loops.
@@ -176,7 +176,7 @@ Live E2E coverage:
 | `Route_01`…`Route_20` YAML | Example demos (not each one a separate E2E module) |
 | `Route_14` | Mid→End side tube is one straight segment |
 | `Route_15` | Room↔room tube ≤3 segments at depth 1/2 |
-| `Route_21` | Panel + room (reference regression) |
+| `Route_21` | Panel + room; lamp N→B conduit ≤3 segments |
 | `Route_22` | Same-box cable must skirt foreign elements |
 | `Route_23` | Prefer conduit × over long C-detour |
 | `Route_24` | Straight side-face cross conduits |

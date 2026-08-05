@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.82.4] — 2026-08-05
+
+### Changed
+
+- Side↔plane conduits (e.g. N→B) also try mark-to-mark L/C (≤3 segments)
+  before contour+iso stubs — Route_21 ``Conducto_lampara``.
+
 ## [0.82.3] — 2026-08-05
 
 ### Added
