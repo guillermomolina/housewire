@@ -35,6 +35,8 @@
    * @type {null|{kind:"conduit"|"conductor", from:string|null, fromX?:number, fromY?:number}}
    */
   let wiringMode = null;
+  /** Last snap target under the pointer (sticky for the following click). */
+  let wiringHoverSnap = null;
   let depthLevel = DEPTH_DEFAULT;
   let maxDepth = 1;
   let scale = 1;
@@ -1443,12 +1445,14 @@
 
   function clearWiringPreview() {
     clearWiringSnapHighlight();
+    wiringHoverSnap = null;
     document.getElementById("wiring-preview")?.remove();
   }
 
   function setWiringMode(mode) {
     if (!mode) clearWiringPreview();
     else if (!mode.from) document.getElementById("wiring-preview")?.remove();
+    wiringHoverSnap = null;
     wiringMode = mode;
     syncWiringCursorUi();
   }
@@ -1493,7 +1497,31 @@
   }
 
   function wiringSnapRadius() {
-    return Math.max(14, 18 / Math.max(scale, 0.01));
+    // Generous hit area so first-click snap works off the tiny mark circle.
+    return Math.max(28, 36 / Math.max(scale, 0.01));
+  }
+
+  /**
+   * World position of an SVG circle (cx/cy in its parent user space).
+   * Prefer screen CTM so pan/zoom and nested transforms stay consistent.
+   */
+  function circleCenterWorld(circle) {
+    if (!circle || !svg) return null;
+    const cx = Number(circle.getAttribute("cx") || 0);
+    const cy = Number(circle.getAttribute("cy") || 0);
+    try {
+      const ctm = circle.getScreenCTM();
+      if (ctm && typeof svg.createSVGPoint === "function") {
+        const pt = svg.createSVGPoint();
+        pt.x = cx;
+        pt.y = cy;
+        const screen = pt.matrixTransform(ctm);
+        return clientToWorld(screen.x, screen.y);
+      }
+    } catch {
+      /* fall through */
+    }
+    return null;
   }
 
   /**
@@ -1513,17 +1541,23 @@
         const g = nodesById[node.id];
         if (!g) continue;
         const a = absXY(node, byId);
-        for (const circle of g.querySelectorAll("circle.opening-mark[data-opening]")) {
+        for (const circle of g.querySelectorAll(
+          "circle.opening-mark[data-opening]"
+        )) {
           const oid = circle.getAttribute("data-opening");
           if (!oid) continue;
           const cx = Number(circle.getAttribute("cx") || 0);
           const cy = Number(circle.getAttribute("cy") || 0);
+          const world = circleCenterWorld(circle) || {
+            x: a.x + cx,
+            y: a.y + cy,
+          };
           const nodeId = node.id;
           const openingId = oid;
           out.push({
             ref: openingRefForNode(nodeId, openingId),
-            x: a.x + cx,
-            y: a.y + cy,
+            x: world.x,
+            y: world.y,
             el: circle,
             pick: () => applyWiringOpeningPick(nodeId, openingId, cx, cy),
           });
@@ -1545,15 +1579,19 @@
         if (!tid) continue;
         const cx = Number(circle.getAttribute("cx") || 0);
         const cy = Number(circle.getAttribute("cy") || 0);
+        const world = circleCenterWorld(circle) || {
+          x: a.x + cx,
+          y: a.y + cy,
+        };
         const elRef = elem;
         const terminalId = tid;
         out.push({
           ref: terminalRefForElem(elRef, terminalId),
-          x: a.x + cx,
-          y: a.y + cy,
+          x: world.x,
+          y: world.y,
           el: circle,
           pick: () =>
-            applyWiringTerminalPick(elRef, terminalId, a.x + cx, a.y + cy),
+            applyWiringTerminalPick(elRef, terminalId, world.x, world.y),
         });
       }
     }
@@ -1574,6 +1612,36 @@
       }
     }
     return best;
+  }
+
+  /**
+   * Resolve snap for a click: geometric nearest, else sticky hover target
+   * if the pointer is still reasonably close to it.
+   */
+  function resolveWiringSnap(world) {
+    if (!wiringMode) return null;
+    const near = nearestWiringSnap(world, wiringMode.kind, wiringMode.from);
+    if (near) return near;
+    const hover = wiringHoverSnap;
+    if (!hover || (wiringMode.from && hover.ref === wiringMode.from)) {
+      return null;
+    }
+    // Hover stickiness: allow a bit more slack than live radius.
+    const stick = wiringSnapRadius() * 1.75;
+    if (Math.hypot(hover.x - world.x, hover.y - world.y) <= stick) {
+      return hover;
+    }
+    return null;
+  }
+
+  function tryWiringSnapAtPointer(clientX, clientY) {
+    if (!wiringMode) return false;
+    const world = clientToWorld(clientX, clientY);
+    const snap = resolveWiringSnap(world);
+    if (!snap) return false;
+    snap.pick();
+    syncWiringPointer(clientX, clientY);
+    return true;
   }
 
   function updateWiringSnapHighlight(cand) {
@@ -1621,6 +1689,7 @@
     if (!wiringMode) return;
     const world = clientToWorld(clientX, clientY);
     const snap = nearestWiringSnap(world, wiringMode.kind, wiringMode.from);
+    wiringHoverSnap = snap;
     updateWiringSnapHighlight(snap);
     if (wiringMode.from) {
       updateWiringPreview(snap ? { x: snap.x, y: snap.y } : world);
@@ -8278,6 +8347,18 @@
         return;
       }
       if (ev.button !== 0) return;
+      // While wiring, snap to openings — never start place drag/select.
+      if (wiringMode?.kind === "conduit") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        tryWiringSnapAtPointer(ev.clientX, ev.clientY);
+        return;
+      }
+      if (wiringMode) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        return;
+      }
       ev.stopPropagation();
       // Shift+drag marquee must work on place floor (not only empty canvas).
       if (beginMarquee(ev)) return;
@@ -8425,6 +8506,18 @@
         return;
       }
       if (ev.button !== 0) return;
+      // While wiring, snap to terminals — never start element drag/select.
+      if (wiringMode?.kind === "conductor") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        tryWiringSnapAtPointer(ev.clientX, ev.clientY);
+        return;
+      }
+      if (wiringMode) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        return;
+      }
       ev.stopPropagation();
       // Allow Shift+drag marquee to start on an element hit target too.
       if (beginMarquee(ev)) return;
@@ -12853,17 +12946,9 @@
         return;
       }
       if (wiringMode && ev.button === 0 && !shouldPanPointer(ev)) {
-        const world = clientToWorld(ev.clientX, ev.clientY);
-        const snap = nearestWiringSnap(
-          world,
-          wiringMode.kind,
-          wiringMode.from
-        );
-        if (snap) {
+        if (tryWiringSnapAtPointer(ev.clientX, ev.clientY)) {
           ev.preventDefault();
           ev.stopPropagation();
-          snap.pick();
-          syncWiringPointer(ev.clientX, ev.clientY);
           return;
         }
         // Empty click while wiring: keep the gesture (no clear-selection pan).

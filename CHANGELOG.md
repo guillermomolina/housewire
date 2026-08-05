@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.81.1] — 2026-08-05
+
+### Fixed
+
+- First-click wiring snap: larger hit radius, sticky hover target, and block
+  place/element drag so nearby openings/terminals register on the first pick.
+
 ## [0.81.0] — 2026-08-05
 
 ### Added
