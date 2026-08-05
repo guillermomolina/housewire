@@ -2111,6 +2111,30 @@ button:hover {
   cursor: pointer;
 }
 
+/* Rubber-band while choosing the second wiring endpoint. */
+#wiring-preview {
+  fill: none;
+  stroke: var(--accent, #3b82f6);
+  stroke-width: 2.5;
+  stroke-dasharray: 7 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+#wiring-preview.wiring-preview-conductor {
+  stroke-width: 2;
+  opacity: 0.85;
+}
+
+circle.opening-mark.wiring-snap,
+circle.element-terminal.wiring-snap {
+  stroke: var(--accent, #3b82f6);
+  stroke-width: 2.25;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent, #3b82f6) 70%, transparent));
+}
+
 #viewport.wiring-conduit .opening-mark,
 #viewport.wiring-conduit .opening-label {
   stroke: var(--accent, #3b82f6);

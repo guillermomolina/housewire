@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+
+## [0.80.0] — 2026-08-05
+
+### Added
+
+- While inserting a conduit or conductor, show a Manhattan rubber-band preview
+  after the first endpoint, and snap the pointer to nearby openings/terminals
+  on both the first and second click.
+
 ### Changed
 
 - Route E2E: collapsed Route_01…Route_20 per-site modules into

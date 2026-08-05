@@ -32,7 +32,7 @@
   let selectedLinkKind = null;
   /**
    * Active wiring gesture.
-   * @type {null|{kind:"conduit"|"conductor", from:string|null}}
+   * @type {null|{kind:"conduit"|"conductor", from:string|null, fromX?:number, fromY?:number}}
    */
   let wiringMode = null;
   let depthLevel = DEPTH_DEFAULT;
@@ -1434,7 +1434,21 @@
     selectedLinkKind = null;
   }
 
+  function clearWiringSnapHighlight() {
+    if (!svg) return;
+    svg.querySelectorAll(".wiring-snap").forEach((el) => {
+      el.classList.remove("wiring-snap");
+    });
+  }
+
+  function clearWiringPreview() {
+    clearWiringSnapHighlight();
+    document.getElementById("wiring-preview")?.remove();
+  }
+
   function setWiringMode(mode) {
+    if (!mode) clearWiringPreview();
+    else if (!mode.from) document.getElementById("wiring-preview")?.remove();
     wiringMode = mode;
     syncWiringCursorUi();
   }
@@ -1476,6 +1490,212 @@
     if (!wiringMode) return;
     setWiringMode(null);
     setStatus(t("status.wiringCancelled"));
+  }
+
+  function wiringSnapRadius() {
+    return Math.max(14, 18 / Math.max(scale, 0.01));
+  }
+
+  /**
+   * Visible opening marks / terminals for wiring snap.
+   * @param {"conduit"|"conductor"} kind
+   * @returns {{ref:string,x:number,y:number,el:Element,pick:()=>void}[]}
+   */
+  function wiringSnapCandidates(kind) {
+    /** @type {{ref:string,x:number,y:number,el:Element,pick:()=>void}[]} */
+    const out = [];
+    if (!graph || !svg) return out;
+    if (kind === "conduit") {
+      const byId = Object.fromEntries(
+        (graph.nodes || []).map((n) => [n.id, n])
+      );
+      for (const node of graph.nodes || []) {
+        const g = nodesById[node.id];
+        if (!g) continue;
+        const a = absXY(node, byId);
+        for (const circle of g.querySelectorAll("circle.opening-mark[data-opening]")) {
+          const oid = circle.getAttribute("data-opening");
+          if (!oid) continue;
+          const cx = Number(circle.getAttribute("cx") || 0);
+          const cy = Number(circle.getAttribute("cy") || 0);
+          const nodeId = node.id;
+          const openingId = oid;
+          out.push({
+            ref: openingRefForNode(nodeId, openingId),
+            x: a.x + cx,
+            y: a.y + cy,
+            el: circle,
+            pick: () => applyWiringOpeningPick(nodeId, openingId, cx, cy),
+          });
+        }
+      }
+      return out;
+    }
+    const placeById = Object.fromEntries(
+      (graph.nodes || []).map((n) => [n.id, n])
+    );
+    for (const elem of graph.elements || []) {
+      const g = elementsById[elem.id];
+      if (!g) continue;
+      const a = elementAbsXY(elem, placeById);
+      for (const circle of g.querySelectorAll(
+        "circle.element-terminal[data-terminal]"
+      )) {
+        const tid = circle.getAttribute("data-terminal");
+        if (!tid) continue;
+        const cx = Number(circle.getAttribute("cx") || 0);
+        const cy = Number(circle.getAttribute("cy") || 0);
+        const elRef = elem;
+        const terminalId = tid;
+        out.push({
+          ref: terminalRefForElem(elRef, terminalId),
+          x: a.x + cx,
+          y: a.y + cy,
+          el: circle,
+          pick: () =>
+            applyWiringTerminalPick(elRef, terminalId, a.x + cx, a.y + cy),
+        });
+      }
+    }
+    return out;
+  }
+
+  function nearestWiringSnap(world, kind, excludeRef) {
+    if (!world || !kind) return null;
+    const maxD = wiringSnapRadius();
+    let best = null;
+    let bestD = maxD;
+    for (const c of wiringSnapCandidates(kind)) {
+      if (excludeRef && c.ref === excludeRef) continue;
+      const d = Math.hypot(c.x - world.x, c.y - world.y);
+      if (d <= bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    return best;
+  }
+
+  function updateWiringSnapHighlight(cand) {
+    clearWiringSnapHighlight();
+    if (cand?.el) cand.el.classList.add("wiring-snap");
+  }
+
+  function updateWiringPreview(endWorld) {
+    if (
+      !wiringMode?.from ||
+      !endWorld ||
+      !worldEl ||
+      !Number.isFinite(wiringMode.fromX) ||
+      !Number.isFinite(wiringMode.fromY)
+    ) {
+      document.getElementById("wiring-preview")?.remove();
+      return;
+    }
+    const pts = simpleOrthoPts(
+      { x: wiringMode.fromX, y: wiringMode.fromY },
+      endWorld
+    );
+    if (!pts || pts.length < 2) {
+      document.getElementById("wiring-preview")?.remove();
+      return;
+    }
+    const d = pointsToPathD(pts);
+    let path = document.getElementById("wiring-preview");
+    if (!path) {
+      path = el("path", {
+        id: "wiring-preview",
+        class: `wiring-preview wiring-preview-${wiringMode.kind}`,
+      });
+      worldEl.appendChild(path);
+    } else {
+      path.setAttribute(
+        "class",
+        `wiring-preview wiring-preview-${wiringMode.kind}`
+      );
+    }
+    path.setAttribute("d", d);
+  }
+
+  function syncWiringPointer(clientX, clientY) {
+    if (!wiringMode) return;
+    const world = clientToWorld(clientX, clientY);
+    const snap = nearestWiringSnap(world, wiringMode.kind, wiringMode.from);
+    updateWiringSnapHighlight(snap);
+    if (wiringMode.from) {
+      updateWiringPreview(snap ? { x: snap.x, y: snap.y } : world);
+    } else {
+      document.getElementById("wiring-preview")?.remove();
+    }
+  }
+
+  function applyWiringOpeningPick(nodeId, openingId, localX, localY) {
+    if (!wiringMode || wiringMode.kind !== "conduit") return false;
+    const ref = openingRefForNode(nodeId, openingId);
+    const byId = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
+    const node = byId[nodeId];
+    let x = localX;
+    let y = localY;
+    if (node && Number.isFinite(localX) && Number.isFinite(localY)) {
+      const a = absXY(node, byId);
+      x = a.x + localX;
+      y = a.y + localY;
+    } else if (node) {
+      const m = openingMouthAbs(node, openingId, openingId?.[0], byId);
+      x = m.x;
+      y = m.y;
+    }
+    if (!wiringMode.from) {
+      setWiringMode({
+        kind: "conduit",
+        from: ref,
+        fromX: x,
+        fromY: y,
+      });
+      setStatus(t("status.wiringConduitTo", { from: ref }));
+      return true;
+    }
+    if (wiringMode.from === ref) {
+      setStatus(t("status.wiringSameEnd"));
+      return true;
+    }
+    completeWiringConduit(ref).catch((err) =>
+      setStatus(String(err.message || err))
+    );
+    return true;
+  }
+
+  function applyWiringTerminalPick(elem, terminalId, worldX, worldY) {
+    if (!wiringMode || wiringMode.kind !== "conductor") return false;
+    const ref = terminalRefForElem(elem, terminalId);
+    let x = worldX;
+    let y = worldY;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      const placeById = Object.fromEntries(
+        (graph?.nodes || []).map((n) => [n.id, n])
+      );
+      const p = terminalCellAnchor(elem, terminalId, placeById);
+      x = p.x;
+      y = p.y;
+    }
+    if (!wiringMode.from) {
+      setWiringMode({
+        kind: "conductor",
+        from: ref,
+        fromX: x,
+        fromY: y,
+      });
+      setStatus(t("status.wiringConductorTo", { from: ref }));
+      return true;
+    }
+    if (wiringMode.from === ref) {
+      setStatus(t("status.wiringSameEnd"));
+      return true;
+    }
+    completeWiringConductor(ref).catch((err) =>
+      setStatus(String(err.message || err))
+    );
+    return true;
   }
 
   async function beginWiringGesture(kind) {
@@ -1593,40 +1813,24 @@
     if (!wiringMode || wiringMode.kind !== "conduit") return false;
     ev.stopPropagation();
     ev.preventDefault();
-    const ref = openingRefForNode(nodeId, openingId);
-    if (!wiringMode.from) {
-      wiringMode = { kind: "conduit", from: ref };
-      syncWiringCursorUi();
-      setStatus(t("status.wiringConduitTo", { from: ref }));
-      return true;
-    }
-    if (wiringMode.from === ref) {
-      setStatus(t("status.wiringSameEnd"));
-      return true;
-    }
-    completeWiringConduit(ref).catch((err) => setStatus(String(err.message || err)));
-    return true;
+    const g = nodesById[nodeId];
+    const circle = g?.querySelector(
+      `circle.opening-mark[data-opening="${CSS.escape(String(openingId))}"]`
+    );
+    const cx = circle ? Number(circle.getAttribute("cx") || 0) : NaN;
+    const cy = circle ? Number(circle.getAttribute("cy") || 0) : NaN;
+    return applyWiringOpeningPick(nodeId, openingId, cx, cy);
   }
 
   function onWiringTerminalClick(elem, terminalId, ev) {
     if (!wiringMode || wiringMode.kind !== "conductor") return false;
     ev.stopPropagation();
     ev.preventDefault();
-    const ref = terminalRefForElem(elem, terminalId);
-    if (!wiringMode.from) {
-      wiringMode = { kind: "conductor", from: ref };
-      syncWiringCursorUi();
-      setStatus(t("status.wiringConductorTo", { from: ref }));
-      return true;
-    }
-    if (wiringMode.from === ref) {
-      setStatus(t("status.wiringSameEnd"));
-      return true;
-    }
-    completeWiringConductor(ref).catch((err) =>
-      setStatus(String(err.message || err))
+    const placeById = Object.fromEntries(
+      (graph?.nodes || []).map((n) => [n.id, n])
     );
-    return true;
+    const p = terminalCellAnchor(elem, terminalId, placeById);
+    return applyWiringTerminalPick(elem, terminalId, p.x, p.y);
   }
 
   async function selectLink(linkId, kindHint) {
@@ -10625,6 +10829,9 @@
   }
 
   svg.addEventListener("pointermove", (ev) => {
+    if (wiringMode) {
+      syncWiringPointer(ev.clientX, ev.clientY);
+    }
     if (drag) {
       if (drag.kind === "resize") applyResizeDrag(ev);
       else applyMultiDrag(ev);
@@ -12603,6 +12810,26 @@
         }
         return;
       }
+      if (wiringMode && ev.button === 0 && !shouldPanPointer(ev)) {
+        const world = clientToWorld(ev.clientX, ev.clientY);
+        const snap = nearestWiringSnap(
+          world,
+          wiringMode.kind,
+          wiringMode.from
+        );
+        if (snap) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          snap.pick();
+          syncWiringPointer(ev.clientX, ev.clientY);
+          return;
+        }
+        // Empty click while wiring: keep the gesture (no clear-selection pan).
+        if (ev.target === svg || ev.target === viewport) {
+          ev.preventDefault();
+          return;
+        }
+      }
       if (drag || marquee) return;
       if (ev.target !== svg && ev.target !== viewport) return;
       if (beginMarquee(ev)) return;
@@ -12621,6 +12848,9 @@
   );
 
   window.addEventListener("pointermove", (ev) => {
+    if (wiringMode && !pendingCatalogPlacement && !placementDrag) {
+      syncWiringPointer(ev.clientX, ev.clientY);
+    }
     if (pendingCatalogPlacement && !placementDrag) {
       const wpos = clientToWorld(ev.clientX, ev.clientY);
       const defs = catalogInsertDefaults(pendingCatalogPlacement.kind);
