@@ -50,14 +50,17 @@ class TestWorkspaceUnit(unittest.TestCase):
 
             blank = ws.new_site(label="Blank", locale="en")
             self.assertTrue(blank.browser_origin)
-            self.assertEqual(blank.yaml_path.name, "new-site.yaml")
+            self.assertEqual(blank.yaml_path.name, "New site.yaml")
             self.assertEqual(blank.title, "New site")
             self.assertEqual(len(ws.status()["documents"]), 3)
             self.assertTrue(ws.status()["dirty"])
             es = ws.new_site(locale="es")
-            self.assertEqual(es.yaml_path.name, "nuevo-sitio.yaml")
+            self.assertEqual(es.yaml_path.name, "Nuevo sitio.yaml")
             self.assertEqual(es.title, "Nuevo sitio")
             self.assertTrue(es.session.dirty_paths())
+            _, es_doc = es.session.ensure_doc()
+            self.assertEqual(es_doc.get("name"), "Nuevo sitio")
+            self.assertEqual(es_doc.get("label"), "Nuevo sitio")
 
     def test_open_custom_yaml_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -204,13 +207,15 @@ class TestWorkspaceApi(unittest.TestCase):
             )
             self.assertEqual(created.status_code, 200)
             new_body = created.json()
-            self.assertEqual(new_body["document"]["yaml"], "nuevo-sitio.yaml")
+            self.assertEqual(new_body["document"]["yaml"], "Nuevo sitio.yaml")
             self.assertEqual(new_body["document"]["title"], "Nuevo sitio")
             self.assertTrue(new_body["document"]["browser_origin"])
             self.assertTrue(new_body["dirty"])
             self.assertTrue(new_body["document"]["dirty"])
             yaml_text = client.get("/api/workspace/yaml").json()["content"]
             self.assertIn("type: House", yaml_text)
+            self.assertIn("name: Nuevo sitio", yaml_text)
+            self.assertIn("label: Nuevo sitio", yaml_text)
 
 
 if __name__ == "__main__":

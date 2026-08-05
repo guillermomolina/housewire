@@ -242,23 +242,24 @@ class Workspace:
     ) -> Document:
         """Create an empty site tab (temp dir + localized YAML name).
 
-        The new document is marked dirty until Save / Save as. Tab title and
-        suggested filename follow ``locale`` (``es`` → Nuevo sitio /
-        ``nuevo-sitio.yaml``).
+        The new document is marked dirty until Save / Save as. Tab title,
+        root ``name``/``label``, and suggested filename follow ``locale``
+        (``es`` → ``Nuevo sitio`` / ``Nuevo sitio.yaml``).
         """
         loc = str(locale or "en").strip().lower()
         if loc.startswith("es"):
-            yaml_name = "nuevo-sitio.yaml"
             title = "Nuevo sitio"
         else:
-            yaml_name = "new-site.yaml"
             title = "New site"
+        root_label = label or title
+        yaml_name = f"{title}.yaml"
         root = Path(tempfile.mkdtemp(prefix="housewire-new-"))
         self._browser_temps.append(root)
         yaml_path = create_site_document(
             root,
             type_id=type_id,
-            label=label or title,
+            label=root_label,
+            working_name=root_label,
             yaml_name=yaml_name,
         )
         doc = self.open_site(yaml_path, force=True, browser_origin=True)

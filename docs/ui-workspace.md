@@ -9,7 +9,7 @@ directory around it when known:
 - optional `$SITE/catalog/` overlay (when opened from a real site path)
 - optional leftover `$SITE/out/` directories (ignored; not part of the document)
 
-New sites still default to `housewire.yaml`.
+New sites use a localized YAML name (``New site.yaml`` / ``Nuevo sitio.yaml``).
 
 **Tabs = open files.** Each tab is one document. File → Open adds another tab
 (or activates it if that YAML is already open). The tab × closes that file.

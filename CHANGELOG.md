@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.73.1] — 2026-08-05
+
+### Fixed
+
+- File → New uses spaced localized YAML names (``New site.yaml`` /
+  ``Nuevo sitio.yaml``) and sets root ``name`` and ``label`` to match.
+
 ## [0.73.0] — 2026-08-05
 
 ### Changed
@@ -29,7 +36,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - File → New creates a dirty tab titled ``New site`` / ``Nuevo sitio`` with
-  localized YAML name (``new-site.yaml`` / ``nuevo-sitio.yaml``).
+  matching root ``name``/``label`` and YAML name (``New site.yaml`` /
+  ``Nuevo sitio.yaml``).
 
 ### Fixed
 
