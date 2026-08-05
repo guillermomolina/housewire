@@ -654,7 +654,7 @@
    * - Cut then Paste with empty selection → original parent (put back; cables stay
    *   open/disconnected from any far end that was severed)
    * - Paste with a place selected + element clipboard → into that place
-   * - Paste with a place selected + place clipboard → siblings of that place
+   * - Paste with a different place selected + place clipboard → into that place
    */
   function resolvePasteParentSiteId() {
     const onlyElems = clipboardHasOnlyElements(editClipboard);
@@ -705,10 +705,21 @@
         if (uniq.length !== 1) return null;
         return uniq[0];
       }
-      // Places: paste as siblings of the selection.
-      const parents = [...new Set(placeSites.map(parentSiteIdOf))];
-      if (parents.length !== 1) return null;
-      return parents[0];
+      const uniq = [...new Set(placeSites)];
+      const sources = new Set(clipboardSourceSiteIds(editClipboard));
+      // Nest into the selected place when it is not the clipboard source
+      // (Cut→select destination, or Copy→select another box).
+      if (uniq.length === 1 && !sources.has(uniq[0])) {
+        return uniq[0];
+      }
+      // Sources still selected (typical Copy→Paste): paste as siblings.
+      if (uniq.length && uniq.every((id) => sources.has(id))) {
+        const parents = [...new Set(uniq.map(parentSiteIdOf))];
+        if (parents.length !== 1) return null;
+        return parents[0];
+      }
+      if (uniq.length !== 1) return null;
+      return uniq[0];
     }
 
     if (elemParents.length) {
@@ -718,6 +729,17 @@
       return uniq[0];
     }
     return locationId || ".";
+  }
+
+  function clipboardSourceSiteIds(payload) {
+    const items = (payload && payload.items) || [];
+    const ids = [];
+    for (const it of items) {
+      const path = it.path;
+      if (!Array.isArray(path) || !path.length) continue;
+      ids.push(path.join("/"));
+    }
+    return ids;
   }
 
   async function copySelection() {
@@ -10100,6 +10122,9 @@
     // Re-route tubes/cables once after the drag, not on every pointermove.
     // Element-only moves leave place boxes fixed → reuse conduit geometry.
     const items = finished.items || [];
+    if (await tryReparentPlacesAfterDrag(finished, items)) {
+      return;
+    }
     const placeParents = [];
     const elementParents = [];
     for (const item of items) {
@@ -12436,6 +12461,143 @@
       }
     }
     return bestId;
+  }
+
+  /**
+   * Like ``placeParentAtWorld``, but skips dragged places and their descendants
+   * so a box can nest into whatever lies under it.
+   */
+  function nestPlaceCanvasIdAtWorld(wx, wy, excludeCanvasIds) {
+    const exclude = excludeCanvasIds || [];
+    const byId = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
+    let bestId = ".";
+    let bestDepth = -1;
+    for (const n of graph?.nodes || []) {
+      if (
+        exclude.some(
+          (ex) => n.id === ex || String(n.id).startsWith(`${ex}/`)
+        )
+      ) {
+        continue;
+      }
+      const r = placeWorldRect(n, byId);
+      if (wx < r.x1 || wx > r.x2 || wy < r.y1 || wy > r.y2) continue;
+      const depth = Array.isArray(n.parts)
+        ? n.parts.length
+        : String(n.id || "").split("/").filter(Boolean).length;
+      if (depth > bestDepth) {
+        bestDepth = depth;
+        bestId = n.id;
+      }
+    }
+    return bestId;
+  }
+
+  /**
+   * If place drag ends over another place, reparent into that place.
+   * Returns true when the drop was handled (caller should skip position PATCH).
+   */
+  async function tryReparentPlacesAfterDrag(finished, items) {
+    const placeItems = (items || []).filter((it) => it.kind === "place");
+    if (!placeItems.length) return false;
+    if ((items || []).some((it) => it.kind === "element")) return false;
+
+    const byId = Object.fromEntries((graph?.nodes || []).map((n) => [n.id, n]));
+    const rootItems = placeItems.filter(
+      (it) =>
+        !placeItems.some(
+          (other) =>
+            other.id !== it.id && String(it.id).startsWith(`${other.id}/`)
+        )
+    );
+    if (!rootItems.length) return false;
+
+    const exclude = placeItems.map((it) => it.id);
+    const anchorId = finished.anchorId || rootItems[0].id;
+    const anchor = byId[anchorId] || byId[rootItems[0].id];
+    if (!anchor) return false;
+    const center = nodeCenterAbs(anchor, byId);
+    const nestCanvas = nestPlaceCanvasIdAtWorld(center.x, center.y, exclude);
+    const nestSite =
+      nestCanvas === "." ? locationId || "." : canvasToSiteId(nestCanvas);
+
+    const rootSiteIds = rootItems.map((it) => canvasToSiteId(it.id));
+    if (
+      rootSiteIds.some(
+        (sid) => nestSite === sid || nestSite.startsWith(`${sid}/`)
+      )
+    ) {
+      return false;
+    }
+    if (!rootSiteIds.some((sid) => parentSiteIdOf(sid) !== nestSite)) {
+      return false;
+    }
+
+    const positions = {};
+    for (const it of rootItems) {
+      const node = byId[it.id];
+      if (!node) continue;
+      const abs = absXY(node, byId);
+      const local = worldToParentLocal(abs.x, abs.y, nestCanvas);
+      const siteId = canvasToSiteId(it.id);
+      positions[siteId] = { x: local.x, y: local.y };
+      if (node.size_locked) {
+        positions[siteId].w = node.w;
+        positions[siteId].h = node.h;
+      }
+    }
+
+    try {
+      const res = await api("/api/edit/reparent", {
+        method: "POST",
+        body: JSON.stringify({
+          ids: rootSiteIds,
+          parent_id: nestSite,
+          positions,
+          location_id: locationId,
+          depth: depthLevel,
+        }),
+      });
+      if (res.graph) {
+        graph = res.graph;
+        depthLevel = graph.depth || depthLevel;
+        maxDepth = graph.max_depth || maxDepth;
+        render();
+      } else {
+        await loadLocation({ fit: false });
+      }
+      applyEditFlags(res);
+      expandOutlineAncestors(nestSite);
+      await loadOutline();
+      const moved = res.moved || [];
+      const relIds = moved
+        .map((id) => siteToCanvasRelative(id))
+        .filter((id) => id);
+      if (relIds.length) {
+        commitSelection(new Set(relIds), relIds[0]);
+        highlightOutlineSelection();
+      } else {
+        clearSelectionState();
+        setSelectedVisual();
+      }
+      await syncInspectorFromSelection();
+      const n = moved.length || rootSiteIds.length;
+      setStatus(
+        res.dirty
+          ? t("status.movedUnsaved", { n })
+          : t("status.moved", { n })
+      );
+      scheduleStatusRefresh();
+      return true;
+    } catch (err) {
+      setStatus(String(err.message || err));
+      try {
+        await loadLocation({ fit: false });
+      } catch {
+        /* ignore reload errors */
+      }
+      return true;
+    }
   }
 
   function clearPlacementGhost() {

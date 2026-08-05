@@ -29,6 +29,7 @@ from housewire.site.delete_selection import (
     _place_deleted,
     _resolve_terminal_element,
     _unique_name,
+    delete_selection,
 )
 from housewire.site.open_runs import format_open_notes
 from housewire.site.tree import logical_parts_from_id
@@ -68,6 +69,13 @@ CLIPBOARD_VERSION = 1
 class PasteResult:
     created: list[str] = field(default_factory=list)
     renamed: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class ReparentResult:
+    moved: list[str] = field(default_factory=list)
+    renamed: dict[str, str] = field(default_factory=dict)
+    deleted: list[str] = field(default_factory=list)
 
 
 def next_available_id(existing: set[str] | dict[str, Any], preferred: str) -> str:
@@ -974,3 +982,74 @@ def paste_payload(
         )
 
     return result
+
+
+def reparent_selection(
+    doc: dict[str, Any],
+    ids: list[str],
+    *,
+    parent_id: str,
+    positions: dict[str, Any] | None = None,
+    locale: str | None = None,
+) -> ReparentResult:
+    """Move selected places/elements under ``parent_id``.
+
+    Uses pack → cascade-delete → paste (cut semantics): internal links stay
+    intact; cross-boundary conductors become open runs. ``positions`` maps old
+    site ids (or leaf ids) to ``{x, y}`` (and optional ``w``/``h``) in the new
+    parent's local coordinates.
+    """
+    if not ids:
+        raise ValueError("ids must not be empty")
+    parent_parts = logical_parts_from_id(parent_id)
+    _node_at(doc, parent_parts)
+
+    selected_places, selected_elements, _, _ = _expand_deletion_sets(doc, ids)
+    if not selected_places and not selected_elements:
+        raise ValueError("Nothing to move")
+    place_roots, _elem_roots = _roots(selected_places, selected_elements)
+    for root in place_roots:
+        if parent_parts[: len(root)] == root:
+            raise ValueError("Cannot move a place into itself or a descendant")
+
+    clip = pack_selection(doc, ids)
+    delete_result = delete_selection(doc, ids)
+
+    pos_map = positions if isinstance(positions, dict) else {}
+    for item in clip.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        node = item.get("node")
+        if not isinstance(node, dict):
+            continue
+        path = item.get("path") or []
+        full_id = (
+            "/".join(str(p) for p in path) if path else str(item.get("id") or "")
+        )
+        leaf = str(item.get("id") or "")
+        pos = pos_map.get(full_id) or pos_map.get(leaf)
+        if not isinstance(pos, dict):
+            continue
+        if "x" in pos and "y" in pos:
+            try:
+                set_physical_position(node, float(pos["x"]), float(pos["y"]))
+            except (TypeError, ValueError):
+                pass
+        if "w" in pos and "h" in pos:
+            try:
+                set_physical_size(node, float(pos["w"]), float(pos["h"]))
+            except (TypeError, ValueError):
+                pass
+
+    paste = paste_payload(
+        doc,
+        parent_id=parent_id,
+        payload=clip,
+        mode="cut",
+        locale=locale,
+    )
+    return ReparentResult(
+        moved=list(paste.created),
+        renamed=dict(paste.renamed),
+        deleted=list(delete_result.deleted),
+    )

@@ -927,6 +927,51 @@ def create_app(site_root: Path | None = None) -> Any:
             **meta,
         }
 
+    @app.post("/api/edit/reparent")
+    async def api_edit_reparent(request: Request) -> dict[str, Any]:
+        from housewire.site.clipboard import reparent_selection
+
+        body = await _json_body(request)
+        raw_ids = body.get("ids") or []
+        if not isinstance(raw_ids, list) or not raw_ids:
+            raise HTTPException(400, "ids must be a non-empty list")
+        ids = [str(x).strip() for x in raw_ids if str(x).strip()]
+        if not ids:
+            raise HTTPException(400, "ids must be a non-empty list")
+        parent_id = str(body.get("parent_id") or ".").strip() or "."
+        positions = body.get("positions")
+        if positions is not None and not isinstance(positions, dict):
+            raise HTTPException(400, "positions must be an object")
+        location_id = str(body.get("location_id") or ".").strip() or "."
+        depth = _depth_from(body)
+        session = _session()
+        try:
+            _preload_location(location_id)
+            _begin_edit()
+            _path, doc = session.ensure_doc(_site_yaml())
+            locale = _locale_from_request(request, body=body)
+            _set_request_locale(locale)
+            result = reparent_selection(
+                doc,
+                ids,
+                parent_id=parent_id,
+                positions=positions if isinstance(positions, dict) else None,
+                locale=locale,
+            )
+            session.mark_dirty(_site_yaml())
+            meta = _end_edit()
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return {
+            "moved": result.moved,
+            "renamed": result.renamed,
+            "deleted": result.deleted,
+            "graph": _graph(location_id, depth, locale=locale),
+            **meta,
+        }
+
     @app.post("/api/physical/auto-layout")
     async def api_auto_layout(request: Request) -> dict[str, Any]:
         payload = await _json_body(request)

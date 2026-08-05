@@ -678,9 +678,13 @@ selection scope as Delete (places/elements). Clipboard is in-browser memory.
     parent**. Cross-boundary cables stay **open / disconnected** (open runs)
     until claim/land.
   - Element clipboard + a place selected: paste *into* that place.
-  - Place clipboard + a place selected: paste as siblings of that place.
+  - Place clipboard + a **different** place selected: paste *into* that place
+    (nest). Same source still selected after Copy: paste as siblings.
   Colliding sibling ids rename
   (`Interruptor` → `Interruptor_1`, `Interruptor_1` → `Interruptor_2`).
+- Dragging a place onto another place **reparents** it into that place (same
+  cable rules as cut+paste). Dropping with the same parent only updates
+  position.
 - Outline siblings use **natural sort** (`Interruptor_2` before `Interruptor_10`).
 
 ## Drawing (UI)

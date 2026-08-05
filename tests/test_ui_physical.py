@@ -1240,6 +1240,37 @@ class TestServeApi(unittest.TestCase):
                 oids,
             )
 
+        with tempfile.TemporaryDirectory() as tmp2:
+            root2 = Path(tmp2)
+            doc2 = init_site(root2, type_id="House", label="Site")
+            add_place(doc2, "Room", type_id="Room", label="Room")
+            add_place(
+                doc2, "Box", under=("Room",), type_id="JunctionBox", label="Box"
+            )
+            add_place(
+                doc2, "Host", under=("Room",), type_id="JunctionBox", label="Host"
+            )
+            save_site(root2, doc2)
+            client2 = TestClient(create_app(root2))
+            client2.get("/api/physical?location=Room&depth=2")
+            moved = client2.post(
+                "/api/edit/reparent",
+                json={
+                    "ids": ["Room/Box"],
+                    "parent_id": "Room/Host",
+                    "positions": {"Room/Box": {"x": 40, "y": 50}},
+                    "location_id": "Room",
+                    "depth": 2,
+                },
+            )
+            self.assertEqual(moved.status_code, 200, moved.text)
+            body = moved.json()
+            self.assertTrue(body.get("dirty"))
+            self.assertIn("Room/Host/Box", body.get("moved") or [])
+            node_ids = {n["id"] for n in body["graph"]["nodes"]}
+            self.assertIn("Host/Box", node_ids)
+            self.assertNotIn("Box", node_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

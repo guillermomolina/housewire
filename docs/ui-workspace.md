@@ -25,7 +25,8 @@ tabs. The last location/depth per open file is remembered while switching tabs.
 | Save as… | Browser/OS save picker; opens the copy as another tab |
 | Close / tab × | Close that document (prompt if dirty) |
 | Edit → Delete | Cascade-delete selected places/elements (`Del` / Backspace); cross-boundary cables become open runs |
-| Edit → Cut / Copy / Paste | Clipboard (`Ctrl+X`/`C`/`V`); places paste as siblings, elements into a selected place (or original box) |
+| Edit → Cut / Copy / Paste | Clipboard (`Ctrl+X`/`C`/`V`); place clipboard nests into a selected destination place (siblings when the copy source stays selected); elements into a selected place (or original box) |
+| Drag place onto place | Reparent into the drop target (`POST /api/edit/reparent`) |
 
 ```text
 Workspace
@@ -49,6 +50,7 @@ Workspace
 - `POST /api/edit/copy` — `{ "ids": […] }` pack selection (no mutation)
 - `POST /api/edit/cut` — pack + cascade delete (one undo)
 - `POST /api/edit/paste` — `{ "parent_id", "payload", "location_id"?, "depth"? }`
+- `POST /api/edit/reparent` — `{ "ids", "parent_id", "positions"?, "location_id"?, "depth"? }` move places into another place
 
 `housewire serve $SITE` may start with one site on disk; File → New / Open adds more
 tabs beside it.

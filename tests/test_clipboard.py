@@ -11,6 +11,7 @@ from housewire.site.clipboard import (
     next_available_id,
     pack_selection,
     paste_payload,
+    reparent_selection,
 )
 from housewire.site.delete_selection import delete_selection
 from housewire.site.natural_sort import natural_sort_key
@@ -287,6 +288,35 @@ class TestClipboard(unittest.TestCase):
         assert size is not None
         self.assertGreaterEqual(size[0], 200.0)
         self.assertGreater(size[0] * size[1], 200.0 * 120.0)
+
+    def test_reparent_place_into_sibling(self) -> None:
+        add_place(self.doc, "Room", type_id="Room")
+        add_place(self.doc, "Box_A", under=("Room",), type_id="JunctionBox")
+        add_place(self.doc, "Box_B", under=("Room",), type_id="JunctionBox")
+        result = reparent_selection(
+            self.doc,
+            ["Room/Box_A"],
+            parent_id="Room/Box_B",
+            positions={"Room/Box_A": {"x": 12.0, "y": 18.0}},
+        )
+        self.assertEqual(result.moved, ["Room/Box_B/Box_A"])
+        room = get_place_node(self.doc, ("Room",))
+        self.assertNotIn("Box_A", room.get("elements") or {})
+        box_b = get_place_node(self.doc, ("Room", "Box_B"))
+        self.assertIn("Box_A", box_b.get("elements") or {})
+        nested = get_place_node(self.doc, ("Room", "Box_B", "Box_A"))
+        from housewire.site.view_layout import get_physical_position
+
+        pos = get_physical_position(nested)
+        self.assertIsNotNone(pos)
+        assert pos is not None
+        self.assertEqual((round(pos[0]), round(pos[1])), (12, 18))
+
+    def test_reparent_rejects_into_self(self) -> None:
+        add_place(self.doc, "Room", type_id="Room")
+        add_place(self.doc, "Box", under=("Room",), type_id="JunctionBox")
+        with self.assertRaises(ValueError):
+            reparent_selection(self.doc, ["Room/Box"], parent_id="Room/Box")
 
 
 if __name__ == "__main__":

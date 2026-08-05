@@ -8,6 +8,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.73.0] — 2026-08-05
+
+### Changed
+
+- Paste with a place clipboard nests into a selected destination place (still
+  duplicates as a sibling when the Copy source stays selected).
+- Dragging a place onto another place reparents it into the drop target
+  (`POST /api/edit/reparent`).
+
 ## [0.72.1] — 2026-08-05
 
 ### Changed
