@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.77.2] — 2026-08-05
+
+### Fixed
+
+- Canvas action messages no longer repeat the document save state; only the
+  left doc strip shows saved / unsaved.
+
 ## [0.77.1] — 2026-08-05
 
 ### Changed

@@ -977,7 +977,7 @@
     const count = (res.deleted || siteIds).length;
     const bits = [`deleted ${count} item(s)`];
     if ((res.severed || []).length) bits.push(`${res.severed.length} open run(s)`);
-    setStatus(`${bits.join(" · ")} · unsaved`);
+    setStatus(bits.join(" · "));
     scheduleStatusRefresh();
   }
 
@@ -9187,9 +9187,7 @@
       render();
     }
     applyEditFlags(res);
-    setStatus(
-      res.dirty ? "flip updated · unsaved" : "flip updated"
-    );
+    setStatus("flip updated");
     scheduleStatusRefresh();
     if (propsTarget.kind === "element" && selectedId) {
       const elem = (graph?.elements || []).find((e) => e.id === selectedId);
@@ -9240,9 +9238,7 @@
       render();
     }
     applyEditFlags(res);
-    setStatus(
-      res.dirty ? "properties updated · unsaved" : "properties updated"
-    );
+    setStatus("properties updated");
     scheduleStatusRefresh();
     await loadOutline();
     highlightOutlineSelection();
@@ -9999,7 +9995,7 @@
     applyEditFlags(res);
     if (res.detail?.id) selectedLinkId = res.detail.id;
     await fillLinkInspector(selectedLinkId);
-    setStatus(res.dirty ? t("status.linkSavedUnsaved") : t("status.linkSaved"));
+    setStatus(t("status.linkSaved"));
   }
 
   function prefillInsertForms(detail) {
@@ -10126,11 +10122,7 @@
             }),
           });
           applyEditFlags(lastMeta);
-          setStatus(
-            lastMeta && lastMeta.dirty
-              ? t("status.resizedPlaceUnsaved")
-              : t("status.resizedPlace")
-          );
+          setStatus(t("status.resizedPlace"));
         } else {
           const ids = new Set([finished.targetId, ...norm.shiftedElems]);
           for (const id of ids) {
@@ -10166,11 +10158,7 @@
             });
           }
           applyEditFlags(lastMeta);
-          setStatus(
-            lastMeta && lastMeta.dirty
-              ? t("status.resizedElementUnsaved")
-              : t("status.resizedElement")
-          );
+          setStatus(t("status.resizedElement"));
         }
         scheduleStatusRefresh();
       } catch (err) {
@@ -10329,11 +10317,7 @@
       applyEditFlags(lastMeta);
       const n =
         Object.keys(placePositions).length + Object.keys(elemPositions).length;
-      setStatus(
-        lastMeta && lastMeta.dirty
-          ? t("status.movedUnsaved", { n })
-          : t("status.moved", { n })
-      );
+      setStatus(t("status.moved", { n }));
       scheduleStatusRefresh();
     } catch (err) {
       setStatus(String(err.message || err));
@@ -11761,7 +11745,7 @@
       bits.push(`${filledElem.length} element(s)`);
     }
     if (bits.length) {
-      setStatus(`auto-placed ${bits.join(" + ")} missing x/y · unsaved`);
+      setStatus(`auto-placed ${bits.join(" + ")} missing x/y`);
     }
     renderOutline();
     updateDocStatusStrip();
@@ -12921,9 +12905,7 @@
       await syncInspectorFromSelection();
       const n = moved.length || rootSiteIds.length;
       setStatus(
-        res.dirty
-          ? t("status.movedUnsaved", { n })
-          : t("status.moved", { n })
+        t("status.moved", { n })
       );
       scheduleStatusRefresh();
       return true;
@@ -13088,7 +13070,7 @@
         await selectNode(newId);
         highlightOutlineSelection({ scrollTo: newId });
       }
-      setStatus(t("status.catalogAddedUnsaved"));
+      setStatus(t("status.catalogAdded"));
       scheduleStatusRefresh();
     } catch (err) {
       const msg = String(err.message || err);
@@ -13293,7 +13275,7 @@
       await loadOutline();
       const newId = res.result?.place_id;
       if (newId) await selectNode(newId);
-      setStatus(`${kind} added · unsaved`);
+      setStatus(`${kind} added`);
       scheduleStatusRefresh();
       form.reset();
       if (selectedId) {
