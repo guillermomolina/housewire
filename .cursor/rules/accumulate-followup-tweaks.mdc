@@ -1,0 +1,23 @@
+---
+description: Accumulate follow-up tweaks into a single final commit
+alwaysApply: true
+---
+
+# Accumulate Follow-up Tweaks
+
+When a user asks for a small follow-up tweak on the same just-delivered change
+and indicates they are not satisfied yet:
+
+- Prefer undoing the last assistant commit and accumulating the tweak(s) in the
+  same change set.
+- Use `git reset --soft HEAD~1` only when the last commit is the assistant's
+  recent commit for that topic and it is safe to fold.
+- Re-commit once the user accepts the result, so the history keeps one clean
+  commit per accepted change.
+
+Safety checks before undoing a commit:
+
+- Do not drop user-authored work.
+- If there are unrelated staged/unstaged changes or the history is ambiguous,
+  ask the user before rewriting local commits.
+- Never push rewritten history unless the user explicitly asks to push.
