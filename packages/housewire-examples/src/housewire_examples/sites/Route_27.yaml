@@ -2,10 +2,10 @@ schema: house/v2
 type: House
 name: Route_27
 label: Route 27 — L-shaped back-face conduits
-notes: >
-  JunctionBox with B 2x2 and four DeviceBoxes offset so each back-face
-  conduit is a single Manhattan L (one corner) between painted mouths.
+notes: 'JunctionBox with B 2x2 and four DeviceBoxes offset so each back-face conduit
+  is a single Manhattan L (one corner) between painted mouths.
 
+  '
 elements:
   Caja_de_derivacion:
     type: JunctionBox
@@ -39,8 +39,8 @@ elements:
     openings: []
     view:
       physical:
-        x: 104.18814111957796
-        y: 464.80777952813605
+        x: 100.64127204417622
+        y: 268.86690890602597
         w: 240.0
         h: 160.0
   Caja_de_mecanismo_2:
@@ -57,8 +57,8 @@ elements:
     openings: []
     view:
       physical:
-        x: 291.5543614449002
-        y: 62.89601223622508
+        x: 708.0868427631626
+        y: 151.14605579785967
         w: 240.0
         h: 160.0
   Caja_de_mecanismo_1:
@@ -75,8 +75,8 @@ elements:
     openings: []
     view:
       physical:
-        x: 724.7689258499414
-        y: 300.5329553780773
+        x: 728.8832939774074
+        y: 579.5454407117354
         w: 240.0
         h: 160.0
   Caja_de_mecanismo:
@@ -93,8 +93,8 @@ elements:
     openings: []
     view:
       physical:
-        x: 426.17385331184056
-        y: 683.6962613569755
+        x: 209.07787913777872
+        y: 663.9402006069878
         w: 240.0
         h: 160.0
 cables:
