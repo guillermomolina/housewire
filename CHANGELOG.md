@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.82.3] — 2026-08-05
+
+### Added
+
+- E2E **Route_15** at depth 1/2: room-to-room conduit must stay ≤3 segments
+  (colinear case: one straight run; covers the same stub-cross gap as Route_14).
+
 ## [0.82.2] — 2026-08-05
 
 ### Fixed

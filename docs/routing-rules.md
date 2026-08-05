@@ -175,6 +175,7 @@ Live E2E coverage:
 | `test_route_smoke` | Compact early fixtures: `Route_01`, `03`, `06`, `07`, `12` |
 | `Route_01`…`Route_20` YAML | Example demos (not each one a separate E2E module) |
 | `Route_14` | Mid→End side tube is one straight segment |
+| `Route_15` | Room↔room tube ≤3 segments at depth 1/2 |
 | `Route_21` | Panel + room (reference regression) |
 | `Route_22` | Same-box cable must skirt foreign elements |
 | `Route_23` | Prefer conduit × over long C-detour |

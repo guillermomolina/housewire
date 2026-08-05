@@ -111,11 +111,12 @@ def free_port() -> int:
         return int(s.getsockname()[1])
 
 
-def _prepare_route_canvas(page) -> None:
-    """Enable Electrical and deepen so tubes/strands/elements are painted.
+def _prepare_route_canvas(page, *, depth: int | None = None) -> None:
+    """Enable Electrical and set canvas depth so tubes/strands/elements paint.
 
     Session defaults are depth 1 + electrical off (quiet editing view); live
-    route E2E needs the full nested diagram with cables visible.
+    route E2E needs the full nested diagram with cables visible unless
+    ``depth`` is set (0-based index matching the UI ``N/max`` label).
     """
     page.wait_for_selector("#btn-electrical", timeout=15000)
     page.wait_for_function(
@@ -139,22 +140,86 @@ def _prepare_route_canvas(page) -> None:
             }""",
             timeout=5000,
         )
+        # Electrical-on awaits setDepth(max); wait for that jump before
+        # selecting a shallow depth (otherwise we match 1/2 too early).
+        try:
+            page.wait_for_function(
+                """() => {
+                  const t = (
+                    document.getElementById('depth-label')?.textContent || ''
+                  ).trim();
+                  const m = /^(\\d+)\\/(\\d+)$/.exec(t);
+                  return Boolean(m && m[1] === m[2]);
+                }""",
+                timeout=8000,
+            )
+        except Exception:
+            page.wait_for_timeout(500)
+    if depth is None:
+        for _ in range(24):
+            depth_in = page.locator("#btn-depth-in")
+            if depth_in.is_disabled():
+                break
+            before = page.locator("#depth-label").inner_text()
+            depth_in.click()
+            try:
+                page.wait_for_function(
+                    """(prev) => {
+                      const d = document.getElementById('depth-label');
+                      const btn = document.getElementById('btn-depth-in');
+                      const text = (d && d.textContent) || '';
+                      return text !== prev || Boolean(btn && btn.disabled);
+                    }""",
+                    before,
+                    timeout=8000,
+                )
+            except Exception:
+                break
+        return
+
+    # Electrical-on may jump to max depth — reach UI label ``depth/…``.
+    want_prefix = f"{int(depth)}/"
+
+    def _label() -> str:
+        return (page.locator("#depth-label").inner_text() or "").strip()
+
     for _ in range(24):
+        if _label().startswith(want_prefix):
+            return
+        depth_out = page.locator("#btn-depth-out")
+        if depth_out.is_disabled():
+            break
+        before = _label()
+        depth_out.click()
+        try:
+            page.wait_for_function(
+                """(prev) => {
+                  const d = document.getElementById('depth-label');
+                  const text = ((d && d.textContent) || '').trim();
+                  return text !== prev;
+                }""",
+                before,
+                timeout=3000,
+            )
+        except Exception:
+            break
+    for _ in range(24):
+        if _label().startswith(want_prefix):
+            return
         depth_in = page.locator("#btn-depth-in")
         if depth_in.is_disabled():
             break
-        before = page.locator("#depth-label").inner_text()
+        before = _label()
         depth_in.click()
         try:
             page.wait_for_function(
                 """(prev) => {
                   const d = document.getElementById('depth-label');
-                  const btn = document.getElementById('btn-depth-in');
-                  const text = (d && d.textContent) || '';
-                  return text !== prev || Boolean(btn && btn.disabled);
+                  const text = ((d && d.textContent) || '').trim();
+                  return text !== prev;
                 }""",
                 before,
-                timeout=8000,
+                timeout=3000,
             )
         except Exception:
             break
@@ -165,8 +230,12 @@ def dump_live_canvas(
     *,
     wait_ms: int = 2000,
     require_tubes: bool = True,
+    depth: int | None = None,
 ) -> dict:
-    """Start serve, load the site, return tubes/strands dump."""
+    """Start serve, load the site, return tubes/strands dump.
+
+    ``depth`` selects the UI depth after enabling Electrical (None = deepest).
+    """
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:  # pragma: no cover
@@ -216,13 +285,14 @@ def dump_live_canvas(
             page = browser.new_page(viewport={"width": 1600, "height": 1000})
             page.goto(f"http://127.0.0.1:{port}/", wait_until="networkidle")
             page.wait_for_timeout(min(wait_ms, 500))
-            _prepare_route_canvas(page)
+            _prepare_route_canvas(page, depth=depth)
             page.wait_for_timeout(wait_ms)
             # Wait until the canvas has painted tubes and/or strands (avoids
             # empty dumps when outline/graph finishes after networkidle).
+            # Shallow depth often hides inbox strands — require tubes only then.
             try:
                 page.wait_for_function(
-                    """(needTubes) => {
+                    """([needTubes, needStrands]) => {
                       const body = document.body?.innerText || '';
                       if (body.includes('No locations with children found')) {
                         return true; // let dump report err
@@ -231,14 +301,23 @@ def dump_live_canvas(
                       const strands = [...document.querySelectorAll('#canvas path')]
                         .filter(el => parseFloat(el.getAttribute('stroke-width')||0) >= 2
                           && (el.getAttribute('stroke')||'').startsWith('#')).length;
-                      return strands > 0 && (!needTubes || tubes > 0);
+                      if (needTubes && tubes < 1) return false;
+                      if (needStrands && strands < 1) return false;
+                      return needTubes || needStrands || strands > 0 || tubes > 0;
                     }""",
-                    require_tubes,
+                    [require_tubes, depth is None and require_tubes],
                     timeout=15000,
                 )
             except Exception:
                 pass
             data = page.evaluate(_DUMP_JS)
+            if require_tubes and not (data.get("tubes") or []):
+                data = dict(data)
+                data["err"] = data.get("err") or "no edge-tube paths on canvas"
+            try:
+                data["depth_label"] = page.locator("#depth-label").inner_text()
+            except Exception:
+                pass
             browser.close()
         return data
     finally:
