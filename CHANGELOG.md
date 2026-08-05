@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 
+## [0.74.0] — 2026-08-05
+
+### Changed
+
+- Insert palette sorts by localized label again (easier to find types).
+- Place and element boxes show icon + name on one line; type stays in the
+  tooltip.
+
 ## [0.73.8] — 2026-08-05
 
 ### Fixed

@@ -238,8 +238,8 @@
     return svg;
   }
 
-  /** Lucide icon + type label on a canvas box (place or element). */
-  function appendTypeWithIcon(g, { icon, typeText, x, y, maxW, textClass }) {
+  /** Lucide icon + primary label on one line (place or element box). */
+  function appendIconWithLabel(g, { icon, labelText, x, y, maxW, textClass }) {
     const iconSize = 10;
     const gap = 3;
     const fo = document.createElementNS(ns, "foreignObject");
@@ -256,7 +256,7 @@
       el(
         "text",
         { class: textClass, x: textX, y },
-        fitLabel(typeText, Math.max(8, maxW - (iconSize + gap)))
+        fitLabel(labelText, Math.max(8, maxW - (iconSize + gap)))
       )
     );
   }
@@ -7638,13 +7638,6 @@
     if (label) {
       label.textContent = fitLabel(
         elem.display_name || elem.name || elem.leaf_id || elem.id,
-        w - 4
-      );
-    }
-    const typeEl = g.querySelector("text.element-type");
-    if (typeEl) {
-      typeEl.textContent = fitLabel(
-        elem.type_label || elem.type || "",
         Math.max(8, w - 15)
       );
     }
@@ -7684,14 +7677,7 @@
       const label = g.querySelector("text.node-label");
       if (label) {
         label.textContent = fitLabel(
-          n.display_name || n.name || n.id,
-          w
-        );
-      }
-      const typeEl = g.querySelector("text.node-type");
-      if (typeEl) {
-        typeEl.textContent = fitLabel(
-          (n.type_label || n.type || "") + (n.expandable ? " · +" : ""),
+          (n.display_name || n.name || n.id) + (n.expandable ? " · +" : ""),
           Math.max(8, w - 21)
         );
       }
@@ -7734,22 +7720,24 @@
     });
     g.appendChild(box);
     const fullLabel = node.display_label || node.label || node.display_name || node.name || node.id;
-    const canvasName = node.display_name || node.name || node.id;
-    g.appendChild(el("title", null, fullLabel));
+    const canvasName =
+      (node.display_name || node.name || node.id) +
+      (node.expandable ? " · +" : "");
+    const typeHint = node.type_label || node.type || "";
     g.appendChild(
       el(
-        "text",
-        { class: "node-label", x: 8, y: 18 },
-        fitLabel(canvasName, w)
+        "title",
+        null,
+        typeHint ? `${fullLabel} · ${typeHint}` : fullLabel
       )
     );
-    appendTypeWithIcon(g, {
+    appendIconWithLabel(g, {
       icon: node.icon,
-      typeText: (node.type_label || node.type || "") + (node.expandable ? " · +" : ""),
+      labelText: canvasName,
       x: 8,
-      y: 34,
+      y: 18,
       maxW: w - 16,
-      textClass: "node-type",
+      textClass: "node-label",
     });
 
     if (showOpenings) {
@@ -7905,20 +7893,13 @@
         ? ` · ${elem.type_label || elem.type}`
         : "");
     g.appendChild(el("title", null, title));
-    g.appendChild(
-      el(
-        "text",
-        { class: "element-label", x: 4, y: 12 },
-        fitLabel(elem.display_name || elem.name || elem.leaf_id || elem.id, w - 4)
-      )
-    );
-    appendTypeWithIcon(g, {
+    appendIconWithLabel(g, {
       icon: elem.icon,
-      typeText: elem.type_label || elem.type || "",
+      labelText: elem.display_name || elem.name || elem.leaf_id || elem.id,
       x: 4,
-      y: 22,
+      y: 14,
       maxW: w - 8,
-      textClass: "element-type",
+      textClass: "element-label",
     });
     // Terminal cells from terminal_grid (N1, S2, …).
     const grid = elem.terminal_grid;
@@ -12451,9 +12432,10 @@
       return hay.includes(needle);
     });
     rows.sort((a, b) =>
-      String(catalogTypeKey(a) || "").localeCompare(
-        String(catalogTypeKey(b) || ""),
-        "en"
+      String(a.label || catalogTypeKey(a) || "").localeCompare(
+        String(b.label || catalogTypeKey(b) || ""),
+        I18n.getLocale ? I18n.getLocale() : "en",
+        { sensitivity: "base" }
       )
     );
     return rows;
