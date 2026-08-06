@@ -352,6 +352,43 @@ class Workspace:
             new_doc.session.save(yaml_path)
         return new_doc
 
+    def save_as_file(self, dest: Path) -> Document:
+        """Write the active YAML buffer to ``dest`` and open that file as a tab.
+
+        Used by Electron (and other path-aware clients). If the previous
+        document was browser-origin (temp), it is closed after the new tab
+        is registered so Save As does not leave a ghost temp tab.
+        """
+        if self.document is None:
+            raise FileNotFoundError("No document open to Save As")
+        if not is_yaml(dest):
+            raise ValueError(f"Not a YAML file: {dest}")
+
+        prev = self.document
+        prev_id = prev.id
+        prev_browser = prev.browser_origin
+        yaml_path_src, live = prev.session.ensure_doc()
+        target = dest.expanduser().resolve()
+
+        if target == yaml_path_src.resolve():
+            prev.session.mark_dirty(yaml_path_src)
+            prev.session.save(yaml_path_src)
+            prev.force_dirty = False
+            prev.browser_origin = False
+            return prev
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        save_yaml(target, live, backup=target.is_file())
+        new_doc = self.open_site(target, force=True, browser_origin=False)
+        new_doc.force_dirty = False
+        # Buffer already matches disk; keep session clean.
+        new_doc.session.reconcile_dirty(new_doc.yaml_path)
+
+        if prev_browser and prev_id in self.documents and prev_id != new_doc.id:
+            self.close(force=True, doc_id=prev_id)
+            self.active_id = new_doc.id
+        return new_doc
+
 
 def create_workspace(initial_site: Path | None = None) -> Workspace:
     """Create a workspace, optionally opening ``initial_site``."""

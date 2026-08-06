@@ -60,6 +60,9 @@ Workspace
 - `GET /api/workspace/yaml` — current YAML text for Save as
 - `POST /api/workspace/close` — `{ "id"?, "force"? }` close one tab (active if omitted)
 - `POST /api/workspace/save-as` — `{ "path": "…" }` duplicate site tree as a new tab
+- `POST /api/workspace/save-as-file` — `{ "path": "…" }` write active YAML buffer to a
+  file path and open it (Electron / path-aware clients; closes a prior
+  browser-origin temp tab when applicable)
 - `POST /api/save` — save active document; returns YAML text for client write-back
 - `POST /api/edit/delete` — `{ "ids": ["Place/…"], "location_id"?, "depth"? }` cascade delete selection
 - `POST /api/edit/copy` — `{ "ids": […] }` pack selection (no mutation)
@@ -67,5 +70,20 @@ Workspace
 - `POST /api/edit/paste` — `{ "parent_id", "payload", "location_id"?, "depth"? }`
 - `POST /api/edit/reparent` — `{ "ids", "parent_id", "positions"?, "location_id"?, "depth"? }` move places into another place
 
-`housewire serve $SITE` may start with one site on disk; File → New / Open adds more
-tabs beside it.
+`housewire serve` may start with an empty workspace (no site argument) or with
+`$SITE` already open. File → New / Open adds more tabs beside it.
+
+## Web vs desktop (Electron)
+
+| | Web (`housewire serve`) | Desktop (`desktop/` Electron shell) |
+|--|-------------------------|-------------------------------------|
+| Open | Browser picker → `open-content` (temp site + optional File System Access handle) | Native dialog → absolute path → `POST /workspace/open` |
+| Save | Handle write-back + `/api/save`, or Save As if no target; serve-opened sites save via `/api/save` | `/api/save` to the real path when `browser_origin` is false |
+| Save As | Picker/download + `open-content` | Native dialog → `POST /workspace/save-as-file` |
+| Path in UI | Temp path (or filename only) | Real `yaml_path` from the server |
+
+Desktop uses a **system** Electron binary (`electron` on `PATH`, e.g. Arch
+`pacman -S electron`). The UI detects desktop mode when `window.housewireDesktop`
+is present (preload bridge). Help → About shows `desktop` or `server` next to
+the version. `GET /api/about` includes `"runtime": "server"`; the client labels
+desktop when the bridge is available.

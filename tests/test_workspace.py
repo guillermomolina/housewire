@@ -69,6 +69,48 @@ class TestWorkspaceUnit(unittest.TestCase):
             ws.clear_force_dirty()
             self.assertFalse(ws.status()["document"]["dirty"])
 
+    def test_save_as_file_and_reopen_same_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "site_a"
+            root.mkdir()
+            save_site(root, init_site(root, type_id="House", label="Site A"))
+            ws = create_workspace(root)
+            path, live = ws.require_session().ensure_doc()
+            live["notes"] = "from-save-as-file"
+            ws.require_session().mark_dirty(path)
+
+            dest = Path(tmp) / "copies" / "plan.yaml"
+            doc = ws.save_as_file(dest)
+            self.assertFalse(doc.browser_origin)
+            self.assertEqual(doc.yaml_path.resolve(), dest.resolve())
+            self.assertTrue(dest.is_file())
+            self.assertIn("from-save-as-file", dest.read_text(encoding="utf-8"))
+            # Original site tab stays open; new file is another tab.
+            self.assertEqual(len(ws.status()["documents"]), 2)
+
+            # Opening the same path again activates, does not duplicate.
+            again = ws.open_site(dest)
+            self.assertEqual(again.id, doc.id)
+            self.assertEqual(len(ws.status()["documents"]), 2)
+
+            # Save As from a browser-origin (New) tab closes the temp tab.
+            created = ws.new_site(locale="en")
+            self.assertTrue(created.browser_origin)
+            temp_id = created.id
+            n_before = len(ws.status()["documents"])
+            out = Path(tmp) / "from_new.yaml"
+            saved = ws.save_as_file(out)
+            self.assertFalse(saved.browser_origin)
+            self.assertNotIn(temp_id, ws.documents)
+            self.assertEqual(len(ws.status()["documents"]), n_before)
+            self.assertEqual(ws.status()["document"]["yaml"], "from_new.yaml")
+
+    def test_empty_workspace(self) -> None:
+        ws = create_workspace(None)
+        self.assertIsNone(ws.document)
+        self.assertEqual(ws.status()["documents"], [])
+        self.assertIsNone(ws.status()["document"])
+
     def test_open_custom_yaml_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "custom"
@@ -229,6 +271,44 @@ class TestWorkspaceApi(unittest.TestCase):
             place = client.get("/api/place", params={"location": ".", "id": "."})
             self.assertEqual(place.status_code, 200, place.text)
             self.assertEqual(place.json().get("type"), "House")
+
+    def test_save_as_file_api_and_empty_serve(self) -> None:
+        try:
+            from fastapi.testclient import TestClient
+        except ImportError:
+            self.skipTest("fastapi not installed")
+
+        from housewire.ui.app import create_app
+
+        empty = TestClient(create_app(None))
+        st = empty.get("/api/workspace").json()
+        self.assertIsNone(st["document"])
+        self.assertEqual(st["documents"], [])
+        about = empty.get("/api/about").json()
+        self.assertEqual(about.get("runtime"), "server")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "site"
+            root.mkdir()
+            save_site(root, init_site(root, type_id="House", label="S"))
+            client = TestClient(create_app(root))
+            created = client.post("/api/workspace/new", json={"locale": "en"})
+            self.assertEqual(created.status_code, 200)
+            dest = Path(tmp) / "out" / "saved.yaml"
+            saved = client.post(
+                "/api/workspace/save-as-file",
+                json={"path": str(dest)},
+            )
+            self.assertEqual(saved.status_code, 200, saved.text)
+            body = saved.json()
+            self.assertEqual(body["document"]["yaml"], "saved.yaml")
+            self.assertFalse(body["document"]["browser_origin"])
+            self.assertTrue(dest.is_file())
+            # Re-open same path activates existing tab.
+            again = client.post(
+                "/api/workspace/open", json={"path": str(dest)}
+            ).json()
+            self.assertEqual(again["document"]["id"], body["document"]["id"])
 
 
 if __name__ == "__main__":

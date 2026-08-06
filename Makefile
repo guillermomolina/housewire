@@ -9,7 +9,7 @@ CATALOG_LOCAL := catalogs/default
 # Parallel workers for live route E2E (each spins serve + Chromium).
 E2E_WORKERS ?= 4
 
-.PHONY: all prepare install test test-route-e2e test-route-e2e-smoke bundle-ui
+.PHONY: all prepare install test test-route-e2e test-route-e2e-smoke bundle-ui desktop desktop-prepare
 
 # Editable install with dev tools + UI + examples + catalog.
 EXTRAS := .[dev,ui,examples,catalog]
@@ -51,3 +51,10 @@ test-route-e2e-smoke:
 		tests/route_e2e/test_route_08.py \
 		tests/route_e2e/test_route_21.py \
 		-v -n $(E2E_WORKERS) --dist loadfile
+
+# Electron shell (system Electron on PATH, e.g. Arch ``pacman -S electron``).
+desktop-prepare:
+	$(MAKE) -C desktop prepare
+
+desktop:
+	$(MAKE) -C desktop run

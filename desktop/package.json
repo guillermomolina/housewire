@@ -1,0 +1,11 @@
+{
+  "name": "housewire-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal Electron shell for HouseWire (native file dialogs + path-aware save)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "housewire-desktop": "electron ."
+  }
+}

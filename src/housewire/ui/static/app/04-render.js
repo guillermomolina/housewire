@@ -2899,17 +2899,17 @@
   }
 
   async function saveDocument() {
-    const handle = activeDocId ? fileHandles[activeDocId] : null;
-    if (!handle) {
-      // New/browser-origin docs have no stable filesystem target yet.
-      // Route Save to Save As so the user picks where it should live.
+    if (!documentHasSaveTarget()) {
+      // New / browser-origin docs without a write target → Save As.
       await fileSaveAs();
       return null;
     }
-    // Keep server-side persistence/validation for workspace state, and also
-    // update the chosen file path from the stored FileSystem handle.
-    const exported = await api("/api/workspace/yaml");
-    await writeTextToFileHandle(handle, exported.content);
+    const handle = activeDocId ? fileHandles[activeDocId] : null;
+    if (handle && !isDesktopMode()) {
+      // Web File System Access: keep server buffer and write-back to the handle.
+      const exported = await api("/api/workspace/yaml");
+      await writeTextToFileHandle(handle, exported.content);
+    }
     const data = await api("/api/save", { method: "POST", body: "{}" });
     setStatus(t("status.saved", { n: (data.saved || []).length }));
     applyEditFlags(data);

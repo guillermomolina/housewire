@@ -13,6 +13,7 @@ APP_DIR = ROOT / "src" / "housewire" / "ui" / "static" / "app"
 OUT = ROOT / "src" / "housewire" / "ui" / "static" / "app.js"
 
 PARTS = [
+    "00-files.js",
     "01-core.js",
     "02-openings.js",
     "03-routing.js",

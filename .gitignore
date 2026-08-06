@@ -8,6 +8,7 @@ build/
 src/housewire.egg-info/
 .playwright-browsers/
 .tmp/
+desktop/node_modules/
 
 /sites/
 /catalogs/

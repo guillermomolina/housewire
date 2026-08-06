@@ -7,6 +7,32 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Desktop shell uses **system Electron** (``electron`` on ``PATH``, e.g. Arch
+  ``pacman -S electron``) instead of the npm ``electron`` binary download.
+  ``make desktop`` / ``desktop/Makefile`` no longer require ``npm install``.
+
+## [0.87.0] — 2026-08-06
+
+### Added
+
+- **Desktop vs web file modes**: Electron shell under ``desktop/`` with native
+  Open / Save As dialogs that pass absolute paths to the server. Web
+  (``housewire serve``) keeps browser pickers for testing.
+- ``POST /api/workspace/save-as-file`` writes the active YAML buffer to a path
+  and opens it (closes a prior browser-origin temp tab when applicable).
+- ``housewire serve`` may omit the site argument (empty workspace).
+- ``GET /api/about`` includes ``runtime: "server"``; About shows ``desktop``
+  when the Electron bridge is present.
+- UI fragment ``00-files.js``: shared web/desktop file helpers; Save uses
+  ``/api/save`` for serve-opened (non-browser-origin) documents without a
+  File System Access handle.
+
+### Changed
+
+- File → Open / Save / Save As route through the desktop bridge when
+  ``window.housewireDesktop`` is available; otherwise the previous web path.
 
 ## [0.86.0] — 2026-08-05
 

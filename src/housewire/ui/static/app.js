@@ -2,6 +2,132 @@
  * Sources: src/housewire/ui/static/app/*.js
  */
 (() => {
+  /* === 00-files.js: Web vs Electron file backends ===
+   * Fragment of the UI IIFE (bundled into ../app.js).
+   * Edit this file, then run: python scripts/bundle_ui_app.py
+   *
+   * Desktop (Electron): window.housewireDesktop → native dialogs + server paths.
+   * Web: File System Access / <input type="file"> + open-content temps.
+   */
+
+  const YAML_PICKER_TYPES = [
+    {
+      description: "YAML",
+      accept: {
+        "application/yaml": [".yaml", ".yml"],
+        "text/yaml": [".yaml", ".yml"],
+        "text/plain": [".yaml", ".yml"],
+      },
+    },
+  ];
+
+  function isDesktopMode() {
+    const bridge = window.housewireDesktop;
+    return Boolean(
+      bridge &&
+        typeof bridge.openYaml === "function" &&
+        typeof bridge.saveYamlAs === "function"
+    );
+  }
+
+  function desktopBridge() {
+    return window.housewireDesktop || null;
+  }
+
+  async function writeTextToFileHandle(handle, text) {
+    const writable = await handle.createWritable();
+    await writable.write(text);
+    await writable.close();
+  }
+
+  function downloadYamlBlob(filename, content) {
+    const blob = new Blob([content], { type: "application/yaml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename || "housewire.yaml";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function pickOpenYamlViaInput() {
+    return new Promise((resolve) => {
+      const input = document.getElementById("file-open-input");
+      if (!input) {
+        resolve(null);
+        return;
+      }
+      input.value = "";
+      const onChange = () => {
+        input.removeEventListener("change", onChange);
+        const file = input.files && input.files[0];
+        if (!file) {
+          resolve(null);
+          return;
+        }
+        file.text().then((content) => {
+          resolve({ handle: null, name: file.name, content });
+        }, () => resolve(null));
+      };
+      input.addEventListener("change", onChange);
+      input.click();
+    });
+  }
+
+  async function pickOpenYamlFileWeb() {
+    if (typeof window.showOpenFilePicker === "function") {
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          multiple: false,
+          types: YAML_PICKER_TYPES,
+          excludeAcceptAllOption: false,
+        });
+        const file = await handle.getFile();
+        return {
+          handle,
+          name: file.name,
+          content: await file.text(),
+        };
+      } catch (err) {
+        if (err && err.name === "AbortError") return null;
+      }
+    }
+    return pickOpenYamlViaInput();
+  }
+
+  async function pickSaveYamlFileWeb(suggestedName, content) {
+    if (typeof window.showSaveFilePicker === "function") {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: suggestedName || "housewire.yaml",
+          types: YAML_PICKER_TYPES,
+          excludeAcceptAllOption: false,
+        });
+        await writeTextToFileHandle(handle, content);
+        return { handle, name: handle.name || suggestedName };
+      } catch (err) {
+        if (err && err.name === "AbortError") return null;
+      }
+    }
+    downloadYamlBlob(suggestedName || "housewire.yaml", content);
+    return {
+      handle: null,
+      name: suggestedName || "housewire.yaml",
+      downloaded: true,
+    };
+  }
+
+  /**
+   * Whether Save can write without a Save As dialog.
+   * Desktop / serve-opened sites: server has a real path (!browser_origin).
+   * Web picker docs: need a FileSystemFileHandle for write-back.
+   */
+  function documentHasSaveTarget() {
+    if (!hasDocument || !activeDocId) return false;
+    if (!activeDocBrowserOrigin) return true;
+    if (isDesktopMode()) return false;
+    return Boolean(fileHandles[activeDocId]);
+  }
   /* === 01-core.js: State, API, documents, selection, layout helpers ===
    * Fragment of the UI IIFE (bundled into ../app.js).
    * Edit this file, then run: python scripts/bundle_ui_app.py
@@ -58,6 +184,12 @@
   let activeDocId = null;
   /** Active document YAML filename (e.g. NuevoSitio.yaml) for root Id display. */
   let activeYamlName = null;
+  /**
+   * True when the active document was opened from browser content / File → New
+   * (temp site on the server). False when opened from a real filesystem path
+   * (``housewire serve $SITE`` or Electron Open).
+   */
+  let activeDocBrowserOrigin = false;
   /** @type {Record<string, FileSystemFileHandle>} */
   let fileHandles = {};
   /** sessionStorage key for per-document camera/view (survives F5). */
@@ -563,6 +695,9 @@
         st.documents &&
         st.documents.find((d) => d.id === activeDocId)?.yaml) ||
       null;
+    activeDocBrowserOrigin = Boolean(
+      st && st.document && st.document.browser_origin
+    );
     if (!hasDocument) {
       dirtyLocal = false;
       canUndo = false;
@@ -570,6 +705,7 @@
       canReset = false;
       activeDocId = null;
       activeYamlName = null;
+      activeDocBrowserOrigin = false;
       updateHistoryButtons();
     }
     const serverDirty = ((st && st.dirty) || []).length > 0;
@@ -11987,17 +12123,17 @@
   }
 
   async function saveDocument() {
-    const handle = activeDocId ? fileHandles[activeDocId] : null;
-    if (!handle) {
-      // New/browser-origin docs have no stable filesystem target yet.
-      // Route Save to Save As so the user picks where it should live.
+    if (!documentHasSaveTarget()) {
+      // New / browser-origin docs without a write target → Save As.
       await fileSaveAs();
       return null;
     }
-    // Keep server-side persistence/validation for workspace state, and also
-    // update the chosen file path from the stored FileSystem handle.
-    const exported = await api("/api/workspace/yaml");
-    await writeTextToFileHandle(handle, exported.content);
+    const handle = activeDocId ? fileHandles[activeDocId] : null;
+    if (handle && !isDesktopMode()) {
+      // Web File System Access: keep server buffer and write-back to the handle.
+      const exported = await api("/api/workspace/yaml");
+      await writeTextToFileHandle(handle, exported.content);
+    }
     const data = await api("/api/save", { method: "POST", body: "{}" });
     setStatus(t("status.saved", { n: (data.saved || []).length }));
     applyEditFlags(data);
@@ -12265,108 +12401,25 @@
     scheduleStatusRefresh();
   }
 
-  const YAML_PICKER_TYPES = [
-    {
-      description: "YAML",
-      accept: {
-        "application/yaml": [".yaml", ".yml"],
-        "text/yaml": [".yaml", ".yml"],
-        "text/plain": [".yaml", ".yml"],
-      },
-    },
-  ];
-
-  async function writeTextToFileHandle(handle, text) {
-    const writable = await handle.createWritable();
-    await writable.write(text);
-    await writable.close();
-  }
-
-  function downloadYamlBlob(filename, content) {
-    const blob = new Blob([content], { type: "application/yaml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename || "housewire.yaml";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function pickOpenYamlViaInput() {
-    return new Promise((resolve) => {
-      const input = document.getElementById("file-open-input");
-      if (!input) {
-        resolve(null);
-        return;
-      }
-      input.value = "";
-      const onChange = () => {
-        input.removeEventListener("change", onChange);
-        const file = input.files && input.files[0];
-        if (!file) {
-          resolve(null);
-          return;
-        }
-        file.text().then((content) => {
-          resolve({ handle: null, name: file.name, content });
-        }, () => resolve(null));
-      };
-      input.addEventListener("change", onChange);
-      input.click();
-    });
-  }
-
-  async function pickOpenYamlFile() {
-    if (typeof window.showOpenFilePicker === "function") {
-      try {
-        const [handle] = await window.showOpenFilePicker({
-          multiple: false,
-          types: YAML_PICKER_TYPES,
-          excludeAcceptAllOption: false,
-        });
-        const file = await handle.getFile();
-        return {
-          handle,
-          name: file.name,
-          content: await file.text(),
-        };
-      } catch (err) {
-        if (err && err.name === "AbortError") return null;
-      }
-    }
-    return pickOpenYamlViaInput();
-  }
-
-  async function pickSaveYamlFile(suggestedName, content) {
-    // OS Save As dialog grants write access as part of the picker — no extra
-    // "allow edit" aviso beyond the system file dialog.
-    if (typeof window.showSaveFilePicker === "function") {
-      try {
-        const handle = await window.showSaveFilePicker({
-          suggestedName: suggestedName || "housewire.yaml",
-          types: YAML_PICKER_TYPES,
-          excludeAcceptAllOption: false,
-        });
-        await writeTextToFileHandle(handle, content);
-        return { handle, name: handle.name || suggestedName };
-      } catch (err) {
-        if (err && err.name === "AbortError") return null;
-      }
-    }
-    downloadYamlBlob(suggestedName || "housewire.yaml", content);
-    return {
-      handle: null,
-      name: suggestedName || "housewire.yaml",
-      downloaded: true,
-    };
-  }
-
   async function fileOpen() {
-    // Multi-doc: OS file picker, then load content into a workspace tab.
-    const picked = await pickOpenYamlFile();
-    if (!picked) return;
     rememberCurrentDocView();
     try {
+      if (isDesktopMode()) {
+        const path = await desktopBridge().openYaml();
+        if (!path) return;
+        const st = await api("/api/workspace/open", {
+          method: "POST",
+          body: JSON.stringify({ path }),
+        });
+        applyWorkspaceStatus(st);
+        await reloadAfterDocumentChange();
+        const name =
+          (st.document && (st.document.yaml || st.document.title)) || path;
+        setStatus(t("status.opened", { name }));
+        return;
+      }
+      const picked = await pickOpenYamlFileWeb();
+      if (!picked) return;
       const st = await api("/api/workspace/open-content", {
         method: "POST",
         body: JSON.stringify({
@@ -12410,18 +12463,43 @@
   }
 
   async function fileSaveAs() {
-    let exported;
     try {
-      exported = await api("/api/workspace/yaml");
-    } catch (err) {
-      setStatus(String(err.message || err));
-      return;
-    }
-    const suggested = exported.filename || "housewire.yaml";
-    const result = await pickSaveYamlFile(suggested, exported.content);
-    if (!result) return;
-    rememberCurrentDocView();
-    try {
+      if (isDesktopMode()) {
+        let suggested = "housewire.yaml";
+        try {
+          const exported = await api("/api/workspace/yaml");
+          suggested = exported.filename || suggested;
+        } catch {
+          /* keep default */
+        }
+        const path = await desktopBridge().saveYamlAs(suggested);
+        if (!path) return;
+        rememberCurrentDocView();
+        const st = await api("/api/workspace/save-as-file", {
+          method: "POST",
+          body: JSON.stringify({ path }),
+        });
+        applyWorkspaceStatus(st);
+        dirtyLocal = false;
+        updateSaveButton(false);
+        await reloadAfterDocumentChange();
+        const name =
+          (st.document && (st.document.yaml || st.document.title)) || path;
+        setStatus(`saved as ${name}`);
+        return;
+      }
+
+      let exported;
+      try {
+        exported = await api("/api/workspace/yaml");
+      } catch (err) {
+        setStatus(String(err.message || err));
+        return;
+      }
+      const suggested = exported.filename || "housewire.yaml";
+      const result = await pickSaveYamlFileWeb(suggested, exported.content);
+      if (!result) return;
+      rememberCurrentDocView();
       const st = await api("/api/workspace/open-content", {
         method: "POST",
         body: JSON.stringify({
@@ -13798,9 +13876,14 @@
       const copyrightEl = document.getElementById("about-copyright");
       if (titleEl) titleEl.textContent = about.title || "HouseWire";
       if (versionEl) {
-        versionEl.textContent = about.version
+        const runtime =
+          isDesktopMode() ? "desktop" : about.runtime || "server";
+        const ver = about.version
           ? t("about.version", { v: about.version })
           : "";
+        versionEl.textContent = ver
+          ? `${ver} · ${runtime}`
+          : String(runtime);
       }
       if (descEl) descEl.textContent = about.description || "";
       if (authorEl) authorEl.textContent = about.author || "";

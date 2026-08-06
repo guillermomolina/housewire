@@ -44,108 +44,25 @@
     scheduleStatusRefresh();
   }
 
-  const YAML_PICKER_TYPES = [
-    {
-      description: "YAML",
-      accept: {
-        "application/yaml": [".yaml", ".yml"],
-        "text/yaml": [".yaml", ".yml"],
-        "text/plain": [".yaml", ".yml"],
-      },
-    },
-  ];
-
-  async function writeTextToFileHandle(handle, text) {
-    const writable = await handle.createWritable();
-    await writable.write(text);
-    await writable.close();
-  }
-
-  function downloadYamlBlob(filename, content) {
-    const blob = new Blob([content], { type: "application/yaml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename || "housewire.yaml";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function pickOpenYamlViaInput() {
-    return new Promise((resolve) => {
-      const input = document.getElementById("file-open-input");
-      if (!input) {
-        resolve(null);
-        return;
-      }
-      input.value = "";
-      const onChange = () => {
-        input.removeEventListener("change", onChange);
-        const file = input.files && input.files[0];
-        if (!file) {
-          resolve(null);
-          return;
-        }
-        file.text().then((content) => {
-          resolve({ handle: null, name: file.name, content });
-        }, () => resolve(null));
-      };
-      input.addEventListener("change", onChange);
-      input.click();
-    });
-  }
-
-  async function pickOpenYamlFile() {
-    if (typeof window.showOpenFilePicker === "function") {
-      try {
-        const [handle] = await window.showOpenFilePicker({
-          multiple: false,
-          types: YAML_PICKER_TYPES,
-          excludeAcceptAllOption: false,
-        });
-        const file = await handle.getFile();
-        return {
-          handle,
-          name: file.name,
-          content: await file.text(),
-        };
-      } catch (err) {
-        if (err && err.name === "AbortError") return null;
-      }
-    }
-    return pickOpenYamlViaInput();
-  }
-
-  async function pickSaveYamlFile(suggestedName, content) {
-    // OS Save As dialog grants write access as part of the picker — no extra
-    // "allow edit" aviso beyond the system file dialog.
-    if (typeof window.showSaveFilePicker === "function") {
-      try {
-        const handle = await window.showSaveFilePicker({
-          suggestedName: suggestedName || "housewire.yaml",
-          types: YAML_PICKER_TYPES,
-          excludeAcceptAllOption: false,
-        });
-        await writeTextToFileHandle(handle, content);
-        return { handle, name: handle.name || suggestedName };
-      } catch (err) {
-        if (err && err.name === "AbortError") return null;
-      }
-    }
-    downloadYamlBlob(suggestedName || "housewire.yaml", content);
-    return {
-      handle: null,
-      name: suggestedName || "housewire.yaml",
-      downloaded: true,
-    };
-  }
-
   async function fileOpen() {
-    // Multi-doc: OS file picker, then load content into a workspace tab.
-    const picked = await pickOpenYamlFile();
-    if (!picked) return;
     rememberCurrentDocView();
     try {
+      if (isDesktopMode()) {
+        const path = await desktopBridge().openYaml();
+        if (!path) return;
+        const st = await api("/api/workspace/open", {
+          method: "POST",
+          body: JSON.stringify({ path }),
+        });
+        applyWorkspaceStatus(st);
+        await reloadAfterDocumentChange();
+        const name =
+          (st.document && (st.document.yaml || st.document.title)) || path;
+        setStatus(t("status.opened", { name }));
+        return;
+      }
+      const picked = await pickOpenYamlFileWeb();
+      if (!picked) return;
       const st = await api("/api/workspace/open-content", {
         method: "POST",
         body: JSON.stringify({
@@ -189,18 +106,43 @@
   }
 
   async function fileSaveAs() {
-    let exported;
     try {
-      exported = await api("/api/workspace/yaml");
-    } catch (err) {
-      setStatus(String(err.message || err));
-      return;
-    }
-    const suggested = exported.filename || "housewire.yaml";
-    const result = await pickSaveYamlFile(suggested, exported.content);
-    if (!result) return;
-    rememberCurrentDocView();
-    try {
+      if (isDesktopMode()) {
+        let suggested = "housewire.yaml";
+        try {
+          const exported = await api("/api/workspace/yaml");
+          suggested = exported.filename || suggested;
+        } catch {
+          /* keep default */
+        }
+        const path = await desktopBridge().saveYamlAs(suggested);
+        if (!path) return;
+        rememberCurrentDocView();
+        const st = await api("/api/workspace/save-as-file", {
+          method: "POST",
+          body: JSON.stringify({ path }),
+        });
+        applyWorkspaceStatus(st);
+        dirtyLocal = false;
+        updateSaveButton(false);
+        await reloadAfterDocumentChange();
+        const name =
+          (st.document && (st.document.yaml || st.document.title)) || path;
+        setStatus(`saved as ${name}`);
+        return;
+      }
+
+      let exported;
+      try {
+        exported = await api("/api/workspace/yaml");
+      } catch (err) {
+        setStatus(String(err.message || err));
+        return;
+      }
+      const suggested = exported.filename || "housewire.yaml";
+      const result = await pickSaveYamlFileWeb(suggested, exported.content);
+      if (!result) return;
+      rememberCurrentDocView();
       const st = await api("/api/workspace/open-content", {
         method: "POST",
         body: JSON.stringify({
@@ -1577,9 +1519,14 @@
       const copyrightEl = document.getElementById("about-copyright");
       if (titleEl) titleEl.textContent = about.title || "HouseWire";
       if (versionEl) {
-        versionEl.textContent = about.version
+        const runtime =
+          isDesktopMode() ? "desktop" : about.runtime || "server";
+        const ver = about.version
           ? t("about.version", { v: about.version })
           : "";
+        versionEl.textContent = ver
+          ? `${ver} · ${runtime}`
+          : String(runtime);
       }
       if (descEl) descEl.textContent = about.description || "";
       if (authorEl) authorEl.textContent = about.author || "";

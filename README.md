@@ -73,10 +73,23 @@ export SITE="$HOME/electrical-sites/my-site/my-site.yaml"
 
 ## Interactive physical UI
 
+**Web (testing):**
+
 ```bash
-housewire serve "$SITE"
+housewire serve            # empty workspace — File → Open / New
+housewire serve "$SITE"    # start with a site already open
 # → http://127.0.0.1:8765/
 ```
+
+**Desktop (Electron, native Open / Save As with real paths):**
+
+```bash
+# Arch: pacman -S electron
+make desktop
+```
+
+See [desktop/README.md](desktop/README.md) and
+[docs/ui-workspace.md](docs/ui-workspace.md) (Web vs desktop file I/O).
 
 Public demo (after `pip install -e packages/housewire-examples` or `.[examples]`):
 

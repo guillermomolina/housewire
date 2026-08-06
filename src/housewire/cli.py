@@ -63,7 +63,12 @@ def _build_parser() -> argparse.ArgumentParser:
         parents=[_catalog_parent()],
         help="Interactive physical location UI (requires housewire[ui])",
     )
-    serve_p.add_argument("site_path", help="Site YAML file or site directory")
+    serve_p.add_argument(
+        "site_path",
+        nargs="?",
+        default=None,
+        help="Site YAML file or site directory (optional; empty workspace if omitted)",
+    )
     serve_p.add_argument(
         "--host",
         default="127.0.0.1",
@@ -245,7 +250,7 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
     if cmd == "serve":
         from housewire.ui.app import run_serve
 
-        site_path = Path(args.site_path)
+        site_path = Path(args.site_path) if args.site_path else None
         try:
             run_serve(site_path, host=args.host, port=args.port)
         except (RuntimeError, FileNotFoundError, ValueError) as exc:

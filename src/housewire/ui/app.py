@@ -178,6 +178,8 @@ def create_app(site_root: Path | None = None) -> Any:
             "copyright": __copyright__,
             "repository": __repository__,
             "lang": locale,
+            # Client may override to "desktop" when the Electron bridge is present.
+            "runtime": "server",
         }
 
     @app.get("/api/wire-colors")
@@ -279,6 +281,23 @@ def create_app(site_root: Path | None = None) -> Any:
             workspace.close(force=force, doc_id=doc_id or None)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
+        return workspace.status()
+
+    @app.post("/api/workspace/save-as-file")
+    async def api_workspace_save_as_file(request: Request) -> dict[str, Any]:
+        """Write active YAML to a filesystem path and open it (Electron / path clients)."""
+        payload = await _json_body(request)
+        path = str(payload.get("path") or "").strip()
+        if not path:
+            raise HTTPException(400, "path is required")
+        try:
+            workspace.save_as_file(Path(path))
+        except FileNotFoundError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(400, str(exc)) from exc
         return workspace.status()
 
     @app.post("/api/workspace/save-as")
@@ -1308,9 +1327,16 @@ def create_app(site_root: Path | None = None) -> Any:
 
 
 def run_serve(
-    site_root: Path, *, host: str = "127.0.0.1", port: int = 8765
+    site_root: Path | None = None,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8765,
 ) -> None:
-    """Run uvicorn for the UI."""
+    """Run uvicorn for the UI.
+
+    ``site_root`` may be omitted to start with an empty workspace (File → Open /
+    New, or Electron dialogs).
+    """
     try:
         import uvicorn
     except ImportError as exc:
@@ -1318,8 +1344,10 @@ def run_serve(
             "UI extras not installed. Run: pip install 'housewire[ui]'"
         ) from exc
     app = create_app(site_root)
-    print(
-        f"{__title__} UI → http://{host}:{port}/  "
-        f"(site: {site_root.expanduser().resolve()})"
+    site_note = (
+        f"site: {site_root.expanduser().resolve()}"
+        if site_root is not None
+        else "empty workspace"
     )
+    print(f"{__title__} UI → http://{host}:{port}/  ({site_note})")
     uvicorn.run(app, host=host, port=port, log_level="info")

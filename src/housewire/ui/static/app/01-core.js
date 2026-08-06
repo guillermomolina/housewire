@@ -54,6 +54,12 @@
   let activeDocId = null;
   /** Active document YAML filename (e.g. NuevoSitio.yaml) for root Id display. */
   let activeYamlName = null;
+  /**
+   * True when the active document was opened from browser content / File → New
+   * (temp site on the server). False when opened from a real filesystem path
+   * (``housewire serve $SITE`` or Electron Open).
+   */
+  let activeDocBrowserOrigin = false;
   /** @type {Record<string, FileSystemFileHandle>} */
   let fileHandles = {};
   /** sessionStorage key for per-document camera/view (survives F5). */
@@ -559,6 +565,9 @@
         st.documents &&
         st.documents.find((d) => d.id === activeDocId)?.yaml) ||
       null;
+    activeDocBrowserOrigin = Boolean(
+      st && st.document && st.document.browser_origin
+    );
     if (!hasDocument) {
       dirtyLocal = false;
       canUndo = false;
@@ -566,6 +575,7 @@
       canReset = false;
       activeDocId = null;
       activeYamlName = null;
+      activeDocBrowserOrigin = false;
       updateHistoryButtons();
     }
     const serverDirty = ((st && st.dirty) || []).length > 0;
