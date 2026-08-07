@@ -7,11 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
+## [0.87.1] — 2026-08-07
 
-- Desktop shell uses **system Electron** (``electron`` on ``PATH``, e.g. Arch
-  ``pacman -S electron``) instead of the npm ``electron`` binary download.
-  ``make desktop`` / ``desktop/Makefile`` no longer require ``npm install``.
+### Fixed
+
+- Desktop: hide Electron's default menu bar so only the in-app File/Edit/View
+  menus show; set the window icon from ``desktop/icon.png`` (HouseWire logo).
 
 ## [0.87.0] — 2026-08-06
 

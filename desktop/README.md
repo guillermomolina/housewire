@@ -12,6 +12,9 @@ Open / Save As dialogs so the UI can use real filesystem paths.
 
 Optional: ``ELECTRON=/usr/bin/electron43`` if you need a specific Arch package.
 
+The shell hides Electron's default menu (so only the in-app menu remains) and
+uses ``desktop/icon.png`` as the window icon.
+
 ## Run
 
 From the repo root:

@@ -8,7 +8,7 @@
  * absolute paths so the renderer can call path-aware workspace APIs.
  */
 
-const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const http = require("http");
@@ -17,6 +17,7 @@ const path = require("path");
 
 const PREFS_NAME = "desktop-prefs.json";
 const DEFAULT_PORT = 8765;
+const APP_ICON = path.join(__dirname, "icon.png");
 
 /** @type {import('child_process').ChildProcess | null} */
 let serverProc = null;
@@ -177,7 +178,11 @@ function yamlFilters() {
 }
 
 function createWindow(port) {
-  mainWindow = new BrowserWindow({
+  // Keep a single menu: the in-app HTML bar (Archivo/Editar/…). Hide Electron's
+  // default File/Edit/View/Window chrome so it does not duplicate.
+  Menu.setApplicationMenu(null);
+
+  const winOpts = {
     width: 1280,
     height: 800,
     webPreferences: {
@@ -187,7 +192,13 @@ function createWindow(port) {
       sandbox: true,
     },
     title: "HouseWire",
-  });
+    autoHideMenuBar: true,
+  };
+  if (fs.existsSync(APP_ICON)) {
+    winOpts.icon = APP_ICON;
+  }
+  mainWindow = new BrowserWindow(winOpts);
+  mainWindow.setMenuBarVisibility(false);
   mainWindow.loadURL(`http://127.0.0.1:${port}/`);
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -234,6 +245,15 @@ async function boot() {
 }
 
 app.whenReady().then(() => {
+  app.setName("HouseWire");
+  if (process.platform === "linux" && fs.existsSync(APP_ICON)) {
+    try {
+      app.setIcon(APP_ICON);
+      // Some Linux DEs also pick up the window icon from BrowserWindow.
+    } catch {
+      /* older Electron without setIcon */
+    }
+  }
   boot().catch((err) => {
     console.error(err);
     dialog.showErrorBox("HouseWire desktop failed to start", String(err && err.message ? err.message : err));
