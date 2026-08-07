@@ -1,24 +1,32 @@
 schema: house/v2
 type: House
-label: 'Route 01 — same box'
-notes: 'Single junction box, two sockets, one conductor pair (no conduit).'
+label: Route 01 — same box
+notes: Single junction box, two sockets, one conductor pair (no conduit).
 elements:
   Box:
     type: JunctionBox
     label: Box
-    openings: [N1, S1]
-    opening_grid: {NS: 1, WE: 1}
+    openings:
+    - N1
+    - S1
+    opening_grid:
+      NS: 1
+      WE: 1
     elements:
       Socket_A:
         type: Socket
         label: Socket A
         view:
-          electrical: {x: 40.0, y: 40.0}
+          electrical:
+            x: 40.0
+            y: 40.0
       Socket_B:
         type: Socket
         label: Socket B
         view:
-          electrical: {x: 160.0, y: 40.0}
+          electrical:
+            x: 160.0
+            y: 40.0
     cables:
       Link_1:
         type: Conductor
@@ -27,8 +35,10 @@ elements:
         from: Socket_A.N1
         to: Socket_B.N1
     view:
-      physical: {x: 120.0, y: 80.0}
-
+      physical:
+        x: 100.0
+        y: 60.0
+        bounds: sprite
 view:
   physical:
     x: 0.0

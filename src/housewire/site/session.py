@@ -151,8 +151,13 @@ class SiteSession:
         buf = self._buffers.get(resolved)
         if buf is None:
             doc = abm.load_editable(resolved, self.root)
+            from housewire.site.view_layout import migrate_site_physical_to_sprite
+
+            migrated = migrate_site_physical_to_sprite(doc)
             mtime = resolved.stat().st_mtime if resolved.is_file() else None
-            buf = DocBuffer(path=resolved, doc=doc, dirty=False, mtime=mtime)
+            buf = DocBuffer(
+                path=resolved, doc=doc, dirty=bool(migrated), mtime=mtime
+            )
             self._buffers[resolved] = buf
             self._init_edit_history(resolved, doc)
         return resolved, buf.doc

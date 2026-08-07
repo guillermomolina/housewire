@@ -21,10 +21,11 @@ elements:
     openings: []
     view:
       physical:
-        x: 400.0
-        y: 400.0
-        w: 234.0
-        h: 196.0
+        x: 380.0
+        y: 380.0
+        w: 254.0
+        h: 216.0
+        bounds: sprite
   Caja_de_mecanismo_3:
     type: DeviceBox
     elements: {}
@@ -39,10 +40,11 @@ elements:
     openings: []
     view:
       physical:
-        x: 100.64127204417622
-        y: 268.86690890602597
-        w: 240.0
-        h: 160.0
+        x: 80.64127204417622
+        y: 248.86690890602597
+        w: 260.0
+        h: 180.0
+        bounds: sprite
   Caja_de_mecanismo_2:
     type: DeviceBox
     elements: {}
@@ -57,10 +59,11 @@ elements:
     openings: []
     view:
       physical:
-        x: 708.0868427631626
-        y: 151.14605579785967
-        w: 240.0
-        h: 160.0
+        x: 688.0868427631626
+        y: 131.14605579785967
+        w: 260.0
+        h: 180.0
+        bounds: sprite
   Caja_de_mecanismo_1:
     type: DeviceBox
     elements: {}
@@ -75,10 +78,11 @@ elements:
     openings: []
     view:
       physical:
-        x: 728.8832939774074
-        y: 579.5454407117354
-        w: 240.0
-        h: 160.0
+        x: 708.8832939774074
+        y: 559.5454407117354
+        w: 260.0
+        h: 180.0
+        bounds: sprite
   Caja_de_mecanismo:
     type: DeviceBox
     elements: {}
@@ -93,10 +97,11 @@ elements:
     openings: []
     view:
       physical:
-        x: 209.07787913777872
-        y: 663.9402006069878
-        w: 240.0
-        h: 160.0
+        x: 189.07787913777872
+        y: 643.9402006069878
+        w: 260.0
+        h: 180.0
+        bounds: sprite
 cables:
   OPEN_Linea_01_1:
     type: Conductor

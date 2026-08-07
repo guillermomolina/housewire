@@ -1,44 +1,75 @@
 schema: house/v2
 type: House
-label: 'Route 09 — strip four pairs feed'
-notes: 'Panel feed to 4-pair strip (phase, switched, neutral, PE).'
+label: Route 09 — strip four pairs feed
+notes: Panel feed to 4-pair strip (phase, switched, neutral, PE).
 elements:
   Panel:
     type: Panel
     label: Panel
-    openings: [S1]
-    opening_grid: {S: 1}
+    openings:
+    - S1
+    opening_grid:
+      S: 1
     elements:
       Supply:
         type: Supply
         view:
-          electrical: {x: 40.0, y: 20.0}
+          electrical:
+            x: 40.0
+            y: 20.0
       Earth:
         type: EarthElectrode
         view:
-          electrical: {x: 180.0, y: 20.0}
+          electrical:
+            x: 180.0
+            y: 20.0
     cables: {}
     view:
-      physical: {x: 140.0, y: 10.0}
+      physical:
+        x: 120.0
+        y: 0.0
+        bounds: sprite
   Box:
     type: JunctionBox
     label: Box
-    openings: [N1, E1]
-    opening_grid: {NS: 1, WE: 1}
+    openings:
+    - N1
+    - E1
+    opening_grid:
+      NS: 1
+      WE: 1
     elements:
       Strip:
         type: TerminalStrip
-        terminal_grid: {NS: 4}
+        terminal_grid:
+          NS: 4
         terminals:
-          N1: {label: L, direction: InOut, role: Phase}
-          N2: {label: Lsw, direction: InOut, role: Phase}
-          N3: {label: N, direction: InOut, role: Neutral}
-          N4: {label: PE, direction: InOut, role: PE}
+          N1:
+            label: L
+            direction: InOut
+            role: Phase
+          N2:
+            label: Lsw
+            direction: InOut
+            role: Phase
+          N3:
+            label: N
+            direction: InOut
+            role: Neutral
+          N4:
+            label: PE
+            direction: InOut
+            role: PE
         view:
-          electrical: {x: 70.0, y: 80.0}
+          electrical:
+            x: 70.0
+            y: 80.0
     cables: {}
     view:
-      physical: {x: 140.0, y: 220.0}
+      physical:
+        x: 120.0
+        y: 210.0
+        bounds: sprite
 cables:
   L:
     type: Conductor
@@ -60,12 +91,15 @@ cables:
     to: Box/Strip.N4
   Power:
     type: Cable
-    contains: [L, N]
+    contains:
+    - L
+    - N
     color: BK
     section: 2.5 mm2
   EarthCable:
     type: Cable
-    contains: [PE]
+    contains:
+    - PE
     color: BK
     section: 2.5 mm2
   Tube:
@@ -73,8 +107,9 @@ cables:
     subtype: Tube
     from: Panel.S1
     to: Box.N1
-    contains: [Power, EarthCable]
-
+    contains:
+    - Power
+    - EarthCable
 view:
   physical:
     x: 0.0

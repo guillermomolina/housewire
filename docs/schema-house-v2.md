@@ -448,9 +448,12 @@ views:
   parent so stored coordinates stay non-negative.
   Optional ``w`` / ``h`` (``> 0``) lock the place box size on the canvas; when
   omitted, the UI auto-sizes from nested places and (when the electrical layer
-  is on) elements. Optional ``flip_ns`` / ``flip_we`` mirror the place and its
-  nested content on the canvas only (opening ids in YAML stay the same; mouths
-  move with the flip). Nested flips compose (XOR) with ancestors.
+  is on) elements. For leaves that paint opening marks (iso bevel), ``x/y/w/h``
+  is the **sprite AABB** of everything drawn: local ``(0,0)`` is the NW of the
+  iso extrusion, the front face sits at ``(20,20)``, and ``bounds: sprite``
+  records that migration. Optional ``flip_ns`` / ``flip_we`` mirror the place
+  and its nested content on the canvas only (opening ids in YAML stay the same;
+  mouths move with the flip). Nested flips compose (XOR) with ancestors.
 - **`view.electrical`**: coordinates of an **element** inside its hosting place
   box (parent-local, ``>= 0``). Used when the UI **Elements** layer is on.
   Optional ``w`` / ``h`` lock the element box; when omitted, size follows the
@@ -477,12 +480,13 @@ views:
   isometric bevel of the leaf place: near faces (**N**, **W**, **F**) use a
   bold mark; far faces (**S**, **E**, **B**) use a dashed / double outline.
   Hidden box edges (back face **B** and depth ribs on **E**/**S**) use the
-  same dashed stroke as far opening marks. Side marks sit on the mid-depth
-  axis between the front and back projected edges; **F**/**B** marks stay
-  inside the front∩back overlap and are separated by the same NW iso offset
-  as the front/back box vertices (``B = F + (ISO_DX, ISO_DY)``).
+  same dashed stroke as far opening marks. The place ``view.physical`` box is
+  the sprite AABB (iso depth included); side marks sit on the mid-depth axis
+  between the front and back projected edges; **F**/**B** marks stay inside
+  the front∩back overlap and are separated by the NW iso depth
+  (``B = F + (-ISO_DEPTH, -ISO_DEPTH)``).
   Side-conduit routing uses those painted mouths; plane bocas still cross the
-  2D contour. Every `opening_grid` cell is shown (used or not).
+  2D front contour. Every `opening_grid` cell is shown (used or not).
 - Omitted when unused; the UI does not require these fields.
 
 ### Mounting

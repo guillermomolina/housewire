@@ -424,3 +424,98 @@ def set_physical_page(
                 f"representation must be one of: {', '.join(sorted(REPRESENTATIONS))}"
             )
         phys["representation"] = representation
+
+
+# Iso leaf layout: ``view.physical`` is the painted sprite AABB (front + NW depth).
+ISO_DEPTH = 20.0
+BOUNDS_SPRITE = "sprite"
+
+
+def place_paints_iso(place: dict[str, Any]) -> bool:
+    """True when the place paints opening marks (iso bevel on the canvas)."""
+    if not isinstance(place, dict):
+        return False
+    openings = place.get("openings")
+    if openings:
+        return True
+    grid = place.get("opening_grid")
+    return bool(isinstance(grid, dict) and len(grid) > 0)
+
+
+def get_physical_bounds(place: dict[str, Any]) -> str | None:
+    """Return ``view.physical.bounds`` or ``None``."""
+    layer = get_physical_view(place)
+    if layer is None:
+        return None
+    raw = layer.get("bounds")
+    return str(raw) if raw is not None else None
+
+
+def set_physical_bounds(place: dict[str, Any], bounds: str) -> None:
+    """Write ``view.physical.bounds`` (e.g. ``sprite``)."""
+    layer = _ensure_view_layer(place, "physical")
+    layer["bounds"] = str(bounds)
+
+
+def migrate_place_physical_to_sprite(place: dict[str, Any]) -> bool:
+    """Convert front-face layout to sprite AABB for one iso place.
+
+    ``x' = x - ISO_DEPTH``, ``y' = y - ISO_DEPTH``, ``w'/h' += ISO_DEPTH``,
+    then mark ``bounds: sprite``. Returns True when the place was updated.
+    """
+    if not place_paints_iso(place):
+        return False
+    if get_physical_bounds(place) == BOUNDS_SPRITE:
+        return False
+    pos = _get_xy(get_physical_view(place), allow_negative=True)
+    if pos is not None:
+        set_physical_position(
+            place,
+            pos[0] - ISO_DEPTH,
+            pos[1] - ISO_DEPTH,
+            allow_negative=True,
+        )
+    size = get_physical_size(place)
+    if size is not None:
+        set_physical_size(place, size[0] + ISO_DEPTH, size[1] + ISO_DEPTH)
+    set_physical_bounds(place, BOUNDS_SPRITE)
+    return True
+
+
+def migrate_site_physical_to_sprite(site_doc: dict[str, Any]) -> int:
+    """Migrate all iso places under ``site_doc``; renormalize negatives.
+
+    Returns the number of places updated.
+    """
+    from housewire.site.tree import get_place_node, iter_place_children, iter_places
+
+    changed = 0
+    for _parts, node in list(iter_places(site_doc, under=())):
+        if migrate_place_physical_to_sprite(node):
+            changed += 1
+    # Root site document itself may be a place with openings (rare).
+    if migrate_place_physical_to_sprite(site_doc):
+        changed += 1
+    if not changed:
+        return 0
+
+    # Collect sibling groups by parent parts.
+    by_parent: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    for parts, node in iter_places(site_doc, under=()):
+        by_parent.setdefault(parts[:-1], []).append(node)
+    # Deepest parents first so NW absorb cascades correctly.
+    for parent_parts in sorted(by_parent.keys(), key=len, reverse=True):
+        siblings = by_parent[parent_parts]
+        dx, dy = normalize_view_xy_siblings(siblings, layer="physical")
+        if not dx and not dy:
+            continue
+        if parent_parts:
+            try:
+                parent = get_place_node(site_doc, parent_parts)
+            except ValueError:
+                continue
+            shift_place_origin(parent, dx, dy)
+        else:
+            # Top-level under house root: grow page? siblings already ≥ 0.
+            pass
+    return changed

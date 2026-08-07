@@ -37,8 +37,9 @@ elements:
     cables: {}
     view:
       physical:
-        x: 187.0
+        x: 167.0
         y: 0.0
+        bounds: sprite
   Habitacion:
     type: Room
     label: Habitacion
@@ -92,8 +93,9 @@ elements:
         cables: {}
         view:
           physical:
-            x: 52.0
-            y: 23.0
+            x: 32.0
+            y: 3.0
+            bounds: sprite
         name: Caja derivacion
       Interruptor:
         type: DeviceBox
@@ -120,8 +122,9 @@ elements:
         cables: {}
         view:
           physical:
-            x: 408.0
-            y: 337.0
+            x: 388.0
+            y: 317.0
+            bounds: sprite
         name: Interruptor
       Lampara:
         type: LightPoint
@@ -162,8 +165,9 @@ elements:
         cables: {}
         view:
           physical:
-            x: 575.0
-            y: 79.0
+            x: 555.0
+            y: 59.0
+            bounds: sprite
         name: Lampara
     cables:
       Linea_interruptor_1:
@@ -248,7 +252,7 @@ elements:
     view:
       physical:
         x: 440.0
-        y: 273.0
+        y: 293.0
         page:
           width: 480
           height: 360

@@ -43,9 +43,15 @@
   }
 
   const PLANE_R = 6;
-  /** NW isometric extrusion (SVG up-left); deep enough for full mouth circles. */
-  const ISO_DX = -20;
-  const ISO_DY = -20;
+  /**
+   * NW isometric depth margin inside the sprite AABB (local ≥ 0).
+   * ``view.physical`` w/h is the full painted hull; the front face sits at
+   * ``(ISO_DEPTH, ISO_DEPTH)`` with size ``(W - ISO_DEPTH, H - ISO_DEPTH)``.
+   */
+  const ISO_DEPTH = 20;
+  /** @deprecated Kept as aliases for mark math (back = front - depth). */
+  const ISO_DX = -ISO_DEPTH;
+  const ISO_DY = -ISO_DEPTH;
   const OPENING_MARK_R = 5;
   /** Side marks depth position between front(0) and back(1) projected faces. */
   const ISO_MARK_SIDE_DEPTH_T = 0.5;
@@ -85,6 +91,37 @@
     return Boolean(grid && typeof grid === "object" && Object.keys(grid).length);
   }
 
+  /** Iso NW depth for a place that paints opening marks; else 0. */
+  function isoDepth(node) {
+    return nodeHasOpeningMarks(node) ? ISO_DEPTH : 0;
+  }
+
+  /** Front-face rect in sprite-local coordinates. */
+  function frontRectLocal(node) {
+    const d = isoDepth(node);
+    const W = nodeW(node);
+    const H = nodeH(node);
+    return {
+      x: d,
+      y: d,
+      w: Math.max(4, W - d),
+      h: Math.max(4, H - d),
+    };
+  }
+
+  /** Content origin (nested places / elements) in sprite-local coordinates. */
+  function contentOriginLocal(node) {
+    const fr = frontRectLocal(node);
+    return { x: fr.x + PAD, y: fr.y + HEADER };
+  }
+
+  /** Front-face rect in world coordinates. */
+  function frontRectAbs(node, byId) {
+    const a = absXY(node, byId);
+    const fr = frontRectLocal(node);
+    return { x: a.x + fr.x, y: a.y + fr.y, w: fr.w, h: fr.h };
+  }
+
   /** Local mark position for 3D paint and conduit mouth alignment. */
   function openingMarkLocal(node, openingId, byId) {
     const faceHint = String(openingId || "?").match(/^[NSEWFB]/i)?.[0] || "?";
@@ -92,37 +129,37 @@
     const visualFace = anchor.face || faceHint;
     const f = String(visualFace || "?").toUpperCase();
     const margin = ISO_MARK_FACE_MARGIN;
-    const w = nodeW(node);
-    const h = nodeH(node);
-    // Overlap of front [0,0]–[w,h] and back [ISO_DX,ISO_DY]–[w+ISO_DX,h+ISO_DY].
-    const ix0 = Math.max(0, ISO_DX);
-    const iy0 = Math.max(0, ISO_DY);
-    const ix1 = Math.min(w, w + ISO_DX);
-    const iy1 = Math.min(h, h + ISO_DY);
-    const insetX = Math.max(margin, Math.abs(ISO_DX) * ISO_MARK_FB_INSET_FACTOR);
-    const insetY = Math.max(margin, Math.abs(ISO_DY) * ISO_MARK_FB_INSET_FACTOR);
+    const fr = frontRectLocal(node);
+    const d = isoDepth(node);
+    const fw = fr.w;
+    const fh = fr.h;
+    // Front [fr] and back [0,0]–[fw,fh] overlap inside the sprite.
+    const insetX = Math.max(margin, d * ISO_MARK_FB_INSET_FACTOR);
+    const insetY = Math.max(margin, d * ISO_MARK_FB_INSET_FACTOR);
     let x = anchor.x;
     let y = anchor.y;
     if (f === "N" || f === "S" || f === "E" || f === "W") {
-      // Mid-depth axis between the front and back projected side edges.
-      const midX = ISO_DX * ISO_MARK_SIDE_DEPTH_T;
-      const midY = ISO_DY * ISO_MARK_SIDE_DEPTH_T;
-      x += midX;
-      y += midY;
+      // Mid-depth toward the back face (NW), staying inside the sprite.
+      const mid = d * ISO_MARK_SIDE_DEPTH_T;
       if (f === "N" || f === "S") {
-        x = Math.max(midX + margin, Math.min(w + midX - margin, x));
-        y = f === "N" ? midY : h + midY;
+        x = Math.max(fr.x - mid + margin, Math.min(fr.x + fw - mid - margin, x - mid));
+        y = f === "N" ? fr.y - mid : fr.y + fh - mid;
       } else {
-        y = Math.max(midY + margin, Math.min(h + midY - margin, y));
-        x = f === "W" ? midX : w + midX;
+        y = Math.max(fr.y - mid + margin, Math.min(fr.y + fh - mid - margin, y - mid));
+        x = f === "W" ? fr.x - mid : fr.x + fw - mid;
       }
     } else if (f === "F" || f === "B") {
-      // Pair F and B by the same iso diagonal as NW front↔back vertices:
-      // B = F + (ISO_DX, ISO_DY), both clamped so the pair fits in front∩back.
-      const loX = ix0 + insetX - ISO_DX;
-      const hiX = ix1 - insetX;
-      const loY = iy0 + insetY - ISO_DY;
-      const hiY = iy1 - insetY;
+      // Front-local overlap math (same as legacy), then offset into the sprite.
+      const w = fw;
+      const h = fh;
+      const ix0 = Math.max(0, ISO_DX);
+      const iy0 = Math.max(0, ISO_DY);
+      const ix1 = Math.min(w, w + ISO_DX);
+      const iy1 = Math.min(h, h + ISO_DY);
+      const loX = fr.x + ix0 + insetX - ISO_DX;
+      const hiX = fr.x + ix1 - insetX;
+      const loY = fr.y + iy0 + insetY - ISO_DY;
+      const hiY = fr.y + iy1 - insetY;
       x = Math.max(loX, Math.min(hiX, x));
       y = Math.max(loY, Math.min(hiY, y));
       if (f === "B") {
@@ -151,34 +188,42 @@
     };
   }
 
-  function nodeIsoTopPathD(w, _h) {
-    return `M 0 0 L ${w} 0 L ${w + ISO_DX} ${ISO_DY} L ${ISO_DX} ${ISO_DY} Z`;
+  /** Top iso face: front top edge → back top edge (sprite-local ≥ 0). */
+  function nodeIsoTopPathD(spriteW, _spriteH) {
+    const d = ISO_DEPTH;
+    const fw = spriteW - d;
+    return `M ${d} ${d} L ${d + fw} ${d} L ${fw} 0 L 0 0 Z`;
   }
 
-  function nodeIsoWestPathD(_w, h) {
-    return `M 0 0 L ${ISO_DX} ${ISO_DY} L ${ISO_DX} ${h + ISO_DY} L 0 ${h} Z`;
+  /** West iso face: front west edge → back west edge. */
+  function nodeIsoWestPathD(_spriteW, spriteH) {
+    const d = ISO_DEPTH;
+    const fh = spriteH - d;
+    return `M ${d} ${d} L 0 0 L 0 ${fh} L ${d} ${d + fh} Z`;
   }
 
   /** Solid visible edges on the projected back/top-left side. */
-  function nodeIsoVisibleWireD(w, h) {
-    const dx = ISO_DX;
-    const dy = ISO_DY;
+  function nodeIsoVisibleWireD(spriteW, spriteH) {
+    const d = ISO_DEPTH;
+    const fw = spriteW - d;
+    const fh = spriteH - d;
     return (
-      `M ${dx} ${dy} H ${w + dx} ` +
-      `M ${dx} ${dy} V ${h + dy} ` +
-      `M ${w} 0 L ${w + dx} ${dy} ` +
-      `M 0 0 L ${dx} ${dy} ` +
-      `M 0 ${h} L ${dx} ${h + dy}`
+      `M 0 0 H ${fw} ` +
+      `M 0 0 V ${fh} ` +
+      `M ${d + fw} ${d} L ${fw} 0 ` +
+      `M ${d} ${d} L 0 0 ` +
+      `M ${d} ${d + fh} L 0 ${fh}`
     );
   }
 
   /** Dashed hidden edges: right/bottom of back face + right depth ribs. */
-  function nodeIsoHiddenWireD(w, h) {
-    const dx = ISO_DX;
-    const dy = ISO_DY;
+  function nodeIsoHiddenWireD(spriteW, spriteH) {
+    const d = ISO_DEPTH;
+    const fw = spriteW - d;
+    const fh = spriteH - d;
     return (
-      `M ${w + dx} ${dy} V ${h + dy} H ${dx} ` +
-      `M ${w} ${h} L ${w + dx} ${h + dy}`
+      `M ${fw} 0 V ${fh} H 0 ` +
+      `M ${d + fw} ${d + fh} L ${fw} ${fh}`
     );
   }
 
@@ -269,12 +314,11 @@
 
   /** Local coords for B/F openings on a face grid, almost touching the border. */
   function planeAnchorLocal(node, openingId, face, byId) {
-    const w = nodeW(node);
-    const h = nodeH(node);
+    const fr = frontRectLocal(node);
     const plane = parsePlaneOpening(openingId);
     const f = (plane?.face || face || "?").toUpperCase();
     if (!plane || (f !== "B" && f !== "F")) {
-      return { x: w / 2, y: h / 2 };
+      return { x: fr.x + fr.w / 2, y: fr.y + fr.h / 2 };
     }
     const { cols, rows } = planeGridDims(node, f, plane);
     const flips = effectiveFlips(node, idMap(byId));
@@ -282,8 +326,8 @@
     let row = plane.row;
     if (flips.we) col = cols + 1 - col;
     if (flips.ns) row = rows + 1 - row;
-    let x = planeCellCenter(w, cols, col, PLANE_R);
-    let y = planeCellCenter(h, rows, row, PLANE_R);
+    let x = fr.x + planeCellCenter(fr.w, cols, col, PLANE_R);
+    let y = fr.y + planeCellCenter(fr.h, rows, row, PLANE_R);
     return { x, y };
   }
 
@@ -333,12 +377,10 @@
     if (!others.length) return { x: pt.x, y: pt.y };
     const CLEAR = 16;
     const NUDGE = 14;
-    const a = absXY(node, byId);
-    const w = nodeW(node);
-    const h = nodeH(node);
+    const fr = frontRectAbs(node, byId);
     const alongH = f === "N" || f === "S";
-    const clampX = (x) => Math.min(a.x + w - 8, Math.max(a.x + 8, x));
-    const clampY = (y) => Math.min(a.y + h - 8, Math.max(a.y + 8, y));
+    const clampX = (x) => Math.min(fr.x + fr.w - 8, Math.max(fr.x + 8, x));
+    const clampY = (y) => Math.min(fr.y + fr.h - 8, Math.max(fr.y + 8, y));
     const clearOf = (cx, cy) =>
       others.every((o) => Math.hypot(o.x - cx, o.y - cy) >= CLEAR);
     // Prefer 0, then left/down, then right/up.
@@ -370,22 +412,20 @@
     const approach = planeApproachFace(node, openingId, f, byId);
     const local = planeAnchorLocal(node, openingId, f, byId);
     const a = absXY(node, byId);
-    const w = nodeW(node);
-    const h = nodeH(node);
+    const frL = frontRectLocal(node);
     /** @type {{x:number,y:number}} */
     let mouth;
-    if (approach === "N") mouth = { x: a.x + local.x, y: a.y };
-    else if (approach === "S") mouth = { x: a.x + local.x, y: a.y + h };
-    else if (approach === "W") mouth = { x: a.x, y: a.y + local.y };
-    else if (approach === "E") mouth = { x: a.x + w, y: a.y + local.y };
+    if (approach === "N") mouth = { x: a.x + local.x, y: a.y + frL.y };
+    else if (approach === "S") mouth = { x: a.x + local.x, y: a.y + frL.y + frL.h };
+    else if (approach === "W") mouth = { x: a.x + frL.x, y: a.y + local.y };
+    else if (approach === "E") mouth = { x: a.x + frL.x + frL.w, y: a.y + local.y };
     else mouth = { x: a.x + local.x, y: a.y + local.y };
     return nudgeOffSideOpenings(node, approach, mouth, byId);
   }
 
   /** Local (0,0) anchor for labels drawn inside the node group. */
   function openingAnchorLocal(node, openingId, face, byId) {
-    const w = nodeW(node);
-    const h = nodeH(node);
+    const fr = frontRectLocal(node);
     const side = parseSideOpening(openingId);
     const plane = parsePlaneOpening(openingId);
     const rawFace = (
@@ -418,24 +458,22 @@
     ) {
       t = 1 - t;
     }
-    if (visualFace === "N") return { x: t * w, y: 0, face: visualFace };
-    if (visualFace === "S") return { x: t * w, y: h, face: visualFace };
-    if (visualFace === "W") return { x: 0, y: t * h, face: visualFace };
-    if (visualFace === "E") return { x: w, y: t * h, face: visualFace };
-    return { x: w / 2, y: h / 2, face: visualFace };
+    if (visualFace === "N") return { x: fr.x + t * fr.w, y: fr.y, face: visualFace };
+    if (visualFace === "S") return { x: fr.x + t * fr.w, y: fr.y + fr.h, face: visualFace };
+    if (visualFace === "W") return { x: fr.x, y: fr.y + t * fr.h, face: visualFace };
+    if (visualFace === "E") return { x: fr.x + fr.w, y: fr.y + t * fr.h, face: visualFace };
+    return { x: fr.x + fr.w / 2, y: fr.y + fr.h / 2, face: visualFace };
   }
 
   /** Nearest contour face for routing stubs into a B/F opening. */
   function planeApproachFace(node, openingId, face, byId) {
     const p = openingAnchorAbs(node, openingId, face, byId);
-    const a = absXY(node, byId);
-    const w = nodeW(node);
-    const h = nodeH(node);
+    const fr = frontRectAbs(node, byId);
     const dists = [
-      ["N", p.y - a.y],
-      ["S", a.y + h - p.y],
-      ["W", p.x - a.x],
-      ["E", a.x + w - p.x],
+      ["N", p.y - fr.y],
+      ["S", fr.y + fr.h - p.y],
+      ["W", p.x - fr.x],
+      ["E", fr.x + fr.w - p.x],
     ];
     dists.sort((x, y) => x[1] - y[1]);
     return dists[0][0];
@@ -1071,9 +1109,23 @@
     );
   }
 
+  /** True when ``pt`` lies strictly inside the front-face rectangle. */
+  function pointInPlaceInterior(pt, node, byId, pad) {
+    if (!pt || !node) return false;
+    const margin = pad == null ? 1 : pad;
+    const fr = frontRectAbs(node, byId);
+    return (
+      pt.x > fr.x + margin &&
+      pt.x < fr.x + fr.w - margin &&
+      pt.y > fr.y + margin &&
+      pt.y < fr.y + fr.h - margin
+    );
+  }
+
   /** Shrunk leaf-place rects as routing obstacles (skip rooms/containers). */
   function placeObstacles(byId, excludeIds, inset) {
-    const pad = inset == null ? 8 : inset;
+    // Sprite AABB is already the painted hull (iso depth included in w/h).
+    const pad = inset == null ? 2 : inset;
     if (
       routeGeomCache &&
       routeGeomCache.placeById === byId &&
@@ -1131,18 +1183,88 @@
     return rects;
   }
 
-  function pathObstacleCost(pts, obstacles) {
-    if (!obstacles || !obstacles.length) return 0;
+  function pathObstacleCost(pts, obstacles, endSlack) {
+    if (!obstacles || !obstacles.length || !pts || pts.length < 2) return 0;
+    // Mouths on iso sprites sit inside the AABB; ignore overlaps near ends so
+    // an outward stub can leave the box without a false obstacle hit.
+    const slack =
+      endSlack == null ? ISO_DEPTH + 24 : Math.max(0, Number(endSlack) || 0);
+    const p0 = pts[0];
+    const p1 = pts[pts.length - 1];
+    const trimNear = (x, y, px, py) => {
+      const dy = y - py;
+      const dx = x - px;
+      // Return 1D interval on the axis-aligned segment that lies inside the
+      // slack circle around endpoint (px,py). Caller supplies the free axis.
+      return null;
+    };
+    void trimNear;
     let cost = 0;
     for (const s of segsFromPoints(pts)) {
       for (const r of obstacles) {
         if (s.axis === "H") {
           if (s.y <= r.y || s.y >= r.y + r.h) continue;
-          const ov = rangeOverlapLen(s.a, s.b, r.x, r.x + r.w);
+          let lo = Math.max(Math.min(s.a, s.b), r.x);
+          let hi = Math.min(Math.max(s.a, s.b), r.x + r.w);
+          if (hi - lo <= 1) continue;
+          if (slack > 0) {
+            for (const ep of [p0, p1]) {
+              const dy = Math.abs(s.y - ep[1]);
+              if (dy >= slack) continue;
+              const half = Math.sqrt(Math.max(0, slack * slack - dy * dy));
+              const t0 = ep[0] - half;
+              const t1 = ep[0] + half;
+              // Subtract [t0,t1] from [lo,hi] — keep only the far remainder.
+              if (t1 <= lo || t0 >= hi) continue;
+              if (t0 <= lo && t1 >= hi) {
+                lo = hi;
+                break;
+              }
+              if (t0 <= lo) lo = t1;
+              else if (t1 >= hi) hi = t0;
+              else {
+                // Hole in the middle: charge both sides.
+                const left = t0 - lo;
+                const right = hi - t1;
+                if (left > 1) cost += 180 + left;
+                if (right > 1) cost += 180 + right;
+                lo = hi;
+                break;
+              }
+            }
+          }
+          const ov = hi - lo;
           if (ov > 1) cost += 180 + ov;
         } else {
           if (s.x <= r.x || s.x >= r.x + r.w) continue;
-          const ov = rangeOverlapLen(s.a, s.b, r.y, r.y + r.h);
+          let lo = Math.max(Math.min(s.a, s.b), r.y);
+          let hi = Math.min(Math.max(s.a, s.b), r.y + r.h);
+          if (hi - lo <= 1) continue;
+          if (slack > 0) {
+            for (const ep of [p0, p1]) {
+              const dx = Math.abs(s.x - ep[0]);
+              if (dx >= slack) continue;
+              const half = Math.sqrt(Math.max(0, slack * slack - dx * dx));
+              const t0 = ep[1] - half;
+              const t1 = ep[1] + half;
+              if (t1 <= lo || t0 >= hi) continue;
+              if (t0 <= lo && t1 >= hi) {
+                lo = hi;
+                break;
+              }
+              if (t0 <= lo) lo = t1;
+              else if (t1 >= hi) hi = t0;
+              else {
+                const left = t0 - lo;
+                const right = hi - t1;
+                if (left > 1) cost += 180 + left;
+                if (right > 1) cost += 180 + right;
+                lo = hi;
+                break;
+              }
+            }
+          }
+          const ov = hi - lo;
           if (ov > 1) cost += 180 + ov;
         }
       }
@@ -1265,8 +1387,8 @@
     const rects = [];
     for (const n of Object.values(byId || {})) {
       if (!n) continue;
-      const a = absXY(n, byId);
-      rects.push({ x: a.x, y: a.y, w: nodeW(n), h: nodeH(n) });
+      // Hug rails follow the front face (poker lid), not the iso NW margin.
+      rects.push(frontRectAbs(n, byId));
     }
     return rects;
   }

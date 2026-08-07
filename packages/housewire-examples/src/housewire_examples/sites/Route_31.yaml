@@ -1,0 +1,53 @@
+schema: house/v2
+type: House
+name: Route_31
+label: Route 31 — offset N↔N must skirt upper DeviceBox
+notes: 'Two DeviceBoxes with N openings offset in X. The tube Conducto_OPEN_Linea_01_01
+  must leave the upper N boca and skirt around Device_mechanism_box — including its
+  painted iso NW extrusion — not drop through the front face or 3D bevel (rule 17
+  / leaf obstacles).
+
+  '
+elements:
+  Device_mechanism_box:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Device / mechanism box
+    label: Device / mechanism box
+    subtype: OneGang
+    opening_grid:
+      NS: 1
+      WE: 1
+      B: 1
+    view:
+      physical:
+        x: 41.52935791015625
+        y: 21.705886840820312
+        w: 237.0
+        h: 174.0
+        bounds: sprite
+  Device_mechanism_box_1:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Device / mechanism box 1
+    label: Device / mechanism box 1
+    subtype: OneGang
+    opening_grid:
+      NS: 1
+      WE: 1
+      B: 1
+    view:
+      physical:
+        x: 4.117645263671875
+        y: 279.0
+        w: 260.0
+        h: 180.0
+        bounds: sprite
+cables:
+  Conducto_OPEN_Linea_01_01:
+    type: Conduit
+    from: Device_mechanism_box.N1
+    to: Device_mechanism_box_1.N1
+    subtype: Tube

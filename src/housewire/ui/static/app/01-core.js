@@ -1169,6 +1169,7 @@
       for (const n of Object.values(placeById || {})) {
         if (!n || childrenOf(n.id).length) continue;
         const a = absXY(n, placeById);
+        // Sprite AABB already includes iso depth.
         const w = nodeW(n) - 2 * pad;
         const h = nodeH(n) - 2 * pad;
         if (w < 4 || h < 4) continue;
@@ -1195,8 +1196,7 @@
     const borderRects = [];
     for (const n of Object.values(placeById || {})) {
       if (!n) continue;
-      const a = absXY(n, placeById);
-      borderRects.push({ x: a.x, y: a.y, w: nodeW(n), h: nodeH(n) });
+      borderRects.push(frontRectAbs(n, placeById));
     }
     routeGeomCache = {
       placeById,
@@ -2739,11 +2739,13 @@
       let autoH;
       if (!kids.length && !elems.length) {
         // Keep server size when no visible interior (depth / empty leaf).
+        const depth = isoDepth(node);
         autoW =
           node.w == null
-            ? leafWidthForLabel(node.display_name || node.name || node.id)
+            ? leafWidthForLabel(node.display_name || node.name || node.id) +
+              depth
             : node.w;
-        autoH = node.h == null ? LEAF_H : node.h;
+        autoH = node.h == null ? LEAF_H + depth : node.h;
       } else {
         let minL = 0;
         let minT = 0;
@@ -2767,6 +2769,11 @@
         }
         autoW = Math.max(LEAF_W, maxR - minL + 2 * PAD);
         autoH = Math.max(LEAF_H, HEADER + (maxB - minT) + PAD);
+        const depth = isoDepth(node);
+        if (depth) {
+          autoW += depth;
+          autoH += depth;
+        }
       }
       if (node._auto_absorb) {
         // Live NW absorb already grew w/h to keep the opposite wall fixed;
@@ -2806,10 +2813,12 @@
       const parent = placeById[parentId];
       if (!parent) continue;
       const pa = absXY(parent, placeById);
-      const ox = pa.x + PAD;
-      const oy = pa.y + HEADER;
-      let maxR = Math.max(0, nodeW(parent) - 2 * PAD);
-      let maxB = Math.max(0, nodeH(parent) - HEADER - PAD);
+      const origin = contentOriginLocal(parent);
+      const fr = frontRectLocal(parent);
+      const ox = pa.x + origin.x;
+      const oy = pa.y + origin.y;
+      let maxR = Math.max(0, fr.w - 2 * PAD);
+      let maxB = Math.max(0, fr.h - HEADER - PAD);
       for (const pts of polys) {
         if (!pts || pts.length < 1) continue;
         for (const p of pts) {
@@ -2823,8 +2832,9 @@
           maxB = Math.max(maxB, ly + margin);
         }
       }
-      const newW = Math.max(LEAF_W, maxR + 2 * PAD);
-      const newH = Math.max(LEAF_H, HEADER + maxB + PAD);
+      const depth = isoDepth(parent);
+      const newW = Math.max(LEAF_W, maxR + 2 * PAD) + depth;
+      const newH = Math.max(LEAF_H, HEADER + maxB + PAD) + depth;
       if (newW > (parent.w ?? 0) + 0.5 || newH > (parent.h ?? 0) + 0.5) {
         parent.w = newW;
         parent.h = newH;
@@ -2863,9 +2873,10 @@
       parent,
       flips
     );
+    const origin = contentOriginLocal(parent);
     return {
-      x: pa.x + PAD + local.x,
-      y: pa.y + HEADER + local.y,
+      x: pa.x + origin.x + local.x,
+      y: pa.y + origin.y + local.y,
     };
   }
 

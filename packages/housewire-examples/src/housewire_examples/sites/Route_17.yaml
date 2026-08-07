@@ -1,51 +1,80 @@
 schema: house/v2
 type: House
-label: 'Route 17 — NESW fan'
-notes: 'Two parallel east tubes (fan-out stand-in until empty tubes are fixed).'
+label: Route 17 — NESW fan
+notes: Two parallel east tubes (fan-out stand-in until empty tubes are fixed).
 elements:
   Box_A:
     type: JunctionBox
     label: Hub
-    openings: [E1, E2]
-    opening_grid: {E: 2}
+    openings:
+    - E1
+    - E2
+    opening_grid:
+      E: 2
     elements:
       Strip:
         type: TerminalStrip
-        terminal_grid: {NS: 2}
+        terminal_grid:
+          NS: 2
         terminals:
-          N1: {label: '1', direction: InOut, role: Phase}
-          N2: {label: '2', direction: InOut, role: Phase}
+          N1:
+            label: '1'
+            direction: InOut
+            role: Phase
+          N2:
+            label: '2'
+            direction: InOut
+            role: Phase
         view:
-          electrical: {x: 70.0, y: 60.0}
+          electrical:
+            x: 70.0
+            y: 60.0
     cables: {}
     view:
-      physical: {x: 40.0, y: 100.0}
+      physical:
+        x: 20.0
+        y: 80.0
+        bounds: sprite
   Box_B:
     type: DeviceBox
     label: North-east
-    openings: [W1]
-    opening_grid: {W: 1}
+    openings:
+    - W1
+    opening_grid:
+      W: 1
     elements:
       Socket:
         type: Socket
         view:
-          electrical: {x: 40.0, y: 30.0}
+          electrical:
+            x: 40.0
+            y: 30.0
     cables: {}
     view:
-      physical: {x: 360.0, y: 40.0}
+      physical:
+        x: 340.0
+        y: 20.0
+        bounds: sprite
   Box_C:
     type: DeviceBox
     label: South-east
-    openings: [W1]
-    opening_grid: {W: 1}
+    openings:
+    - W1
+    opening_grid:
+      W: 1
     elements:
       Socket:
         type: Socket
         view:
-          electrical: {x: 40.0, y: 30.0}
+          electrical:
+            x: 40.0
+            y: 30.0
     cables: {}
     view:
-      physical: {x: 360.0, y: 220.0}
+      physical:
+        x: 340.0
+        y: 200.0
+        bounds: sprite
 cables:
   Run_B:
     type: Conductor
@@ -64,14 +93,15 @@ cables:
     subtype: Tube
     from: Box_A.E1
     to: Box_B.W1
-    contains: [Run_B]
+    contains:
+    - Run_B
   Tube_C:
     type: Conduit
     subtype: Tube
     from: Box_A.E2
     to: Box_C.W1
-    contains: [Run_C]
-
+    contains:
+    - Run_C
 view:
   physical:
     x: 0.0

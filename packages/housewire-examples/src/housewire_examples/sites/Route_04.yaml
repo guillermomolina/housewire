@@ -1,51 +1,81 @@
 schema: house/v2
 type: House
-label: 'Route 04 — L shaped path'
+label: Route 04 — L shaped path
 notes: 'Three boxes: horizontal then vertical conduit chain.'
 elements:
   Box_A:
     type: DeviceBox
     label: A
-    openings: [E1]
-    opening_grid: {E: 1}
+    openings:
+    - E1
+    opening_grid:
+      E: 1
     elements:
       Socket:
         type: Socket
         view:
-          electrical: {x: 40.0, y: 30.0}
+          electrical:
+            x: 40.0
+            y: 30.0
     cables: {}
     view:
-      physical: {x: 20.0, y: 40.0}
+      physical:
+        x: 0.0
+        y: 20.0
+        bounds: sprite
   Box_B:
     type: JunctionBox
     label: Bend
-    openings: [W1, S1]
-    opening_grid: {WE: 1, NS: 1}
+    openings:
+    - W1
+    - S1
+    opening_grid:
+      WE: 1
+      NS: 1
     elements:
       Strip:
         type: TerminalStrip
-        terminal_grid: {NS: 2}
+        terminal_grid:
+          NS: 2
         terminals:
-          N1: {label: '1', direction: InOut, role: Phase}
-          N2: {label: '2', direction: InOut, role: Neutral}
+          N1:
+            label: '1'
+            direction: InOut
+            role: Phase
+          N2:
+            label: '2'
+            direction: InOut
+            role: Neutral
         view:
-          electrical: {x: 60.0, y: 50.0}
+          electrical:
+            x: 60.0
+            y: 50.0
     cables: {}
     view:
-      physical: {x: 280.0, y: 40.0}
+      physical:
+        x: 260.0
+        y: 20.0
+        bounds: sprite
   Box_C:
     type: DeviceBox
     label: C
-    openings: [N1]
-    opening_grid: {N: 1}
+    openings:
+    - N1
+    opening_grid:
+      N: 1
     elements:
       Socket:
         type: Socket
         view:
-          electrical: {x: 40.0, y: 30.0}
+          electrical:
+            x: 40.0
+            y: 30.0
     cables: {}
     view:
-      physical: {x: 280.0, y: 280.0}
+      physical:
+        x: 260.0
+        y: 260.0
+        bounds: sprite
 cables:
   AB:
     type: Conductor
@@ -64,14 +94,15 @@ cables:
     subtype: Tube
     from: Box_A.E1
     to: Box_B.W1
-    contains: [AB]
+    contains:
+    - AB
   Tube_BC:
     type: Conduit
     subtype: Tube
     from: Box_B.S1
     to: Box_C.N1
-    contains: [BC]
-
+    contains:
+    - BC
 view:
   physical:
     x: 0.0

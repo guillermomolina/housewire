@@ -7,6 +7,27 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.89.0] — 2026-08-07
+
+### Changed
+
+- Iso leaf ``view.physical`` is now the **sprite AABB**: ``x/y`` is the NW of
+  everything painted (including the NW iso bevel), and ``w/h`` spans the full
+  drawn extent. Front face sits at local ``(20,20)``. Mark
+  ``view.physical.bounds: sprite`` after migration; legacy sites migrate once
+  on load (``scripts/migrate_sprite_bounds.py`` for offline trees).
+
+### Added
+
+- Live E2E ``Route_31``: offset N↔N DeviceBoxes — tube must skirt the upper
+  DeviceBox sprite (front + iso depth).
+
+### Fixed
+
+- Side-opening conduits no longer treat every iso mouth≠anchor as clearing the
+  endpoint leaf obstacle; only mouths inside the **front** face do. Routing
+  obstacles use the sprite AABB directly (no negative paint / re-expand hull).
+
 ## [0.88.1] — 2026-08-07
 
 ### Added

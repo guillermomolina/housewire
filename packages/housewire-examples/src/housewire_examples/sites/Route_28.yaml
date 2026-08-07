@@ -2,11 +2,11 @@ schema: house/v2
 type: House
 name: Route_28
 label: Route 28 — back-face conduits that cannot share L paths
-notes: >
-  Same B 2x2 JunctionBox pattern as Route_27, but DeviceBoxes are placed so
-  mark-to-mark Manhattan L routes would colinear-stack; routing must use
-  extra bends (C/U) so tubes stay separated.
+notes: 'Same B 2x2 JunctionBox pattern as Route_27, but DeviceBoxes are placed so
+  mark-to-mark Manhattan L routes would colinear-stack; routing must use extra bends
+  (C/U) so tubes stay separated.
 
+  '
 elements:
   Caja_de_derivacion:
     type: JunctionBox
@@ -22,10 +22,11 @@ elements:
     openings: []
     view:
       physical:
-        x: 438.2076423637224
+        x: 418.2076423637224
         y: 528.3154239547403
-        w: 234.0
-        h: 196.0
+        w: 254.0
+        h: 216.0
+        bounds: sprite
   Caja_de_mecanismo_3:
     type: DeviceBox
     elements: {}
@@ -40,10 +41,11 @@ elements:
     openings: []
     view:
       physical:
-        x: 374.863907239884
+        x: 354.863907239884
         y: 0.0
-        w: 240.0
-        h: 160.0
+        w: 260.0
+        h: 180.0
+        bounds: sprite
   Caja_de_mecanismo_2:
     type: DeviceBox
     elements: {}
@@ -58,10 +60,11 @@ elements:
     openings: []
     view:
       physical:
-        x: 77.24786766242451
+        x: 57.24786766242451
         y: 139.4640378388413
-        w: 240.0
-        h: 160.0
+        w: 260.0
+        h: 180.0
+        bounds: sprite
   Caja_de_mecanismo_1:
     type: DeviceBox
     elements: {}
@@ -76,10 +79,11 @@ elements:
     openings: []
     view:
       physical:
-        x: 21.36588549516658
+        x: 1.3658854951665802
         y: 346.87857834810654
-        w: 240.0
-        h: 160.0
+        w: 260.0
+        h: 180.0
+        bounds: sprite
   Caja_de_mecanismo:
     type: DeviceBox
     elements: {}
@@ -94,10 +98,11 @@ elements:
     openings: []
     view:
       physical:
-        x: 79.80560156624188
+        x: 59.805601566241876
         y: 543.0640335153324
-        w: 240.0
-        h: 160.0
+        w: 260.0
+        h: 180.0
+        bounds: sprite
 cables:
   OPEN_Linea_01_1:
     type: Conductor

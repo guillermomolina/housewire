@@ -8,6 +8,7 @@
     const h = nodeH(node);
     const hasKids = childrenOf(node.id).length > 0;
     const showOpenings = !hasKids && nodeHasOpeningMarks(node);
+    const fr = frontRectLocal(node);
     const g = el("g", {
       class: "node" + (hasKids ? " container" : ""),
       "data-id": node.id,
@@ -23,8 +24,10 @@
         (hasKids ? " container" : "") +
         (node.expandable ? " expandable" : "") +
         (showOpenings ? " iso-box" : ""),
-      width: w,
-      height: h,
+      x: fr.x,
+      y: fr.y,
+      width: fr.w,
+      height: fr.h,
       rx: showOpenings ? 0 : 6,
     });
     g.appendChild(box);
@@ -45,9 +48,9 @@
     appendIconWithLabel(g, {
       icon: node.icon,
       labelText: canvasName,
-      x: 8,
-      y: 18,
-      maxW: w - 16,
+      x: fr.x + 8,
+      y: fr.y + 18,
+      maxW: fr.w - 16,
       textClass: "node-label",
     });
 

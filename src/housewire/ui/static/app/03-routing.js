@@ -912,14 +912,19 @@
     const m2 = openingMouthAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
     const a1 = openingAnchorAbs(a, edge.from_opening, edge.from_opening?.[0], byId);
     const a2 = openingAnchorAbs(b, edge.to_opening, edge.to_opening?.[0], byId);
-    const fromInset = Math.hypot(m1.x - a1.x, m1.y - a1.y) > 1e-6;
-    const toInset = Math.hypot(m2.x - a2.x, m2.y - a2.y) > 1e-6;
+    // Iso marks often sit off the contour (mid-depth); that alone must not
+    // clear the endpoint as an obstacle — only a mouth *inside* the place
+    // needs a corridor to the boca (Route_31 N↔N must skirt the upper box).
+    const fromOffContour = Math.hypot(m1.x - a1.x, m1.y - a1.y) > 1e-6;
+    const toOffContour = Math.hypot(m2.x - a2.x, m2.y - a2.y) > 1e-6;
+    const fromInset = pointInPlaceInterior(m1, a, byId);
+    const toInset = pointInPlaceInterior(m2, b, byId);
     // Allow the route to enter leaves whose end is a B/F boca.
     /** @type {string[]} */
     const exclude = [];
     if (fromPlane) exclude.push(a.id);
     if (toPlane) exclude.push(b.id);
-    // When the rendered mouth is inset (iso side/front/back mark), allow the
+    // When the rendered mouth is inside the place (iso inset mark), allow the
     // path to enter that endpoint box so the conduit reaches the visible boca.
     if (fromInset && !exclude.includes(a.id)) exclude.push(a.id);
     if (toInset && !exclude.includes(b.id)) exclude.push(b.id);
@@ -949,11 +954,13 @@
       const parent = byId[a.parent];
       if (parent) {
         const pa = absXY(parent, byId);
+        const origin = contentOriginLocal(parent);
+        const fr = frontRectLocal(parent);
         stayBounds = {
-          x: pa.x + PAD,
-          y: pa.y + HEADER,
-          w: Math.max(4, nodeW(parent) - 2 * PAD),
-          h: Math.max(4, nodeH(parent) - HEADER - PAD),
+          x: pa.x + origin.x,
+          y: pa.y + origin.y,
+          w: Math.max(4, fr.w - 2 * PAD),
+          h: Math.max(4, fr.h - HEADER - PAD),
         };
       }
     }
@@ -1083,12 +1090,14 @@
           return { d, dCore: d, segs: segsFromPoints(pts, half) };
         }
         // L blocked (stack/obstacle): try ≤3-segment mark-to-mark C/U.
+        // Pass faces so N/W mouths stub *out* of the sprite AABB first
+        // (Route_21 lamp N→B must clear the from-box iso margin).
         const cPts = cleanOrthoPoly(
           orthoRoute(
             m1,
             m2,
-            null,
-            null,
+            fromFace,
+            toFace,
             occupied,
             markObstacles,
             stayBounds,
@@ -1144,13 +1153,13 @@
       const corePts = cleanOrthoPoly(pts.map((p) => [p[0], p[1]]));
       if (corePts.length < 2) return null;
       const dCore = pointsToPathD(corePts);
-      if (fromInset && pts.length) {
+      if (fromOffContour && pts.length) {
         const head = renderedMarkHeadPts(m1, a1, fromFace, fromPlane);
         if (head.length >= 2) {
           pts = mergeOrthoPolys(head, pts) || pts;
         }
       }
-      if (toInset && pts.length) {
+      if (toOffContour && pts.length) {
         const tail = renderedMarkTailPts(a2, m2, toFace, toPlane);
         if (tail.length >= 2) {
           pts = mergeOrthoPolys(pts, tail) || pts;
@@ -1162,8 +1171,8 @@
         [a1.x, a1.y],
         [a2.x, a2.y],
       ]);
-      if (fromInset && pts.length) pts[0] = [m1.x, m1.y];
-      if (toInset && pts.length) pts[pts.length - 1] = [m2.x, m2.y];
+      if (fromOffContour && pts.length) pts[0] = [m1.x, m1.y];
+      if (toOffContour && pts.length) pts[pts.length - 1] = [m2.x, m2.y];
       pts = cleanOrthoPoly(pts);
       if (pts.length < 2) return null;
       return {
@@ -1244,10 +1253,10 @@
       parent,
       flips
     );
-    // Same content origin as nested locations (PAD / HEADER).
+    const origin = contentOriginLocal(parent);
     return {
-      x: a.x + PAD + local.x,
-      y: a.y + HEADER + local.y,
+      x: a.x + origin.x + local.x,
+      y: a.y + origin.y + local.y,
     };
   }
 
@@ -3580,11 +3589,13 @@
       let stayBounds = null;
       if (parent) {
         const pa = absXY(parent, placeById);
+        const origin = contentOriginLocal(parent);
+        const fr = frontRectLocal(parent);
         stayBounds = {
-          x: pa.x + PAD,
-          y: pa.y + HEADER,
-          w: Math.max(4, nodeW(parent) - 2 * PAD),
-          h: Math.max(4, nodeH(parent) - HEADER - PAD),
+          x: pa.x + origin.x,
+          y: pa.y + origin.y,
+          w: Math.max(4, fr.w - 2 * PAD),
+          h: Math.max(4, fr.h - HEADER - PAD),
         };
       }
       const f1 = p1.face || elementAttachFace(a, c2, placeById);
@@ -4666,6 +4677,11 @@
     if (box) {
       box.classList.add("iso-box");
       box.setAttribute("rx", "0");
+      const fr = frontRectLocal(node);
+      box.setAttribute("x", String(fr.x));
+      box.setAttribute("y", String(fr.y));
+      box.setAttribute("width", String(fr.w));
+      box.setAttribute("height", String(fr.h));
     }
     if (!g.querySelector("g.node-iso-faces") || !g.querySelector("g.node-iso-wires")) {
       appendNodeIsoBevel(g, w, h);

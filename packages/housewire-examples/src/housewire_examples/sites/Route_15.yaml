@@ -1,7 +1,7 @@
 schema: house/v2
 type: House
-label: 'Route 15 — two rooms'
-notes: 'Two rooms with a conduit between junction boxes.'
+label: Route 15 — two rooms
+notes: Two rooms with a conduit between junction boxes.
 elements:
   Room_A:
     type: Room
@@ -10,23 +10,42 @@ elements:
       JBox:
         type: JunctionBox
         label: JA
-        openings: [E1]
-        opening_grid: {E: 1}
+        openings:
+        - E1
+        opening_grid:
+          E: 1
         elements:
           Strip:
             type: TerminalStrip
-            terminal_grid: {NS: 2}
+            terminal_grid:
+              NS: 2
             terminals:
-              N1: {label: L, direction: InOut, role: Phase}
-              N2: {label: N, direction: InOut, role: Neutral}
+              N1:
+                label: L
+                direction: InOut
+                role: Phase
+              N2:
+                label: N
+                direction: InOut
+                role: Neutral
             view:
-              electrical: {x: 60.0, y: 50.0}
+              electrical:
+                x: 60.0
+                y: 50.0
         cables: {}
         view:
-          physical: {x: 30.0, y: 40.0}
+          physical:
+            x: 10.0
+            y: 20.0
+            bounds: sprite
     cables: {}
     view:
-      physical: {x: 20.0, y: 40.0, page: {width: 240, height: 200}}
+      physical:
+        x: 20.0
+        y: 40.0
+        page:
+          width: 240
+          height: 200
   Room_B:
     type: Room
     label: Room B
@@ -34,23 +53,42 @@ elements:
       JBox:
         type: JunctionBox
         label: JB
-        openings: [W1]
-        opening_grid: {W: 1}
+        openings:
+        - W1
+        opening_grid:
+          W: 1
         elements:
           Strip:
             type: TerminalStrip
-            terminal_grid: {NS: 2}
+            terminal_grid:
+              NS: 2
             terminals:
-              N1: {label: L, direction: InOut, role: Phase}
-              N2: {label: N, direction: InOut, role: Neutral}
+              N1:
+                label: L
+                direction: InOut
+                role: Phase
+              N2:
+                label: N
+                direction: InOut
+                role: Neutral
             view:
-              electrical: {x: 60.0, y: 50.0}
+              electrical:
+                x: 60.0
+                y: 50.0
         cables: {}
         view:
-          physical: {x: 30.0, y: 40.0}
+          physical:
+            x: 10.0
+            y: 20.0
+            bounds: sprite
     cables: {}
     view:
-      physical: {x: 320.0, y: 40.0, page: {width: 240, height: 200}}
+      physical:
+        x: 320.0
+        y: 40.0
+        page:
+          width: 240
+          height: 200
 cables:
   L:
     type: Conductor
@@ -66,7 +104,9 @@ cables:
     to: Room_B/JBox/Strip.N2
   Cable:
     type: Cable
-    contains: [L, N]
+    contains:
+    - L
+    - N
     color: BK
     section: 1.5 mm2
   Tube:
@@ -74,8 +114,8 @@ cables:
     subtype: Tube
     from: Room_A/JBox.E1
     to: Room_B/JBox.W1
-    contains: [Cable]
-
+    contains:
+    - Cable
 view:
   physical:
     x: 0.0

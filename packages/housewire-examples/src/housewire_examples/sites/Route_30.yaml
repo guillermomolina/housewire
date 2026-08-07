@@ -32,10 +32,11 @@ elements:
       B: 1
     view:
       physical:
-        x: 80.0
-        y: 40.0
-        w: 520.0
-        h: 320.0
+        x: 60.0
+        y: 20.0
+        w: 540.0
+        h: 340.0
+        bounds: sprite
   Caja_de_mecanismo_1:
     type: DeviceBox
     elements:
@@ -59,10 +60,11 @@ elements:
       B: 1
     view:
       physical:
-        x: 80.0
-        y: 750.0
-        w: 520.0
-        h: 320.0
+        x: 60.0
+        y: 730.0
+        w: 540.0
+        h: 340.0
+        bounds: sprite
 cables:
   Conducto_OPEN_Linea_01_01:
     type: Conduit

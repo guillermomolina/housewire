@@ -1,50 +1,77 @@
 schema: house/v2
 type: House
-label: 'Route 07 — bipolar V'
-notes: 'Two exits from one strip via distinct openings (expects V at pin).'
+label: Route 07 — bipolar V
+notes: Two exits from one strip via distinct openings (expects V at pin).
 elements:
   Box_A:
     type: JunctionBox
     label: A
-    openings: [E1, S1]
-    opening_grid: {E: 1, S: 1}
+    openings:
+    - E1
+    - S1
+    opening_grid:
+      E: 1
+      S: 1
     elements:
       Strip:
         type: TerminalStrip
-        terminal_grid: {NS: 1}
+        terminal_grid:
+          NS: 1
         terminals:
-          N1: {label: L, direction: InOut, role: Phase}
+          N1:
+            label: L
+            direction: InOut
+            role: Phase
         view:
-          electrical: {x: 80.0, y: 60.0}
+          electrical:
+            x: 80.0
+            y: 60.0
     cables: {}
     view:
-      physical: {x: 40.0, y: 80.0}
+      physical:
+        x: 20.0
+        y: 60.0
+        bounds: sprite
   Box_B:
     type: DeviceBox
     label: B
-    openings: [W1]
-    opening_grid: {W: 1}
+    openings:
+    - W1
+    opening_grid:
+      W: 1
     elements:
       Socket:
         type: Socket
         view:
-          electrical: {x: 40.0, y: 30.0}
+          electrical:
+            x: 40.0
+            y: 30.0
     cables: {}
     view:
-      physical: {x: 340.0, y: 80.0}
+      physical:
+        x: 320.0
+        y: 60.0
+        bounds: sprite
   Box_C:
     type: DeviceBox
     label: C
-    openings: [N1]
-    opening_grid: {N: 1}
+    openings:
+    - N1
+    opening_grid:
+      N: 1
     elements:
       Socket:
         type: Socket
         view:
-          electrical: {x: 40.0, y: 30.0}
+          electrical:
+            x: 40.0
+            y: 30.0
     cables: {}
     view:
-      physical: {x: 40.0, y: 280.0}
+      physical:
+        x: 20.0
+        y: 260.0
+        bounds: sprite
 cables:
   To_B:
     type: Conductor
@@ -63,14 +90,15 @@ cables:
     subtype: Tube
     from: Box_A.E1
     to: Box_B.W1
-    contains: [To_B]
+    contains:
+    - To_B
   Tube_C:
     type: Conduit
     subtype: Tube
     from: Box_A.S1
     to: Box_C.N1
-    contains: [To_C]
-
+    contains:
+    - To_C
 view:
   physical:
     x: 0.0

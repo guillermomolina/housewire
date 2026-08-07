@@ -1,43 +1,69 @@
 schema: house/v2
 type: House
-label: 'Route 10 — feed plus earth'
-notes: 'Panel supply and earth into junction strip.'
+label: Route 10 — feed plus earth
+notes: Panel supply and earth into junction strip.
 elements:
   Panel:
     type: Panel
     label: Panel
-    openings: [S1]
-    opening_grid: {S: 1}
+    openings:
+    - S1
+    opening_grid:
+      S: 1
     elements:
       Supply:
         type: Supply
         view:
-          electrical: {x: 40.0, y: 20.0}
+          electrical:
+            x: 40.0
+            y: 20.0
       Earth:
         type: EarthElectrode
         view:
-          electrical: {x: 160.0, y: 20.0}
+          electrical:
+            x: 160.0
+            y: 20.0
     cables: {}
     view:
-      physical: {x: 180.0, y: 20.0}
+      physical:
+        x: 160.0
+        y: 0.0
+        bounds: sprite
   Box:
     type: JunctionBox
     label: Box
-    openings: [N1]
-    opening_grid: {N: 1}
+    openings:
+    - N1
+    opening_grid:
+      N: 1
     elements:
       Strip:
         type: TerminalStrip
-        terminal_grid: {NS: 3}
+        terminal_grid:
+          NS: 3
         terminals:
-          N1: {label: L, direction: InOut, role: Phase}
-          N2: {label: N, direction: InOut, role: Neutral}
-          N3: {label: PE, direction: InOut, role: PE}
+          N1:
+            label: L
+            direction: InOut
+            role: Phase
+          N2:
+            label: N
+            direction: InOut
+            role: Neutral
+          N3:
+            label: PE
+            direction: InOut
+            role: PE
         view:
-          electrical: {x: 70.0, y: 70.0}
+          electrical:
+            x: 70.0
+            y: 70.0
     cables: {}
     view:
-      physical: {x: 180.0, y: 240.0}
+      physical:
+        x: 160.0
+        y: 220.0
+        bounds: sprite
 cables:
   L:
     type: Conductor
@@ -59,7 +85,9 @@ cables:
     to: Box/Strip.N3
   Power:
     type: Cable
-    contains: [L, N]
+    contains:
+    - L
+    - N
     color: BK
     section: 2.5 mm2
   Tube:
@@ -67,8 +95,9 @@ cables:
     subtype: Tube
     from: Panel.S1
     to: Box.N1
-    contains: [Power, PE]
-
+    contains:
+    - Power
+    - PE
 view:
   physical:
     x: 0.0

@@ -36,6 +36,8 @@ from housewire.site.tree import (
     site_yaml_path,
 )
 from housewire.site.view_layout import (
+    BOUNDS_SPRITE,
+    ISO_DEPTH,
     clear_electrical_size,
     clear_physical_size,
     get_electrical_flips,
@@ -48,9 +50,12 @@ from housewire.site.view_layout import (
     get_physical_size,
     get_physical_view,
     grow_view_size_by,
+    migrate_site_physical_to_sprite,
     normalize_view_xy_siblings,
+    place_paints_iso,
     set_electrical_position,
     set_electrical_size,
+    set_physical_bounds,
     set_physical_position,
     set_physical_size,
     shift_place_origin,
@@ -975,6 +980,8 @@ def build_physical_graph(
     _yaml_path, site_doc = _load_site_doc(
         site_root, session_docs=session_docs, site_yaml=site_yaml
     )
+    if migrate_site_physical_to_sprite(site_doc) and session_docs is not None:
+        session_docs[_yaml_path] = site_doc
     canvas_parts = logical_parts_from_id(location_id)
     try:
         loc_doc = get_place_node(site_doc, canvas_parts)
@@ -1081,6 +1088,10 @@ def build_physical_graph(
             size_cache,
             element_boxes,
         )
+        if place_paints_iso(doc):
+            # Sprite AABB includes NW iso depth beyond the content/front box.
+            width += ISO_DEPTH
+            height += ISO_DEPTH
         stored_size = get_physical_size(doc)
         size_locked = stored_size is not None
         if stored_size is not None:
@@ -1411,6 +1422,8 @@ def apply_positions(
         )
         if "w" in pos and "h" in pos:
             set_physical_size(place, float(pos["w"]), float(pos["h"]))
+        if place_paints_iso(place):
+            set_physical_bounds(place, BOUNDS_SPRITE)
         updated.append(str(node_id))
         parents.add(tuple(canvas_parts) + parts[:-1])
 

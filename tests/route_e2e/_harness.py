@@ -65,6 +65,24 @@ _DUMP_JS = """() => {
       id:g.getAttribute('data-id')||'',
     };
   }).filter(Boolean);
+  const leaves=[...svg.querySelectorAll('g.leaves > g.node')].map(g=>{
+    const r=g.querySelector(':scope > rect.node-box, :scope > rect');
+    if(!r) return null;
+    const m=g.transform&&g.transform.baseVal.consolidate();
+    const t=m?m.matrix:{e:0,f:0};
+    const bx=Number(r.getAttribute('x')||0);
+    const by=Number(r.getAttribute('y')||0);
+    const bw=Number(r.getAttribute('width')||0);
+    const bh=Number(r.getAttribute('height')||0);
+    // Group origin is the sprite NW; node-box may be inset (iso front face).
+    return {
+      x:t.e,
+      y:t.f,
+      w:bx+bw,
+      h:by+bh,
+      id:g.getAttribute('data-id')||'',
+    };
+  }).filter(Boolean);
   const mouths=[...svg.querySelectorAll('circle.opening-mark')].map(c=>{
     const g=c.closest('g.node');
     const m=g&&g.transform&&g.transform.baseVal.consolidate();
@@ -86,6 +104,7 @@ _DUMP_JS = """() => {
     strands: strands.map(s=>s.pts),
     strokes: strands.map(s=>s.stroke),
     elements,
+    leaves,
     mouths,
   };
 }"""
@@ -493,6 +512,47 @@ def assert_no_strand_through_elements(
     test.assertEqual(through, [], msg=f"strands pierce elements: {through}")
 
 
+def assert_no_tube_through_leaves(
+    test: unittest.TestCase,
+    data: dict,
+    *,
+    leaf_id: str | None = None,
+) -> None:
+    """Fail when a tube mid-run pierces a leaf place box (rule 17).
+
+    Pass ``leaf_id`` to check one painted leaf (``data-id``). Without it,
+    every dumped leaf is checked — prefer a named leaf when endpoints are
+    plane bocas that intentionally enter their own place.
+
+    Leaf rects are the sprite AABB (iso depth already included in w/h).
+    """
+    from housewire.ui.route_quality import strands_through_elements
+
+    tubes = [
+        t
+        for t in (data.get("tube_cores") or data.get("tubes") or [])
+        if len(t) >= 2
+    ]
+    leaves = list(data.get("leaves") or [])
+    if leaf_id is not None:
+        leaves = [e for e in leaves if (e.get("id") or "") == leaf_id]
+    rects = [
+        (float(e["x"]), float(e["y"]), float(e["w"]), float(e["h"]))
+        for e in leaves
+        if e.get("w") and e.get("h")
+    ]
+    if not tubes or not rects:
+        test.fail(
+            f"assert_no_tube_through_leaves: missing tubes/leaves "
+            f"(tubes={len(tubes)} leaves={len(leaves)} leaf_id={leaf_id!r})"
+        )
+    issues = [
+        msg.replace("strand ", "tube ", 1)
+        for msg in strands_through_elements(tubes, rects)
+    ]
+    test.assertEqual(issues, [], msg=f"tubes pierce leaves: {issues}")
+
+
 def assert_inbox_at_most_segments(
     test: unittest.TestCase,
     data: dict,
@@ -843,8 +903,9 @@ def assert_named_tube_segment_count(
 
 
 # Match src/housewire/ui/static/app.js isometric opening-mark constants.
-_ISO_DX = -20.0
-_ISO_DY = -20.0
+_ISO_DEPTH = 20.0
+_ISO_DX = -_ISO_DEPTH
+_ISO_DY = -_ISO_DEPTH
 _ISO_MARK_SIDE_DEPTH_T = 0.5
 _OPENING_MARK_R = 5.0
 
@@ -857,9 +918,11 @@ _DUMP_OPENINGS_JS = """() => {
   for (const g of nodes) {
     const box = g.querySelector(':scope > rect.node-box, :scope > rect');
     if (!box) continue;
-    const w = Number(box.getAttribute('width') || 0);
-    const h = Number(box.getAttribute('height') || 0);
-    if (!w || !h) continue;
+    const fx = Number(box.getAttribute('x') || 0);
+    const fy = Number(box.getAttribute('y') || 0);
+    const fw = Number(box.getAttribute('width') || 0);
+    const fh = Number(box.getAttribute('height') || 0);
+    if (!fw || !fh) continue;
     const marks = [...g.querySelectorAll('circle.opening-mark')].map(c => ({
       id: c.getAttribute('data-opening') || '',
       cx: Number(c.getAttribute('cx') || 0),
@@ -869,7 +932,9 @@ _DUMP_OPENINGS_JS = """() => {
     if (!marks.length) continue;
     out.push({
       id: g.getAttribute('data-id') || '',
-      w, h,
+      fx, fy, fw, fh,
+      w: fx + fw,
+      h: fy + fh,
       marks,
     });
   }
@@ -970,18 +1035,22 @@ def assert_iso_opening_marks(
     test.assertGreaterEqual(len(nodes), 1, msg=data)
 
     mid_t = _ISO_MARK_SIDE_DEPTH_T
-    mid_x = _ISO_DX * mid_t
-    mid_y = _ISO_DY * mid_t
     issues: list[str] = []
 
     for node in nodes:
-        w = float(node["w"])
-        h = float(node["h"])
-        ix0 = max(0.0, _ISO_DX)
-        iy0 = max(0.0, _ISO_DY)
-        ix1 = min(w, w + _ISO_DX)
-        iy1 = min(h, h + _ISO_DY)
-        # Circle centers must sit in the intersection; allow mark radius slack.
+        fx = float(node.get("fx") or 0.0)
+        fy = float(node.get("fy") or 0.0)
+        fw = float(node.get("fw") or node["w"])
+        fh = float(node.get("fh") or node["h"])
+        d = fx  # iso depth inset (== fy) for sprite leaves
+        mid = d * mid_t
+        # Front∩back in sprite coords (legacy front-local overlap + front origin).
+        fw_f = fw
+        fh_f = fh
+        ix0 = fx + max(0.0, _ISO_DX)
+        iy0 = fy + max(0.0, _ISO_DY)
+        ix1 = fx + min(fw_f, fw_f + _ISO_DX)
+        iy1 = fy + min(fh_f, fh_f + _ISO_DY)
         pad = _OPENING_MARK_R
         fronts = [m for m in node["marks"] if m.get("face") == "F"]
         backs = [m for m in node["marks"] if m.get("face") == "B"]
@@ -995,14 +1064,14 @@ def assert_iso_opening_marks(
                 cx, cy = float(m["cx"]), float(m["cy"])
                 oid = m.get("id") or "?"
                 if face in ("N", "S"):
-                    expect_y = mid_y if face == "N" else h + mid_y
+                    expect_y = (fy - mid) if face == "N" else (fy + fh - mid)
                     if abs(cy - expect_y) > tol:
                         issues.append(
                             f"{node.get('id')}.{oid}: side {face} cy={cy} "
                             f"want mid-depth y={expect_y}"
                         )
                 else:
-                    expect_x = mid_x if face == "W" else w + mid_x
+                    expect_x = (fx - mid) if face == "W" else (fx + fw - mid)
                     if abs(cx - expect_x) > tol:
                         issues.append(
                             f"{node.get('id')}.{oid}: side {face} cx={cx} "
@@ -1021,9 +1090,9 @@ def assert_iso_opening_marks(
                     f"[{ix0},{iy0}]–[{ix1},{iy1}] at ({cx},{cy})"
                 )
 
-        # Corresponding Frow-col / Brow-col pairs: same iso diagonal as NW verts.
-        expect_dx = _ISO_DX
-        expect_dy = _ISO_DY
+        # Corresponding Frow-col / Brow-col pairs: B = F + (-depth, -depth).
+        expect_dx = -d if d else _ISO_DX
+        expect_dy = -d if d else _ISO_DY
         expect_dist = (expect_dx * expect_dx + expect_dy * expect_dy) ** 0.5
         by_cell: dict[str, dict[str, dict]] = {}
         for m in fronts + backs:

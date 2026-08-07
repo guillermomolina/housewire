@@ -2,9 +2,10 @@ schema: house/v2
 type: House
 name: Route_25
 label: Route 25 — ISO opening marks
-notes: >
-  Single JunctionBox with side + F/B grids for isometric opening-mark layout
+notes: 'Single JunctionBox with side + F/B grids for isometric opening-mark layout
   invariants (mid-depth sides; F/B inside front∩back, no shared axes).
+
+  '
 elements:
   Caja_de_derivacion:
     type: JunctionBox
@@ -23,10 +24,11 @@ elements:
     install: Flush
     view:
       physical:
-        x: 254.0
-        y: 251.0
-        w: 382.0
-        h: 347.0
+        x: 234.0
+        y: 231.0
+        w: 402.0
+        h: 367.0
+        bounds: sprite
     openings: []
     mount: Wall
 cables: {}

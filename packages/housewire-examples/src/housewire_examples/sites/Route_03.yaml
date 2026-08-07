@@ -1,36 +1,50 @@
 schema: house/v2
 type: House
-label: 'Route 03 — twin conductors'
-notes: 'Two boxes, one conduit carrying BN+BU.'
+label: Route 03 — twin conductors
+notes: Two boxes, one conduit carrying BN+BU.
 elements:
   Box_A:
     type: DeviceBox
     label: Box A
-    openings: [E1]
-    opening_grid: {E: 1}
+    openings:
+    - E1
+    opening_grid:
+      E: 1
     elements:
       Socket:
         type: Socket
         label: Socket
         view:
-          electrical: {x: 40.0, y: 30.0}
+          electrical:
+            x: 40.0
+            y: 30.0
     cables: {}
     view:
-      physical: {x: 40.0, y: 80.0}
+      physical:
+        x: 20.0
+        y: 60.0
+        bounds: sprite
   Box_B:
     type: DeviceBox
     label: Box B
-    openings: [W1]
-    opening_grid: {W: 1}
+    openings:
+    - W1
+    opening_grid:
+      W: 1
     elements:
       Socket:
         type: Socket
         label: Socket
         view:
-          electrical: {x: 40.0, y: 30.0}
+          electrical:
+            x: 40.0
+            y: 30.0
     cables: {}
     view:
-      physical: {x: 340.0, y: 80.0}
+      physical:
+        x: 320.0
+        y: 60.0
+        bounds: sprite
 cables:
   L:
     type: Conductor
@@ -46,7 +60,9 @@ cables:
     to: Box_B/Socket.N3
   Cable:
     type: Cable
-    contains: [L, N]
+    contains:
+    - L
+    - N
     color: BK
     section: 1.5 mm2
   Tube:
@@ -54,9 +70,9 @@ cables:
     subtype: Tube
     from: Box_A.E1
     to: Box_B.W1
-    contains: [Cable]
+    contains:
+    - Cable
     color: BK
-
 view:
   physical:
     x: 0.0

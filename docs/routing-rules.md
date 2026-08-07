@@ -192,3 +192,4 @@ Live E2E coverage:
 | `Route_28` | Back-face L would stack — use C/U instead |
 | `Route_29` | Three conductors in one N↔N tube — no strand lane stack |
 | `Route_30` | Nine BN in one aligned S↔N tube — straight core, inbox ≤3, skirt elements |
+| `Route_31` | Offset N↔N DeviceBoxes — tube must skirt upper box sprite AABB |

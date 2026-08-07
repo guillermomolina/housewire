@@ -1,7 +1,7 @@
 schema: house/v2
 type: House
-label: 'Route 06 — lamp plane boca'
-notes: 'Junction to light point via B1-1 plane opening.'
+label: Route 06 — lamp plane boca
+notes: Junction to light point via B1-1 plane opening.
 elements:
   Room:
     type: Room
@@ -10,39 +10,75 @@ elements:
       JBox:
         type: JunctionBox
         label: JBox
-        openings: [N1, E1]
-        opening_grid: {NS: 1, WE: 1}
+        openings:
+        - N1
+        - E1
+        opening_grid:
+          NS: 1
+          WE: 1
         elements:
           Strip:
             type: TerminalStrip
-            terminal_grid: {NS: 3}
+            terminal_grid:
+              NS: 3
             terminals:
-              N1: {label: L, direction: InOut, role: Phase}
-              N2: {label: N, direction: InOut, role: Neutral}
-              N3: {label: PE, direction: InOut, role: PE}
+              N1:
+                label: L
+                direction: InOut
+                role: Phase
+              N2:
+                label: N
+                direction: InOut
+                role: Neutral
+              N3:
+                label: PE
+                direction: InOut
+                role: PE
             view:
-              electrical: {x: 70.0, y: 70.0}
+              electrical:
+                x: 70.0
+                y: 70.0
         cables: {}
         view:
-          physical: {x: 40.0, y: 120.0}
+          physical:
+            x: 20.0
+            y: 100.0
+            bounds: sprite
       Lamp:
         type: LightPoint
         label: Lamp
-        openings: [B1-1]
-        opening_grid: {B: 1}
+        openings:
+        - B1-1
+        opening_grid:
+          B: 1
         elements:
           Luminaire:
             type: Luminaire
-            terminal_grid: {N: 3}
+            terminal_grid:
+              N: 3
             terminals:
-              N1: {label: '1', direction: In, role: Phase}
-              N2: {label: '2', direction: In, role: Earth}
-              N3: {label: '3', direction: In, role: Neutral}
+              N1:
+                label: '1'
+                direction: In
+                role: Phase
+              N2:
+                label: '2'
+                direction: In
+                role: Earth
+              N3:
+                label: '3'
+                direction: In
+                role: Neutral
             view:
-              electrical: {x: 100.0, y: 80.0}
+              electrical:
+                x: 100.0
+                y: 80.0
         cables: {}
         view:
-          physical: {x: 280.0, y: 40.0}
+          physical:
+            x: 260.0
+            y: 20.0
+            bounds: sprite
     cables:
       Ph:
         type: Conductor
@@ -64,7 +100,9 @@ elements:
         to: Lamp/Luminaire.N2
       Cable:
         type: Cable
-        contains: [Ph, Nu]
+        contains:
+        - Ph
+        - Nu
         color: WH
         section: 1.5 mm2
       Tube:
@@ -72,10 +110,16 @@ elements:
         subtype: Tube
         from: JBox.N1
         to: Lamp.B1-1
-        contains: [Cable, Pe]
+        contains:
+        - Cable
+        - Pe
     view:
-      physical: {x: 20.0, y: 20.0, page: {width: 480, height: 320}}
-
+      physical:
+        x: 20.0
+        y: 20.0
+        page:
+          width: 480
+          height: 320
 view:
   physical:
     x: 0.0

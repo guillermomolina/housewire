@@ -2,11 +2,11 @@ schema: house/v2
 type: House
 name: Route_29
 label: Route 29 — three conductors in one N↔N conduit
-notes: >
-  One Tube between north openings of two DeviceBoxes carries three parallel
-  Conductors. With Electrical on, strand lanes must stay separated through
-  the tube and inbox approaches (no colinear stack on a shared horizontal).
+notes: 'One Tube between north openings of two DeviceBoxes carries three parallel
+  Conductors. With Electrical on, strand lanes must stay separated through the tube
+  and inbox approaches (no colinear stack on a shared horizontal).
 
+  '
 elements:
   Caja_de_mecanismo:
     type: DeviceBox
@@ -29,10 +29,11 @@ elements:
       B: 1
     view:
       physical:
-        x: 488.0
-        y: 228.0
-        w: 240.0
-        h: 160.0
+        x: 468.0
+        y: 208.0
+        w: 260.0
+        h: 180.0
+        bounds: sprite
   Caja_de_mecanismo_1:
     type: DeviceBox
     elements:
@@ -54,10 +55,11 @@ elements:
       B: 1
     view:
       physical:
-        x: 91.0
-        y: 212.0
-        w: 240.0
-        h: 160.0
+        x: 71.0
+        y: 192.0
+        w: 260.0
+        h: 180.0
+        bounds: sprite
 cables:
   Conducto_OPEN_Linea_01_01:
     type: Conduit
