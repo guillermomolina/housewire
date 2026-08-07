@@ -193,3 +193,4 @@ Live E2E coverage:
 | `Route_29` | Three conductors in one N↔N tube — no strand lane stack |
 | `Route_30` | Nine BN in one aligned S↔N tube — straight core, inbox ≤3, skirt elements |
 | `Route_31` | Offset N↔N DeviceBoxes — tube must skirt upper box sprite AABB |
+| `Route_32` | S↔B conduit — S1 exits south; exactly three tube segments |

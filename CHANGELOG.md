@@ -7,6 +7,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.89.1] — 2026-08-07
+
+### Fixed
+
+- Side↔plane tubes now leave and approach their declared side faces before
+  taking mark-to-mark shortcuts. Route_32 S1→B1-1 therefore exits south and
+  uses the required three segments instead of an illegal westward L.
+
+### Added
+
+- Live E2E ``Route_32`` locks ``Conducto_OPEN_Linea_01_01`` to exactly three
+  segments and asserts its first segment leaves S1 downward.
+
 ## [0.89.0] — 2026-08-07
 
 ### Changed

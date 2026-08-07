@@ -1,0 +1,48 @@
+schema: house/v2
+type: House
+name: Nuevo sitio
+label: Nuevo sitio
+elements:
+  Caja_de_derivacion:
+    type: JunctionBox
+    elements: {}
+    cables: {}
+    name: Caja de derivación
+    label: Caja de derivación
+    subtype: IP40
+    opening_grid:
+      NS: 2
+      WE: 2
+      B: 2x2
+    install: Flush
+    view:
+      physical:
+        x: 266.0
+        y: 143.0
+        w: 260.0
+        h: 180.0
+        bounds: sprite
+  Caja_de_mecanismo:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo
+    label: Caja de mecanismo
+    subtype: OneGang
+    opening_grid:
+      NS: 1
+      WE: 1
+      B: 1
+    view:
+      physical:
+        x: 36.0
+        y: 455.0
+        w: 260.0
+        h: 180.0
+        bounds: sprite
+cables:
+  Conducto_OPEN_Linea_01_01:
+    type: Conduit
+    from: Caja_de_derivacion.S1
+    to: Caja_de_mecanismo.B1-1
+    subtype: Tube

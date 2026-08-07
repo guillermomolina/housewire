@@ -5633,6 +5633,28 @@
             }
           }
           if (pathObstacleCost(pts, markObstacles) > 0) return false;
+          // A side mouth must leave on its declared face and a plane mouth
+          // must be approached through its nearest contour face. Without
+          // these strict endpoint directions S→B can take a shorter-but-wrong
+          // west exit (Route_32).
+          const leavesFace = (face, origin, toward) => {
+            const dx = toward[0] - origin.x;
+            const dy = toward[1] - origin.y;
+            if (face === "N") return Math.abs(dx) < 1e-6 && dy < -1e-6;
+            if (face === "S") return Math.abs(dx) < 1e-6 && dy > 1e-6;
+            if (face === "E") return Math.abs(dy) < 1e-6 && dx > 1e-6;
+            if (face === "W") return Math.abs(dy) < 1e-6 && dx < -1e-6;
+            return true;
+          };
+          if (fromPlane !== toPlane) {
+            if (!fromPlane && !leavesFace(fromFace, m1, pts[1])) return false;
+            if (!toPlane && !leavesFace(toFace, m2, pts[pts.length - 2])) {
+              return false;
+            }
+            if (toPlane && !leavesFace(toFace, m2, pts[pts.length - 2])) {
+              return false;
+            }
+          }
           if (pathStackConflictCost(pts, occupied, stackEps, half) > 0) {
             return false;
           }
