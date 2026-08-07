@@ -105,6 +105,32 @@ class TestWorkspaceUnit(unittest.TestCase):
             self.assertEqual(len(ws.status()["documents"]), n_before)
             self.assertEqual(ws.status()["document"]["yaml"], "from_new.yaml")
 
+    def test_reload_active_discards_dirty_and_history(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "site"
+            root.mkdir()
+            save_site(root, init_site(root, type_id="House", label="Site"))
+            ws = create_workspace(root)
+            path, live = ws.require_session().ensure_doc()
+            live["notes"] = "in-memory"
+            ws.require_session().commit_edit(path)
+            ws.require_session().mark_dirty(path)
+            self.assertTrue(ws.status()["document"]["dirty"])
+            self.assertTrue(ws.status()["can_undo"])
+
+            # Mutate on disk independently.
+            disk = load_yaml(path)
+            disk["notes"] = "from-disk"
+            save_yaml(path, disk, backup=False)
+
+            ws.reload_active()
+            st = ws.status()
+            self.assertFalse(st["document"]["dirty"])
+            self.assertFalse(st["can_undo"])
+            self.assertFalse(st["can_redo"])
+            _, doc = ws.require_session().ensure_doc()
+            self.assertEqual(doc.get("notes"), "from-disk")
+
     def test_empty_workspace(self) -> None:
         ws = create_workspace(None)
         self.assertIsNone(ws.document)

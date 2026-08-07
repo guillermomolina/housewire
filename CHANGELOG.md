@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.88.1] — 2026-08-07
+
+### Added
+
+- File → **Reload from disk** (F5): re-reads the active YAML, discards the
+  buffer and undo/redo; prompts when the document is dirty.
+
 ## [0.88.0] — 2026-08-07
 
 ### Added

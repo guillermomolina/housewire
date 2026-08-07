@@ -39,6 +39,7 @@ Electrical, fit, and zoom sit on the status strip under the canvas.
 | Save | Persist the **active** document |
 | Save as… | Browser/OS save picker; opens the copy as another tab |
 | Close / tab × | Close that document (prompt if dirty) |
+| Reload from disk | Re-read active YAML from disk (F5); discards buffer + undo; prompt if dirty |
 | Edit → Delete | Cascade-delete selected places/elements (`Del` / Backspace); cross-boundary cables become open runs |
 | Edit → Cut / Copy / Paste | Clipboard (`Ctrl+X`/`C`/`V`); place clipboard nests into a selected destination place (siblings when the copy source stays selected); elements into a selected place (or original box) |
 | Drag place onto place | Reparent into the drop target (`POST /api/edit/reparent`) |
@@ -59,6 +60,8 @@ Workspace
 - `POST /api/workspace/activate` — `{ "id": "…" }` switch active tab
 - `GET /api/workspace/yaml` — current YAML text for Save as
 - `POST /api/workspace/close` — `{ "id"?, "force"? }` close one tab (active if omitted)
+- `POST /api/workspace/reload` — reload active document from disk (discards
+  buffer changes and resets undo/redo); client should confirm when dirty
 - `POST /api/workspace/save-as` — `{ "path": "…" }` duplicate site tree as a new tab
 - `POST /api/workspace/save-as-file` — `{ "path": "…" }` write active YAML buffer to a
   file path and open it (Electron / path-aware clients; closes a prior

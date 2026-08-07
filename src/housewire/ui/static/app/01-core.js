@@ -496,6 +496,19 @@
     return null;
   }
 
+  async function confirmReloadDiscard(docTitle) {
+    const name = docTitle || t("modal.unsavedThisFile");
+    const choice = await appDialog({
+      title: t("modal.reloadTitle"),
+      message: t("modal.reloadMessage", { name }),
+      buttons: [
+        { id: "cancel", label: t("modal.cancel") },
+        { id: "reload", label: t("modal.reload"), danger: true, primary: true },
+      ],
+    });
+    return choice === "reload";
+  }
+
   function updateHistoryButtons() {
     for (const id of ["btn-undo", "menu-undo"]) {
       const el = document.getElementById(id);
@@ -534,6 +547,8 @@
     if (btnSave) btnSave.disabled = saveDisabled;
     if (menuSaveAs) menuSaveAs.disabled = !hasDocument;
     if (menuClose) menuClose.disabled = !hasDocument;
+    const menuReload = document.getElementById("menu-reload");
+    if (menuReload) menuReload.disabled = !hasDocument;
     updateDeleteButtons();
     updateDocStatusStrip();
   }

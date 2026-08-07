@@ -271,6 +271,20 @@ def create_app(site_root: Path | None = None) -> Any:
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
 
+    @app.post("/api/workspace/reload")
+    async def api_workspace_reload(request: Request) -> dict[str, Any]:
+        """Reload active document from disk (discards buffer + undo history)."""
+        del request  # no body required; force is client-side confirm
+        try:
+            workspace.reload_active()
+        except FileNotFoundError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return workspace.status()
+
     @app.post("/api/workspace/close")
     async def api_workspace_close(request: Request) -> dict[str, Any]:
         payload = await _json_body(request)

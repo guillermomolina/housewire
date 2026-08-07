@@ -626,6 +626,19 @@
     return null;
   }
 
+  async function confirmReloadDiscard(docTitle) {
+    const name = docTitle || t("modal.unsavedThisFile");
+    const choice = await appDialog({
+      title: t("modal.reloadTitle"),
+      message: t("modal.reloadMessage", { name }),
+      buttons: [
+        { id: "cancel", label: t("modal.cancel") },
+        { id: "reload", label: t("modal.reload"), danger: true, primary: true },
+      ],
+    });
+    return choice === "reload";
+  }
+
   function updateHistoryButtons() {
     for (const id of ["btn-undo", "menu-undo"]) {
       const el = document.getElementById(id);
@@ -664,6 +677,8 @@
     if (btnSave) btnSave.disabled = saveDisabled;
     if (menuSaveAs) menuSaveAs.disabled = !hasDocument;
     if (menuClose) menuClose.disabled = !hasDocument;
+    const menuReload = document.getElementById("menu-reload");
+    if (menuReload) menuReload.disabled = !hasDocument;
     updateDeleteButtons();
     updateDocStatusStrip();
   }
@@ -12648,7 +12663,32 @@
       }
     } else if (action === "save-as") await fileSaveAs();
     else if (action === "close") await fileClose();
+    else if (action === "reload") await fileReload();
     else if (action === "quit") await desktopQuit();
+  }
+
+  async function fileReload() {
+    if (!hasDocument) return;
+    const title = activeYamlName || t("modal.unsavedThisFile");
+    if (dirtyLocal) {
+      const ok = await confirmReloadDiscard(title);
+      if (!ok) return;
+    }
+    rememberCurrentDocView();
+    try {
+      const st = await api("/api/workspace/reload", {
+        method: "POST",
+        body: "{}",
+      });
+      applyWorkspaceStatus(st);
+      dirtyLocal = false;
+      updateSaveButton(false);
+      resetCanvasState();
+      await loadLocations();
+      setStatus(t("status.reloaded", { name: activeYamlName || title }));
+    } catch (err) {
+      setStatus(String(err.message || err));
+    }
   }
 
   async function rememberDesktopRecent(filePath) {
@@ -13511,6 +13551,11 @@
 
   document.addEventListener("keydown", (ev) => {
     if (isEditableFocus(ev.target)) return;
+    if (ev.key === "F5") {
+      ev.preventDefault();
+      fileReload().catch((err) => setStatus(String(err.message || err)));
+      return;
+    }
     if (ev.key === "F11" && isDesktopMode()) {
       ev.preventDefault();
       desktopToggleFullscreen().catch((err) =>

@@ -389,6 +389,19 @@ class Workspace:
             self.active_id = new_doc.id
         return new_doc
 
+    def reload_active(self) -> Document:
+        """Reload the active document from disk; reset undo/redo history.
+
+        Discards unsaved buffer changes (caller should confirm when dirty).
+        """
+        doc = self.document
+        if doc is None:
+            raise FileNotFoundError("No document open to reload")
+        yaml_path = doc.session.reload(doc.yaml_path)
+        doc.force_dirty = False
+        doc.display_title = None
+        return doc
+
 
 def create_workspace(initial_site: Path | None = None) -> Workspace:
     """Create a workspace, optionally opening ``initial_site``."""

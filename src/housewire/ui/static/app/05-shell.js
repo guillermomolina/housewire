@@ -274,7 +274,32 @@
       }
     } else if (action === "save-as") await fileSaveAs();
     else if (action === "close") await fileClose();
+    else if (action === "reload") await fileReload();
     else if (action === "quit") await desktopQuit();
+  }
+
+  async function fileReload() {
+    if (!hasDocument) return;
+    const title = activeYamlName || t("modal.unsavedThisFile");
+    if (dirtyLocal) {
+      const ok = await confirmReloadDiscard(title);
+      if (!ok) return;
+    }
+    rememberCurrentDocView();
+    try {
+      const st = await api("/api/workspace/reload", {
+        method: "POST",
+        body: "{}",
+      });
+      applyWorkspaceStatus(st);
+      dirtyLocal = false;
+      updateSaveButton(false);
+      resetCanvasState();
+      await loadLocations();
+      setStatus(t("status.reloaded", { name: activeYamlName || title }));
+    } catch (err) {
+      setStatus(String(err.message || err));
+    }
   }
 
   async function rememberDesktopRecent(filePath) {
@@ -1137,6 +1162,11 @@
 
   document.addEventListener("keydown", (ev) => {
     if (isEditableFocus(ev.target)) return;
+    if (ev.key === "F5") {
+      ev.preventDefault();
+      fileReload().catch((err) => setStatus(String(err.message || err)));
+      return;
+    }
     if (ev.key === "F11" && isDesktopMode()) {
       ev.preventDefault();
       desktopToggleFullscreen().catch((err) =>
