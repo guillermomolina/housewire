@@ -123,6 +123,15 @@ body {
   line-height: 1;
 }
 
+/* Desktop shell: native title bar already shows HouseWire + file name. */
+body.desktop-shell .brand {
+  display: none;
+}
+
+body:not(.desktop-shell) [data-desktop-only] {
+  display: none !important;
+}
+
 .menu {
   position: relative;
   overflow: visible;

@@ -55,6 +55,7 @@
           body: JSON.stringify({ path }),
         });
         applyWorkspaceStatus(st);
+        await rememberDesktopRecent(path);
         await reloadAfterDocumentChange();
         const name =
           (st.document && (st.document.yaml || st.document.title)) || path;
@@ -123,6 +124,7 @@
           body: JSON.stringify({ path }),
         });
         applyWorkspaceStatus(st);
+        await rememberDesktopRecent(path);
         dirtyLocal = false;
         updateSaveButton(false);
         await reloadAfterDocumentChange();
@@ -272,6 +274,113 @@
       }
     } else if (action === "save-as") await fileSaveAs();
     else if (action === "close") await fileClose();
+    else if (action === "quit") await desktopQuit();
+  }
+
+  async function rememberDesktopRecent(filePath) {
+    if (!isDesktopMode() || !filePath) return;
+    const bridge = desktopBridge();
+    if (!bridge || typeof bridge.rememberRecent !== "function") return;
+    try {
+      await bridge.rememberRecent(filePath);
+      await refreshRecentMenu();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function desktopQuit() {
+    if (!isDesktopMode()) return;
+    const bridge = desktopBridge();
+    if (bridge && typeof bridge.quit === "function") {
+      await bridge.quit();
+    }
+  }
+
+  async function desktopToggleFullscreen() {
+    if (!isDesktopMode()) return;
+    const bridge = desktopBridge();
+    if (bridge && typeof bridge.toggleFullscreen === "function") {
+      await bridge.toggleFullscreen();
+    }
+  }
+
+  async function openRecentPath(filePath) {
+    if (!filePath) return;
+    rememberCurrentDocView();
+    try {
+      const st = await api("/api/workspace/open", {
+        method: "POST",
+        body: JSON.stringify({ path: filePath }),
+      });
+      applyWorkspaceStatus(st);
+      await rememberDesktopRecent(filePath);
+      await reloadAfterDocumentChange();
+      const name =
+        (st.document && (st.document.yaml || st.document.title)) || filePath;
+      setStatus(t("status.opened", { name }));
+    } catch (err) {
+      const bridge = desktopBridge();
+      if (bridge && typeof bridge.forgetRecent === "function") {
+        try {
+          await bridge.forgetRecent(filePath);
+          await refreshRecentMenu();
+        } catch {
+          /* ignore */
+        }
+      }
+      setStatus(String(err.message || err));
+    }
+  }
+
+  function basenamePath(filePath) {
+    const s = String(filePath || "");
+    const parts = s.split(/[/\\]/);
+    return parts[parts.length - 1] || s;
+  }
+
+  async function refreshRecentMenu() {
+    const flyout = document.getElementById("menu-recent");
+    const empty = document.getElementById("menu-recent-empty");
+    if (!flyout || !isDesktopMode()) return;
+    const bridge = desktopBridge();
+    let paths = [];
+    try {
+      if (bridge && typeof bridge.listRecent === "function") {
+        paths = (await bridge.listRecent()) || [];
+      }
+    } catch {
+      paths = [];
+    }
+    flyout.querySelectorAll("[data-recent-path]").forEach((el) => el.remove());
+    if (!paths.length) {
+      if (empty) empty.classList.remove("hidden");
+      return;
+    }
+    if (empty) empty.classList.add("hidden");
+    for (const filePath of paths) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("role", "menuitem");
+      btn.setAttribute("data-recent-path", filePath);
+      btn.title = filePath;
+      const main = document.createElement("span");
+      main.className = "menu-item-main";
+      const label = document.createElement("span");
+      label.textContent = basenamePath(filePath);
+      main.appendChild(label);
+      btn.appendChild(main);
+      flyout.appendChild(btn);
+    }
+  }
+
+  function applyDesktopShellChrome() {
+    if (!isDesktopMode()) return;
+    document.body.classList.add("desktop-shell");
+    document.querySelectorAll("[data-desktop-only]").forEach((el) => {
+      el.hidden = false;
+    });
+    refreshRecentMenu().catch(() => {});
   }
 
   async function fillMissingLayout() {
@@ -1028,6 +1137,13 @@
 
   document.addEventListener("keydown", (ev) => {
     if (isEditableFocus(ev.target)) return;
+    if (ev.key === "F11" && isDesktopMode()) {
+      ev.preventDefault();
+      desktopToggleFullscreen().catch((err) =>
+        setStatus(String(err.message || err))
+      );
+      return;
+    }
     const mod = ev.ctrlKey || ev.metaKey;
     if (!mod) {
       if (ev.key === "Delete" || ev.key === "Backspace") {
@@ -1045,6 +1161,11 @@
     if (key === "s") {
       ev.preventDefault();
       saveDocument().catch((err) => setStatus(String(err.message || err)));
+      return;
+    }
+    if (key === "q" && isDesktopMode()) {
+      ev.preventDefault();
+      desktopQuit().catch((err) => setStatus(String(err.message || err)));
       return;
     }
     if (key === "n") {
@@ -1269,6 +1390,38 @@
   if (menuFile) {
     menuFile.addEventListener("click", (ev) => {
       ev.stopPropagation();
+      const recentItem = ev.target.closest("[data-recent-path]");
+      if (recentItem) {
+        closeAllMenus();
+        openRecentPath(recentItem.getAttribute("data-recent-path")).catch(
+          (err) => setStatus(String(err.message || err))
+        );
+        return;
+      }
+      const subTrigger = ev.target.closest(".menu-submenu-trigger");
+      if (subTrigger && menuFile.contains(subTrigger)) {
+        ev.preventDefault();
+        const host = subTrigger.closest(".menu-item-submenu");
+        const flyout = host && host.querySelector(".menu-flyout");
+        if (!flyout) return;
+        const open = flyout.classList.contains("hidden");
+        document.querySelectorAll(".menu-flyout").forEach((el) => {
+          el.classList.add("hidden");
+        });
+        document.querySelectorAll(".menu-item-submenu").forEach((el) => {
+          el.classList.remove("is-open");
+        });
+        document.querySelectorAll(".menu-submenu-trigger").forEach((btn) => {
+          btn.setAttribute("aria-expanded", "false");
+        });
+        if (open) {
+          refreshRecentMenu().catch(() => {});
+          flyout.classList.remove("hidden");
+          host.classList.add("is-open");
+          subTrigger.setAttribute("aria-expanded", "true");
+        }
+        return;
+      }
       const item = ev.target.closest("[data-file-action]");
       if (!item || item.disabled) return;
       closeAllMenus();
@@ -1468,7 +1621,11 @@
       if (action === "zoom-in") zoomIn();
       else if (action === "zoom-out") zoomOut();
       else if (action === "fit") fitView();
-      else if (action === "depth-in") {
+      else if (action === "fullscreen") {
+        desktopToggleFullscreen().catch((err) =>
+          setStatus(String(err.message || err))
+        );
+      } else if (action === "depth-in") {
         setDepth(depthLevel + 1).catch((err) =>
           setStatus(String(err.message || err))
         );
@@ -1497,6 +1654,8 @@
   syncThemeMenu();
   syncLanguageMenu();
   I18n.applyDomTranslations();
+  applyDesktopShellChrome();
+  updateWindowTitle();
 
   function closeAboutModal() {
     const modal = document.getElementById("about-modal");
@@ -2852,6 +3011,18 @@
       return loadConductorColors();
     })
     .then(() => api("/api/workspace"))
-    .then((st) => applyWorkspaceStatus(st))
+    .then((st) => {
+      applyWorkspaceStatus(st);
+      if (
+        isDesktopMode() &&
+        st &&
+        st.document &&
+        !st.document.browser_origin &&
+        st.document.yaml_path
+      ) {
+        return rememberDesktopRecent(st.document.yaml_path).then(() => st);
+      }
+      return st;
+    })
     .then(() => loadLocations())
     .catch((err) => setStatus(String(err.message || err)));

@@ -18,6 +18,7 @@ const path = require("path");
 const PREFS_NAME = "desktop-prefs.json";
 const DEFAULT_PORT = 8765;
 const APP_ICON = path.join(__dirname, "icon.png");
+const MAX_RECENT = 12;
 
 /** @type {import('child_process').ChildProcess | null} */
 let serverProc = null;
@@ -53,6 +54,34 @@ function rememberDirFromFile(filePath) {
   const prefs = loadPrefs();
   prefs.lastOpenDir = path.dirname(filePath);
   savePrefs(prefs);
+}
+
+function listRecent() {
+  const prefs = loadPrefs();
+  const raw = Array.isArray(prefs.recent) ? prefs.recent : [];
+  return raw.filter((p) => typeof p === "string" && p.trim());
+}
+
+function addRecent(filePath) {
+  if (!filePath) return listRecent();
+  const abs = path.resolve(filePath);
+  const prefs = loadPrefs();
+  const next = [abs, ...listRecent().filter((p) => p !== abs)].slice(
+    0,
+    MAX_RECENT
+  );
+  prefs.recent = next;
+  savePrefs(prefs);
+  return next;
+}
+
+function removeRecent(filePath) {
+  if (!filePath) return listRecent();
+  const abs = path.resolve(filePath);
+  const prefs = loadPrefs();
+  prefs.recent = listRecent().filter((p) => p !== abs);
+  savePrefs(prefs);
+  return prefs.recent;
 }
 
 function defaultDialogPath(suggestedName) {
@@ -218,6 +247,7 @@ ipcMain.handle("desktop:open-yaml", async () => {
   }
   const filePath = result.filePaths[0];
   rememberDirFromFile(filePath);
+  addRecent(filePath);
   return filePath;
 });
 
@@ -234,7 +264,30 @@ ipcMain.handle("desktop:save-yaml-as", async (_event, suggestedName) => {
     filePath = `${filePath}.yaml`;
   }
   rememberDirFromFile(filePath);
+  addRecent(filePath);
   return filePath;
+});
+
+ipcMain.handle("desktop:recent-list", async () => listRecent());
+
+ipcMain.handle("desktop:recent-add", async (_event, filePath) => {
+  return addRecent(String(filePath || ""));
+});
+
+ipcMain.handle("desktop:recent-remove", async (_event, filePath) => {
+  return removeRecent(String(filePath || ""));
+});
+
+ipcMain.handle("desktop:quit", async () => {
+  app.quit();
+});
+
+ipcMain.handle("desktop:toggle-fullscreen", async () => {
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  if (!win || win.isDestroyed()) return false;
+  const next = !win.isFullScreen();
+  win.setFullScreen(next);
+  return next;
 });
 
 async function boot() {

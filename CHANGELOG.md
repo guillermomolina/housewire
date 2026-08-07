@@ -7,6 +7,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.88.0] — 2026-08-07
+
+### Added
+
+- Desktop: **Open recent** (paths remembered in Electron userData), **Quit**
+  (Ctrl+Q), and **Full screen** (F11 / View menu).
+- Window title shows the active YAML filename with a leading ``*`` when dirty
+  (replaces the old ``HouseWire — physical`` title).
+
+### Changed
+
+- Desktop chrome: hide the in-app HouseWire brand mark (title bar already
+  identifies the app); show desktop-only menu items only when the Electron
+  bridge is present.
+
 ## [0.87.1] — 2026-08-07
 
 ### Fixed

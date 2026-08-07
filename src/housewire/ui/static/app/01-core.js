@@ -54,6 +54,8 @@
   let activeDocId = null;
   /** Active document YAML filename (e.g. NuevoSitio.yaml) for root Id display. */
   let activeYamlName = null;
+  /** Absolute yaml_path from workspace status (real path or server temp). */
+  let activeYamlPath = null;
   /**
    * True when the active document was opened from browser content / File → New
    * (temp site on the server). False when opened from a real filesystem path
@@ -542,6 +544,7 @@
     if (!hasDocument || !activeYamlName) {
       el.textContent = "";
       el.title = "";
+      updateWindowTitle();
       return;
     }
     const state = dirtyLocal ? t("status.unsaved") : t("status.savedOk");
@@ -553,6 +556,17 @@
     el.title = loc
       ? `${activeYamlName} · ${state} · ${loc}`
       : `${activeYamlName} · ${state}`;
+    updateWindowTitle();
+  }
+
+  /** Browser / OS window title: active file (+ dirty *) — HouseWire. */
+  function updateWindowTitle() {
+    if (!hasDocument || !activeYamlName) {
+      document.title = "HouseWire";
+      return;
+    }
+    const mark = dirtyLocal ? "*" : "";
+    document.title = `${mark}${activeYamlName} — HouseWire`;
   }
 
   function applyWorkspaceStatus(st) {
@@ -565,6 +579,8 @@
         st.documents &&
         st.documents.find((d) => d.id === activeDocId)?.yaml) ||
       null;
+    activeYamlPath =
+      (st && st.document && st.document.yaml_path) || null;
     activeDocBrowserOrigin = Boolean(
       st && st.document && st.document.browser_origin
     );
@@ -575,6 +591,7 @@
       canReset = false;
       activeDocId = null;
       activeYamlName = null;
+      activeYamlPath = null;
       activeDocBrowserOrigin = false;
       updateHistoryButtons();
     }

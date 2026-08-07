@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HouseWire — physical</title>
+  <title>HouseWire</title>
   <script>
     (function () {
       try {
@@ -48,6 +48,24 @@
           <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-folder-open"></use></svg><span data-i18n="menu.file.open">Open…</span></span>
           <span class="menu-shortcut">Ctrl+O</span>
         </button>
+        <div class="menu-item-submenu" id="menu-recent-host" data-desktop-only hidden>
+          <button
+            type="button"
+            class="menu-submenu-trigger"
+            id="menu-recent-btn"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-controls="menu-recent"
+          >
+            <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-history"></use></svg><span data-i18n="menu.file.openRecent">Open recent</span></span>
+            <span class="menu-caret" aria-hidden="true"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-chevron-right"></use></svg></span>
+          </button>
+          <div class="menu-flyout hidden" id="menu-recent" role="menu">
+            <p class="menu-hint" id="menu-recent-empty" role="note">
+              <span data-i18n="menu.file.openRecentEmpty">No recent files</span>
+            </p>
+          </div>
+        </div>
         <button type="button" role="menuitem" data-file-action="save" id="menu-save" disabled>
           <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-save"></use></svg><span data-i18n="menu.file.save">Save</span></span>
           <span class="menu-shortcut">Ctrl+S</span>
@@ -57,6 +75,11 @@
         </button>
         <button type="button" role="menuitem" data-file-action="close" id="menu-close" disabled>
           <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-x"></use></svg><span data-i18n="menu.file.close">Close</span></span>
+        </button>
+        <hr class="menu-sep" data-desktop-only hidden />
+        <button type="button" role="menuitem" data-file-action="quit" data-desktop-only hidden>
+          <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-x"></use></svg><span data-i18n="menu.file.quit">Quit</span></span>
+          <span class="menu-shortcut">Ctrl+Q</span>
         </button>
       </div>
     </div>
@@ -158,6 +181,10 @@
         </button>
         <button type="button" role="menuitem" data-view-action="fit">
           <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-maximize-2"></use></svg><span data-i18n="menu.view.fit">Fit</span></span>
+        </button>
+        <button type="button" role="menuitem" data-view-action="fullscreen" data-desktop-only hidden>
+          <span class="menu-item-main"><svg class="hw-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-maximize-2"></use></svg><span data-i18n="menu.view.fullscreen">Full screen</span></span>
+          <span class="menu-shortcut">F11</span>
         </button>
         <p class="menu-hint" role="note">
           <span data-i18n="menu.view.panHint">Pan: Space+drag, middle-click, or drag empty canvas</span>
