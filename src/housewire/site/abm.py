@@ -564,15 +564,16 @@ def add_conduit(
     notes: str | None = None,
     kind: str | None = None,
 ) -> None:
-    """Add a Conduit entry into the unified ``cables`` map."""
+    """Add a Conduit entry into the unified ``cables`` map.
+
+    ``contains`` may be empty when the tube is installed before its cables.
+    """
     _ensure_maps(doc)
     cables = doc["cables"]
     if not isinstance(cables, dict):
         raise ValueError("cables must be a map")
     if name in cables:
         raise ValueError(f"Cable already exists: {name}")
-    if not contains:
-        raise ValueError("contains cannot be empty")
     for cable_ref in contains:
         if str(cable_ref) not in cables:
             raise ValueError(f"Conduit references missing cables entry: {cable_ref}")

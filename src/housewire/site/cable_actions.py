@@ -239,12 +239,12 @@ def insert_conduit(
     label: str | None = None,
     notes: str | None = None,
     contains: list[str] | None = None,
-    create_open_payload: bool = True,
+    create_open_payload: bool = False,
 ) -> dict[str, Any]:
     """Create a Conduit between two openings.
 
-    If ``contains`` is omitted, creates an ``OPEN_*`` sheath leaving ``from_ref``
-    and claims the hop to ``to_ref`` (matches the open→claim workflow).
+    A conduit can be empty. The open→claim workflow is only used when
+    ``create_open_payload`` is explicitly requested.
     """
     path, doc = session.ensure_doc()
     _parts, owner = _owner_node_for_insert(doc, owner_id=owner_id)
@@ -271,8 +271,6 @@ def insert_conduit(
         detail["open_cable"] = open_name
         return detail
 
-    if not payload:
-        raise ValueError("contains cannot be empty")
     cables = _ensure_cables(host)
     cd_name = name or _next_unique(cables, "Conducto")
     abm.add_conduit(

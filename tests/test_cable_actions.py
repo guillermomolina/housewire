@@ -56,7 +56,7 @@ def _session(tmp_path: Path) -> SiteSession:
     return SiteSession(tmp_path, site_yaml=yaml_path)
 
 
-def test_insert_conduit_creates_open_payload(tmp_path: Path) -> None:
+def test_insert_conduit_creates_empty_tube(tmp_path: Path) -> None:
     session = _session(tmp_path)
     detail = insert_conduit(
         session,
@@ -67,10 +67,9 @@ def test_insert_conduit_creates_open_payload(tmp_path: Path) -> None:
     assert detail["kind"] == "conduit"
     assert detail["from"] == "RoomA.E1"
     assert detail["to"] == "RoomB.W1"
-    assert detail.get("open_cable", "").startswith("OPEN_")
-    open_id = detail["open_cable"]
-    open_detail = cable_detail(session, cable_id=open_id)
-    assert open_detail["is_open_run"] is True
+    assert detail["contains"] == []
+    _path, doc = session.ensure_doc()
+    assert list(doc["cables"]) == [detail["id"]]
 
 
 def test_insert_conductor_and_patch(tmp_path: Path) -> None:

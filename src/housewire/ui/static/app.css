@@ -1098,13 +1098,41 @@ button:hover {
   border-color: var(--selection);
 }
 
-.palette-group h4 {
-  margin: 0.35rem 0.45rem 0.1rem;
+.palette-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+  margin: 0.35rem 0 0.1rem;
+  padding: 0.15rem 0.45rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
   font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.palette-group-toggle:hover {
+  color: var(--text);
+  background: var(--tree-row);
+}
+
+.palette-group-chevron::before {
+  content: "▾";
+  display: inline-block;
+  width: 0.8rem;
+}
+
+.palette-group.collapsed .palette-group-chevron::before {
+  content: "▸";
+}
+
+.palette-group.collapsed .palette-group-body {
+  display: none;
 }
 
 .palette-list {

@@ -2324,6 +2324,9 @@
           setStatus(t("status.linkGrouped"));
         });
       }
+      appendLinkAction(bar, t("menu.edit.delete"), async () => {
+        await deleteSelection();
+      });
     }
   }
 

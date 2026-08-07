@@ -11751,6 +11751,9 @@
           setStatus(t("status.linkGrouped"));
         });
       }
+      appendLinkAction(bar, t("menu.edit.delete"), async () => {
+        await deleteSelection();
+      });
     }
   }
 
@@ -13744,7 +13747,7 @@
         const insertModal = document.getElementById("insert-modal");
         if (appModal && !appModal.classList.contains("hidden")) return;
         if (insertModal && !insertModal.classList.contains("hidden")) return;
-        if (selectedIds.size < 1) return;
+        if (selectedIds.size < 1 && !selectedLinkId) return;
         ev.preventDefault();
         deleteSelection().catch((err) => setStatus(String(err.message || err)));
       }
@@ -15390,6 +15393,12 @@
       elemGroup.classList.toggle("is-electrical-off", !elemsEnabled);
       elemGroup.title = elemsEnabled ? "" : needHint;
     }
+    document
+      .querySelectorAll("[data-palette-insert-action][data-needs-electrical]")
+      .forEach((btn) => {
+        btn.disabled = !elemsEnabled;
+        btn.title = elemsEnabled ? "" : needHint;
+      });
   }
 
   function initLeftNavAccordion() {
@@ -15592,6 +15601,30 @@
   });
   document.getElementById("palette-search-side")?.addEventListener("input", () => {
     renderPaletteSideList();
+  });
+  document.querySelectorAll(".palette-group-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const group = btn.closest(".palette-group");
+      if (!group) return;
+      const collapsed = group.classList.toggle("collapsed");
+      btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    });
+  });
+  document.querySelectorAll("[data-palette-insert-action]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const action = btn.getAttribute("data-palette-insert-action");
+      const run = async () => {
+        if (btn.hasAttribute("data-needs-electrical")) {
+          await ensureElectricalForElementInsert();
+        }
+        if (action === "conduit" || action === "conductor") {
+          await beginWiringGesture(action);
+        } else if (action === "cable") {
+          await beginSheathFromSelection();
+        }
+      };
+      run().catch((err) => setStatus(String(err.message || err)));
+    });
   });
   document.getElementById("form-catalog-item")?.addEventListener("submit", (ev) => {
     ev.preventDefault();

@@ -310,13 +310,43 @@
               <span data-i18n="palette.search">Search</span>
               <input id="palette-search-side" type="text" />
             </label>
+            <div class="palette-group" id="palette-group-links">
+              <button type="button" class="palette-group-toggle" aria-expanded="true">
+                <span class="palette-group-chevron" aria-hidden="true"></span>
+                <span data-i18n="palette.links">Links</span>
+              </button>
+              <div class="palette-group-body palette-list">
+                <button type="button" class="palette-item" data-palette-insert-action="conduit">
+                  <svg class="palette-item-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-grip-horizontal"></use></svg>
+                  <span class="palette-item-label" data-i18n="menu.insert.conduit">Conduit…</span>
+                </button>
+                <button type="button" class="palette-item" data-palette-insert-action="cable" data-needs-electrical>
+                  <svg class="palette-item-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-link"></use></svg>
+                  <span class="palette-item-label" data-i18n="menu.insert.cable">Cable…</span>
+                </button>
+                <button type="button" class="palette-item" data-palette-insert-action="conductor" data-needs-electrical>
+                  <svg class="palette-item-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use width="24" height="24" href="#icon-zap"></use></svg>
+                  <span class="palette-item-label" data-i18n="menu.insert.conductor">Conductor…</span>
+                </button>
+              </div>
+            </div>
             <div class="palette-group">
-              <h4 data-i18n="palette.containers">Containers</h4>
-              <div id="palette-list-containers" class="palette-list"></div>
+              <button type="button" class="palette-group-toggle" aria-expanded="true">
+                <span class="palette-group-chevron" aria-hidden="true"></span>
+                <span data-i18n="palette.containers">Containers</span>
+              </button>
+              <div class="palette-group-body">
+                <div id="palette-list-containers" class="palette-list"></div>
+              </div>
             </div>
             <div class="palette-group" id="palette-group-elements">
-              <h4 data-i18n="palette.elements">Elements</h4>
-              <div id="palette-list-elements" class="palette-list"></div>
+              <button type="button" class="palette-group-toggle" aria-expanded="true">
+                <span class="palette-group-chevron" aria-hidden="true"></span>
+                <span data-i18n="palette.elements">Elements</span>
+              </button>
+              <div class="palette-group-body">
+                <div id="palette-list-elements" class="palette-list"></div>
+              </div>
             </div>
           </div>
         </section>

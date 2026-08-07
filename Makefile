@@ -58,3 +58,6 @@ desktop-prepare:
 
 desktop:
 	$(MAKE) -C desktop run
+
+serve:
+	$(PYTHON) -m housewire serve

@@ -1,0 +1,47 @@
+schema: house/v2
+type: House
+name: Nuevo sitio
+label: Nuevo sitio
+elements:
+  Caja_de_mecanismo:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo
+    label: Caja de mecanismo
+    subtype: OneGang
+    opening_grid:
+      NS: 1
+      WE: 1
+      B: 1
+    view:
+      physical:
+        x: 902.4836294391373
+        y: 2266.9858787159833
+        w: 260.0
+        h: 180.0
+        bounds: sprite
+  Caja_de_mecanismo_1:
+    type: DeviceBox
+    elements: {}
+    cables: {}
+    name: Caja de mecanismo 1
+    label: Caja de mecanismo 1
+    subtype: OneGang
+    opening_grid:
+      NS: 1
+      WE: 1
+      B: 1
+    view:
+      physical:
+        x: 903.8856296684073
+        y: 2580.44287065066
+        w: 260.0
+        h: 180.0
+        bounds: sprite
+cables:
+  Conducto:
+    type: Conduit
+    from: Caja_de_mecanismo.N1
+    to: Caja_de_mecanismo_1.S1
+    contains: []

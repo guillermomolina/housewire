@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.89.2] — 2026-08-07
+
+### Added
+
+- Palette connection groups for tubes, cables, and conductors can be collapsed
+  independently, as can containers and elements.
+- Selected connections can be deleted from their properties panel, the Delete
+  toolbar/menu controls, or the Delete key.
+
 ## [0.89.1] — 2026-08-07
 
 ### Fixed
