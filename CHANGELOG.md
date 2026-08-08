@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.94.1] — 2026-08-08
+
+### Fixed
+
+- Se localizan las etiquetas de color, sección, origen, destino y contenido
+  en el panel de propiedades de conexiones.
+
 ## [0.94.0] — 2026-08-08
 
 ### Added
