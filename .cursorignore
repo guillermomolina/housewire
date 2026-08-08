@@ -1,0 +1,33 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.so
+
+# Playwright
+.playwright-browsers/
+
+# Build / caches
+.pytest_cache/
+.cache/
+dist/
+build/
+coverage/
+htmlcov/
+
+# Node / frontend
+node_modules/
+*.min.js
+*.map
+
+# IDE / misc
+.vscode/
+.idea/
+
+# Generated / temporary
+tmp/
+temp/
+logs/
+*.log
