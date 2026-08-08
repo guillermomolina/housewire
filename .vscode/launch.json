@@ -1,0 +1,33 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Serve: Margalló 4A",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "module": "housewire",
+            "args": [
+                "serve",
+                "housewire.yaml"
+            ],
+            "cwd": "${workspaceFolder}/sites/Margalló 4A",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Serve: Margalló 4A · Test.yaml",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "module": "housewire",
+            "args": [
+                "serve",
+                "Test.yaml"
+            ],
+            "cwd": "${workspaceFolder}/sites/Margalló 4A",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}
