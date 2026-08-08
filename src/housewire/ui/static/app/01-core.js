@@ -193,7 +193,8 @@
   const LINK_HIT_PAD = 4;
   /** Must stay in sync with housewire.ui.route_quality highway constants. */
   const STRAND_WIDTH = 2.5;
-  const LANE_GAP = STRAND_WIDTH;
+  // Keep cable strands and adjacent jackets visually distinct and clickable.
+  const LANE_GAP = 4;
   const LANE_PITCH = STRAND_WIDTH + LANE_GAP;
   /** Shared-terminal V: lateral pitch (keep strands distinct but tight). */
   const TERMINAL_FAN_PITCH = LANE_PITCH;
@@ -1421,6 +1422,7 @@
       startClientX: ev.clientX,
       startClientY: ev.clientY,
       additive: Boolean(ev.ctrlKey || ev.metaKey),
+      kind: wiringMode?.kind === "cable" ? "cable" : "selection",
       moved: false,
       captured: true,
     };
@@ -1612,31 +1614,28 @@
     setStatus(t("status.wiringCancelled"));
   }
 
-  /** Ordered conduit ids travelled by a loose conductor, if it is visible. */
-  function cableRouteForConductor(conductorId) {
+  /** Ordered conduit ids travelled by a visible conductor or Cable. */
+  function cableRouteForMember(memberId) {
+    const routes = new Set();
     for (const edge of graph?.cable_edges || []) {
-      if (!Array.isArray(edge.conductors) || !edge.conductors.includes(conductorId)) {
-        continue;
-      }
-      // A conductor already inside a sheath is not a candidate for another
-      // sheath. Its displayed edge can aggregate several different members.
-      if (edge.id !== conductorId) return null;
+      if (edge.id !== memberId) continue;
       const hops = Array.isArray(edge.conduit_hops)
         ? edge.conduit_hops.map((hop) => String(hop.conduit || ""))
         : edge.conduit
           ? [String(edge.conduit)]
           : [];
-      return JSON.stringify(hops);
+      routes.add(JSON.stringify(hops));
     }
-    return null;
+    // A cable spanning different routes cannot be added as one member.
+    return routes.size === 1 ? [...routes][0] : null;
   }
 
   function cableSelectionSeed() {
     if (
       selectedIds.size === 0 &&
-      selectedLinkKind === "conductor" &&
+      (selectedLinkKind === "conductor" || selectedLinkKind === "cable") &&
       selectedLinkId &&
-      cableRouteForConductor(selectedLinkId) !== null
+      cableRouteForMember(selectedLinkId) !== null
     ) {
       return selectedLinkId;
     }
@@ -1647,83 +1646,78 @@
   function syncCableCandidateVisuals() {
     const route = wiringMode?.kind === "cable" ? wiringMode.cableRoute : null;
     const selected = new Set(wiringMode?.selectedConductors || []);
-    document.querySelectorAll("[data-conductor-id]").forEach((path) => {
-      const id = path.getAttribute("data-conductor-id");
-      const eligible = cableRouteForConductor(id) !== null;
-      const candidate = eligible && route !== null && cableRouteForConductor(id) === route;
+    document
+      .querySelectorAll("[data-conductor-id], [data-link-kind=\"cable\"]")
+      .forEach((path) => {
+      const id =
+        path.getAttribute("data-cable-id") ||
+        path.getAttribute("data-conductor-id") ||
+        path.getAttribute("data-link-id");
+      const memberRoute = cableRouteForMember(id);
+      const eligible = memberRoute !== null;
+      const candidate = eligible && route !== null && memberRoute === route;
       path.classList.toggle("cable-eligible", eligible);
       path.classList.toggle("cable-candidate", candidate);
       path.classList.toggle("cable-choice", selected.has(id));
-    });
+      });
   }
 
-  function pickCableConductor(conductorId) {
+  function pickCableMember(memberId) {
+    return pickCableMembers([memberId], false);
+  }
+
+  function pickCableMembers(memberIds, additive) {
     if (!wiringMode || wiringMode.kind !== "cable") return false;
-    const route = cableRouteForConductor(conductorId);
-    if (route === null) return false;
-    const selected = wiringMode.selectedConductors || [];
-    if (wiringMode.cableRoute !== null && route !== wiringMode.cableRoute) {
-      return false;
+    const prior = wiringMode.selectedConductors || [];
+    const next = additive ? [...prior] : [];
+    for (const id of memberIds) {
+      const route = cableRouteForMember(id);
+      if (route === null) continue;
+      if (additive && next.includes(id)) {
+        next.splice(next.indexOf(id), 1);
+      } else if (!next.includes(id)) {
+        next.push(id);
+      }
     }
-    if (selected.includes(conductorId)) {
-      const next = selected.filter((id) => id !== conductorId);
-      setWiringMode(
-        next.length
-          ? {
-              ...wiringMode,
-              selectedConductors: next,
-              cableHistory: (wiringMode.cableHistory || []).filter(
-                (id) => id !== conductorId
-              ),
-            }
-          : {
-              kind: "cable",
-              from: null,
-              cableRoute: null,
-              selectedConductors: [],
-              cableHistory: [],
-            }
-      );
-      syncCableCandidateVisuals();
-      return true;
-    }
+    const first = next[0];
+    const route = first ? cableRouteForMember(first) : null;
+    const compatible = route === null
+      ? []
+      : next.filter((id) => cableRouteForMember(id) === route);
     setWiringMode({
       ...wiringMode,
       cableRoute: route,
-      selectedConductors: [...selected, conductorId],
-      cableHistory: [...(wiringMode.cableHistory || []), conductorId],
+      selectedConductors: compatible,
+      cableHistory: [],
     });
     syncCableCandidateVisuals();
-    setStatus(t("status.wiringCableCandidates"));
+    if (compatible.length) setStatus(t("status.wiringCableCandidates"));
     return true;
   }
 
-  function undoCableConductorPick() {
-    if (!wiringMode || wiringMode.kind !== "cable") return false;
-    const history = wiringMode.cableHistory || [];
-    const last = history.at(-1);
-    if (!last) return false;
-    const selected = (wiringMode.selectedConductors || []).filter(
-      (id) => id !== last
-    );
-    setWiringMode(
-      selected.length
-        ? {
-            ...wiringMode,
-            selectedConductors: selected,
-            cableHistory: history.slice(0, -1),
-          }
-        : {
-            kind: "cable",
-            from: null,
-            cableRoute: null,
-            selectedConductors: [],
-            cableHistory: [],
-          }
-    );
-    syncCableCandidateVisuals();
-    setStatus(t("status.wiringCableUndone"));
-    return true;
+  /** Cable / conductor ids whose rendered paths touch a screen-space box. */
+  function cableMembersInClientRect(rect) {
+    const ids = new Set();
+    document
+      .querySelectorAll(
+        ".cable-strand-hit.cable-eligible, .cable-jacket-hit.cable-eligible"
+      )
+      .forEach((path) => {
+        const box = path.getBoundingClientRect();
+        if (
+          box.left <= rect.right &&
+          box.right >= rect.left &&
+          box.top <= rect.bottom &&
+          box.bottom >= rect.top
+        ) {
+          const id =
+            path.getAttribute("data-cable-id") ||
+            path.getAttribute("data-conductor-id") ||
+            path.getAttribute("data-link-id");
+          if (id) ids.add(id);
+        }
+      });
+    return [...ids];
   }
 
   function wiringSnapRadius() {
@@ -2219,7 +2213,7 @@
     );
   }
 
-  async function beginSheathFromSelection() {
+  async function beginCableFromSelection() {
     if (!hasDocument || !locationId) {
       setStatus(t("status.needDocument"));
       return;
@@ -2235,20 +2229,20 @@
     syncCableCandidateVisuals();
     if (seed) {
       clearSelectionState();
-      pickCableConductor(seed);
+      pickCableMember(seed);
       return;
     }
     setStatus(t("status.wiringCableFrom"));
   }
 
-  async function completeCableSheath() {
+  async function completeCableCable() {
     const contains = wiringMode?.kind === "cable"
       ? wiringMode.selectedConductors || []
       : [];
     if (!contains.length) return;
     setWiringMode(null);
     syncCableCandidateVisuals();
-    const res = await api("/api/cable/sheath", {
+    const res = await api("/api/connection/cable", {
       method: "POST",
       body: JSON.stringify({
         location_id: locationId,
@@ -2284,7 +2278,7 @@
     const fromRef = wiringMode?.from;
     setWiringMode(null);
     if (!fromRef) return;
-    const res = await api("/api/cable/conduit", {
+    const res = await api("/api/connection/conduit", {
       method: "POST",
       body: JSON.stringify({
         location_id: locationId,
@@ -2309,7 +2303,7 @@
     if (!segments.length) return;
     let lastRes = null;
     for (const segment of segments) {
-      const res = await api("/api/cable/conductor", {
+      const res = await api("/api/connection/conductor", {
         method: "POST",
         body: JSON.stringify({
           location_id: locationId,
@@ -2551,12 +2545,28 @@
     );
   }
 
+  /**
+   * Cable lanes need distinct hit areas: the general 16px link target is
+   * wider than their pitch and makes adjacent cables impossible to choose.
+   */
+  function cableHitStrokeWorld(visualW) {
+    const visual = Math.max(0, Number(visualW) || 0);
+    return Math.min(
+      linkHitStrokeWorld(visual),
+      visual + 1
+    );
+  }
+
   function syncLinkHitStrokes() {
     document
       .querySelectorAll(".edge-tube-hit, .cable-strand-hit, .cable-jacket-hit")
       .forEach((el) => {
         const visual = Number(el.getAttribute("data-hit-visual") || 0);
-        el.style.strokeWidth = String(linkHitStrokeWorld(visual));
+        el.style.strokeWidth = String(
+          el.classList.contains("edge-tube-hit")
+            ? linkHitStrokeWorld(visual)
+            : cableHitStrokeWorld(visual)
+        );
       });
   }
 
@@ -2566,7 +2576,9 @@
       ev.stopPropagation();
       ev.preventDefault();
       if (wiringMode?.kind === "cable") {
-        if (kind === "conductor") pickCableConductor(linkId);
+        if (kind === "conductor" || kind === "cable") {
+          pickCableMembers([linkId], Boolean(ev.ctrlKey || ev.metaKey));
+        }
         return;
       }
       selectLink(linkId, kind).catch((err) =>

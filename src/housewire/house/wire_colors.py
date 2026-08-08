@@ -67,7 +67,7 @@ CONDUCTOR_COLORS: dict[str, dict[str, str]] = {
         "label_en": "white",
         "label_es": "blanco",
         "css": "#ffffff",
-        "typical": "Sheath jacket / catalog signal default (with BU)",
+        "typical": "Cable jacket / catalog signal default (with BU)",
     },
     "PK": {
         "label_en": "pink",

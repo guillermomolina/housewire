@@ -79,7 +79,7 @@ class TestDeleteSelection(unittest.TestCase):
             from_ref="Box_A/Strip.N1",
             to_ref="Box_B/Strip.N1",
         )
-        abm.add_sheath(room, "L1", contains=["L1_1"], section="1.5")
+        abm.add_cable(room, "L1", contains=["L1_1"], section="1.5")
         abm.add_conduit(
             room,
             "C1",
@@ -96,7 +96,7 @@ class TestDeleteSelection(unittest.TestCase):
         # Cable relocated to Box_B as open run.
         box_b = get_place_node(self.doc, ("Room", "Box_B"))
         b_cables = box_b.get("cables") or {}
-        # Sheath + conductor should live on Box_B now.
+        # Cable + conductor should live on Box_B now.
         found = False
         for name, entry in b_cables.items():
             if not isinstance(entry, dict):

@@ -721,6 +721,7 @@
       });
       return;
     }
+    orderCableLayers(cablesG);
     endRouteGeomCache();
     edgeRefreshJob = null;
   }
@@ -753,7 +754,7 @@
         occupied,
         layout,
         cablesG,
-        edges: graph.cable_edges || [],
+        edges: cablePaintOrder(graph.cable_edges),
         index: 0,
       };
       refreshCablesChunk(gen);

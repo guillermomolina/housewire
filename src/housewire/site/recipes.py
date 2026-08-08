@@ -1,6 +1,6 @@
 """High-level capture recipes: socket, lamp, feed.
 
-Each recipe creates Conductor leaves + optional Cable sheath + Conduit.
+Each recipe creates Conductor leaves + optional Cable + Conduit.
 """
 from __future__ import annotations
 
@@ -130,7 +130,7 @@ def add_wired_run(
     label: str | None = None,
     subtype: str | None = abm.DEFAULT_CABLE_SUBTYPE,
 ) -> WiredRunResult:
-    """Add conductors + sheath + conduit joining terminal pairs one-to-one."""
+    """Add conductors + cable + conduit joining terminal pairs one-to-one."""
     if not colors:
         raise ValueError("colors cannot be empty")
     if not (len(from_pins) == len(to_pins) == len(colors)):
@@ -158,7 +158,7 @@ def add_wired_run(
         conductor_names.append(cid)
         from_refs.append(str(fp))
         to_refs.append(str(tp))
-    abm.add_sheath(
+    abm.add_cable(
         doc,
         cable_name,
         contains=conductor_names,

@@ -14,9 +14,10 @@ from housewire.site.cable_actions import (
     find_cable_owner,
     insert_conductor,
     insert_conduit,
-    insert_sheath,
+    insert_cable,
     land_run,
     open_run,
+    ungroup_cable,
     update_cable_properties,
 )
 from housewire.site.delete_selection import delete_selection
@@ -90,7 +91,7 @@ def test_insert_conductor_and_patch(tmp_path: Path) -> None:
     assert updated["color"] == "BU"
 
 
-def test_sheath_group_and_delete(tmp_path: Path) -> None:
+def test_cable_group_and_delete(tmp_path: Path) -> None:
     session = _session(tmp_path)
     a = insert_conductor(
         session,
@@ -108,11 +109,11 @@ def test_sheath_group_and_delete(tmp_path: Path) -> None:
         name="N1",
         color="BU",
     )
-    sheath = insert_sheath(
+    cable = insert_cable(
         session, contains=[a["id"], b["id"]], owner_id=".", name="Funda1"
     )
-    assert sheath["kind"] == "cable"
-    assert set(sheath["contains"]) == {"L1", "N1"}
+    assert cable["kind"] == "cable"
+    assert set(cable["contains"]) == {"L1", "N1"}
     _path, doc = session.ensure_doc()
     deleted = delete_cables(doc, ["Funda1"])
     assert "Funda1" in deleted
@@ -120,6 +121,28 @@ def test_sheath_group_and_delete(tmp_path: Path) -> None:
         find_cable_owner(doc, "Funda1")
     # Children remain
     find_cable_owner(doc, "L1")
+
+
+def test_ungroup_cable_preserves_members_in_conduit(tmp_path: Path) -> None:
+    session = _session(tmp_path)
+    conduit = insert_conduit(
+        session, from_ref="RoomA.E1", to_ref="RoomB.W1", owner_id=".", name="Tube"
+    )
+    a = insert_conductor(
+        session,
+        from_ref="RoomA/SockA.N1",
+        to_ref="RoomB/SockB.N1",
+        owner_id=".",
+        name="L1",
+        conduit_id=conduit["id"],
+    )
+    cable = insert_cable(session, contains=[a["id"]], owner_id=".", name="Funda1")
+
+    assert ungroup_cable(session, cable_id=cable["id"]) == ["L1"]
+    _path, doc = session.ensure_doc()
+    assert doc["cables"]["Tube"]["contains"] == ["L1"]
+    with pytest.raises(ValueError):
+        find_cable_owner(doc, "Funda1")
 
 
 def test_delete_selection_cable_id(tmp_path: Path) -> None:

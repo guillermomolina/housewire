@@ -2095,7 +2095,7 @@ button:hover {
 .cable-jacket {
   fill: none;
   stroke: #ffffff;
-  /* Width and sheath color set in JS. High opacity so WH reads as white. */
+  /* Width and cable color set in JS. High opacity so WH reads as white. */
   stroke-opacity: 0.92;
   stroke-linejoin: round;
   stroke-linecap: round;
@@ -2119,17 +2119,14 @@ button:hover {
   cursor: pointer;
 }
 
-.cable-strand-hit.selected,
-.cable-jacket-hit.selected {
-  stroke: color-mix(in srgb, var(--selection) 35%, transparent);
-}
-
-.cable-strand.cable-candidate {
+.cable-strand.cable-candidate,
+.cable-jacket.cable-candidate {
   stroke-dasharray: 5 3;
   stroke-opacity: 0.95;
 }
 
-.cable-strand.cable-choice {
+.cable-strand.cable-choice,
+.cable-jacket.cable-choice {
   stroke: var(--selection) !important;
   stroke-dasharray: 2 2;
   stroke-opacity: 1;
@@ -2275,18 +2272,27 @@ circle.element-terminal.wiring-snap {
   pointer-events: none;
 }
 
-#viewport.wiring-cable .cable-strand-hit.cable-eligible {
+#viewport.wiring-cable .cable-strand-hit.cable-eligible,
+#viewport.wiring-cable .cable-jacket-hit.cable-eligible {
   pointer-events: stroke;
   cursor: crosshair;
 }
 
-#viewport.wiring-cable.wiring-cable-has-route .cable-strand-hit.cable-eligible {
+#viewport.wiring-cable.wiring-cable-has-route .cable-strand-hit.cable-eligible,
+#viewport.wiring-cable.wiring-cable-has-route .cable-jacket-hit.cable-eligible {
   pointer-events: none;
 }
 
-#viewport.wiring-cable.wiring-cable-has-route .cable-strand-hit.cable-candidate {
+#viewport.wiring-cable.wiring-cable-has-route .cable-strand-hit.cable-candidate,
+#viewport.wiring-cable.wiring-cable-has-route .cable-jacket-hit.cable-candidate {
   pointer-events: stroke;
   cursor: cell;
+}
+
+/* A cable's strands overlap its jacket hit area. While grouping cables,
+   send those clicks to the jacket; loose conductors remain selectable. */
+#viewport.wiring-cable .cable-strand-hit[data-cableed="true"] {
+  pointer-events: none;
 }
 
 .cable-edge {

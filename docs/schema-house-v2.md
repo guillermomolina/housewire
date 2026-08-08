@@ -526,7 +526,7 @@ One dictionary. Kind is distinguished by `type`:
 | `type` | Endpoints | `contains` | Role |
 |--------|-----------|------------|------|
 | `Conduit` | `from`/`to` = `PlaceRef.Opening` | ids of Cable and/or Conductor | Physical tube/hose between openings |
-| `Cable` | none (sheath / bundle) | ids of Cable and/or Conductor | Jacket grouping; drawn inside conduits |
+| `Cable` | none (cable / bundle) | ids of Cable and/or Conductor | Jacket grouping; drawn inside conduits |
 | `Conductor` | `from`/`to` = `ElementRef.Terminal` (one each) | forbidden | Leaf wire = the electrical connection |
 
 Shared fields: `name`, `label`, `notes`, optional `section`, `color` (singular),
@@ -567,7 +567,7 @@ cables:
 **Ownership:** a place node owns the `cables` entries it declares. Conductor
 `from`/`to` must resolve under that place’s subtree (connection-scope rules).
 
-ABM shortcuts: `add cable NAME --colors BN,BU` creates a `Cable` sheath plus
+ABM shortcuts: `add cable NAME --colors BN,BU` creates a `Cable` cable plus
 child `Conductor`s; `add conductor` / `add conduit` write typed entries directly.
 There is no separate `connections:` list and no multi-terminal `via:` sugar —
 one Conductor = one terminal pair.
@@ -579,13 +579,13 @@ codes follow **IEC 60757**; CSS hex values are the HouseWire UI palette. Use
 uppercase in YAML (`BN`, not `bn`). The UI loads the same table from
 `GET /api/wire-colors`.
 
-A Cable sheath’s own `color:` (e.g. `WH`) is the **jacket** tint on the canvas
+A Cable’s own `color:` (e.g. `WH`) is the **jacket** tint on the canvas
 (`jacket_color` on the physical cable edge). A Conduit’s own `color:` (e.g.
 `BK`) is painted on the **tube**. Conductor `color:` values are the individual
 strand strokes. A thin high-contrast rim is drawn **only** when a stroke would
 blend into its container (same IEC code or similar luminance) — e.g. a black
 jacket in a black conduit, or a black tube on a dark canvas. A black tube on a
-light canvas, or a black jacket in a white conduit, needs no rim. The sheath
+light canvas, or a black jacket in a white conduit, needs no rim. The cable
 jacket follows the continuous tube path, slightly narrower, so the conduit
 color remains visible.
 
@@ -600,7 +600,7 @@ color remains visible.
 | `BU` | blue | Neutral (N) |
 | `VT` | violet | Available |
 | `GY` | grey | Phase (light grey), travellers, some feeds |
-| `WH` | white | Sheath jacket / catalog `signal` default |
+| `WH` | white | Cable jacket / catalog `signal` default |
 | `PK` | pink | Available |
 | `TQ` | turquoise | Available |
 | `GNYE` | green-yellow | Protective earth (PE) |
@@ -610,11 +610,11 @@ color remains visible.
 - **Neutral** → `BU` (IEC / EU practice).
 - **Phase** may be `BK`, `BN`, or `GY`; note mixed phases in the same box.
 
-### Sheath vs loose conductors
+### Cable vs loose conductors
 
-A multiwire run is a `Cable` sheath (`contains: […]`) plus leaf `Conductor`s —
+A multiwire run is a `Cable` cable (`contains: […]`) plus leaf `Conductor`s —
 not a single bag with `colors: […]`. Loose singles can be Conductors listed
-directly in a Conduit’s `contains` without a sheath.
+directly in a Conduit’s `contains` without a cable.
 
 ### Capture recipes
 
@@ -702,10 +702,10 @@ selection scope as Delete (places/elements). Clipboard is in-browser memory.
 
 ## Drawing (UI)
 
-- In conduit segments: show the Conduit path; nest Cable sheaths and Conductors
+- In conduit segments: show the Conduit path; nest Cables and Conductors
   from `contains`.
 - Inside a place canvas: draw Conductors that terminate on an element in that
-  place; hide pure sheaths unless pass-through (enters and leaves with no
+  place; hide pure cables unless pass-through (enters and leaves with no
   terminal landing in that place).
 
 ## Cross-location references

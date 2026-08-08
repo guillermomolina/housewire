@@ -267,7 +267,7 @@ class TestPhysicalGraph(unittest.TestCase):
             self.assertEqual(graph["cable_edges"][0]["to"], "Enchufe_1/Socket")
             self.assertEqual(graph["cable_edges"][0].get("conduit"), "Conducto_1")
             self.assertEqual(graph["cable_edges"][0].get("from_opening"), "W2")
-            # Sheath keeps per-strand pins (not only the first conductor's).
+            # Cable keeps per-strand pins (not only the first conductor's).
             self.assertEqual(
                 graph["cable_edges"][0].get("from_pins"), ["N1", "N3"]
             )
@@ -429,7 +429,7 @@ class TestPhysicalGraph(unittest.TestCase):
             self.assertIsNone(edge.get("conduit"))
 
     def test_opposite_direction_strands_share_cable_edge(self) -> None:
-        """Sheath conductors with flipped from/to still paint as one jacket."""
+        """Cable conductors with flipped from/to still paint as one jacket."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             doc = init_site(root, type_id="House", label="Site")
@@ -477,8 +477,8 @@ class TestPhysicalGraph(unittest.TestCase):
             self.assertEqual(edge.get("from"), "Caja/Regleta")
             self.assertEqual(edge.get("to"), "Caja2/Regleta")
 
-    def test_sheath_jacket_color_on_cable_edge(self) -> None:
-        """Cable sheath ``color:`` becomes ``jacket_color`` for the UI jacket."""
+    def test_cable_jacket_color_on_cable_edge(self) -> None:
+        """Cable ``color:`` becomes ``jacket_color`` for the UI jacket."""
         root = Path(__file__).resolve().parents[1] / "sites" / "Tests"
         if not root.is_dir() or not any(root.glob("*.yaml")):
             self.skipTest("sites/Tests fixture not present")
@@ -498,7 +498,7 @@ class TestPhysicalGraph(unittest.TestCase):
         self.assertEqual(pe.get("colors"), ["GNYE"])
 
     def test_conduit_nesting_lamp_bundle(self) -> None:
-        """BK conduit holds WH(BK+BU) sheath + bare GNYE — graph nesting."""
+        """BK conduit holds WH(BK+BU) cable + bare GNYE — graph nesting."""
         root = Path(__file__).resolve().parents[1] / "sites" / "Tests"
         if not root.is_dir() or not any(root.glob("*.yaml")):
             self.skipTest("sites/Tests fixture not present")
@@ -1145,7 +1145,7 @@ class TestServeApi(unittest.TestCase):
                 from_ref="Box_A/Strip.N1",
                 to_ref="Box_B/Strip.N1",
             )
-            abm.add_sheath(room, "L1", contains=["L1_1"], section="1.5")
+            abm.add_cable(room, "L1", contains=["L1_1"], section="1.5")
             abm.add_conduit(
                 room,
                 "C1",

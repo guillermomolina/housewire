@@ -4,7 +4,7 @@ The live Lampara/Caja bugs this suite must catch:
 - long boca→element diagonals
 - Manhattan Z into unique terminals
 - stacked lanes / overlap
-- sheath color WH must stay true white (#ffffff)
+- cable color WH must stay true white (#ffffff)
 """
 from __future__ import annotations
 
@@ -586,7 +586,7 @@ class TestConductorPaletteContrast(unittest.TestCase):
         self.assertFalse(needs_nested_contrast_rim("#1a1a1a", "#ffffff"))
 
     def test_jacket_spans_contiguous_cable_lanes_not_centerline(self) -> None:
-        """WH sheath around BK+BU must sit on their lane mid, not tube center.
+        """WH cable around BK+BU must sit on their lane mid, not tube center.
 
         Highway of 3 strands: GNYE @0, BK @1, BU @2 → jacket mid ≠ 0.
         """

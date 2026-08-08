@@ -198,7 +198,7 @@ class TestClipboard(unittest.TestCase):
             from_ref="Box_A/Strip.N1",
             to_ref="Box_B/Strip.N1",
         )
-        abm.add_sheath(room, "L1", contains=["L1_1"], section="1.5")
+        abm.add_cable(room, "L1", contains=["L1_1"], section="1.5")
         abm.add_conduit(
             room,
             "C1",

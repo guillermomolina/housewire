@@ -361,7 +361,7 @@ def rm_element(doc: dict[str, Any], name: str) -> None:
     del elements[name]
 
 
-def add_sheath(
+def add_cable_group(
     doc: dict[str, Any],
     name: str,
     *,
@@ -373,7 +373,7 @@ def add_sheath(
     label: str | None = None,
     notes: str | None = None,
 ) -> None:
-    """Add a Cable sheath entry (groups conductors / nested sheaths)."""
+    """Add a Cable entry that groups conductors and/or other cables."""
     _ensure_maps(doc)
     cables = doc["cables"]
     if not isinstance(cables, dict):
@@ -384,7 +384,7 @@ def add_sheath(
         raise ValueError("contains cannot be empty")
     for ref in contains:
         if str(ref) not in cables:
-            raise ValueError(f"Cable sheath references missing cables entry: {ref}")
+            raise ValueError(f"Cable references missing cables entry: {ref}")
     entry: dict[str, Any] = {
         "type": type_id,
         "contains": [str(c) for c in contains],
@@ -464,7 +464,7 @@ def add_cable(
     """Add a ``cables`` entry.
 
     - ``type: Conductor`` (default): leaf wire; optional ``colors[0]`` as color.
-    - ``type: Cable``: sheath; requires ``contains``.
+    - ``type: Cable``: cable; requires ``contains``.
     - ``type: Conduit``: use :func:`add_conduit`.
     """
     resolved_subtype = subtype if kind is None else kind
@@ -473,8 +473,8 @@ def add_cable(
         raise ValueError("Use add_conduit for type: Conduit")
     if resolved_type == DEFAULT_CABLE_TYPE or contains is not None:
         if not contains:
-            raise ValueError("Cable sheath requires contains")
-        add_sheath(
+            raise ValueError("Cable requires contains")
+        add_cable_group(
             doc,
             name,
             contains=contains,
@@ -501,7 +501,7 @@ def add_cable(
                 notes=notes,
             )
             conductor_ids.append(cid)
-        add_sheath(
+        add_cable_group(
             doc,
             name,
             contains=conductor_ids,
@@ -616,17 +616,17 @@ def add_pending_cable(
     label: str | None = None,
     notes: str | None = None,
 ) -> tuple[str, str]:
-    """Create PEND_* sheath + conductors + pass-through conduit.
+    """Create PEND_* cable + conductors + pass-through conduit.
 
-    Returns (sheath_name, conduit_name).
+    Returns (cable_name, conduit_name).
     """
     enter_s = str(enter).strip()
     exit_s = str(exit).strip()
     if not enter_s or not exit_s:
         raise ValueError("enter and exit (openings) are required")
     require_opening_ids(doc, enter_s, exit_s)
-    sheath_name = next_pend_cable_name(doc)
-    suffix = sheath_name.rsplit("_", 1)[-1]
+    cable_name = next_pend_cable_name(doc)
+    suffix = cable_name.rsplit("_", 1)[-1]
     conduit_name = f"Conducto_paso_{suffix}"
     note_bits = [f"status: pending; enters via {enter_s} and exits via {exit_s}"]
     if notes:
@@ -635,7 +635,7 @@ def add_pending_cable(
     resolved_colors = list(colors) if colors else ["BN", "BU"]
     conductor_ids: list[str] = []
     for index, col in enumerate(resolved_colors, start=1):
-        cid = f"{sheath_name}_{index}"
+        cid = f"{cable_name}_{index}"
         add_conductor(
             doc,
             cid,
@@ -646,9 +646,9 @@ def add_pending_cable(
             label=label,
         )
         conductor_ids.append(cid)
-    add_sheath(
+    add_cable(
         doc,
-        sheath_name,
+        cable_name,
         contains=conductor_ids,
         subtype=subtype if kind is None else kind,
         notes=note,
@@ -658,11 +658,11 @@ def add_pending_cable(
     add_conduit(
         doc,
         conduit_name,
-        contains=[sheath_name],
+        contains=[cable_name],
         from_ref=f".{enter_s}",
         to_ref=f".{exit_s}",
     )
-    return sheath_name, conduit_name
+    return cable_name, conduit_name
 
 
 def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str | None = None) -> str:

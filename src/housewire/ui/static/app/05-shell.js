@@ -1211,9 +1211,8 @@
     if (!mod) {
       if (
         ev.key === "Backspace" &&
-        (wiringMode?.kind === "conductor"
-          ? undoWiringConductorStep()
-          : undoCableConductorPick())
+        wiringMode?.kind === "conductor" &&
+        undoWiringConductorStep()
       ) {
         // This listener runs before the window-level wiring shortcut. Stop it
         // here so Backspace cannot fall through to deletion of the selection.
@@ -1531,7 +1530,7 @@
           } else if (action === "conductor") {
             await beginWiringGesture("conductor");
           } else if (action === "cable") {
-            await beginSheathFromSelection();
+            await beginCableFromSelection();
           } else {
             openInsertModal(action);
           }
@@ -1881,6 +1880,17 @@
         }
         return;
       }
+      if (
+        wiringMode?.kind === "cable" &&
+        ev.button === 0 &&
+        ev.shiftKey &&
+        !shouldPanPointer(ev) &&
+        beginMarquee(ev)
+      ) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        return;
+      }
       if (wiringMode && ev.button === 0 && !shouldPanPointer(ev)) {
         if (tryWiringSnapAtPointer(ev.clientX, ev.clientY)) {
           ev.preventDefault();
@@ -1990,9 +2000,8 @@
     }
     if (
       ev.key === "Backspace" &&
-      (wiringMode?.kind === "conductor"
-        ? undoWiringConductorStep()
-        : undoCableConductorPick())
+      wiringMode?.kind === "conductor" &&
+      undoWiringConductorStep()
     ) {
       ev.preventDefault();
       return;
@@ -2014,7 +2023,7 @@
       wiringMode.selectedConductors?.length
     ) {
       ev.preventDefault();
-      completeCableSheath().catch((err) =>
+      completeCableCable().catch((err) =>
         setStatus(String(err.message || err))
       );
       return;
@@ -3260,7 +3269,7 @@
         if (action === "conduit" || action === "conductor") {
           await beginWiringGesture(action);
         } else if (action === "cable") {
-          await beginSheathFromSelection();
+          await beginCableFromSelection();
         }
       };
       run().catch((err) => setStatus(String(err.message || err)));

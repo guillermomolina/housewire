@@ -625,7 +625,7 @@
       cablesG.innerHTML = "";
       cablePaths = [];
       inboxCablePtsByParent = {};
-      for (const edge of graph.cable_edges || []) {
+      for (const edge of cablePaintOrder(graph.cable_edges)) {
         const item = appendCableVisuals(
           cablesG,
           edge,
@@ -636,6 +636,7 @@
         );
         if (item) cablePaths.push(item);
       }
+      orderCableLayers(cablesG);
       syncCableCandidateVisuals();
       if (
         renderExpandPass < 1 &&
@@ -2154,7 +2155,7 @@
     propsTarget = { kind: "link", linkId };
     let detail;
     try {
-      detail = await api(`/api/cable?id=${encodeURIComponent(linkId)}`);
+      detail = await api(`/api/connection?id=${encodeURIComponent(linkId)}`);
     } catch (err) {
       setStatus(String(err.message || err));
       appendPropsRow(meta, {
@@ -2255,7 +2256,7 @@
         appendLinkAction(bar, t("props.link.claim"), async () => {
           const enter = window.prompt(t("props.link.claimEnter"));
           if (!enter) return;
-          const res = await api("/api/cable/claim", {
+          const res = await api("/api/connection/claim", {
             method: "POST",
             body: JSON.stringify({
               location_id: locationId,
@@ -2278,7 +2279,7 @@
           const toRef = window.prompt(t("props.link.landTo"), detail.to || "");
           if (toRef == null) return;
           const asName = window.prompt(t("props.link.landAs"), detail.id);
-          const res = await api("/api/cable/land", {
+          const res = await api("/api/connection/land", {
             method: "POST",
             body: JSON.stringify({
               location_id: locationId,
@@ -2300,7 +2301,7 @@
         });
       }
       if (detail.kind === "conductor" || detail.kind === "cable") {
-        appendLinkAction(bar, t("props.link.groupSheath"), async () => {
+        appendLinkAction(bar, t("props.link.groupCable"), async () => {
           const extra = window.prompt(t("props.link.groupContains"), detail.id);
           if (extra == null) return;
           const contains = [
@@ -2310,7 +2311,7 @@
               .map((s) => s.trim())
               .filter(Boolean),
           ];
-          const res = await api("/api/cable/sheath", {
+          const res = await api("/api/connection/cable", {
             method: "POST",
             body: JSON.stringify({
               location_id: locationId,
@@ -2326,6 +2327,25 @@
           applyEditFlags(res);
           await selectLink(res.detail.id, "cable");
           setStatus(t("status.linkGrouped"));
+        });
+      }
+      if (detail.kind === "cable") {
+        appendLinkAction(bar, t("props.link.ungroupCable"), async () => {
+          const res = await api("/api/connection/ungroup", {
+            method: "POST",
+            body: JSON.stringify({
+              location_id: locationId,
+              id: detail.id,
+              depth: depthLevel,
+            }),
+          });
+          if (res.graph) {
+            graph = res.graph;
+            render();
+          }
+          applyEditFlags(res);
+          clearSelectionState();
+          setStatus(t("status.linkUngrouped"));
         });
       }
       appendLinkAction(bar, t("menu.edit.delete"), async () => {
@@ -2352,7 +2372,7 @@
         .map((s) => s.trim())
         .filter(Boolean);
     }
-    const res = await api("/api/cable/properties", {
+    const res = await api("/api/connection/properties", {
       method: "PATCH",
       body: JSON.stringify({
         location_id: locationId,
@@ -2785,6 +2805,7 @@
       /* ignore */
     }
     if (!finished.moved) {
+      if (finished.kind === "cable") return;
       if (!finished.additive) {
         clearSelectionState();
         setSelectedVisual();
@@ -2804,6 +2825,19 @@
       x2: Math.max(w0.x, w1.x),
       y2: Math.max(w0.y, w1.y),
     };
+    if (finished.kind === "cable") {
+      const clientRect = {
+        left: Math.min(finished.startClientX, ev?.clientX ?? finished.startClientX),
+        right: Math.max(finished.startClientX, ev?.clientX ?? finished.startClientX),
+        top: Math.min(finished.startClientY, ev?.clientY ?? finished.startClientY),
+        bottom: Math.max(finished.startClientY, ev?.clientY ?? finished.startClientY),
+      };
+      pickCableMembers(
+        cableMembersInClientRect(clientRect),
+        finished.additive || isModClick(ev)
+      );
+      return;
+    }
     const hit = idsInMarqueeWorld(
       worldRect,
       finished.additive || isModClick(ev)

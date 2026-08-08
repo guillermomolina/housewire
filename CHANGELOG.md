@@ -7,6 +7,29 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.94.0] — 2026-08-08
+
+### Added
+
+- La paleta agrupa Conduit, Cable y Conductor en Conexiones, mostrando el tipo
+  inglés junto a cada etiqueta localizada.
+- Los cables se pueden agrupar y desagrupar; los cables anidados se muestran
+  con sus cables y conductores en capas separadas.
+
+### Changed
+
+- La API de conexiones usa `/api/connection/...` para Conduit, Cable y
+  Conductor.
+- La selección para crear un Cable usa clic, Ctrl/Cmd y rectángulo con Shift,
+  igual que la selección normal.
+- Se aumenta la separación visual y se limita el área de clic de cables y
+  conductores a su carril.
+
+### Fixed
+
+- Un Conduit no puede contener otro Conduit; un Cable solo puede contener
+  Cables y Conductores.
+
 ## [0.93.1] — 2026-08-08
 
 ### Fixed

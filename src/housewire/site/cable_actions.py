@@ -74,6 +74,25 @@ def _ensure_cables(node: dict[str, Any]) -> dict[str, Any]:
     return cables
 
 
+def _validate_container_members(
+    cables: dict[str, Any],
+    *,
+    container_kind: str,
+    members: list[str],
+    catalog: dict[str, Any],
+) -> None:
+    """Allow only conductors and Cables inside a container."""
+    if container_kind not in {"conduit", "cable"}:
+        raise ValueError(f"{container_kind} cannot contain cable members")
+    for member in members:
+        entry = cables.get(member)
+        if not isinstance(entry, dict):
+            raise ValueError(f"contains references missing cable: {member}")
+        member_kind = resolve_link_kind(entry, catalog)
+        if member_kind == "conduit":
+            raise ValueError("A Conduit cannot be nested inside another container")
+
+
 def _next_unique(cables: dict[str, Any], prefix: str) -> str:
     if prefix not in cables:
         return prefix
@@ -177,7 +196,7 @@ def update_cable_properties(
 
     for key, raw in fields.items():
         if key in {"from", "to"} and kind == "cable":
-            raise ValueError("Cable sheath has no from/to endpoints")
+            raise ValueError("Cable has no from/to endpoints")
         if key == "contains":
             if kind == "conductor":
                 raise ValueError("Conductor cannot have contains")
@@ -185,9 +204,9 @@ def update_cable_properties(
                 raise ValueError("contains must be a list")
             cleaned = [str(x).strip() for x in raw if str(x).strip()]
             cables = _ensure_cables(owner)
-            for ref in cleaned:
-                if ref not in cables:
-                    raise ValueError(f"contains references missing cable: {ref}")
+            _validate_container_members(
+                cables, container_kind=kind, members=cleaned, catalog=catalog
+            )
             entry["contains"] = cleaned
             continue
         if key in {"from", "to"}:
@@ -224,7 +243,7 @@ def update_cable_properties(
 def delete_cables(doc: dict[str, Any], names: list[str]) -> list[str]:
     """Delete cables by id; strip from parent ``contains`` first.
 
-    Conduits are removed without deleting their payload. Sheaths remove
+    Conduits are removed without deleting their payload. Cables remove
     themselves from conduits; child conductors are kept unless also listed.
     """
     deleted: list[str] = []
@@ -238,7 +257,7 @@ def delete_cables(doc: dict[str, Any], names: list[str]) -> list[str]:
         cables = _ensure_cables(owner)
         kind = resolve_link_kind(entry, catalog)
         contains = [str(c) for c in (entry.get("contains") or [])]
-        if kind in {"conduit", "cable"} and contains:
+        if kind == "conduit" and contains:
             raise ValueError(
                 f"No se puede borrar el conector contenedor no vacío: {name}"
             )
@@ -262,6 +281,32 @@ def delete_cables(doc: dict[str, Any], names: list[str]) -> list[str]:
         deleted.append(name)
         del kind  # kind used for clarity / future hooks
     return deleted
+
+
+def ungroup_cable(session: SiteSession, *, cable_id: str) -> list[str]:
+    """Remove a Cable while preserving and reconnecting its members."""
+    path, doc = session.ensure_doc()
+    _parts, owner, entry = find_cable_owner(doc, cable_id)
+    catalog = load_catalog()
+    if resolve_link_kind(entry, catalog) != "cable":
+        raise ValueError(f"{cable_id} is not a Cable")
+
+    cables = _ensure_cables(owner)
+    members = [str(child) for child in (entry.get("contains") or [])]
+    for other_id, other in cables.items():
+        if other_id == cable_id or not isinstance(other, dict):
+            continue
+        contains = [str(child) for child in (other.get("contains") or [])]
+        if cable_id not in contains:
+            continue
+        replacement: list[str] = []
+        for child in contains:
+            replacement.extend(members if child == cable_id else [child])
+        other["contains"] = list(dict.fromkeys(replacement))
+
+    del cables[cable_id]
+    session.mark_dirty(path)
+    return members
 
 
 def _owner_node_for_insert(
@@ -316,6 +361,12 @@ def insert_conduit(
         return detail
 
     cables = _ensure_cables(host)
+    _validate_container_members(
+        cables,
+        container_kind="conduit",
+        members=payload,
+        catalog=load_catalog(),
+    )
     cd_name = name or _next_unique(cables, "Conducto")
     abm.add_conduit(
         host,
@@ -388,7 +439,7 @@ def insert_conductor(
     return cable_detail(session, cable_id=cid)
 
 
-def insert_sheath(
+def insert_cable(
     session: SiteSession,
     *,
     contains: list[str],
@@ -400,7 +451,7 @@ def insert_sheath(
     label: str | None = None,
     notes: str | None = None,
 ) -> dict[str, Any]:
-    """Group existing conductors/cables into a Cable sheath."""
+    """Group existing conductors/cables into a Cable."""
     path, doc = session.ensure_doc()
     _parts, owner = _owner_node_for_insert(doc, owner_id=owner_id)
     host = owner
@@ -408,13 +459,16 @@ def insert_sheath(
     if len(payload) < 1:
         raise ValueError("contains cannot be empty")
     cables = _ensure_cables(host)
-    for ref in payload:
-        if ref not in cables:
-            raise ValueError(f"contains references missing cable: {ref}")
-    sheath = name or _next_unique(cables, "Funda")
-    abm.add_sheath(
+    _validate_container_members(
+        cables,
+        container_kind="cable",
+        members=payload,
+        catalog=load_catalog(),
+    )
+    cable = name or _next_unique(cables, "Cable")
+    abm.add_cable(
         host,
-        sheath,
+        cable,
         contains=payload,
         subtype=subtype,
         color=color,
@@ -422,7 +476,7 @@ def insert_sheath(
         label=label,
         notes=notes,
     )
-    # Rewrite conduits that listed the members so they list the sheath instead
+    # Rewrite conduits that listed the members so they list the cable instead
     # when all members were previously contained (optional tidy).
     catalog = load_catalog()
     for _cname, entry in cables.items():
@@ -438,10 +492,10 @@ def insert_sheath(
             continue
         if all(m in contains_now for m in payload):
             kept = [c for c in contains_now if c not in payload]
-            kept.append(sheath)
+            kept.append(cable)
             entry["contains"] = kept
     session.mark_dirty(path)
-    return cable_detail(session, cable_id=sheath)
+    return cable_detail(session, cable_id=cable)
 
 
 def open_run(

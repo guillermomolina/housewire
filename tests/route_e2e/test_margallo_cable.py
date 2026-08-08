@@ -1,4 +1,4 @@
-"""Live E2E: one sheath remains one jacket across different terminal pairs."""
+"""Live E2E: one cable remains one jacket across different terminal pairs."""
 from __future__ import annotations
 
 import unittest
@@ -7,8 +7,8 @@ from pathlib import Path
 from tests.route_e2e._harness import REPO, dump_live_canvas
 
 
-class TestMargalloSheath(unittest.TestCase):
-    def test_three_conductor_sheath_has_one_jacket(self) -> None:
+class TestMargalloCable(unittest.TestCase):
+    def test_three_conductor_cable_has_one_jacket(self) -> None:
         site = REPO / "sites" / "Margalló 4A" / "Test.yaml"
         if not site.is_file():
             raise unittest.SkipTest(f"fixture not found: {site}")

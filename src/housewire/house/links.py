@@ -1,4 +1,4 @@
-"""Unified house/v2 ``cables`` map: Conduit, Cable (sheath), Conductor."""
+"""Unified house/v2 ``cables`` map: Conduit, Cable (cable), Conductor."""
 from __future__ import annotations
 
 import copy
@@ -171,7 +171,7 @@ def expand_conduit(
 def expand_cable(
     cable: dict[str, Any], catalog: dict[str, dict[str, Any]] | None = None
 ) -> dict[str, Any]:
-    """Normalize a Cable sheath entry (``contains``, optional jacket ``color``)."""
+    """Normalize a Cable entry (``contains``, optional jacket ``color``)."""
     from housewire.house import load_catalog
 
     cat = catalog if catalog is not None else load_catalog()
@@ -189,7 +189,7 @@ def expand_cable(
     type_def = cat.get(type_id)
     if type_def is not None and type_def.get("kind") not in (None, CABLE_CATALOG_KIND):
         raise ValueError(
-            f"type: {type_id} is not a cable sheath type "
+            f"type: {type_id} is not a cable type "
             f"(catalog kind={type_def.get('kind')!r})"
         )
     if type_def is None and type_id != DEFAULT_CABLE_TYPE:
@@ -343,10 +343,10 @@ def validate_link_entry(
         expanded = expand_cable(entry, catalog)
         contains = expanded.get("contains") or []
         if not isinstance(contains, list) or not contains:
-            raise ValueError(f"Cable sheath {name} requires non-empty contains")
+            raise ValueError(f"Cable {name} requires non-empty contains")
         if expanded.get("from") is not None or expanded.get("to") is not None:
             raise ValueError(
-                f"Cable sheath {name} must not set from/to "
+                f"Cable {name} must not set from/to "
                 "(only Conductor leaves connect terminals)"
             )
         for cable_ref in contains:

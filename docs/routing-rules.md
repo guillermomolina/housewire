@@ -70,7 +70,7 @@ the same endpoint kind. Multi-cable geometry differs:
 
 **Who enters the location.** Only leaf runs that end on a terminal
 (typically `Conductor`, or any cable whose endpoints are element pins) draw
-an inbox path from the boca to the pin. Intermediate `Cable` sheaths
+an inbox path from the boca to the pin. Intermediate `Cable` cables
 (cables-of-cables / jackets with `contains`) are drawn in the conduit and
 **stop at the mouth** — they do not cross into the place interior.
 

@@ -130,7 +130,7 @@ def add_open_cable(
     notes: str | None = None,
     cable_name: str | None = None,
 ) -> str:
-    """Create ``OPEN_*`` sheath + conductors (no conduit, no terminal ends yet)."""
+    """Create ``OPEN_*`` cable + conductors (no conduit, no terminal ends yet)."""
     leaves_ref = str(leaves).strip()
     split_conduit_endpoint(leaves_ref)
     loc, opening = split_conduit_endpoint(leaves_ref)
@@ -154,7 +154,7 @@ def add_open_cable(
             notes=note,
         )
         conductor_ids.append(cid)
-    abm.add_sheath(
+    abm.add_cable(
         doc,
         name,
         contains=conductor_ids,
@@ -204,7 +204,7 @@ def rename_cable(doc: dict[str, Any], old_name: str, new_name: str) -> None:
     if old_name == new_name:
         return
     cables[new_name] = cables.pop(old_name)
-    # Rename child conductors OPEN_x_1 → Final_1 when renaming sheath.
+    # Rename child conductors OPEN_x_1 → Final_1 when renaming cable.
     child_renames: list[tuple[str, str]] = []
     for name in list(cables):
         if name == new_name:
@@ -370,7 +370,7 @@ def land_open_cable(
 
 
 def list_open_cables(doc: dict[str, Any]) -> list[tuple[str, OpenMeta]]:
-    """Return open/claimed (not landed) sheath cables in ``doc``."""
+    """Return open/claimed (not landed) cables in ``doc``."""
     rows: list[tuple[str, OpenMeta]] = []
     cables = doc.get("cables") or {}
     if not isinstance(cables, dict):

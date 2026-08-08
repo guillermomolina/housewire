@@ -575,8 +575,8 @@ def create_app(site_root: Path | None = None) -> Any:
             **meta,
         }
 
-    @app.get("/api/cable")
-    def api_cable(id: str) -> dict[str, Any]:
+    @app.get("/api/connection")
+    def api_connection(id: str) -> dict[str, Any]:
         from housewire.site.cable_actions import cable_detail
 
         cable_id = str(id or "").strip()
@@ -591,8 +591,8 @@ def create_app(site_root: Path | None = None) -> Any:
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
 
-    @app.patch("/api/cable/properties")
-    async def api_cable_properties(request: Request) -> dict[str, Any]:
+    @app.patch("/api/connection/properties")
+    async def api_connection_properties(request: Request) -> dict[str, Any]:
         from housewire.site.cable_actions import update_cable_properties
 
         payload = await _json_body(request)
@@ -621,8 +621,8 @@ def create_app(site_root: Path | None = None) -> Any:
             **meta,
         }
 
-    @app.post("/api/cable/conduit")
-    async def api_cable_conduit(request: Request) -> dict[str, Any]:
+    @app.post("/api/connection/conduit")
+    async def api_connection_conduit(request: Request) -> dict[str, Any]:
         from housewire.site.cable_actions import insert_conduit
 
         payload = await _json_body(request)
@@ -663,8 +663,8 @@ def create_app(site_root: Path | None = None) -> Any:
             **meta,
         }
 
-    @app.post("/api/cable/conductor")
-    async def api_cable_conductor(request: Request) -> dict[str, Any]:
+    @app.post("/api/connection/conductor")
+    async def api_connection_conductor(request: Request) -> dict[str, Any]:
         from housewire.site.cable_actions import insert_conductor
 
         payload = await _json_body(request)
@@ -716,9 +716,9 @@ def create_app(site_root: Path | None = None) -> Any:
             **meta,
         }
 
-    @app.post("/api/cable/sheath")
-    async def api_cable_sheath(request: Request) -> dict[str, Any]:
-        from housewire.site.cable_actions import insert_sheath
+    @app.post("/api/connection/cable")
+    async def api_connection_cable(request: Request) -> dict[str, Any]:
+        from housewire.site.cable_actions import insert_cable
 
         payload = await _json_body(request)
         location_id = str(payload.get("location_id") or ".").strip() or "."
@@ -729,7 +729,7 @@ def create_app(site_root: Path | None = None) -> Any:
         try:
             _preload_location(location_id)
             _begin_edit()
-            detail = insert_sheath(
+            detail = insert_cable(
                 _session(),
                 contains=[str(x) for x in contains],
                 owner_id=str(payload.get("owner_id") or location_id).strip()
@@ -758,8 +758,33 @@ def create_app(site_root: Path | None = None) -> Any:
             **meta,
         }
 
-    @app.get("/api/cable/open-runs")
-    def api_cable_open_runs(owner_id: str | None = None) -> dict[str, Any]:
+    @app.post("/api/connection/ungroup")
+    async def api_connection_ungroup(request: Request) -> dict[str, Any]:
+        from housewire.site.cable_actions import ungroup_cable
+
+        payload = await _json_body(request)
+        cable_id = str(payload.get("id") or "").strip()
+        location_id = str(payload.get("location_id") or ".").strip() or "."
+        if not cable_id:
+            raise HTTPException(400, "id is required")
+        depth = _depth_from(payload)
+        try:
+            _preload_location(location_id)
+            _begin_edit()
+            members = ungroup_cable(_session(), cable_id=cable_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        meta = _end_edit()
+        return {
+            "members": members,
+            "graph": _graph(location_id, depth),
+            **meta,
+        }
+
+    @app.get("/api/connection/open-runs")
+    def api_connection_open_runs(owner_id: str | None = None) -> dict[str, Any]:
         from housewire.site.cable_actions import list_open_runs
 
         try:
@@ -771,8 +796,8 @@ def create_app(site_root: Path | None = None) -> Any:
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
 
-    @app.post("/api/cable/open")
-    async def api_cable_open(request: Request) -> dict[str, Any]:
+    @app.post("/api/connection/open")
+    async def api_connection_open(request: Request) -> dict[str, Any]:
         from housewire.site.cable_actions import open_run
 
         payload = await _json_body(request)
@@ -813,8 +838,8 @@ def create_app(site_root: Path | None = None) -> Any:
             **meta,
         }
 
-    @app.post("/api/cable/claim")
-    async def api_cable_claim(request: Request) -> dict[str, Any]:
+    @app.post("/api/connection/claim")
+    async def api_connection_claim(request: Request) -> dict[str, Any]:
         from housewire.site.cable_actions import claim_run
 
         payload = await _json_body(request)
@@ -849,8 +874,8 @@ def create_app(site_root: Path | None = None) -> Any:
             **meta,
         }
 
-    @app.post("/api/cable/land")
-    async def api_cable_land(request: Request) -> dict[str, Any]:
+    @app.post("/api/connection/land")
+    async def api_connection_land(request: Request) -> dict[str, Any]:
         from housewire.site.cable_actions import land_run
 
         payload = await _json_body(request)

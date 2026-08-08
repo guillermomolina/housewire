@@ -21,7 +21,7 @@ class TestCableCatalog(unittest.TestCase):
         self.assertEqual(self.catalog["Conduit"]["kind"], "ConduitType")
         self.assertEqual(self.catalog["Conductor"]["kind"], "ConductorType")
 
-    def test_expand_cable_sheath_defaults(self) -> None:
+    def test_expand_cable_cable_defaults(self) -> None:
         out = expand_cable({"type": "Cable", "subtype": "Earth"}, self.catalog)
         self.assertEqual(out["type"], "Cable")
         self.assertEqual(out["subtype"], "Earth")
@@ -73,7 +73,7 @@ class TestCableCatalog(unittest.TestCase):
         )
         self.assertEqual(cable["install"], "Flush")
 
-    def test_validate_accepts_sheath_and_conductors(self) -> None:
+    def test_validate_accepts_cable_and_conductors(self) -> None:
         doc = {
             "schema": "house/v2",
             "type": "Floor",

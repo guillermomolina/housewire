@@ -256,7 +256,7 @@ def _mark_conductor_open(entry: dict[str, Any], *, clear_from: bool) -> None:
     entry["notes"] = format_open_notes(status="open", extra=extra or None)
 
 
-def _find_parent_sheath(
+def _find_parent_cable(
     cables: dict[str, Any], child: str, *, catalog: dict[str, Any]
 ) -> str | None:
     for other, entry in cables.items():
@@ -373,7 +373,7 @@ def delete_selection(doc: dict[str, Any], ids: list[str]) -> DeleteResult:
                 else:
                     delete_keys.add(key)
 
-    # Mark sheaths that only contain deleted members.
+    # Mark cables that only contain deleted members.
     for owner_parts, node in _iter_cable_owners(doc):
         cables = node.get("cables") or {}
         if not isinstance(cables, dict):
@@ -415,8 +415,8 @@ def delete_selection(doc: dict[str, Any], ids: list[str]) -> DeleteResult:
         if cond_name not in src_cables:
             continue
 
-        parent = _find_parent_sheath(src_cables, cond_name, catalog=catalog)
-        # Move sheath + surviving children, or just the conductor.
+        parent = _find_parent_cable(src_cables, cond_name, catalog=catalog)
+        # Move cable + surviving children, or just the conductor.
         if parent and (owner_parts, parent) not in delete_keys:
             group = [parent]
             for child in (src_cables.get(parent) or {}).get("contains") or []:
@@ -462,7 +462,7 @@ def delete_selection(doc: dict[str, Any], ids: list[str]) -> DeleteResult:
                         result.severed.append(new)
                         break
                 else:
-                    # Sibling under same sheath may sever to same or other dest;
+                    # Sibling under same cable may sever to same or other dest;
                     # apply any sever for this conductor name.
                     for o, n, surv, cf in severs:
                         if o == owner_parts and n == old:

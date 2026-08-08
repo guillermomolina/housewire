@@ -493,7 +493,7 @@ def _build_cable_edges(
 ) -> list[dict[str, Any]]:
     """Conductor edges whose endpoints are both in ``element_ids``.
 
-    Group sibling conductors under the same sheath that share the same host
+    Group sibling conductors under the same cable that share the same host
     elements into one multi-color ``cable_edge`` for jacket drawing.
     """
     catalog = load_catalog()
@@ -503,13 +503,14 @@ def _build_cable_edges(
         (tuple(), loc_doc),
         *places,
     ]
-    # Collect conductors: (sheath_or_self, from_id, to_id, from_pin, to_pin, color, name, label)
+    # Collect conductors: (cable_or_self, from_id, to_id, from_pin, to_pin, color, name, label)
     raw_rows: list[dict[str, Any]] = []
     for current_parts, doc in sources:
         cables = doc.get("cables") or {}
         if not isinstance(cables, dict):
             continue
-        # sheath -> children
+        # child -> immediate cable; resolve repeatedly below so cables can be
+        # grouped into another cable.
         parent_of: dict[str, str] = {}
         for name, entry in cables.items():
             if not isinstance(entry, dict):
@@ -547,12 +548,16 @@ def _build_cable_edges(
                 continue
             if from_id == to_id:
                 continue
-            sheath = parent_of.get(str(name), str(name))
+            cable = str(name)
+            seen: set[str] = set()
+            while cable in parent_of and cable not in seen:
+                seen.add(cable)
+                cable = parent_of[cable]
             raw_n = entry.get("name")
             raw_l = entry.get("label")
             raw_rows.append(
                 {
-                    "sheath": sheath,
+                    "cable": cable,
                     "conductor": str(name),
                     "from": from_id,
                     "to": to_id,
@@ -573,16 +578,16 @@ def _build_cable_edges(
                 }
             )
 
-    # Group by sheath + unordered element pair for multi-strand jacket.
+    # Group by cable + unordered element pair for multi-strand jacket.
     groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for row in raw_rows:
         a, b = row["from"], row["to"]
         if a <= b:
-            key = (row["sheath"], a, b)
+            key = (row["cable"], a, b)
             groups.setdefault(key, []).append(row)
         else:
             # Opposite conductor direction: normalize to lo→hi and swap pins.
-            key = (row["sheath"], b, a)
+            key = (row["cable"], b, a)
             groups.setdefault(key, []).append(
                 {
                     **row,
@@ -594,36 +599,36 @@ def _build_cable_edges(
             )
 
     edges: list[dict[str, Any]] = []
-    for (sheath, from_id, to_id), members in groups.items():
+    for (cable, from_id, to_id), members in groups.items():
         members_sorted = sorted(members, key=lambda m: m["conductor"])
         colors = [m["color"] for m in members_sorted]
-        # Prefer sheath display name when grouping multiple strands.
-        sheath_entry = None
+        # Prefer cable display name when grouping multiple strands.
+        cable_entry = None
         for _parts, doc in sources:
             cables = doc.get("cables") or {}
-            if isinstance(cables, dict) and sheath in cables:
-                sheath_entry = cables[sheath]
+            if isinstance(cables, dict) and cable in cables:
+                cable_entry = cables[cable]
                 break
         name_disp = members_sorted[0]["name"]
         label_disp = members_sorted[0]["label"]
         jacket_color: str | None = None
-        if isinstance(sheath_entry, dict):
-            sn = sheath_entry.get("name")
-            sl = sheath_entry.get("label")
+        if isinstance(cable_entry, dict):
+            sn = cable_entry.get("name")
+            sl = cable_entry.get("label")
             if sn is not None and str(sn).strip():
                 name_disp = str(sn).strip()
             if sl is not None and str(sl).strip():
                 label_disp = str(sl).strip()
-            # Jacket only for a real Cable sheath (has ``contains``), not a
-            # bare conductor that happens to be its own sheath key.
-            has_children = bool(sheath_entry.get("contains"))
+            # Jacket only for a real Cable (has ``contains``), not a
+            # bare conductor that happens to be its own cable key.
+            has_children = bool(cable_entry.get("contains"))
             if has_children or len(members_sorted) > 1:
                 try:
-                    sheath_kind = resolve_link_kind(sheath_entry, catalog)
+                    cable_kind = resolve_link_kind(cable_entry, catalog)
                 except ValueError:
-                    sheath_kind = "cable" if has_children else "conductor"
-                if sheath_kind == "cable" or has_children:
-                    jc = sheath_entry.get("color")
+                    cable_kind = "cable" if has_children else "conductor"
+                if cable_kind == "cable" or has_children:
+                    jc = cable_entry.get("color")
                     jacket_color = (
                         str(jc).strip().upper() if jc else None
                     )
@@ -632,7 +637,7 @@ def _build_cable_edges(
         from_pins = [m["from_pin"] or None for m in members_sorted]
         to_pins = [m["to_pin"] or None for m in members_sorted]
         row: dict[str, Any] = {
-            "id": sheath,
+            "id": cable,
             "name": name_disp,
             "label": label_disp,
             "from": from_id,
@@ -641,7 +646,7 @@ def _build_cable_edges(
             "to_pin": to_pins[0],
             "from_pins": from_pins,
             "to_pins": to_pins,
-            "via": sheath,
+            "via": cable,
             "colors": colors,
             "jacket_color": jacket_color,
             "via_indices": list(range(1, len(colors) + 1)),
@@ -659,7 +664,7 @@ def _build_cable_edges(
                 break
         if hops is None:
             hops = _conduit_hops_for_cable(
-                sheath,
+                cable,
                 elem_parent.get(from_id),
                 elem_parent.get(to_id),
                 conduit_edges,

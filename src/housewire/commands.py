@@ -55,7 +55,7 @@ HELP_TEXT = """HouseWire shell commands:
                                [--colors BN,BU] [--section 1.5] [--notes …]
                                Cable/Conductor+Conduit between existing places
   add element NAME --type T … [--set KEY=VALUE | --set KEY VALUE …]  (memory → save)
-  add cable NAME …             sheath or conductor into cables: (memory → save)
+  add cable NAME …             cable or conductor into cables: (memory → save)
   add conductor NAME --from A --to B [--color BN] …
                                leaf Conductor in cables: (memory → save)
   add conduit NAME --from A.Op --to B.Op --contains C1[,C2…]
@@ -684,7 +684,7 @@ def cmd_add(session: SiteSession, argv: list[str]) -> int:
         p = argparse.ArgumentParser(prog="add cable", add_help=False)
         p.add_argument("name")
         p.add_argument("--section", default=None)
-        p.add_argument("--colors", default=None, help="One or more colors → sheath+conductors")
+        p.add_argument("--colors", default=None, help="One or more colors → cable+conductors")
         p.add_argument("--color", default=None, help="Single conductor color")
         p.add_argument("--from", dest="from_ref", default=None)
         p.add_argument("--to", dest="to_ref", default=None)
@@ -709,7 +709,7 @@ def cmd_add(session: SiteSession, argv: list[str]) -> int:
                     notes=args.notes,
                 )
                 conductor_ids.append(cid)
-            abm.add_sheath(
+            abm.add_cable(
                 place,
                 args.name,
                 contains=conductor_ids,
@@ -838,7 +838,7 @@ def cmd_rm(session: SiteSession, argv: list[str]) -> int:
     if kind == "connection":
         raise ValueError(
             "rm connection is removed in house/v2; "
-            "use rm cable <ConductorOrSheathId>"
+            "use rm cable <ConductorOrCableId>"
         )
     raise ValueError(f"Unknown rm kind: {kind}")
 

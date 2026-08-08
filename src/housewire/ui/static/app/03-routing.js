@@ -1962,7 +1962,7 @@
 
   /**
    * Immediate visual container for a cable stroke: jacket, else conduit color,
-   * else the canvas background (loose wire with no sheath / uncolored tube).
+   * else the canvas background (loose wire with no cable / uncolored tube).
    */
   function strokeContainerForCableEdge(edge) {
     if (edge && edge.jacket_color) {
@@ -2036,6 +2036,26 @@
     }
     // Unique, stable order.
     return [...new Set(indices)].sort((a, b) => a - b);
+  }
+
+  /** Paint broad cables first so nested / narrower cables remain visible. */
+  function cablePaintOrder(edges) {
+    return [...(edges || [])].sort((a, b) => {
+      const width = cableWireIndices(b).length - cableWireIndices(a).length;
+      if (width) return width;
+      return String(a.id || "").localeCompare(String(b.id || ""));
+    });
+  }
+
+  /** Keep all cables below all conductors, independent of cable paint order. */
+  function orderCableLayers(cablesG) {
+    if (!cablesG) return;
+    const children = [...cablesG.children];
+    const jackets = children.filter((el) =>
+      [...el.classList].some((name) => name.startsWith("cable-jacket"))
+    );
+    const strands = children.filter((el) => !jackets.includes(el));
+    for (const el of [...jackets, ...strands]) cablesG.appendChild(el);
   }
 
   function laneOffset(laneIndex, laneCount) {
@@ -2296,15 +2316,15 @@
         byRoute.get(rk).push(entry);
       }
       for (const cid of conduitIdsForEdge(edge)) {
-        // A sheath can have conductors terminating on different element
+        // A cable can have conductors terminating on different element
         // pairs. They become separate cable edges to preserve their landing
         // pins, but must share one jacket while they ride this conduit.
         if (!edge.jacket_color) continue;
         if (!jacketsByConduit.has(cid)) jacketsByConduit.set(cid, new Map());
-        const bySheath = jacketsByConduit.get(cid);
-        const sheath = String(edge.id || key);
-        if (!bySheath.has(sheath)) bySheath.set(sheath, new Set());
-        bySheath.get(sheath).add(key);
+        const byCable = jacketsByConduit.get(cid);
+        const cable = String(edge.id || key);
+        if (!byCable.has(cable)) byCable.set(cable, new Set());
+        byCable.get(cable).add(key);
       }
     }
 
@@ -2337,9 +2357,9 @@
 
     /** @type {Map<string, {first:number,last:number,count:number,representative:string}>} */
     const jacketMap = new Map();
-    for (const [cid, bySheath] of jacketsByConduit) {
+    for (const [cid, byCable] of jacketsByConduit) {
       const conduitItems = byConduit.get(cid) || [];
-      for (const [sheath, keys] of bySheath) {
+      for (const [cable, keys] of byCable) {
         const lanes = conduitItems
           .filter((item) => keys.has(item.key))
           .map((item) =>
@@ -2348,7 +2368,7 @@
           .filter(Boolean);
         if (!lanes.length) continue;
         const indices = lanes.map((lane) => lane.index);
-        jacketMap.set(`${cid}|${sheath}`, {
+        jacketMap.set(`${cid}|${cable}`, {
           first: Math.min(...indices),
           last: Math.max(...indices),
           count: lanes[0].count,
@@ -4400,7 +4420,7 @@
     const paths = [];
 
     /**
-     * Paint a sheath jacket around this cable's contiguous lane span (not the
+     * Paint a cable jacket around this cable's contiguous lane span (not the
      * conduit centerline — that made every jacket look like a peer strand).
      */
     if (layout && wireIdx.length && edge.jacket_color) {
@@ -4444,7 +4464,7 @@
             "data-link-kind": "cable",
             "data-hit-visual": String(jwStroke),
           });
-          jacketHit.style.strokeWidth = String(linkHitStrokeWorld(jwStroke));
+          jacketHit.style.strokeWidth = String(cableHitStrokeWorld(jwStroke));
           bindLinkHit(jacketHit, edge.id, "cable");
           const jacket = el("path", {
             class: "cable-jacket",
@@ -4543,6 +4563,7 @@
           class: "cable-strand",
           d,
           "data-conductor-id": pickId,
+          "data-cable-id": edge.id,
         });
         gn.setAttribute("stroke", gnCss);
         gn.setAttribute("stroke-width", String(STRAND_WIDTH));
@@ -4551,6 +4572,7 @@
           class: "cable-strand cable-strand-gnye",
           d,
           "data-conductor-id": pickId,
+          "data-cable-id": edge.id,
         });
         ye.setAttribute("stroke", wireColorCss("YE"));
         ye.setAttribute("stroke-width", String(STRAND_WIDTH));
@@ -4562,9 +4584,11 @@
           "data-link-id": pickId,
           "data-link-kind": pickKind,
           "data-conductor-id": pickId,
+          "data-cable-id": edge.id,
+          "data-cableed": String(edge.id !== pickId),
           "data-hit-visual": String(STRAND_WIDTH),
         });
-        hit.style.strokeWidth = String(linkHitStrokeWorld(STRAND_WIDTH));
+        hit.style.strokeWidth = String(cableHitStrokeWorld(STRAND_WIDTH));
         bindLinkHit(hit, pickId, pickKind);
         cablesG.appendChild(hit);
         cablesG.appendChild(gn);
@@ -4589,6 +4613,7 @@
         class: "cable-strand",
         d,
         "data-conductor-id": pickId,
+        "data-cable-id": edge.id,
       });
       strand.setAttribute("stroke", fillCss);
       strand.setAttribute("stroke-width", String(STRAND_WIDTH));
@@ -4599,9 +4624,11 @@
         "data-link-id": pickId,
         "data-link-kind": pickKind,
         "data-conductor-id": pickId,
+        "data-cable-id": edge.id,
+        "data-cableed": String(edge.id !== pickId),
         "data-hit-visual": String(STRAND_WIDTH),
       });
-      hit.style.strokeWidth = String(linkHitStrokeWorld(STRAND_WIDTH));
+      hit.style.strokeWidth = String(cableHitStrokeWorld(STRAND_WIDTH));
       bindLinkHit(hit, pickId, pickKind);
       cablesG.appendChild(hit);
       cablesG.appendChild(strand);
@@ -4728,7 +4755,7 @@
         const layout =
           layoutForTubes ||
           buildCableLayout(graph.cable_edges || [], elemById, byId);
-        for (const edge of graph.cable_edges || []) {
+        for (const edge of cablePaintOrder(graph.cable_edges)) {
           const item = appendCableVisuals(
             cablesG,
             edge,
@@ -4739,6 +4766,7 @@
           );
           if (item) cablePaths.push(item);
         }
+        orderCableLayers(cablesG);
         syncCableCandidateVisuals();
       }
     } finally {
