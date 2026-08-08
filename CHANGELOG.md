@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.96.0] — 2026-08-08
+
+### Changed
+
+- Las conexiones usan únicamente `type` en PascalCase (`Conduit`, `Cable` o
+  `Conductor`); `subtype` conserva sus variantes.
+- La API, el grafo y el inspector dejan de exponer o consumir la clasificación
+  redundante `kind` de las conexiones.
+
 ## [0.95.0] — 2026-08-08
 
 ### Added

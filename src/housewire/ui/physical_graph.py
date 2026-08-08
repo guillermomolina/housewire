@@ -24,7 +24,7 @@ from housewire.house.conduit_ref import (
     resolve_location_ref,
     split_conduit_endpoint,
 )
-from housewire.house.links import contained_ids, resolve_link_kind
+from housewire.house.links import contained_ids, connection_type
 from housewire.site.io import load_yaml
 from housewire.site.openings import declared_opening_ids, expand_opening_grid
 from housewire.site.terminals import element_terminal_layout, grid_to_api
@@ -516,10 +516,10 @@ def _build_cable_edges(
             if not isinstance(entry, dict):
                 continue
             try:
-                kind = resolve_link_kind(entry, catalog)
+                type_id = connection_type(entry)
             except ValueError:
                 continue
-            if kind != "cable":
+            if type_id != "Cable":
                 continue
             for child in entry.get("contains") or []:
                 parent_of[str(child)] = str(name)
@@ -527,10 +527,10 @@ def _build_cable_edges(
             if not isinstance(entry, dict):
                 continue
             try:
-                kind = resolve_link_kind(entry, catalog)
+                type_id = connection_type(entry)
             except ValueError:
                 continue
-            if kind != "conductor":
+            if type_id != "Conductor":
                 continue
             from_raw = str(entry.get("from") or "")
             to_raw = str(entry.get("to") or "")
@@ -624,10 +624,10 @@ def _build_cable_edges(
             has_children = bool(cable_entry.get("contains"))
             if has_children or len(members_sorted) > 1:
                 try:
-                    cable_kind = resolve_link_kind(cable_entry, catalog)
+                    cable_type = connection_type(cable_entry)
                 except ValueError:
-                    cable_kind = "cable" if has_children else "conductor"
-                if cable_kind == "cable" or has_children:
+                    cable_type = "Cable" if has_children else "Conductor"
+                if cable_type == "Cable" or has_children:
                     jc = cable_entry.get("color")
                     jacket_color = (
                         str(jc).strip().upper() if jc else None
@@ -1233,7 +1233,7 @@ def build_physical_graph(
             if not isinstance(conduit, dict):
                 continue
             try:
-                if resolve_link_kind(conduit, catalog) != "conduit":
+                if connection_type(conduit) != "Conduit":
                     continue
             except ValueError:
                 continue

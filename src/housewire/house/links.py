@@ -6,7 +6,8 @@ from typing import Any, Literal
 
 from housewire.house.conduit_ref import split_conduit_endpoint
 
-LinkKind = Literal["conduit", "cable", "conductor"]
+ConnectionType = Literal["Conduit", "Cable", "Conductor"]
+CONNECTION_TYPES = frozenset({"Conduit", "Cable", "Conductor"})
 
 DEFAULT_CABLE_TYPE = "Cable"
 DEFAULT_CONDUIT_TYPE = "Conduit"
@@ -82,28 +83,16 @@ def _catalog_defaults_for_subtype(
     return defaults
 
 
-def resolve_link_kind(
-    entry: dict[str, Any], catalog: dict[str, dict[str, Any]]
-) -> LinkKind:
-    """Classify a ``cables:`` entry by catalog kind / type id."""
-    type_id = entry.get("type")
-    if type_id is None:
+def connection_type(entry: dict[str, Any]) -> ConnectionType:
+    """Return the fixed PascalCase type of a ``cables:`` entry."""
+    value = entry.get("type")
+    if value is None:
         raise ValueError("cables entry missing type")
-    type_id = str(type_id)
-    type_def = catalog.get(type_id)
-    kind = type_def.get("kind") if isinstance(type_def, dict) else None
-    if kind == CONDUIT_CATALOG_KIND or type_id == DEFAULT_CONDUIT_TYPE:
-        return "conduit"
-    if kind == CONDUCTOR_CATALOG_KIND or type_id == DEFAULT_CONDUCTOR_TYPE:
-        return "conductor"
-    if kind == CABLE_CATALOG_KIND or type_id == DEFAULT_CABLE_TYPE:
-        return "cable"
-    if type_def is None:
-        raise ValueError(f"Unknown cables type in catalog: {type_id}")
-    raise ValueError(
-        f"type: {type_id} cannot appear under cables: "
-        f"(catalog kind={kind!r}; expected conduit/cable/conductor)"
-    )
+    type_id = str(value)
+    if type_id not in CONNECTION_TYPES:
+        expected = ", ".join(sorted(CONNECTION_TYPES))
+        raise ValueError(f"cables type must be one of {expected}: {type_id}")
+    return type_id  # type: ignore[return-value]
 
 
 def expand_conduit(
@@ -117,34 +106,12 @@ def expand_conduit(
     if not isinstance(raw, dict):
         raise ValueError("Invalid conduit (not a map)")
 
-    type_id = raw.get("type")
     subtype = raw.get("subtype")
-    kind = raw.get("kind")
-
-    type_def = cat.get(str(type_id)) if type_id is not None else None
-    if type_def is not None and type_def.get("kind") == CONDUIT_CATALOG_KIND:
-        resolved_type = str(type_id)
-    elif type_id is not None and subtype is None:
-        resolved_type = DEFAULT_CONDUIT_TYPE
-        subtype = type_id
-    elif type_id is None:
-        resolved_type = DEFAULT_CONDUIT_TYPE
-        if subtype is None and kind is not None and str(kind) != "conduit":
-            subtype = kind
-    else:
-        raise ValueError(
-            f"type: {type_id} is not a known conduit type; "
-            f"use type: {DEFAULT_CONDUIT_TYPE} and subtype: …"
-        )
-
-    type_def = cat.get(resolved_type)
+    if connection_type(raw) != DEFAULT_CONDUIT_TYPE:
+        raise ValueError(f"type must be {DEFAULT_CONDUIT_TYPE}")
+    type_def = cat.get(DEFAULT_CONDUIT_TYPE)
     if type_def is None:
-        raise ValueError(f"Unknown conduit type in catalog: {resolved_type}")
-    if type_def.get("kind") not in (None, CONDUIT_CATALOG_KIND):
-        raise ValueError(
-            f"type: {resolved_type} is not a conduit type "
-            f"(catalog kind={type_def.get('kind')!r})"
-        )
+        raise ValueError(f"Unknown conduit type in catalog: {DEFAULT_CONDUIT_TYPE}")
 
     from housewire.house import resolve_catalog_subtype_key
 
@@ -152,7 +119,7 @@ def expand_conduit(
         type_def, str(subtype) if subtype is not None else None
     )
     defaults = _catalog_defaults_for_subtype(type_def, subtype)
-    out: dict[str, Any] = {"type": resolved_type}
+    out: dict[str, Any] = {"type": DEFAULT_CONDUIT_TYPE}
     if subtype is not None:
         out["subtype"] = str(subtype)
     for key in ("contains", "from", "to", "name", "label", "notes", "section", "color"):
@@ -180,20 +147,11 @@ def expand_cable(
         raise ValueError("Invalid cable (not a map)")
 
     subtype = raw.get("subtype")
-    if subtype is None and raw.get("kind") is not None:
-        subtype = raw.get("kind")
-    type_id = raw.get("type")
-    if type_id is None:
-        type_id = DEFAULT_CABLE_TYPE
-    type_id = str(type_id)
-    type_def = cat.get(type_id)
-    if type_def is not None and type_def.get("kind") not in (None, CABLE_CATALOG_KIND):
-        raise ValueError(
-            f"type: {type_id} is not a cable type "
-            f"(catalog kind={type_def.get('kind')!r})"
-        )
-    if type_def is None and type_id != DEFAULT_CABLE_TYPE:
-        raise ValueError(f"Unknown cable type in catalog: {type_id}")
+    if connection_type(raw) != DEFAULT_CABLE_TYPE:
+        raise ValueError(f"type must be {DEFAULT_CABLE_TYPE}")
+    type_def = cat.get(DEFAULT_CABLE_TYPE)
+    if type_def is None:
+        raise ValueError(f"Unknown cable type in catalog: {DEFAULT_CABLE_TYPE}")
 
     from housewire.house import resolve_catalog_subtype_key
 
@@ -201,7 +159,7 @@ def expand_cable(
         type_def, str(subtype) if subtype is not None else None
     )
     defaults = _catalog_defaults_for_subtype(type_def, subtype)
-    out: dict[str, Any] = {"type": type_id}
+    out: dict[str, Any] = {"type": DEFAULT_CABLE_TYPE}
     if subtype is not None:
         out["subtype"] = str(subtype)
     for key in (
@@ -242,21 +200,13 @@ def expand_conductor(
         raise ValueError("Invalid conductor (not a map)")
 
     subtype = raw.get("subtype")
-    type_id = raw.get("type")
-    if type_id is None:
-        type_id = DEFAULT_CONDUCTOR_TYPE
-    type_id = str(type_id)
-    type_def = cat.get(type_id)
-    if type_def is not None and type_def.get("kind") not in (
-        None,
-        CONDUCTOR_CATALOG_KIND,
-    ):
+    if connection_type(raw) != DEFAULT_CONDUCTOR_TYPE:
+        raise ValueError(f"type must be {DEFAULT_CONDUCTOR_TYPE}")
+    type_def = cat.get(DEFAULT_CONDUCTOR_TYPE)
+    if type_def is None:
         raise ValueError(
-            f"type: {type_id} is not a conductor type "
-            f"(catalog kind={type_def.get('kind')!r})"
+            f"Unknown conductor type in catalog: {DEFAULT_CONDUCTOR_TYPE}"
         )
-    if type_def is None and type_id != DEFAULT_CONDUCTOR_TYPE:
-        raise ValueError(f"Unknown conductor type in catalog: {type_id}")
 
     from housewire.house import resolve_catalog_subtype_key
 
@@ -264,7 +214,7 @@ def expand_conductor(
         type_def, str(subtype) if subtype is not None else None
     )
     defaults = _catalog_defaults_for_subtype(type_def, subtype)
-    out: dict[str, Any] = {"type": type_id}
+    out: dict[str, Any] = {"type": DEFAULT_CONDUCTOR_TYPE}
     if subtype is not None:
         out["subtype"] = str(subtype)
     for key in (
@@ -296,10 +246,10 @@ def expand_link(
     from housewire.house import load_catalog
 
     cat = catalog if catalog is not None else load_catalog()
-    kind = resolve_link_kind(entry, cat)
-    if kind == "conduit":
+    type_id = connection_type(entry)
+    if type_id == "Conduit":
         return expand_conduit(entry, cat)
-    if kind == "cable":
+    if type_id == "Cable":
         return expand_cable(entry, cat)
     return expand_conductor(entry, cat)
 
@@ -317,15 +267,11 @@ def validate_link_entry(
     split_element_terminal,
 ) -> None:
     """Validate one ``cables:`` entry in place context."""
-    kind = resolve_link_kind(entry, catalog)
+    type_id = connection_type(entry)
     from housewire.house import validate_catalog_subtype
 
-    type_id = str(entry.get("type") or "")
-    if type_id:
-        validate_catalog_subtype(
-            type_id, entry, catalog, context=f"cables.{name}"
-        )
-    if kind == "conduit":
+    validate_catalog_subtype(type_id, entry, catalog, context=f"cables.{name}")
+    if type_id == "Conduit":
         expanded = expand_conduit(entry, catalog)
         if not expanded.get("from") or not expanded.get("to"):
             raise ValueError(f"Conduit {name} requires from and to (openings)")
@@ -339,7 +285,7 @@ def validate_link_entry(
                 )
         return
 
-    if kind == "cable":
+    if type_id == "Cable":
         expanded = expand_cable(entry, catalog)
         contains = expanded.get("contains") or []
         if not isinstance(contains, list) or not contains:

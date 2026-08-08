@@ -4461,16 +4461,16 @@
             class: "cable-jacket-hit",
             d: jd,
             "data-link-id": edge.id,
-            "data-link-kind": "cable",
+            "data-link-type": "Cable",
             "data-hit-visual": String(jwStroke),
           });
           jacketHit.style.strokeWidth = String(cableHitStrokeWorld(jwStroke));
-          bindLinkHit(jacketHit, edge.id, "cable");
+          bindLinkHit(jacketHit, edge.id, "Cable");
           const jacket = el("path", {
             class: "cable-jacket",
             d: jd,
             "data-link-id": edge.id,
-            "data-link-kind": "cable",
+            "data-link-type": "Cable",
           });
           jacket.style.stroke = jacketCss;
           jacket.style.strokeWidth = String(jwStroke);
@@ -4537,11 +4537,11 @@
       }
     }
 
-    const paintStrand = (d, code, title, linkId, kind) => {
+    const paintStrand = (d, code, title, linkId, type) => {
       if (!d) return;
       const key = String(code || "").toUpperCase();
       const pickId = linkId || edge.id;
-      const pickKind = kind || "cable";
+      const pickType = type || "Cable";
       // Immediate container: jacket if present, else conduit, else canvas.
       const container = strokeContainerForCableEdge(edge);
       if (key === "GNYE") {
@@ -4582,14 +4582,14 @@
           class: "cable-strand-hit",
           d,
           "data-link-id": pickId,
-          "data-link-kind": pickKind,
+          "data-link-type": pickType,
           "data-conductor-id": pickId,
           "data-cable-id": edge.id,
           "data-cableed": String(edge.id !== pickId),
           "data-hit-visual": String(STRAND_WIDTH),
         });
         hit.style.strokeWidth = String(cableHitStrokeWorld(STRAND_WIDTH));
-        bindLinkHit(hit, pickId, pickKind);
+        bindLinkHit(hit, pickId, pickType);
         cablesG.appendChild(hit);
         cablesG.appendChild(gn);
         cablesG.appendChild(ye);
@@ -4622,14 +4622,14 @@
         class: "cable-strand-hit",
         d,
         "data-link-id": pickId,
-        "data-link-kind": pickKind,
+        "data-link-type": pickType,
         "data-conductor-id": pickId,
         "data-cable-id": edge.id,
         "data-cableed": String(edge.id !== pickId),
         "data-hit-visual": String(STRAND_WIDTH),
       });
       hit.style.strokeWidth = String(cableHitStrokeWorld(STRAND_WIDTH));
-      bindLinkHit(hit, pickId, pickKind);
+      bindLinkHit(hit, pickId, pickType);
       cablesG.appendChild(hit);
       cablesG.appendChild(strand);
       paths.push(hit, strand);
@@ -4664,14 +4664,14 @@
         toPin: cableWirePin(edge, wi, "to"),
       });
       const conductorId = conductors[wi] || edge.id;
-      const strandKind = "conductor";
+      const strandType = "Conductor";
       for (const sub of strandSubs) {
         paintStrand(
           pointsToPathD(sub),
           code,
           `${edgeName} · ${code}${edge.via ? ` (${edge.via})` : ""}`,
           conductorId,
-          strandKind
+          strandType
         );
         // Later same-box / free-space strands avoid stacking on this run.
         for (const s of segsFromPoints(sub, STRAND_WIDTH / 2)) {

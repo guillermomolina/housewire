@@ -17,7 +17,7 @@ from housewire.house import (
     load_catalog,
     place_meta_from_mapping,
 )
-from housewire.house.links import contained_ids, resolve_link_kind
+from housewire.house.links import contained_ids, connection_type
 from housewire.site.io import load_yaml, require_house_document, save_yaml
 from housewire.site.openings import (
     declared_opening_ids,
@@ -285,10 +285,10 @@ def conductors_referencing_element(doc: dict[str, Any], element_name: str) -> li
         if not isinstance(entry, dict):
             continue
         try:
-            kind = resolve_link_kind(entry, catalog)
+            type_id = connection_type(entry)
         except ValueError:
             continue
-        if kind != "conductor":
+        if type_id != "Conductor":
             continue
         text = f"{entry.get('from', '')} {entry.get('to', '')}"
         if re.search(
@@ -451,7 +451,6 @@ def add_cable(
     *,
     type_id: str = DEFAULT_CONDUCTOR_TYPE,
     subtype: str | None = DEFAULT_CABLE_SUBTYPE,
-    kind: str | None = None,
     section: str | None = None,
     color: str | None = None,
     colors: list[str] | None = None,
@@ -467,10 +466,12 @@ def add_cable(
     - ``type: Cable``: cable; requires ``contains``.
     - ``type: Conduit``: use :func:`add_conduit`.
     """
-    resolved_subtype = subtype if kind is None else kind
+    resolved_subtype = subtype
     resolved_type = str(type_id)
-    if resolved_type == DEFAULT_CONDUIT_TYPE:
-        raise ValueError("Use add_conduit for type: Conduit")
+    if resolved_type not in {DEFAULT_CABLE_TYPE, DEFAULT_CONDUCTOR_TYPE}:
+        raise ValueError(
+            f"type must be {DEFAULT_CABLE_TYPE} or {DEFAULT_CONDUCTOR_TYPE}"
+        )
     if resolved_type == DEFAULT_CABLE_TYPE or contains is not None:
         if not contains:
             raise ValueError("Cable requires contains")
@@ -565,7 +566,6 @@ def add_conduit(
     subtype: str | None = DEFAULT_CONDUIT_SUBTYPE,
     label: str | None = None,
     notes: str | None = None,
-    kind: str | None = None,
 ) -> None:
     """Add a Conduit entry into the unified ``cables`` map.
 
@@ -585,9 +585,9 @@ def add_conduit(
     split_conduit_endpoint(from_ref)
     split_conduit_endpoint(to_ref)
     resolved_type = type_id
+    if resolved_type != DEFAULT_CONDUIT_TYPE:
+        raise ValueError(f"type must be {DEFAULT_CONDUIT_TYPE}")
     resolved_subtype = subtype
-    if kind is not None and kind != "conduit" and resolved_subtype is None:
-        resolved_subtype = kind
     entry: dict[str, Any] = {
         "type": resolved_type,
         "from": str(from_ref).strip(),
@@ -612,7 +612,6 @@ def add_pending_cable(
     section: str | None = None,
     colors: list[str] | None = None,
     subtype: str | None = DEFAULT_CABLE_SUBTYPE,
-    kind: str | None = None,
     label: str | None = None,
     notes: str | None = None,
 ) -> tuple[str, str]:
@@ -639,7 +638,7 @@ def add_pending_cable(
         add_conductor(
             doc,
             cid,
-            subtype=subtype if kind is None else kind,
+            subtype=subtype,
             section=section,
             color=col,
             notes=note,
@@ -650,7 +649,7 @@ def add_pending_cable(
         doc,
         cable_name,
         contains=conductor_ids,
-        subtype=subtype if kind is None else kind,
+        subtype=subtype,
         notes=note,
         label=label,
         section=section,
@@ -724,20 +723,20 @@ def format_show(doc: dict[str, Any], *, element: str | None = None, cable: str |
         suffix = f"{t}/{st}" if st else str(t)
         extra = ""
         try:
-            kind = resolve_link_kind(cb, catalog) if isinstance(cb, dict) else ""
+            type_id = connection_type(cb) if isinstance(cb, dict) else ""
         except ValueError:
-            kind = ""
-        if kind == "conductor":
+            type_id = ""
+        if type_id == "Conductor":
             ends = ""
             if cb.get("from") and cb.get("to"):
                 ends = f": {cb['from']} → {cb['to']}"
             col = cb.get("color")
             extra = f" [{col}]{ends}" if col else ends
-        elif kind in ("cable", "conduit"):
+        elif type_id in ("Cable", "Conduit"):
             contains = cb.get("contains") or []
             contains_s = f" [{', '.join(str(c) for c in contains)}]" if contains else ""
             ends = ""
-            if kind == "conduit" and cb.get("from") and cb.get("to"):
+            if type_id == "Conduit" and cb.get("from") and cb.get("to"):
                 ends = f": {cb['from']} → {cb['to']}"
             extra = f"{ends}{contains_s}"
         lines.append(f"  {name} ({suffix}){extra}")

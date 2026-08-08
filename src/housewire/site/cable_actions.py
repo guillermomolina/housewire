@@ -15,7 +15,7 @@ from housewire.house.conduit_ref import (
     format_conduit_endpoint,
     split_conduit_endpoint,
 )
-from housewire.house.links import resolve_link_kind
+from housewire.house.links import connection_type
 from housewire.site import abm
 from housewire.site import open_runs
 from housewire.site.session import SiteSession
@@ -77,19 +77,19 @@ def _ensure_cables(node: dict[str, Any]) -> dict[str, Any]:
 def _validate_container_members(
     cables: dict[str, Any],
     *,
-    container_kind: str,
+    container_type: str,
     members: list[str],
     catalog: dict[str, Any],
 ) -> None:
     """Allow only conductors and Cables inside a container."""
-    if container_kind not in {"conduit", "cable"}:
-        raise ValueError(f"{container_kind} cannot contain cable members")
+    if container_type not in {"Conduit", "Cable"}:
+        raise ValueError(f"{container_type} cannot contain cable members")
     for member in members:
         entry = cables.get(member)
         if not isinstance(entry, dict):
             raise ValueError(f"contains references missing cable: {member}")
-        member_kind = resolve_link_kind(entry, catalog)
-        if member_kind == "conduit":
+        member_type = connection_type(entry)
+        if member_type == "Conduit":
             raise ValueError("A Conduit cannot be nested inside another container")
 
 
@@ -121,7 +121,7 @@ def _validated_conduit_path(
         if not all(hop.values()):
             raise ValueError("each conduit_path item needs conduit and endpoints")
         _parts, _owner, conduit = find_cable_owner(doc, hop["conduit"])
-        if resolve_link_kind(conduit, load_catalog()) != "conduit":
+        if connection_type(conduit) != "Conduit":
             raise ValueError(f"{hop['conduit']} is not a Conduit")
         left, right = conduit_endpoints(conduit)
         _left_loc, left_opening = split_conduit_endpoint(left)
@@ -145,11 +145,10 @@ def cable_detail(session: SiteSession, *, cable_id: str) -> dict[str, Any]:
     del path
     owner_parts, _owner, entry = find_cable_owner(doc, cable_id)
     catalog = load_catalog()
-    kind = resolve_link_kind(entry, catalog)
+    type_id = connection_type(entry)
     contains = [str(c) for c in (entry.get("contains") or [])]
     row: dict[str, Any] = {
         "id": str(cable_id).strip(),
-        "kind": kind,
         "type": entry.get("type"),
         "subtype": entry.get("subtype"),
         "name": entry.get("name"),
@@ -164,7 +163,7 @@ def cable_detail(session: SiteSession, *, cable_id: str) -> dict[str, Any]:
         "contains": contains,
         "owner": "/".join(owner_parts) if owner_parts else ".",
     }
-    if kind in {"cable", "conductor"}:
+    if type_id in {"Cable", "Conductor"}:
         meta = open_runs.parse_open_notes(entry.get("notes"))
         row["open_status"] = meta.status
         row["open_leaves"] = meta.leaves
@@ -189,23 +188,23 @@ def update_cable_properties(
     path, doc = session.ensure_doc()
     _parts, owner, entry = find_cable_owner(doc, cable_id)
     catalog = load_catalog()
-    kind = resolve_link_kind(entry, catalog)
+    type_id = connection_type(entry)
     unknown = sorted(set(fields) - _EDITABLE_FIELDS)
     if unknown:
         raise ValueError(f"Unsupported cable fields: {', '.join(unknown)}")
 
     for key, raw in fields.items():
-        if key in {"from", "to"} and kind == "cable":
+        if key in {"from", "to"} and type_id == "Cable":
             raise ValueError("Cable has no from/to endpoints")
         if key == "contains":
-            if kind == "conductor":
+            if type_id == "Conductor":
                 raise ValueError("Conductor cannot have contains")
             if not isinstance(raw, list):
                 raise ValueError("contains must be a list")
             cleaned = [str(x).strip() for x in raw if str(x).strip()]
             cables = _ensure_cables(owner)
             _validate_container_members(
-                cables, container_kind=kind, members=cleaned, catalog=catalog
+                cables, container_type=type_id, members=cleaned, catalog=catalog
             )
             entry["contains"] = cleaned
             continue
@@ -214,7 +213,7 @@ def update_cable_properties(
             if not text:
                 entry.pop(key, None)
             else:
-                if kind == "conduit":
+                if type_id == "Conduit":
                     split_conduit_endpoint(text)
                 entry[key] = text
             continue
@@ -229,9 +228,9 @@ def update_cable_properties(
             entry[key] = raw if not isinstance(raw, str) else raw.strip()
 
     # Re-validate against catalog expanders.
-    if kind == "conduit":
+    if type_id == "Conduit":
         expand_conduit(entry, catalog)
-    elif kind == "cable":
+    elif type_id == "Cable":
         expand_cable(entry, catalog)
     else:
         expand_conductor(entry, catalog)
@@ -255,9 +254,9 @@ def delete_cables(doc: dict[str, Any], names: list[str]) -> list[str]:
         except ValueError:
             raise ValueError(f"Unknown id: {name}") from None
         cables = _ensure_cables(owner)
-        kind = resolve_link_kind(entry, catalog)
+        type_id = connection_type(entry)
         contains = [str(c) for c in (entry.get("contains") or [])]
-        if kind == "conduit" and contains:
+        if type_id == "Conduit" and contains:
             raise ValueError(
                 f"No se puede borrar el conector contenedor no vacío: {name}"
             )
@@ -270,16 +269,15 @@ def delete_cables(doc: dict[str, Any], names: list[str]) -> list[str]:
                 other["contains"] = [c for c in other_contains if c != name]
                 if not other["contains"]:
                     try:
-                        other_kind = resolve_link_kind(other, catalog)
+                        other_type = connection_type(other)
                     except ValueError:
-                        other_kind = ""
-                    if other_kind in {"conduit", "cable"}:
+                        other_type = ""
+                    if other_type in {"Conduit", "Cable"}:
                         del cables[other_name]
                         if other_name not in deleted:
                             deleted.append(other_name)
         del cables[name]
         deleted.append(name)
-        del kind  # kind used for clarity / future hooks
     return deleted
 
 
@@ -288,7 +286,7 @@ def ungroup_cable(session: SiteSession, *, cable_id: str) -> list[str]:
     path, doc = session.ensure_doc()
     _parts, owner, entry = find_cable_owner(doc, cable_id)
     catalog = load_catalog()
-    if resolve_link_kind(entry, catalog) != "cable":
+    if connection_type(entry) != "Cable":
         raise ValueError(f"{cable_id} is not a Cable")
 
     cables = _ensure_cables(owner)
@@ -363,7 +361,7 @@ def insert_conduit(
     cables = _ensure_cables(host)
     _validate_container_members(
         cables,
-        container_kind="conduit",
+        container_type="Conduit",
         members=payload,
         catalog=load_catalog(),
     )
@@ -429,7 +427,7 @@ def insert_conductor(
         catalog = load_catalog()
         for selected_conduit_id in dict.fromkeys(conduit_ids):
             _op, _on, conduit = find_cable_owner(doc, selected_conduit_id)
-            if resolve_link_kind(conduit, catalog) != "conduit":
+            if connection_type(conduit) != "Conduit":
                 raise ValueError(f"{selected_conduit_id} is not a Conduit")
             contains = [str(c) for c in (conduit.get("contains") or [])]
             if cid not in contains:
@@ -461,7 +459,7 @@ def insert_cable(
     cables = _ensure_cables(host)
     _validate_container_members(
         cables,
-        container_kind="cable",
+        container_type="Cable",
         members=payload,
         catalog=load_catalog(),
     )
@@ -483,7 +481,7 @@ def insert_cable(
         if not isinstance(entry, dict):
             continue
         try:
-            if resolve_link_kind(entry, catalog) != "conduit":
+            if connection_type(entry) != "Conduit":
                 continue
         except ValueError:
             continue

@@ -32,7 +32,7 @@
   /** @type {string|null} Selected conduit/cable/conductor id (cables: map). */
   let selectedLinkId = null;
   /** @type {"conduit"|"cable"|"conductor"|null} */
-  let selectedLinkKind = null;
+  let selectedLinkType = null;
   /**
    * Active wiring gesture.
    * @type {null|{
@@ -1544,7 +1544,7 @@
   
   function clearLinkSelection() {
     selectedLinkId = null;
-    selectedLinkKind = null;
+    selectedLinkType = null;
   }
 
   function clearWiringSnapHighlight() {
@@ -1633,7 +1633,7 @@
   function cableSelectionSeed() {
     if (
       selectedIds.size === 0 &&
-      (selectedLinkKind === "conductor" || selectedLinkKind === "cable") &&
+      (selectedLinkType === "Conductor" || selectedLinkType === "Cable") &&
       selectedLinkId &&
       cableRouteForMember(selectedLinkId) !== null
     ) {
@@ -1647,7 +1647,7 @@
     const route = wiringMode?.kind === "cable" ? wiringMode.cableRoute : null;
     const selected = new Set(wiringMode?.selectedConductors || []);
     document
-      .querySelectorAll("[data-conductor-id], [data-link-kind=\"cable\"]")
+      .querySelectorAll("[data-conductor-id], [data-link-type=\"Cable\"]")
       .forEach((path) => {
       const id =
         path.getAttribute("data-cable-id") ||
@@ -2256,7 +2256,7 @@
       render();
     }
     applyEditFlags(res);
-    await selectLink(res.detail.id, "cable");
+    await selectLink(res.detail.id, "Cable");
     setStatus(t("status.linkGrouped"));
   }
 
@@ -2293,7 +2293,7 @@
       render();
     }
     applyEditFlags(res);
-    await selectLink(res.detail.id, "conduit");
+    await selectLink(res.detail.id, "Conduit");
     setStatus(t("status.conduitCreated"));
   }
 
@@ -2319,7 +2319,7 @@
       applyEditFlags(res);
     }
     if (graph) render();
-    if (lastRes?.detail?.id) await selectLink(lastRes.detail.id, "conductor");
+    if (lastRes?.detail?.id) await selectLink(lastRes.detail.id, "Conductor");
     setStatus(t("status.conductorCreated"));
   }
 
@@ -2360,10 +2360,10 @@
     return applyWiringTerminalPick(elem, terminalId, p.x, p.y);
   }
 
-  async function selectLink(linkId, kindHint) {
+  async function selectLink(linkId, typeHint) {
     clearSelectionSilent();
     selectedLinkId = linkId;
-    selectedLinkKind = kindHint || null;
+    selectedLinkType = typeHint || null;
     setSelectedVisual();
     highlightOutlineSelection();
     await fillLinkInspector(linkId);
@@ -2570,18 +2570,18 @@
       });
   }
 
-  function bindLinkHit(el, linkId, kind) {
+  function bindLinkHit(el, linkId, type) {
     el.addEventListener("pointerdown", (ev) => {
       if (ev.button !== 0 || shouldPanPointer(ev)) return;
       ev.stopPropagation();
       ev.preventDefault();
       if (wiringMode?.kind === "cable") {
-        if (kind === "conductor" || kind === "cable") {
+        if (type === "Conductor" || type === "Cable") {
           pickCableMembers([linkId], Boolean(ev.ctrlKey || ev.metaKey));
         }
         return;
       }
-      selectLink(linkId, kind).catch((err) =>
+      selectLink(linkId).catch((err) =>
         setStatus(String(err.message || err))
       );
     });

@@ -161,8 +161,8 @@
   let selectedIds = new Set();
   /** @type {string|null} Selected conduit/cable/conductor id (cables: map). */
   let selectedLinkId = null;
-  /** @type {"conduit"|"cable"|"conductor"|null} */
-  let selectedLinkKind = null;
+  /** @type {"Conduit"|"Cable"|"Conductor"|null} */
+  let selectedLinkType = null;
   /**
    * Active wiring gesture.
    * @type {null|{
@@ -1674,7 +1674,7 @@
   
   function clearLinkSelection() {
     selectedLinkId = null;
-    selectedLinkKind = null;
+    selectedLinkType = null;
   }
 
   function clearWiringSnapHighlight() {
@@ -1763,7 +1763,7 @@
   function cableSelectionSeed() {
     if (
       selectedIds.size === 0 &&
-      (selectedLinkKind === "conductor" || selectedLinkKind === "cable") &&
+      (selectedLinkType === "Conductor" || selectedLinkType === "Cable") &&
       selectedLinkId &&
       cableRouteForMember(selectedLinkId) !== null
     ) {
@@ -1777,7 +1777,7 @@
     const route = wiringMode?.kind === "cable" ? wiringMode.cableRoute : null;
     const selected = new Set(wiringMode?.selectedConductors || []);
     document
-      .querySelectorAll("[data-conductor-id], [data-link-kind=\"cable\"]")
+      .querySelectorAll("[data-conductor-id], [data-link-type=\"Cable\"]")
       .forEach((path) => {
       const id =
         path.getAttribute("data-cable-id") ||
@@ -2386,7 +2386,7 @@
       render();
     }
     applyEditFlags(res);
-    await selectLink(res.detail.id, "cable");
+    await selectLink(res.detail.id, "Cable");
     setStatus(t("status.linkGrouped"));
   }
 
@@ -2423,7 +2423,7 @@
       render();
     }
     applyEditFlags(res);
-    await selectLink(res.detail.id, "conduit");
+    await selectLink(res.detail.id, "Conduit");
     setStatus(t("status.conduitCreated"));
   }
 
@@ -2449,7 +2449,7 @@
       applyEditFlags(res);
     }
     if (graph) render();
-    if (lastRes?.detail?.id) await selectLink(lastRes.detail.id, "conductor");
+    if (lastRes?.detail?.id) await selectLink(lastRes.detail.id, "Conductor");
     setStatus(t("status.conductorCreated"));
   }
 
@@ -2490,10 +2490,10 @@
     return applyWiringTerminalPick(elem, terminalId, p.x, p.y);
   }
 
-  async function selectLink(linkId, kindHint) {
+  async function selectLink(linkId, typeHint) {
     clearSelectionSilent();
     selectedLinkId = linkId;
-    selectedLinkKind = kindHint || null;
+    selectedLinkType = typeHint || null;
     setSelectedVisual();
     highlightOutlineSelection();
     await fillLinkInspector(linkId);
@@ -2700,18 +2700,18 @@
       });
   }
 
-  function bindLinkHit(el, linkId, kind) {
+  function bindLinkHit(el, linkId, type) {
     el.addEventListener("pointerdown", (ev) => {
       if (ev.button !== 0 || shouldPanPointer(ev)) return;
       ev.stopPropagation();
       ev.preventDefault();
       if (wiringMode?.kind === "cable") {
-        if (kind === "conductor" || kind === "cable") {
+        if (type === "Conductor" || type === "Cable") {
           pickCableMembers([linkId], Boolean(ev.ctrlKey || ev.metaKey));
         }
         return;
       }
-      selectLink(linkId, kind).catch((err) =>
+      selectLink(linkId).catch((err) =>
         setStatus(String(err.message || err))
       );
     });
@@ -9442,16 +9442,16 @@
             class: "cable-jacket-hit",
             d: jd,
             "data-link-id": edge.id,
-            "data-link-kind": "cable",
+            "data-link-type": "Cable",
             "data-hit-visual": String(jwStroke),
           });
           jacketHit.style.strokeWidth = String(cableHitStrokeWorld(jwStroke));
-          bindLinkHit(jacketHit, edge.id, "cable");
+          bindLinkHit(jacketHit, edge.id, "Cable");
           const jacket = el("path", {
             class: "cable-jacket",
             d: jd,
             "data-link-id": edge.id,
-            "data-link-kind": "cable",
+            "data-link-type": "Cable",
           });
           jacket.style.stroke = jacketCss;
           jacket.style.strokeWidth = String(jwStroke);
@@ -9518,11 +9518,11 @@
       }
     }
 
-    const paintStrand = (d, code, title, linkId, kind) => {
+    const paintStrand = (d, code, title, linkId, type) => {
       if (!d) return;
       const key = String(code || "").toUpperCase();
       const pickId = linkId || edge.id;
-      const pickKind = kind || "cable";
+      const pickType = type || "Cable";
       // Immediate container: jacket if present, else conduit, else canvas.
       const container = strokeContainerForCableEdge(edge);
       if (key === "GNYE") {
@@ -9563,14 +9563,14 @@
           class: "cable-strand-hit",
           d,
           "data-link-id": pickId,
-          "data-link-kind": pickKind,
+          "data-link-type": pickType,
           "data-conductor-id": pickId,
           "data-cable-id": edge.id,
           "data-cableed": String(edge.id !== pickId),
           "data-hit-visual": String(STRAND_WIDTH),
         });
         hit.style.strokeWidth = String(cableHitStrokeWorld(STRAND_WIDTH));
-        bindLinkHit(hit, pickId, pickKind);
+        bindLinkHit(hit, pickId, pickType);
         cablesG.appendChild(hit);
         cablesG.appendChild(gn);
         cablesG.appendChild(ye);
@@ -9603,14 +9603,14 @@
         class: "cable-strand-hit",
         d,
         "data-link-id": pickId,
-        "data-link-kind": pickKind,
+        "data-link-type": pickType,
         "data-conductor-id": pickId,
         "data-cable-id": edge.id,
         "data-cableed": String(edge.id !== pickId),
         "data-hit-visual": String(STRAND_WIDTH),
       });
       hit.style.strokeWidth = String(cableHitStrokeWorld(STRAND_WIDTH));
-      bindLinkHit(hit, pickId, pickKind);
+      bindLinkHit(hit, pickId, pickType);
       cablesG.appendChild(hit);
       cablesG.appendChild(strand);
       paths.push(hit, strand);
@@ -9645,14 +9645,14 @@
         toPin: cableWirePin(edge, wi, "to"),
       });
       const conductorId = conductors[wi] || edge.id;
-      const strandKind = "conductor";
+      const strandType = "Conductor";
       for (const sub of strandSubs) {
         paintStrand(
           pointsToPathD(sub),
           code,
           `${edgeName} · ${code}${edge.via ? ` (${edge.via})` : ""}`,
           conductorId,
-          strandKind
+          strandType
         );
         // Later same-box / free-space strands avoid stacking on this run.
         for (const s of segsFromPoints(sub, STRAND_WIDTH / 2)) {
@@ -10459,16 +10459,16 @@
           class: "edge-tube-hit",
           d: displayD,
           "data-link-id": edge.id,
-          "data-link-kind": "conduit",
+          "data-link-type": "Conduit",
           "data-hit-visual": String(roadW),
         });
         tubeHit.style.strokeWidth = String(linkHitStrokeWorld(roadW));
-        bindLinkHit(tubeHit, edge.id, "conduit");
+        bindLinkHit(tubeHit, edge.id, "Conduit");
         const tube = el("path", {
           class: "edge-tube",
           d: displayD,
           "data-link-id": edge.id,
-          "data-link-kind": "conduit",
+          "data-link-type": "Conduit",
           "data-core-d": dCore,
         });
         tube.style.stroke = tubeCss;
@@ -11774,7 +11774,7 @@
       appendSub(li, c.label && c.label !== c.name ? String(c.label).trim() : "");
       appendSub(li, c.notes ? String(c.notes).trim() : "");
       li.addEventListener("click", () => {
-        selectLink(c.id, "conduit").catch((err) =>
+        selectLink(c.id, "Conduit").catch((err) =>
           setStatus(String(err.message || err))
         );
       });
@@ -11805,7 +11805,7 @@
         appendSub(li, `id: ${e.id}`);
       }
       li.addEventListener("click", () => {
-        selectLink(e.id, "cable").catch((err) =>
+        selectLink(e.id, "Cable").catch((err) =>
           setStatus(String(err.message || err))
         );
       });
@@ -12171,17 +12171,11 @@
       snapshotPropsBaseline(meta);
       return;
     }
-    selectedLinkKind = detail.kind || selectedLinkKind;
+    selectedLinkType = detail.type || selectedLinkType;
     appendPropsRow(meta, {
       key: "id",
       value: detail.id,
       editable: false,
-    });
-    appendPropsRow(meta, {
-      key: "kind",
-      value: detail.kind || "",
-      editable: false,
-      labelKey: "kind",
     });
     appendPropsRow(meta, {
       key: "type",
@@ -12204,14 +12198,14 @@
       editable: true,
     });
     appendColorPicker(meta, detail.color);
-    if (detail.kind !== "conduit") {
+    if (detail.type !== "Conduit") {
       appendPropsRow(meta, {
         key: "section",
         value: detail.section || "",
         editable: true,
       });
     }
-    if (detail.kind === "conduit" || detail.kind === "cable") {
+    if (detail.type === "Conduit" || detail.type === "Cable") {
       appendPropsRow(meta, {
         key: "install",
         value: detail.install || "",
@@ -12223,17 +12217,17 @@
     appendPropsRow(meta, {
       key: "from",
       value: detail.from || "",
-      editable: detail.kind !== "cable",
+      editable: detail.type !== "Cable",
     });
     appendPropsRow(meta, {
       key: "to",
       value: detail.to || "",
-      editable: detail.kind !== "cable",
+      editable: detail.type !== "Cable",
     });
     appendPropsRow(meta, {
       key: "contains",
       value: (detail.contains || []).join(", "),
-      editable: detail.kind !== "conductor",
+      editable: detail.type !== "Conductor",
     });
     appendPropsRow(meta, {
       key: "notes",
@@ -12270,7 +12264,7 @@
             render();
           }
           applyEditFlags(res);
-          await selectLink(detail.id, detail.kind);
+          await selectLink(detail.id, detail.type);
           setStatus(t("status.linkClaimed"));
         });
         appendLinkAction(bar, t("props.link.land"), async () => {
@@ -12296,11 +12290,11 @@
           }
           applyEditFlags(res);
           const nextId = res.detail?.id || detail.id;
-          await selectLink(nextId, "cable");
+          await selectLink(nextId, res.detail?.type);
           setStatus(t("status.linkLanded"));
         });
       }
-      if (detail.kind === "conductor" || detail.kind === "cable") {
+      if (detail.type === "Conductor" || detail.type === "Cable") {
         appendLinkAction(bar, t("props.link.groupCable"), async () => {
           const extra = window.prompt(t("props.link.groupContains"), detail.id);
           if (extra == null) return;
@@ -12325,11 +12319,11 @@
             render();
           }
           applyEditFlags(res);
-          await selectLink(res.detail.id, "cable");
+          await selectLink(res.detail.id, res.detail.type);
           setStatus(t("status.linkGrouped"));
         });
       }
-      if (detail.kind === "cable") {
+      if (detail.type === "Cable") {
         appendLinkAction(bar, t("props.link.ungroupCable"), async () => {
           const res = await api("/api/connection/ungroup", {
             method: "POST",

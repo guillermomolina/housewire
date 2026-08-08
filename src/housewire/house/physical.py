@@ -221,7 +221,7 @@ def build_physical_model(
         )
 
     # Pass 2: Conduit entries in cables: → edges between locations.
-    from housewire.house.links import resolve_link_kind
+    from housewire.house.links import connection_type
     from housewire.house import load_catalog
 
     catalog = load_catalog()
@@ -233,7 +233,7 @@ def build_physical_model(
             if not isinstance(conduit, dict):
                 continue
             try:
-                if resolve_link_kind(conduit, catalog) != "conduit":
+                if connection_type(conduit) != "Conduit":
                     continue
             except ValueError:
                 continue

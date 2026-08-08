@@ -17,7 +17,7 @@ from housewire.house.conduit_ref import (
     resolve_location_ref,
     split_conduit_endpoint,
 )
-from housewire.house.links import resolve_link_kind
+from housewire.house.links import connection_type
 from housewire.site.open_runs import format_open_notes, next_open_cable_name
 from housewire.site.tree import get_place_node, iter_places, logical_parts_from_id
 
@@ -263,7 +263,7 @@ def _find_parent_cable(
         if not isinstance(entry, dict) or other == child:
             continue
         try:
-            if resolve_link_kind(entry, catalog) != "cable":
+            if connection_type(entry) != "Cable":
                 continue
         except ValueError:
             continue
@@ -313,12 +313,12 @@ def delete_selection(doc: dict[str, Any], ids: list[str]) -> DeleteResult:
             if not isinstance(entry, dict):
                 continue
             try:
-                kind = resolve_link_kind(entry, catalog)
+                type_id = connection_type(entry)
             except ValueError:
                 continue
             key = (owner_parts, str(name))
 
-            if kind == "conduit":
+            if type_id == "Conduit":
                 try:
                     from_ref, to_ref = conduit_endpoints(entry)
                     from_loc, _a = split_conduit_endpoint(from_ref)
@@ -338,7 +338,7 @@ def delete_selection(doc: dict[str, Any], ids: list[str]) -> DeleteResult:
                     delete_keys.add(key)
                 continue
 
-            if kind != "conductor":
+            if type_id != "Conductor":
                 continue
 
             from_el = _resolve_terminal_element(
@@ -386,7 +386,7 @@ def delete_selection(doc: dict[str, Any], ids: list[str]) -> DeleteResult:
                 if not isinstance(entry, dict):
                     continue
                 try:
-                    if resolve_link_kind(entry, catalog) != "cable":
+                    if connection_type(entry) != "Cable":
                         continue
                 except ValueError:
                     continue
@@ -451,10 +451,10 @@ def delete_selection(doc: dict[str, Any], ids: list[str]) -> DeleteResult:
         for old, blob in snapshots.items():
             new = rename[old]
             try:
-                kind = resolve_link_kind(blob, catalog)
+                type_id = connection_type(blob)
             except ValueError:
-                kind = ""
-            if kind == "conductor":
+                type_id = ""
+            if type_id == "Conductor":
                 # Apply sever if this conductor is in the sever list for this dest.
                 for o, n, surv, cf in severs:
                     if o == owner_parts and n == old and surv == survivor_el:
@@ -469,7 +469,7 @@ def delete_selection(doc: dict[str, Any], ids: list[str]) -> DeleteResult:
                             _mark_conductor_open(blob, clear_from=cf)
                             result.severed.append(new)
                             break
-            elif kind == "cable":
+            elif type_id == "Cable":
                 blob["contains"] = [
                     rename[str(c)]
                     for c in (blob.get("contains") or [])
@@ -509,10 +509,10 @@ def delete_selection(doc: dict[str, Any], ids: list[str]) -> DeleteResult:
                 if not isinstance(entry, dict):
                     continue
                 try:
-                    kind = resolve_link_kind(entry, catalog)
+                    type_id = connection_type(entry)
                 except ValueError:
                     continue
-                if kind not in ("cable", "conduit"):
+                if type_id not in ("Cable", "Conduit"):
                     continue
                 contains = [str(c) for c in (entry.get("contains") or [])]
                 filtered = [c for c in contains if c in cables]

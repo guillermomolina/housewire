@@ -136,7 +136,7 @@ def _place_wiring(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Cables/conduits for a place from the unified ``cables`` map."""
     from housewire.house import load_catalog
-    from housewire.house.links import resolve_link_kind
+    from housewire.house.links import connection_type
     from housewire.site.tree import get_place_node
 
     catalog = load_catalog()
@@ -150,10 +150,10 @@ def _place_wiring(
             if not isinstance(defn, dict):
                 continue
             try:
-                kind = resolve_link_kind(defn, catalog)
+                type_id = connection_type(defn)
             except ValueError:
                 continue
-            if kind == "conduit":
+            if type_id == "Conduit":
                 try:
                     from_ref, to_ref = conduit_endpoints(defn)
                     _from_loc, from_op = split_conduit_endpoint(from_ref)
@@ -204,7 +204,7 @@ def _place_wiring(
                 if not isinstance(defn, dict):
                     continue
                 try:
-                    if resolve_link_kind(defn, catalog) != "conduit":
+                    if connection_type(defn) != "Conduit":
                         continue
                 except ValueError:
                     continue

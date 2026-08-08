@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from housewire.house.conduit_ref import format_conduit_endpoint, split_conduit_endpoint
-from housewire.house.links import resolve_link_kind
+from housewire.house.links import connection_type
 from housewire.house import load_catalog
 from housewire.site import abm
 from housewire.site.recipes import _expand_pin_spec
@@ -184,7 +184,7 @@ def conduits_containing(doc: dict[str, Any], cable_name: str) -> list[str]:
         if not isinstance(entry, dict):
             continue
         try:
-            if resolve_link_kind(entry, catalog) != "conduit":
+            if connection_type(entry) != "Conduit":
                 continue
         except ValueError:
             continue
@@ -380,10 +380,10 @@ def list_open_cables(doc: dict[str, Any]) -> list[tuple[str, OpenMeta]]:
         if not isinstance(entry, dict):
             continue
         try:
-            kind = resolve_link_kind(entry, catalog)
+            type_id = connection_type(entry)
         except ValueError:
             continue
-        if kind != "cable":
+        if type_id != "Cable":
             continue
         meta = parse_open_notes(entry.get("notes"))
         is_open_id = bool(_OPEN_CABLE_RE.match(str(name)))

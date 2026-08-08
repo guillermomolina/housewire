@@ -16,7 +16,7 @@ from housewire.house.conduit_ref import (
     resolve_location_ref,
     split_conduit_endpoint,
 )
-from housewire.house.links import resolve_link_kind
+from housewire.house.links import connection_type
 from housewire.i18n import unlabeled_for, unnamed_for
 from housewire.site.delete_selection import (
     _element_deleted,
@@ -251,10 +251,10 @@ def _scrub_cables_in_node(
         if not isinstance(entry, dict):
             continue
         try:
-            kind = resolve_link_kind(entry, catalog)
+            type_id = connection_type(entry)
         except ValueError:
             continue
-        if kind == "conduit":
+        if type_id == "Conduit":
             try:
                 from_ref, to_ref = conduit_endpoints(entry)
                 from_loc, _a = split_conduit_endpoint(from_ref)
@@ -274,7 +274,7 @@ def _scrub_cables_in_node(
                 continue
             drop.add(str(name))
             continue
-        if kind != "conductor":
+        if type_id != "Conductor":
             continue
         from_el = _resolve_terminal_element(entry.get("from"), owner_parts=owner_parts)
         to_el = _resolve_terminal_element(entry.get("to"), owner_parts=owner_parts)
@@ -307,10 +307,10 @@ def _scrub_cables_in_node(
             if not isinstance(entry, dict):
                 continue
             try:
-                kind = resolve_link_kind(entry, catalog)
+                type_id = connection_type(entry)
             except ValueError:
                 continue
-            if kind not in ("cable", "conduit"):
+            if type_id not in ("Cable", "Conduit"):
                 continue
             contains = [str(c) for c in (entry.get("contains") or [])]
             filtered = [c for c in contains if c in cables]
@@ -479,10 +479,10 @@ def pack_selection(doc: dict[str, Any], ids: list[str]) -> dict[str, Any]:
             if not isinstance(entry, dict):
                 continue
             try:
-                kind = resolve_link_kind(entry, catalog)
+                type_id = connection_type(entry)
             except ValueError:
                 continue
-            if kind == "conduit":
+            if type_id == "Conduit":
                 try:
                     from_ref, to_ref = conduit_endpoints(entry)
                     from_loc, _a = split_conduit_endpoint(from_ref)
@@ -500,7 +500,7 @@ def pack_selection(doc: dict[str, Any], ids: list[str]) -> dict[str, Any]:
                 ) and _place_deleted(to_p, deleted_places=selected_places):
                     include.add(str(name))
                 continue
-            if kind != "conductor":
+            if type_id != "Conductor":
                 continue
             from_el = _resolve_terminal_element(
                 entry.get("from"), owner_parts=owner_parts
@@ -555,7 +555,7 @@ def pack_selection(doc: dict[str, Any], ids: list[str]) -> dict[str, Any]:
             if not isinstance(entry, dict) or str(name) in include:
                 continue
             try:
-                if resolve_link_kind(entry, catalog) != "cable":
+                if connection_type(entry) != "Cable":
                     continue
             except ValueError:
                 continue
@@ -577,16 +577,16 @@ def pack_selection(doc: dict[str, Any], ids: list[str]) -> dict[str, Any]:
             if not isinstance(entry, dict):
                 continue
             try:
-                kind = resolve_link_kind(entry, catalog)
+                type_id = connection_type(entry)
             except ValueError:
                 continue
-            if kind == "cable":
+            if type_id == "Cable":
                 entry["contains"] = [
                     rename[str(c)]
                     for c in (entry.get("contains") or [])
                     if str(c) in rename
                 ]
-            elif kind == "conductor":
+            elif type_id == "Conductor":
                 for key in ("from", "to"):
                     raw = entry.get(key)
                     if raw is None or not str(raw).strip():
@@ -597,7 +597,7 @@ def pack_selection(doc: dict[str, Any], ids: list[str]) -> dict[str, Any]:
                         place_roots=place_roots,
                         elem_roots=elem_roots,
                     )
-            elif kind == "conduit":
+            elif type_id == "Conduit":
                 for key in ("from", "to"):
                     raw = entry.get(key)
                     if raw is None:
@@ -685,21 +685,21 @@ def _merge_cables_into(
 
     for new, entry in snapshots.items():
         try:
-            kind = resolve_link_kind(entry, catalog)
+            type_id = connection_type(entry)
         except ValueError:
-            kind = ""
-        if kind == "cable":
+            type_id = ""
+        if type_id == "Cable":
             entry["contains"] = [
                 rename[str(c)]
                 for c in (entry.get("contains") or [])
                 if str(c) in rename
             ]
-        elif kind == "conductor":
+        elif type_id == "Conductor":
             for key in ("from", "to"):
                 entry[key] = _rewrite_endpoint_on_paste(
                     entry.get(key), owner_parts=owner_parts, root_rename=root_rename
                 )
-        elif kind == "conduit":
+        elif type_id == "Conduit":
             for key in ("from", "to"):
                 entry[key] = _rewrite_conduit_on_paste(
                     entry.get(key), root_rename=root_rename

@@ -22,7 +22,7 @@ from housewire.house.links import (
     expand_conduit,
     expand_link,
     reject_legacy_keys,
-    resolve_link_kind,
+    connection_type,
     validate_link_entry,
 )
 
