@@ -7,6 +7,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.95.0] — 2026-08-08
+
+### Added
+
+- El panel de propiedades permite elegir los colores IEC 60757 de cables,
+  conductores y conductos mediante un desplegable con muestra visual,
+  incluyendo el patrón verde-amarillo de GNYE.
+
+### Fixed
+
+- Se diferencia la clase de conexión de su tipo de catálogo en propiedades.
+
 ## [0.94.2] — 2026-08-08
 
 ### Fixed

@@ -1378,6 +1378,78 @@
     meta.appendChild(dd);
   }
 
+  /** Color picker restricted to the IEC 60757 palette served by the API. */
+  function appendColorPicker(meta, value) {
+    const code = String(value || "").trim().toUpperCase();
+    const dt = document.createElement("dt");
+    dt.dataset.labelKey = "color";
+    dt.textContent = propsLabel("color");
+
+    const dd = document.createElement("dd");
+    const details = document.createElement("details");
+    details.className = "props-color-picker";
+    const summary = document.createElement("summary");
+    const preview = document.createElement("span");
+    preview.className = "props-color-preview";
+    const label = document.createElement("span");
+    label.className = "props-color-label";
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.dataset.prop = "color";
+    input.value = code;
+
+    function colorName(colorCode) {
+      const meta = CONDUCTOR_COLORS[colorCode];
+      return colorCode && meta ? colorCode : colorCode || "—";
+    }
+
+    function setSelected(colorCode) {
+      const next = String(colorCode || "").trim().toUpperCase();
+      input.value = next;
+      preview.style.setProperty("--wire-color", wireColorCss(next));
+      preview.classList.toggle("is-gnye", next === "GNYE");
+      label.textContent = colorName(next);
+      summary.title = next || propsLabel("color");
+    }
+
+    setSelected(code);
+    summary.appendChild(preview);
+    summary.appendChild(label);
+    details.appendChild(summary);
+
+    const options = document.createElement("div");
+    options.className = "props-color-options";
+    for (const [colorCode, css] of Object.entries(CONDUCTOR_COLORS)) {
+      const option = document.createElement("button");
+      option.type = "button";
+      option.className = "props-color-option";
+      option.title = colorCode;
+      const sample = document.createElement("span");
+      sample.className = "props-color-preview";
+      sample.style.setProperty("--wire-color", css);
+      sample.classList.toggle("is-gnye", colorCode === "GNYE");
+      const optionLabel = document.createElement("span");
+      optionLabel.textContent = colorCode;
+      option.appendChild(sample);
+      option.appendChild(optionLabel);
+      option.addEventListener("click", () => {
+        if (input.value === colorCode) {
+          details.open = false;
+          return;
+        }
+        setSelected(colorCode);
+        details.open = false;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      options.appendChild(option);
+    }
+    details.appendChild(options);
+    details.appendChild(input);
+    dd.appendChild(details);
+    meta.appendChild(dt);
+    meta.appendChild(dd);
+  }
+
   function bindPropsEditors(meta) {
     meta.querySelectorAll("[data-prop]").forEach((el) => {
       const key = el.getAttribute("data-prop");
@@ -2177,7 +2249,7 @@
       key: "kind",
       value: detail.kind || "",
       editable: false,
-      labelKey: "type",
+      labelKey: "kind",
     });
     appendPropsRow(meta, {
       key: "type",
@@ -2199,12 +2271,8 @@
       value: detail.label || "",
       editable: true,
     });
+    appendColorPicker(meta, detail.color);
     if (detail.kind !== "conduit") {
-      appendPropsRow(meta, {
-        key: "color",
-        value: detail.color || "",
-        editable: true,
-      });
       appendPropsRow(meta, {
         key: "section",
         value: detail.section || "",
