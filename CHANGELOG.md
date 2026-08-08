@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.89.3] — 2026-08-08
+
+### Fixed
+
+- Opposing-face stub cancellation in ``orthoRoute`` now requires the mouths to
+  actually face each other. N→S (and E↔W) routes that leave outward no longer
+  drop their stubs, so Route_33 skirts both device boxes in five segments and
+  approaches S1 from below instead of from the left.
+
+### Added
+
+- Live E2E ``Route_33`` locks the N→S conduit to five segments, south approach
+  into S1, and no mid-run pierce of either DeviceBox.
+
 ## [0.89.2] — 2026-08-07
 
 ### Added

@@ -41,10 +41,10 @@
     let stubFrom = fromFace;
     let stubTo = toFace;
     if (
-      (fromFace === "E" && toFace === "W" && x1 + STUB > x2 - STUB) ||
-      (fromFace === "W" && toFace === "E" && x1 - STUB < x2 + STUB) ||
-      (fromFace === "S" && toFace === "N" && y1 + STUB > y2 - STUB) ||
-      (fromFace === "N" && toFace === "S" && y1 - STUB < y2 + STUB)
+      (fromFace === "E" && toFace === "W" && x1 < x2 && x1 + STUB > x2 - STUB) ||
+      (fromFace === "W" && toFace === "E" && x1 > x2 && x1 - STUB < x2 + STUB) ||
+      (fromFace === "S" && toFace === "N" && y1 < y2 && y1 + STUB > y2 - STUB) ||
+      (fromFace === "N" && toFace === "S" && y1 > y2 && y1 - STUB < y2 + STUB)
     ) {
       stubFrom = null;
       stubTo = null;
