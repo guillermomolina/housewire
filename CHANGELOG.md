@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.96.1] — 2026-08-08
+
+### Fixed
+
+- Guardar como archivo conserva la pestaña original cuando representa un
+  documento local; solo reemplaza pestañas temporales abiertas en el navegador.
+- La expansión del catálogo acepta cables y conductos con el formato heredado
+  basado en `kind`, manteniendo `type` y `subtype` como salida canónica.
+
 ## [0.96.0] — 2026-08-08
 
 ### Changed

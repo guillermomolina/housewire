@@ -107,6 +107,15 @@ def expand_conduit(
         raise ValueError("Invalid conduit (not a map)")
 
     subtype = raw.get("subtype")
+    # Legacy conduit entries used ``kind: conduit`` and stored the catalog
+    # subtype/size in ``type`` (for example ``type: M20``).
+    if (
+        str(raw.get("kind", "")).lower() == "conduit"
+        and raw.get("type") not in CONNECTION_TYPES
+    ):
+        if subtype is None:
+            subtype = raw.get("type")
+        raw["type"] = DEFAULT_CONDUIT_TYPE
     if connection_type(raw) != DEFAULT_CONDUIT_TYPE:
         raise ValueError(f"type must be {DEFAULT_CONDUIT_TYPE}")
     type_def = cat.get(DEFAULT_CONDUIT_TYPE)
@@ -147,6 +156,12 @@ def expand_cable(
         raise ValueError("Invalid cable (not a map)")
 
     subtype = raw.get("subtype")
+    # Legacy cable entries stored their catalog subtype in ``kind`` and did
+    # not have the fixed ``type: Cable`` discriminator.
+    if raw.get("type") is None and raw.get("kind") is not None:
+        if subtype is None:
+            subtype = raw.get("kind")
+        raw["type"] = DEFAULT_CABLE_TYPE
     if connection_type(raw) != DEFAULT_CABLE_TYPE:
         raise ValueError(f"type must be {DEFAULT_CABLE_TYPE}")
     type_def = cat.get(DEFAULT_CABLE_TYPE)

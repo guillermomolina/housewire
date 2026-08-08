@@ -398,7 +398,7 @@ class Workspace:
         # Buffer already matches disk; keep session clean.
         new_doc.session.reconcile_dirty(new_doc.yaml_path)
 
-        if prev_id in self.documents and prev_id != new_doc.id:
+        if prev.browser_origin and prev_id in self.documents and prev_id != new_doc.id:
             self.close(force=True, doc_id=prev_id)
         self.active_id = new_doc.id
         return new_doc
