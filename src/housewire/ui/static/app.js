@@ -166,11 +166,12 @@
   /**
    * Active wiring gesture.
    * @type {null|{
-   *   kind:"conduit"|"conductor", from:string|null, fromX?:number, fromY?:number,
+   *   kind:"conduit"|"conductor"|"cable", from:string|null, fromX?:number, fromY?:number,
    *   lastX?:number, lastY?:number,
    *   activeContainer?:string|null, enteredOpening?:string|null,
    *   conduitPath?:any[], pathSteps?:any[], history?:any[],
-   *   completedSegments?:any[], readyToCommit?:boolean
+   *   completedSegments?:any[], readyToCommit?:boolean,
+   *   cableRoute?:string|null, selectedConductors?:string[], cableHistory?:string[]
    * }}
    */
   let wiringMode = null;
@@ -1542,6 +1543,8 @@
     clearLinkSelection();
     updateDeleteButtons();
     syncElectricalUi();
+    setSelectedVisual();
+    highlightOutlineSelection();
   }
 
   function setSelectedVisual() {
@@ -1673,6 +1676,11 @@
     const mode = wiringMode;
     viewport.classList.toggle("wiring-conduit", mode?.kind === "conduit");
     viewport.classList.toggle("wiring-conductor", mode?.kind === "conductor");
+    viewport.classList.toggle("wiring-cable", mode?.kind === "cable");
+    viewport.classList.toggle(
+      "wiring-cable-has-route",
+      mode?.kind === "cable" && mode.cableRoute !== null
+    );
     viewport.classList.toggle(
       "wiring-conductor-from",
       mode?.kind === "conductor" && !mode?.from
@@ -1704,7 +1712,122 @@
   function cancelWiringMode() {
     if (!wiringMode) return;
     setWiringMode(null);
+    syncCableCandidateVisuals();
     setStatus(t("status.wiringCancelled"));
+  }
+
+  /** Ordered conduit ids travelled by a loose conductor, if it is visible. */
+  function cableRouteForConductor(conductorId) {
+    for (const edge of graph?.cable_edges || []) {
+      if (!Array.isArray(edge.conductors) || !edge.conductors.includes(conductorId)) {
+        continue;
+      }
+      // A conductor already inside a sheath is not a candidate for another
+      // sheath. Its displayed edge can aggregate several different members.
+      if (edge.id !== conductorId) return null;
+      const hops = Array.isArray(edge.conduit_hops)
+        ? edge.conduit_hops.map((hop) => String(hop.conduit || ""))
+        : edge.conduit
+          ? [String(edge.conduit)]
+          : [];
+      return JSON.stringify(hops);
+    }
+    return null;
+  }
+
+  function cableSelectionSeed() {
+    if (
+      selectedIds.size === 0 &&
+      selectedLinkKind === "conductor" &&
+      selectedLinkId &&
+      cableRouteForConductor(selectedLinkId) !== null
+    ) {
+      return selectedLinkId;
+    }
+    if (selectedIds.size || selectedLinkId) clearSelectionState();
+    return null;
+  }
+
+  function syncCableCandidateVisuals() {
+    const route = wiringMode?.kind === "cable" ? wiringMode.cableRoute : null;
+    const selected = new Set(wiringMode?.selectedConductors || []);
+    document.querySelectorAll("[data-conductor-id]").forEach((path) => {
+      const id = path.getAttribute("data-conductor-id");
+      const eligible = cableRouteForConductor(id) !== null;
+      const candidate = eligible && route !== null && cableRouteForConductor(id) === route;
+      path.classList.toggle("cable-eligible", eligible);
+      path.classList.toggle("cable-candidate", candidate);
+      path.classList.toggle("cable-choice", selected.has(id));
+    });
+  }
+
+  function pickCableConductor(conductorId) {
+    if (!wiringMode || wiringMode.kind !== "cable") return false;
+    const route = cableRouteForConductor(conductorId);
+    if (route === null) return false;
+    const selected = wiringMode.selectedConductors || [];
+    if (wiringMode.cableRoute !== null && route !== wiringMode.cableRoute) {
+      return false;
+    }
+    if (selected.includes(conductorId)) {
+      const next = selected.filter((id) => id !== conductorId);
+      setWiringMode(
+        next.length
+          ? {
+              ...wiringMode,
+              selectedConductors: next,
+              cableHistory: (wiringMode.cableHistory || []).filter(
+                (id) => id !== conductorId
+              ),
+            }
+          : {
+              kind: "cable",
+              from: null,
+              cableRoute: null,
+              selectedConductors: [],
+              cableHistory: [],
+            }
+      );
+      syncCableCandidateVisuals();
+      return true;
+    }
+    setWiringMode({
+      ...wiringMode,
+      cableRoute: route,
+      selectedConductors: [...selected, conductorId],
+      cableHistory: [...(wiringMode.cableHistory || []), conductorId],
+    });
+    syncCableCandidateVisuals();
+    setStatus(t("status.wiringCableCandidates"));
+    return true;
+  }
+
+  function undoCableConductorPick() {
+    if (!wiringMode || wiringMode.kind !== "cable") return false;
+    const history = wiringMode.cableHistory || [];
+    const last = history.at(-1);
+    if (!last) return false;
+    const selected = (wiringMode.selectedConductors || []).filter(
+      (id) => id !== last
+    );
+    setWiringMode(
+      selected.length
+        ? {
+            ...wiringMode,
+            selectedConductors: selected,
+            cableHistory: history.slice(0, -1),
+          }
+        : {
+            kind: "cable",
+            from: null,
+            cableRoute: null,
+            selectedConductors: [],
+            cableHistory: [],
+          }
+    );
+    syncCableCandidateVisuals();
+    setStatus(t("status.wiringCableUndone"));
+    return true;
   }
 
   function wiringSnapRadius() {
@@ -2187,6 +2310,8 @@
       setStatus(t("status.needDocument"));
       return;
     }
+    // Neither endpoint-based connection type consumes a prior selection.
+    if (selectedIds.size || selectedLinkId) clearSelectionState();
     if (kind === "conductor" && !showElectrical) {
       await setElectrical(true);
     }
@@ -2203,18 +2328,30 @@
       setStatus(t("status.needDocument"));
       return;
     }
-    const seed = selectedLinkId
-      ? selectedLinkId
-      : window.prompt(t("props.link.groupContains"), "");
-    if (!seed) return;
-    const extra = window.prompt(t("props.link.groupMore"), "");
-    const contains = [
-      String(seed).trim(),
-      ...String(extra || "")
-        .split(/[,\s]+/)
-        .map((s) => s.trim())
-        .filter(Boolean),
-    ];
+    const seed = cableSelectionSeed();
+    setWiringMode({
+      kind: "cable",
+      from: null,
+      cableRoute: null,
+      selectedConductors: [],
+      cableHistory: [],
+    });
+    syncCableCandidateVisuals();
+    if (seed) {
+      clearSelectionState();
+      pickCableConductor(seed);
+      return;
+    }
+    setStatus(t("status.wiringCableFrom"));
+  }
+
+  async function completeCableSheath() {
+    const contains = wiringMode?.kind === "cable"
+      ? wiringMode.selectedConductors || []
+      : [];
+    if (!contains.length) return;
+    setWiringMode(null);
+    syncCableCandidateVisuals();
     const res = await api("/api/cable/sheath", {
       method: "POST",
       body: JSON.stringify({
@@ -2532,6 +2669,10 @@
       if (ev.button !== 0 || shouldPanPointer(ev)) return;
       ev.stopPropagation();
       ev.preventDefault();
+      if (wiringMode?.kind === "cable") {
+        if (kind === "conductor") pickCableConductor(linkId);
+        return;
+      }
       selectLink(linkId, kind).catch((err) =>
         setStatus(String(err.message || err))
       );
@@ -9318,11 +9459,19 @@
           );
           if (rim) paths.push(rim);
         }
-        const gn = el("path", { class: "cable-strand", d });
+        const gn = el("path", {
+          class: "cable-strand",
+          d,
+          "data-conductor-id": pickId,
+        });
         gn.setAttribute("stroke", gnCss);
         gn.setAttribute("stroke-width", String(STRAND_WIDTH));
         gn.appendChild(el("title", null, title));
-        const ye = el("path", { class: "cable-strand cable-strand-gnye", d });
+        const ye = el("path", {
+          class: "cable-strand cable-strand-gnye",
+          d,
+          "data-conductor-id": pickId,
+        });
         ye.setAttribute("stroke", wireColorCss("YE"));
         ye.setAttribute("stroke-width", String(STRAND_WIDTH));
         ye.setAttribute("stroke-dasharray", "5 5");
@@ -9332,6 +9481,7 @@
           d,
           "data-link-id": pickId,
           "data-link-kind": pickKind,
+          "data-conductor-id": pickId,
           "data-hit-visual": String(STRAND_WIDTH),
         });
         hit.style.strokeWidth = String(linkHitStrokeWorld(STRAND_WIDTH));
@@ -9355,7 +9505,11 @@
         );
         if (rim) paths.push(rim);
       }
-      const strand = el("path", { class: "cable-strand", d });
+      const strand = el("path", {
+        class: "cable-strand",
+        d,
+        "data-conductor-id": pickId,
+      });
       strand.setAttribute("stroke", fillCss);
       strand.setAttribute("stroke-width", String(STRAND_WIDTH));
       strand.appendChild(el("title", null, title));
@@ -9364,6 +9518,7 @@
         d,
         "data-link-id": pickId,
         "data-link-kind": pickKind,
+        "data-conductor-id": pickId,
         "data-hit-visual": String(STRAND_WIDTH),
       });
       hit.style.strokeWidth = String(linkHitStrokeWorld(STRAND_WIDTH));
@@ -9402,8 +9557,7 @@
         toPin: cableWirePin(edge, wi, "to"),
       });
       const conductorId = conductors[wi] || edge.id;
-      const strandKind =
-        conductors[wi] && conductors[wi] !== edge.id ? "conductor" : "cable";
+      const strandKind = "conductor";
       for (const sub of strandSubs) {
         paintStrand(
           pointsToPathD(sub),
@@ -9505,6 +9659,7 @@
           );
           if (item) cablePaths.push(item);
         }
+        syncCableCandidateVisuals();
       }
     } finally {
       endRouteGeomCache();
@@ -10324,6 +10479,7 @@
         );
         if (item) cablePaths.push(item);
       }
+      syncCableCandidateVisuals();
       if (
         renderExpandPass < 1 &&
         expandPlacesForInboxCables(inboxCablePtsByParent, byId)
@@ -14041,8 +14197,9 @@
     if (!mod) {
       if (
         ev.key === "Backspace" &&
-        wiringMode?.kind === "conductor" &&
-        undoWiringConductorStep()
+        (wiringMode?.kind === "conductor"
+          ? undoWiringConductorStep()
+          : undoCableConductorPick())
       ) {
         // This listener runs before the window-level wiring shortcut. Stop it
         // here so Backspace cannot fall through to deletion of the selection.
@@ -14819,8 +14976,9 @@
     }
     if (
       ev.key === "Backspace" &&
-      wiringMode?.kind === "conductor" &&
-      undoWiringConductorStep()
+      (wiringMode?.kind === "conductor"
+        ? undoWiringConductorStep()
+        : undoCableConductorPick())
     ) {
       ev.preventDefault();
       return;
@@ -14832,6 +14990,17 @@
     ) {
       ev.preventDefault();
       completeWiringConductor().catch((err) =>
+        setStatus(String(err.message || err))
+      );
+      return;
+    }
+    if (
+      ev.key === "Enter" &&
+      wiringMode?.kind === "cable" &&
+      wiringMode.selectedConductors?.length
+    ) {
+      ev.preventDefault();
+      completeCableSheath().catch((err) =>
         setStatus(String(err.message || err))
       );
       return;

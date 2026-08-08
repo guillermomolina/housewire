@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.92.0] — 2026-08-08
+
+### Added
+
+- La creación de cables agrupa conductores con el mismo recorrido ordenado de
+  conduits, los resalta con línea discontinua y permite confirmar con `Enter`,
+  cancelar con `Escape` o retirar el último con `Backspace`.
+
 ### Fixed
 
 - Las rutas B↔B prueban desvíos U compactos por sus cajas de extremo antes del

@@ -4517,11 +4517,19 @@
           );
           if (rim) paths.push(rim);
         }
-        const gn = el("path", { class: "cable-strand", d });
+        const gn = el("path", {
+          class: "cable-strand",
+          d,
+          "data-conductor-id": pickId,
+        });
         gn.setAttribute("stroke", gnCss);
         gn.setAttribute("stroke-width", String(STRAND_WIDTH));
         gn.appendChild(el("title", null, title));
-        const ye = el("path", { class: "cable-strand cable-strand-gnye", d });
+        const ye = el("path", {
+          class: "cable-strand cable-strand-gnye",
+          d,
+          "data-conductor-id": pickId,
+        });
         ye.setAttribute("stroke", wireColorCss("YE"));
         ye.setAttribute("stroke-width", String(STRAND_WIDTH));
         ye.setAttribute("stroke-dasharray", "5 5");
@@ -4531,6 +4539,7 @@
           d,
           "data-link-id": pickId,
           "data-link-kind": pickKind,
+          "data-conductor-id": pickId,
           "data-hit-visual": String(STRAND_WIDTH),
         });
         hit.style.strokeWidth = String(linkHitStrokeWorld(STRAND_WIDTH));
@@ -4554,7 +4563,11 @@
         );
         if (rim) paths.push(rim);
       }
-      const strand = el("path", { class: "cable-strand", d });
+      const strand = el("path", {
+        class: "cable-strand",
+        d,
+        "data-conductor-id": pickId,
+      });
       strand.setAttribute("stroke", fillCss);
       strand.setAttribute("stroke-width", String(STRAND_WIDTH));
       strand.appendChild(el("title", null, title));
@@ -4563,6 +4576,7 @@
         d,
         "data-link-id": pickId,
         "data-link-kind": pickKind,
+        "data-conductor-id": pickId,
         "data-hit-visual": String(STRAND_WIDTH),
       });
       hit.style.strokeWidth = String(linkHitStrokeWorld(STRAND_WIDTH));
@@ -4601,8 +4615,7 @@
         toPin: cableWirePin(edge, wi, "to"),
       });
       const conductorId = conductors[wi] || edge.id;
-      const strandKind =
-        conductors[wi] && conductors[wi] !== edge.id ? "conductor" : "cable";
+      const strandKind = "conductor";
       for (const sub of strandSubs) {
         paintStrand(
           pointsToPathD(sub),
@@ -4704,6 +4717,7 @@
           );
           if (item) cablePaths.push(item);
         }
+        syncCableCandidateVisuals();
       }
     } finally {
       endRouteGeomCache();

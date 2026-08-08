@@ -1211,8 +1211,9 @@
     if (!mod) {
       if (
         ev.key === "Backspace" &&
-        wiringMode?.kind === "conductor" &&
-        undoWiringConductorStep()
+        (wiringMode?.kind === "conductor"
+          ? undoWiringConductorStep()
+          : undoCableConductorPick())
       ) {
         // This listener runs before the window-level wiring shortcut. Stop it
         // here so Backspace cannot fall through to deletion of the selection.
@@ -1989,8 +1990,9 @@
     }
     if (
       ev.key === "Backspace" &&
-      wiringMode?.kind === "conductor" &&
-      undoWiringConductorStep()
+      (wiringMode?.kind === "conductor"
+        ? undoWiringConductorStep()
+        : undoCableConductorPick())
     ) {
       ev.preventDefault();
       return;
@@ -2002,6 +2004,17 @@
     ) {
       ev.preventDefault();
       completeWiringConductor().catch((err) =>
+        setStatus(String(err.message || err))
+      );
+      return;
+    }
+    if (
+      ev.key === "Enter" &&
+      wiringMode?.kind === "cable" &&
+      wiringMode.selectedConductors?.length
+    ) {
+      ev.preventDefault();
+      completeCableSheath().catch((err) =>
         setStatus(String(err.message || err))
       );
       return;

@@ -636,6 +636,7 @@
         );
         if (item) cablePaths.push(item);
       }
+      syncCableCandidateVisuals();
       if (
         renderExpandPass < 1 &&
         expandPlacesForInboxCables(inboxCablePtsByParent, byId)

@@ -2116,6 +2116,17 @@ button:hover {
   stroke: color-mix(in srgb, var(--selection) 35%, transparent);
 }
 
+.cable-strand.cable-candidate {
+  stroke-dasharray: 5 3;
+  stroke-opacity: 0.95;
+}
+
+.cable-strand.cable-choice {
+  stroke: var(--selection) !important;
+  stroke-dasharray: 2 2;
+  stroke-opacity: 1;
+}
+
 .props-link-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2248,6 +2259,26 @@ circle.element-terminal.wiring-snap {
 #viewport.wiring-conductor .cable-strand-hit,
 #viewport.wiring-conductor .cable-jacket-hit {
   pointer-events: none;
+}
+
+#viewport.wiring-cable .edge-tube-hit,
+#viewport.wiring-cable .cable-jacket-hit,
+#viewport.wiring-cable .cable-strand-hit {
+  pointer-events: none;
+}
+
+#viewport.wiring-cable .cable-strand-hit.cable-eligible {
+  pointer-events: stroke;
+  cursor: crosshair;
+}
+
+#viewport.wiring-cable.wiring-cable-has-route .cable-strand-hit.cable-eligible {
+  pointer-events: none;
+}
+
+#viewport.wiring-cable.wiring-cable-has-route .cable-strand-hit.cable-candidate {
+  pointer-events: stroke;
+  cursor: cell;
 }
 
 .cable-edge {
