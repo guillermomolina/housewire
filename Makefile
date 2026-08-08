@@ -9,7 +9,7 @@ CATALOG_LOCAL := catalogs/default
 # Parallel workers for live route E2E (each spins serve + Chromium).
 E2E_WORKERS ?= 4
 
-.PHONY: all prepare install test test-route-e2e test-route-e2e-smoke bundle-ui desktop desktop-prepare
+.PHONY: all prepare install test test-unit test-route-e2e bundle-ui desktop desktop-prepare serve
 
 # Editable install with dev tools + UI + examples + catalog.
 EXTRAS := .[dev,ui,examples,catalog]

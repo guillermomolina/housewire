@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.96.3] — 2026-08-08
+
+### Fixed
+
+- Los tests de acciones de cables comprueban el campo canónico `type` en vez
+  del campo eliminado `kind`.
+- Make, CI y VS Code ejecutan la misma suite unitaria con pytest, evitando que
+  el descubrimiento de unittest oculte tests definidos como funciones.
+
 ## [0.96.2] — 2026-08-08
 
 ### Fixed

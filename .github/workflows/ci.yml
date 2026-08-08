@@ -36,7 +36,7 @@ jobs:
           python -m pip install -e '.[dev,ui,examples,catalog]'
 
       - name: Run unit tests
-        run: python -m pytest tests/unit -q
+        run: make test-unit PYTHON=python
 
   # route-e2e:
   #   name: Route E2E

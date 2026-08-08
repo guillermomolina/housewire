@@ -65,7 +65,7 @@ def test_insert_conduit_creates_empty_tube(tmp_path: Path) -> None:
         to_ref="RoomB.W1",
         owner_id=".",
     )
-    assert detail["kind"] == "conduit"
+    assert detail["type"] == "Conduit"
     assert detail["from"] == "RoomA.E1"
     assert detail["to"] == "RoomB.W1"
     assert detail["contains"] == []
@@ -82,7 +82,7 @@ def test_insert_conductor_and_patch(tmp_path: Path) -> None:
         owner_id=".",
         color="BN",
     )
-    assert detail["kind"] == "conductor"
+    assert detail["type"] == "Conductor"
     assert detail["from"] == "RoomA/SockA.N1"
     updated = update_cable_properties(
         session, cable_id=detail["id"], fields={"notes": "test note", "color": "BU"}
@@ -112,7 +112,7 @@ def test_cable_group_and_delete(tmp_path: Path) -> None:
     cable = insert_cable(
         session, contains=[a["id"], b["id"]], owner_id=".", name="Funda1"
     )
-    assert cable["kind"] == "cable"
+    assert cable["type"] == "Cable"
     assert set(cable["contains"]) == {"L1", "N1"}
     _path, doc = session.ensure_doc()
     deleted = delete_cables(doc, ["Funda1"])
