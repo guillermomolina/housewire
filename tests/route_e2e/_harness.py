@@ -52,6 +52,11 @@ _DUMP_JS = """() => {
     .filter(el=>parseFloat(el.getAttribute('stroke-width')||0)>=2
       && (el.getAttribute('stroke')||'').startsWith('#'))
     .map(el=>({stroke:el.getAttribute('stroke'), pts:parse(el.getAttribute('d'))}));
+  const jackets=[...svg.querySelectorAll('path.cable-jacket')].map(el=>({
+    id:el.getAttribute('data-link-id')||'',
+    width:parseFloat(getComputedStyle(el).strokeWidth)||0,
+    pts:parse(el.getAttribute('d')),
+  }));
   const elements=[...svg.querySelectorAll('g.elements > g.element-node')].map(g=>{
     const r=g.querySelector(':scope > rect.element-box, :scope > rect');
     if(!r) return null;
@@ -103,6 +108,7 @@ _DUMP_JS = """() => {
     halves: tubes.map(t=>t.half),
     strands: strands.map(s=>s.pts),
     strokes: strands.map(s=>s.stroke),
+    jackets,
     elements,
     leaves,
     mouths,

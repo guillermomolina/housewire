@@ -7136,7 +7136,7 @@
     const byConduit = new Map();
     /** @type {Map<string, {key:string, wi:number, ax:number, ay:number, bx:number, by:number}[]>} */
     const byRoute = new Map();
-    /** @type {Map<string, string[]>} */
+    /** @type {Map<string, Map<string, Set<string>>>} */
     const jacketsByConduit = new Map();
 
     function towardForEnd(edge, end, a, b) {
@@ -7264,10 +7264,15 @@
         byRoute.get(rk).push(entry);
       }
       for (const cid of conduitIdsForEdge(edge)) {
-        if (!jacketsByConduit.has(cid)) jacketsByConduit.set(cid, []);
-        if (!jacketsByConduit.get(cid).includes(key)) {
-          jacketsByConduit.get(cid).push(key);
-        }
+        // A sheath can have conductors terminating on different element
+        // pairs. They become separate cable edges to preserve their landing
+        // pins, but must share one jacket while they ride this conduit.
+        if (!edge.jacket_color) continue;
+        if (!jacketsByConduit.has(cid)) jacketsByConduit.set(cid, new Map());
+        const bySheath = jacketsByConduit.get(cid);
+        const sheath = String(edge.id || key);
+        if (!bySheath.has(sheath)) bySheath.set(sheath, new Set());
+        bySheath.get(sheath).add(key);
       }
     }
 
@@ -7298,21 +7303,33 @@
       conduitStrandCounts.set(cid, count);
     });
 
+    /** @type {Map<string, {first:number,last:number,count:number,representative:string}>} */
+    const jacketMap = new Map();
+    for (const [cid, bySheath] of jacketsByConduit) {
+      const conduitItems = byConduit.get(cid) || [];
+      for (const [sheath, keys] of bySheath) {
+        const lanes = conduitItems
+          .filter((item) => keys.has(item.key))
+          .map((item) =>
+            conduitLaneMap.get(`${cid}|${item.key}|${item.wi}`)
+          )
+          .filter(Boolean);
+        if (!lanes.length) continue;
+        const indices = lanes.map((lane) => lane.index);
+        jacketMap.set(`${cid}|${sheath}`, {
+          first: Math.min(...indices),
+          last: Math.max(...indices),
+          count: lanes[0].count,
+          representative: [...keys].sort()[0],
+        });
+      }
+    }
+
     /** @type {Map<string, {index:number, count:number}>} */
     const routeLaneMap = new Map();
     packLaneGroups(byRoute, (item, index, count) => {
       routeLaneMap.set(`${item.key}|${item.wi}`, { index, count });
     });
-
-    /** @type {Map<string, {index:number, count:number}>} */
-    const jacketMap = new Map();
-    for (const [cid, keys] of jacketsByConduit) {
-      keys.sort();
-      const count = keys.length;
-      keys.forEach((key, index) => {
-        jacketMap.set(`${cid}|${key}`, { index, count });
-      });
-    }
 
     return {
       terminal(edge, wi, end) {
@@ -7356,13 +7373,12 @@
         );
       },
       jacketOnConduit(conduitId, edge) {
-        if (!conduitId) return { index: 0, count: 1 };
-        return (
-          jacketMap.get(`${conduitId}|${cableEdgeKey(edge)}`) || {
-            index: 0,
-            count: 1,
-          }
-        );
+        if (!conduitId) return null;
+        return jacketMap.get(`${conduitId}|${edge.id}`) || null;
+      },
+      isJacketRepresentative(conduitId, edge) {
+        const jacket = this.jacketOnConduit(conduitId, edge);
+        return !!jacket && jacket.representative === cableEdgeKey(edge);
       },
       jacket(edge) {
         const hops = edge.conduit_hops || [];
@@ -9421,44 +9437,50 @@
         }
       };
       const jacketMetrics = (cid) => {
-        const laneInfos = wireIdx.map((wi) =>
-          layout.laneOnConduit(cid, edge, wi)
-        );
-        const count = laneInfos[0]?.count || wireIdx.length;
-        const indices = laneInfos.map((l) => l.index);
-        const i0 = Math.min(...indices);
-        const i1 = Math.max(...indices);
+        const jacket = layout.jacketOnConduit(cid, edge);
+        if (!jacket) return null;
         return {
           midOff:
-            (highwayLaneOffset(i0, count) + highwayLaneOffset(i1, count)) / 2,
-          jw: highwaySpanWidth(i1 - i0 + 1) + 1.2,
+            (highwayLaneOffset(jacket.first, jacket.count) +
+              highwayLaneOffset(jacket.last, jacket.count)) /
+            2,
+          jw: highwaySpanWidth(jacket.last - jacket.first + 1) + 1.2,
         };
       };
       const hops = edge.conduit_hops || [];
       if (hops.length) {
         for (const hop of hops) {
           const tubeD = hopTubePathD(hop);
-          if (!tubeD || !hop.conduit) continue;
+          if (
+            !tubeD ||
+            !hop.conduit ||
+            !layout.isJacketRepresentative(hop.conduit, edge)
+          ) continue;
           const fakeEdge = {
             from: hop.from,
             to: hop.to,
             from_opening: hop.from_opening,
             to_opening: hop.to_opening,
           };
-          const { midOff, jw } = jacketMetrics(hop.conduit);
+          const metrics = jacketMetrics(hop.conduit);
+          if (!metrics) continue;
+          const { midOff, jw } = metrics;
           paintJacketD(conduitDisplayD(tubeD, placeById, fakeEdge), midOff, jw);
         }
       } else if (edge.conduit) {
         const item =
           edgePathsByConduitId.get(edge.conduit) ||
           edgePaths.find((e) => e.edge && e.edge.id === edge.conduit);
-        if (item && item.d) {
-          const { midOff, jw } = jacketMetrics(edge.conduit);
-          paintJacketD(
-            conduitDisplayD(item.dPaint || item.d, placeById, item.edge),
-            midOff,
-            jw
-          );
+        if (item && item.d && layout.isJacketRepresentative(edge.conduit, edge)) {
+          const metrics = jacketMetrics(edge.conduit);
+          if (metrics) {
+            const { midOff, jw } = metrics;
+            paintJacketD(
+              conduitDisplayD(item.dPaint || item.d, placeById, item.edge),
+              midOff,
+              jw
+            );
+          }
         }
       }
     }

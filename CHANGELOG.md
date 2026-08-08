@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.93.1] — 2026-08-08
+
+### Fixed
+
+- Una funda con conductores que terminan en pares de elementos distintos se
+  dibuja como un único cable que envuelve todos sus conductores en el conduit.
+
 ## [0.93.0] — 2026-08-08
 
 ### Added
