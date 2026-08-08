@@ -52,6 +52,12 @@ test-route-e2e-smoke:
 		tests/route_e2e/test_route_21.py \
 		-v -n $(E2E_WORKERS) --dist loadfile
 
+# Cheap PR smoke: detectors + a few representative sites.
+test-route-e2e-smoke_1:
+	$(PYTHON) -m unittest \
+		tests/route_e2e/test_route_28.py \
+		-v
+
 # Electron shell (system Electron on PATH, e.g. Arch ``pacman -S electron``).
 desktop-prepare:
 	$(MAKE) -C desktop prepare

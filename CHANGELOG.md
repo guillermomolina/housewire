@@ -7,6 +7,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Las rutas B↔B prueban desvíos U compactos por sus cajas de extremo antes del
+  fallback de contorno, evitando seis segmentos en Route_28.
+
+## [0.89.4] — 2026-08-08
+
+### Fixed
+
+- Las rutas offset y los desvíos laterales ya no se aceptan si todavía
+  atraviesan una caja. Esto corrige la detección y el trazado de Route_33:
+  el Conducto rodea ambas cajas y llega a S1 desde abajo.
+
 ## [0.89.3] — 2026-08-08
 
 ### Fixed

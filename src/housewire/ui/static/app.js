@@ -5685,6 +5685,32 @@
           const d = pointsToPathD(pts);
           return { d, dCore: d, segs: segsFromPoints(pts, half) };
         }
+        // B↔B mouths may sit inside their projected endpoint boxes.  A
+        // three-segment U through an endpoint box is valid, whereas contour
+        // stubs turn the same detour into six painted segments (Route_28).
+        if (fromPlane && toPlane) {
+          const railGap = Math.max(LANE_PITCH, LANE_GAP + (half || 0));
+          const cCandidates = [
+            cleanOrthoPoly([
+              [m1.x, m1.y],
+              [m1.x, m2.y + railGap],
+              [m2.x, m2.y + railGap],
+              [m2.x, m2.y],
+            ]),
+            cleanOrthoPoly([
+              [m1.x, m1.y],
+              [m1.x, m2.y - railGap],
+              [m2.x, m2.y - railGap],
+              [m2.x, m2.y],
+            ]),
+          ].filter(acceptMarkPath);
+          cCandidates.sort((a, b) => pathLen(a) - pathLen(b));
+          if (cCandidates.length) {
+            const pts = cCandidates[0];
+            const d = pointsToPathD(pts);
+            return { d, dCore: d, segs: segsFromPoints(pts, half) };
+          }
+        }
         // L blocked (stack/obstacle): try ≤3-segment mark-to-mark C/U.
         // Pass faces so N/W mouths stub *out* of the sprite AABB first
         // (Route_21 lamp N→B must clear the from-box iso margin).
@@ -7017,7 +7043,7 @@
     const a = off[0];
     const b = off[off.length - 1];
     if (!a || !b) return off;
-    return orthoRoute(
+    const routed = orthoRoute(
       { x: a[0], y: a[1] },
       { x: b[0], y: b[1] },
       null,
@@ -7027,6 +7053,9 @@
       stayBounds || null,
       null
     );
+    // Never return an offset lane that still intersects an element.  The
+    // centerline may be clear while the parallel lane cuts through a box.
+    return pathObstacleCost(routed, obstacles) <= 0 ? routed : off;
   }
 
   /** Expand a rect outward by ``pad`` on every side. */
@@ -7307,7 +7336,12 @@
       skirt.push([crossing.x, crossing.y]);
     }
     skirt = cleanOrthoPoly(skirt);
-    if (pathObstacleCost(skirt, obstacles) <= pathObstacleCost(pts, obstacles)) {
+    // A skirt is only a valid repair when it clears every obstacle.  Comparing
+    // costs alone accepts a partially improved path that still pierces a box.
+    if (
+      pathObstacleCost(skirt, obstacles) <= 0 &&
+      pathObstacleCost(skirt, obstacles) <= pathObstacleCost(pts, obstacles)
+    ) {
       return skirt;
     }
     return pts;
