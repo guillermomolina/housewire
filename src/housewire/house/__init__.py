@@ -489,7 +489,7 @@ def catalog_type_label(
     When ``locale`` is ``es`` and ``label_es`` is set, that wins. Falls back to
     the type id when the catalog has no display string.
     """
-    return _catalog_type_localized_text(
+    label = _catalog_type_localized_text(
         type_id,
         catalog=catalog,
         subtype=subtype,
@@ -498,6 +498,16 @@ def catalog_type_label(
         es_key="label_es",
         fallback_to_id=True,
     )
+    from housewire.i18n import normalize_locale
+
+    # The English catalog uses explanatory alternatives such as
+    # "Device / mechanism box".  In a compact palette, show one name per
+    # catalog type just as the Spanish labels do; the full catalog description
+    # remains available in the item details.
+    if normalize_locale(locale) == "en":
+        label = re.sub(r"\s+/\s+.*$", "", label)
+        label = re.sub(r"\s*\([^)]*\)\s*$", "", label)
+    return label
 
 
 def catalog_type_description(

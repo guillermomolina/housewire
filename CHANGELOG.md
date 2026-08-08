@@ -7,6 +7,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.94.2] — 2026-08-08
+
+### Fixed
+
+- La paleta en inglés muestra un único nombre por tipo de catálogo, igual que
+  en castellano.
+
 ## [0.94.1] — 2026-08-08
 
 ### Fixed
