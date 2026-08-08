@@ -107,7 +107,10 @@
       }
       if (ev.button !== 0) return;
       // While wiring, snap to openings — never start place drag/select.
-      if (wiringMode?.kind === "conduit") {
+      if (
+        wiringMode?.kind === "conduit" ||
+        wiringMode?.kind === "conductor"
+      ) {
         ev.preventDefault();
         ev.stopPropagation();
         tryWiringSnapAtPointer(ev.clientX, ev.clientY);

@@ -11,6 +11,7 @@ from housewire.house import (
     load_catalog,
 )
 from housewire.house.conduit_ref import (
+    conduit_endpoints,
     format_conduit_endpoint,
     split_conduit_endpoint,
 )
@@ -82,6 +83,43 @@ def _next_unique(cables: dict[str, Any], prefix: str) -> str:
     return f"{prefix}_{n}"
 
 
+def _validated_conduit_path(
+    doc: dict[str, Any], raw_path: list[Any] | None
+) -> list[dict[str, str]]:
+    """Validate an ordered, oriented route selected in the canvas."""
+    if raw_path is None:
+        return []
+    if not isinstance(raw_path, list):
+        raise ValueError("conduit_path must be a list")
+    path: list[dict[str, str]] = []
+    for raw_hop in raw_path:
+        if not isinstance(raw_hop, dict):
+            raise ValueError("each conduit_path item must be an object")
+        hop = {
+            key: str(raw_hop.get(key) or "").strip()
+            for key in ("conduit", "from", "to", "from_opening", "to_opening")
+        }
+        if not all(hop.values()):
+            raise ValueError("each conduit_path item needs conduit and endpoints")
+        _parts, _owner, conduit = find_cable_owner(doc, hop["conduit"])
+        if resolve_link_kind(conduit, load_catalog()) != "conduit":
+            raise ValueError(f"{hop['conduit']} is not a Conduit")
+        left, right = conduit_endpoints(conduit)
+        _left_loc, left_opening = split_conduit_endpoint(left)
+        _right_loc, right_opening = split_conduit_endpoint(right)
+        if {hop["from_opening"], hop["to_opening"]} != {
+            str(left_opening or ""),
+            str(right_opening or ""),
+        }:
+            raise ValueError(
+                f"{hop['conduit']} does not match the selected opening endpoints"
+            )
+        if path and path[-1]["to"] != hop["from"]:
+            raise ValueError("conduit_path must be a continuous route")
+        path.append(hop)
+    return path
+
+
 def cable_detail(session: SiteSession, *, cable_id: str) -> dict[str, Any]:
     """JSON-friendly detail for the Properties panel."""
     path, doc = session.ensure_doc()
@@ -103,6 +141,7 @@ def cable_detail(session: SiteSession, *, cable_id: str) -> dict[str, Any]:
         "install": entry.get("install"),
         "from": entry.get("from"),
         "to": entry.get("to"),
+        "conduit_path": entry.get("conduit_path"),
         "contains": contains,
         "owner": "/".join(owner_parts) if owner_parts else ".",
     }
@@ -300,6 +339,7 @@ def insert_conductor(
     label: str | None = None,
     notes: str | None = None,
     conduit_id: str | None = None,
+    conduit_path: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Create a Conductor between two element terminals."""
     path, doc = session.ensure_doc()
@@ -311,6 +351,7 @@ def insert_conductor(
         raise ValueError("from must be ElementRef.Terminal (e.g. Socket.N1)")
     if not tr or "." not in tr:
         raise ValueError("to must be ElementRef.Terminal (e.g. Box/Lamp.L1)")
+    selected_path = _validated_conduit_path(doc, conduit_path)
     cables = _ensure_cables(host)
     cid = name or _next_unique(cables, "Conductor")
     abm.add_conductor(
@@ -323,16 +364,21 @@ def insert_conductor(
         subtype=subtype,
         label=label,
         notes=notes,
+        conduit_path=selected_path or None,
     )
-    if conduit_id:
-        _op, _on, conduit = find_cable_owner(doc, conduit_id)
+    conduit_ids = [hop["conduit"] for hop in selected_path]
+    if conduit_id and conduit_id not in conduit_ids:
+        conduit_ids.append(conduit_id)
+    if conduit_ids:
         catalog = load_catalog()
-        if resolve_link_kind(conduit, catalog) != "conduit":
-            raise ValueError(f"{conduit_id} is not a Conduit")
-        contains = [str(c) for c in (conduit.get("contains") or [])]
-        if cid not in contains:
-            contains.append(cid)
-            conduit["contains"] = contains
+        for selected_conduit_id in dict.fromkeys(conduit_ids):
+            _op, _on, conduit = find_cable_owner(doc, selected_conduit_id)
+            if resolve_link_kind(conduit, catalog) != "conduit":
+                raise ValueError(f"{selected_conduit_id} is not a Conduit")
+            contains = [str(c) for c in (conduit.get("contains") or [])]
+            if cid not in contains:
+                contains.append(cid)
+                conduit["contains"] = contains
     session.mark_dirty(path)
     return cable_detail(session, cable_id=cid)
 

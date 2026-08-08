@@ -435,6 +435,54 @@ def _conduit_hops_for_cable(
     return hops or None
 
 
+def _persisted_conduit_hops(
+    conduit_path: Any,
+    from_place: str | None,
+    to_place: str | None,
+    conduit_edges: list[dict[str, Any]],
+) -> list[dict[str, Any]] | None:
+    """Resolve a user-selected conduit sequence against visible conduit edges."""
+    if not isinstance(conduit_path, list) or not conduit_path:
+        return None
+    if not from_place or not to_place or from_place == to_place:
+        return None
+    current = from_place
+    hops: list[dict[str, Any]] = []
+    for raw_hop in conduit_path:
+        if not isinstance(raw_hop, dict):
+            return None
+        conduit_id = str(raw_hop.get("conduit") or "")
+        edge = next(
+            (item for item in conduit_edges if str(item.get("id") or "") == conduit_id),
+            None,
+        )
+        if edge is None:
+            return None
+        direct = {
+            "conduit": conduit_id,
+            "from": str(edge.get("from") or ""),
+            "to": str(edge.get("to") or ""),
+            "from_opening": edge.get("from_opening"),
+            "to_opening": edge.get("to_opening"),
+        }
+        reverse = {
+            "conduit": conduit_id,
+            "from": direct["to"],
+            "to": direct["from"],
+            "from_opening": direct["to_opening"],
+            "to_opening": direct["from_opening"],
+        }
+        if direct["from"] == current:
+            hop = direct
+        elif reverse["from"] == current:
+            hop = reverse
+        else:
+            return None
+        hops.append(hop)
+        current = hop["to"]
+    return hops if current == to_place else None
+
+
 def _build_cable_edges(
     *,
     places: list[tuple[tuple[str, ...], dict[str, Any]]],
@@ -521,6 +569,7 @@ def _build_cable_edges(
                         if raw_l is not None and str(raw_l).strip()
                         else None
                     ),
+                    "conduit_path": entry.get("conduit_path"),
                 }
             )
 
@@ -598,12 +647,23 @@ def _build_cable_edges(
             "via_indices": list(range(1, len(colors) + 1)),
             "conductors": [m["conductor"] for m in members_sorted],
         }
-        hops = _conduit_hops_for_cable(
-            sheath,
-            elem_parent.get(from_id),
-            elem_parent.get(to_id),
-            conduit_edges,
-        )
+        hops = None
+        for member in members_sorted:
+            hops = _persisted_conduit_hops(
+                member.get("conduit_path"),
+                elem_parent.get(from_id),
+                elem_parent.get(to_id),
+                conduit_edges,
+            )
+            if hops:
+                break
+        if hops is None:
+            hops = _conduit_hops_for_cable(
+                sheath,
+                elem_parent.get(from_id),
+                elem_parent.get(to_id),
+                conduit_edges,
+            )
         if hops is None:
             # Also try matching via each conductor id.
             for m in members_sorted:

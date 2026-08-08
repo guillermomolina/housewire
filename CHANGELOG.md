@@ -12,6 +12,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - Las rutas B↔B prueban desvíos U compactos por sus cajas de extremo antes del
   fallback de contorno, evitando seis segmentos en Route_28.
 
+## [0.91.0] — 2026-08-08
+
+### Added
+
+- El trazado de conductores permite recorrer conduits entre contenedores,
+  confirmar varios tramos terminal-a-terminal con `Enter` y deshacer el último
+  clic con `Backspace`.
+- Los recorridos de conduits elegidos se conservan en los conductores y el
+  diagrama los reproduce en lugar de recalcular un camino distinto.
+
 ## [0.90.0] — 2026-08-08
 
 ### Fixed

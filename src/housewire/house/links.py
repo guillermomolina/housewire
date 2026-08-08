@@ -273,6 +273,7 @@ def expand_conductor(
         "color",
         "from",
         "to",
+        "conduit_path",
         "name",
         "label",
         "notes",

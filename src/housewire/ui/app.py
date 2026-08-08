@@ -584,6 +584,9 @@ def create_app(site_root: Path | None = None) -> Any:
         to_ref = str(payload.get("to") or "").strip()
         if not from_ref or not to_ref:
             raise HTTPException(400, "from and to terminals are required")
+        conduit_path = payload.get("conduit_path")
+        if conduit_path is not None and not isinstance(conduit_path, list):
+            raise HTTPException(400, "conduit_path must be a list")
         depth = _depth_from(payload)
         try:
             _preload_location(location_id)
@@ -611,6 +614,7 @@ def create_app(site_root: Path | None = None) -> Any:
                     if payload.get("conduit_id")
                     else None
                 ),
+                conduit_path=conduit_path,
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc

@@ -1176,6 +1176,17 @@
     }
     const mod = ev.ctrlKey || ev.metaKey;
     if (!mod) {
+      if (
+        ev.key === "Backspace" &&
+        wiringMode?.kind === "conductor" &&
+        undoWiringConductorStep()
+      ) {
+        // This listener runs before the window-level wiring shortcut. Stop it
+        // here so Backspace cannot fall through to deletion of the selection.
+        ev.preventDefault();
+        ev.stopPropagation();
+        return;
+      }
       if (ev.key === "Delete" || ev.key === "Backspace") {
         const appModal = document.getElementById("app-modal");
         const insertModal = document.getElementById("insert-modal");
@@ -1941,6 +1952,25 @@
     if (ev.key === "Escape" && wiringMode) {
       ev.preventDefault();
       cancelWiringMode();
+      return;
+    }
+    if (
+      ev.key === "Backspace" &&
+      wiringMode?.kind === "conductor" &&
+      undoWiringConductorStep()
+    ) {
+      ev.preventDefault();
+      return;
+    }
+    if (
+      ev.key === "Enter" &&
+      wiringMode?.kind === "conductor" &&
+      wiringMode.readyToCommit
+    ) {
+      ev.preventDefault();
+      completeWiringConductor().catch((err) =>
+        setStatus(String(err.message || err))
+      );
       return;
     }
     if (ev.code === "Space") {

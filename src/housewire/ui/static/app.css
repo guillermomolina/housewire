@@ -2165,6 +2165,16 @@ button:hover {
   opacity: 0.85;
 }
 
+.wiring-draft {
+  fill: none;
+  stroke: var(--accent, #3b82f6);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
 circle.opening-mark.wiring-snap,
 circle.element-terminal.wiring-snap {
   stroke: var(--accent, #3b82f6);

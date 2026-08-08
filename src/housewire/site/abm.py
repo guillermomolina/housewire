@@ -414,6 +414,7 @@ def add_conductor(
     subtype: str | None = DEFAULT_CABLE_SUBTYPE,
     label: str | None = None,
     notes: str | None = None,
+    conduit_path: list[dict[str, Any]] | None = None,
 ) -> None:
     """Add a Conductor leaf (optional from/to for pending/open runs)."""
     _ensure_maps(doc)
@@ -434,6 +435,8 @@ def add_conductor(
         entry["from"] = str(from_ref).strip()
     if to_ref is not None:
         entry["to"] = str(to_ref).strip()
+    if conduit_path:
+        entry["conduit_path"] = [dict(hop) for hop in conduit_path]
     if label:
         entry["label"] = label
     if notes:
