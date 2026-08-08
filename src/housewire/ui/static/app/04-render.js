@@ -2909,8 +2909,8 @@
 
   async function saveDocument() {
     if (!documentHasSaveTarget()) {
-      // New / browser-origin docs without a write target → Save As.
-      await fileSaveAs();
+      // New browser documents receive a name through the in-app Save modal.
+      await saveBrowserDocumentInApp();
       return null;
     }
     const handle = activeDocId ? fileHandles[activeDocId] : null;

@@ -118,19 +118,20 @@
         }
         const path = await desktopBridge().saveYamlAs(suggested);
         if (!path) return;
+        const previousDocId = activeDocId;
         rememberCurrentDocView();
         const st = await api("/api/workspace/save-as-file", {
           method: "POST",
           body: JSON.stringify({ path }),
         });
         applyWorkspaceStatus(st);
+        replaceActiveDocumentView(previousDocId);
         await rememberDesktopRecent(path);
         dirtyLocal = false;
         updateSaveButton(false);
-        await reloadAfterDocumentChange();
         const name =
           (st.document && (st.document.yaml || st.document.title)) || path;
-        setStatus(`saved as ${name}`);
+        setStatus(t("status.savedAs", { name }));
         return;
       }
 
@@ -144,29 +145,61 @@
       const suggested = exported.filename || "housewire.yaml";
       const result = await pickSaveYamlFileWeb(suggested, exported.content);
       if (!result) return;
-      rememberCurrentDocView();
-      const st = await api("/api/workspace/open-content", {
-        method: "POST",
-        body: JSON.stringify({
-          filename: result.name,
-          content: exported.content,
-        }),
-      });
-      applyWorkspaceStatus(st);
-      if (result.handle && st.document && st.document.id) {
-        fileHandles[st.document.id] = result.handle;
-      }
-      dirtyLocal = false;
-      updateSaveButton(false);
-      await reloadAfterDocumentChange();
+      await replaceBrowserDocument(
+        result.name,
+        exported.content,
+        result.handle || null
+      );
       setStatus(
         result.downloaded
           ? `downloaded ${result.name}`
-          : `saved as ${result.name}`
+          : t("status.savedAs", { name: result.name })
       );
     } catch (err) {
       setStatus(String(err.message || err));
     }
+  }
+
+  async function saveBrowserDocumentInApp() {
+    const exported = await api("/api/workspace/yaml");
+    const suggested = exported.filename || "housewire.yaml";
+    const filename = await promptText({
+      title: t("menu.file.save"),
+      message: t("modal.saveAsMessage"),
+      label: t("modal.filename"),
+      value: suggested,
+      placeholder: "housewire.yaml",
+      okLabel: t("menu.file.save"),
+    });
+    if (!filename) return null;
+    const st = await replaceBrowserDocument(filename, exported.content);
+    setStatus(t("status.savedAs", { name: filename }));
+    return st;
+  }
+
+  async function replaceBrowserDocument(filename, content, handle = null) {
+    const previousDocId = activeDocId;
+    rememberCurrentDocView();
+    const st = await api("/api/workspace/save-as-content", {
+      method: "POST",
+      body: JSON.stringify({ filename, content }),
+    });
+    applyWorkspaceStatus(st);
+    replaceActiveDocumentView(previousDocId);
+    if (handle && activeDocId) fileHandles[activeDocId] = handle;
+    dirtyLocal = false;
+    updateSaveButton(false);
+    return st;
+  }
+
+  function replaceActiveDocumentView(previousDocId) {
+    if (!previousDocId || previousDocId === activeDocId) return;
+    if (docViews[previousDocId]) {
+      docViews[activeDocId] = docViews[previousDocId];
+    }
+    delete docViews[previousDocId];
+    delete fileHandles[previousDocId];
+    persistDocViews();
   }
 
   async function closeDocument(docId) {

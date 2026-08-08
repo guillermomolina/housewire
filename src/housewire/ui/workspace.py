@@ -253,6 +253,21 @@ class Workspace:
         save_yaml(yaml_path, data, backup=False)
         return self.open_site(yaml_path, force=True, browser_origin=True)
 
+    def save_as_yaml_content(self, filename: str, content: str) -> Document:
+        """Replace the active browser document with named YAML content.
+
+        The replacement is deliberately a single tab: unlike opening content,
+        Save As must not leave the prior temporary document open.
+        """
+        if self.document is None:
+            raise FileNotFoundError("No document open to Save As")
+        previous_id = self.document.id
+        new_doc = self.open_yaml_content(filename, content)
+        if previous_id != new_doc.id and previous_id in self.documents:
+            self.close(force=True, doc_id=previous_id)
+        self.active_id = new_doc.id
+        return new_doc
+
     def new_site(
         self,
         *,
@@ -366,7 +381,6 @@ class Workspace:
 
         prev = self.document
         prev_id = prev.id
-        prev_browser = prev.browser_origin
         yaml_path_src, live = prev.session.ensure_doc()
         target = dest.expanduser().resolve()
 
@@ -384,9 +398,9 @@ class Workspace:
         # Buffer already matches disk; keep session clean.
         new_doc.session.reconcile_dirty(new_doc.yaml_path)
 
-        if prev_browser and prev_id in self.documents and prev_id != new_doc.id:
+        if prev_id in self.documents and prev_id != new_doc.id:
             self.close(force=True, doc_id=prev_id)
-            self.active_id = new_doc.id
+        self.active_id = new_doc.id
         return new_doc
 
     def reload_active(self) -> Document:

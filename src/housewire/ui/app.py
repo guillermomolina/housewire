@@ -230,6 +230,24 @@ def create_app(site_root: Path | None = None) -> Any:
             raise HTTPException(code, msg) from exc
         return workspace.status()
 
+    @app.post("/api/workspace/save-as-content")
+    async def api_workspace_save_as_content(request: Request) -> dict[str, Any]:
+        """Save browser content under a name, replacing the active tab."""
+        payload = await _json_body(request)
+        filename = str(payload.get("filename") or "").strip()
+        content = payload.get("content")
+        if not filename:
+            raise HTTPException(400, "filename is required")
+        if not isinstance(content, str):
+            raise HTTPException(400, "content must be a string")
+        try:
+            workspace.save_as_yaml_content(filename, content)
+        except FileNotFoundError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return workspace.status()
+
     @app.post("/api/workspace/new")
     async def api_workspace_new(request: Request) -> dict[str, Any]:
         """Create an empty House site as a new document tab (temp on server)."""

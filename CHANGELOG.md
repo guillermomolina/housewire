@@ -12,6 +12,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - Las rutas B↔B prueban desvíos U compactos por sus cajas de extremo antes del
   fallback de contorno, evitando seis segmentos en Route_28.
 
+## [0.91.1] — 2026-08-08
+
+### Fixed
+
+- Guardar en documentos web sin destino solicita el nombre en un diálogo propio.
+  Guardar como abre el selector nativo y ambos reemplazan la pestaña actual
+  sin modificar la vista, profundidad ni capa eléctrica.
+
 ## [0.91.0] — 2026-08-08
 
 ### Added
