@@ -36,7 +36,7 @@ jobs:
           python -m pip install -e '.[dev,ui,examples,catalog]'
 
       - name: Run unit tests
-        run: python -m pytest tests --ignore=tests/route_e2e -q
+        run: python -m pytest tests/unit -q
 
   # route-e2e:
   #   name: Route E2E
