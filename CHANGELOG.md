@@ -7,6 +7,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.96.2] — 2026-08-08
+
+### Fixed
+
+- El trazado entre bocas posteriores prueba desvíos compactos en ambas
+  orientaciones y respeta el ancho completo de los tubos, evitando el rodeo
+  de seis segmentos de Route_28 sin apilar conductos.
+
 ## [0.96.1] — 2026-08-08
 
 ### Fixed

@@ -1115,7 +1115,13 @@
         // three-segment U through an endpoint box is valid, whereas contour
         // stubs turn the same detour into six painted segments (Route_28).
         if (fromPlane && toPlane) {
-          const railGap = Math.max(LANE_PITCH, LANE_GAP + (half || 0));
+          // Match segStackConflict's tube-to-tube clearance.  Using only one
+          // half-width leaves the compact rail stacked beside an existing
+          // conduit, so every candidate is rejected (Route_28 Linea_03).
+          const railGap = Math.max(
+            LANE_PITCH,
+            LANE_GAP + 2 * (half || 0)
+          );
           const cCandidates = [
             cleanOrthoPoly([
               [m1.x, m1.y],
@@ -1127,6 +1133,18 @@
               [m1.x, m1.y],
               [m1.x, m2.y - railGap],
               [m2.x, m2.y - railGap],
+              [m2.x, m2.y],
+            ]),
+            cleanOrthoPoly([
+              [m1.x, m1.y],
+              [m2.x + railGap, m1.y],
+              [m2.x + railGap, m2.y],
+              [m2.x, m2.y],
+            ]),
+            cleanOrthoPoly([
+              [m1.x, m1.y],
+              [m2.x - railGap, m1.y],
+              [m2.x - railGap, m2.y],
               [m2.x, m2.y],
             ]),
           ].filter(acceptMarkPath);
@@ -4948,4 +4966,3 @@
       }
     }
   }
-
