@@ -81,6 +81,15 @@ housewire serve "$SITE"    # start with a site already open
 # → http://127.0.0.1:8765/
 ```
 
+The server records startup and HTTP failures in
+`$XDG_STATE_HOME/housewire/housewire.log` (or
+`~/.local/state/housewire/housewire.log`). Change the verbosity or destination
+when needed:
+
+```bash
+housewire serve --log-level DEBUG --log-file /tmp/housewire.log "$SITE"
+```
+
 **Desktop (Electron, native Open / Save As with real paths):**
 
 ```bash

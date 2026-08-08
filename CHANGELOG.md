@@ -7,6 +7,23 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.93.0] — 2026-08-08
+
+### Added
+
+- `housewire serve` registra en un archivo rotativo configurable mediante
+  `--log-level` y `--log-file`.
+
+### Changed
+
+- Los avisos y errores de la API se muestran en un diálogo, reservando la barra
+  de estado para mensajes informativos.
+
+### Fixed
+
+- No se pueden borrar tubos o cables contenedores mientras tengan conexiones
+  contenidas.
+
 ## [0.92.0] — 2026-08-08
 
 ### Added

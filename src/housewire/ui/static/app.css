@@ -439,6 +439,14 @@ body:not(.desktop-shell) [data-desktop-only] {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
 }
 
+#app-modal[data-kind="warning"] .modal-card {
+  border-color: #d29922;
+}
+
+#app-modal[data-kind="error"] .modal-card {
+  border-color: #f85149;
+}
+
 .modal-card h2 {
   margin: 0 0 0.35rem;
   font-size: 1rem;

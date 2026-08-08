@@ -339,8 +339,29 @@
       });
   }
 
+  let pendingProblemStatus = null;
+
   function setStatus(text) {
+    if (text && text === pendingProblemStatus) {
+      pendingProblemStatus = null;
+      return;
+    }
     statusEl.textContent = text || "";
+  }
+
+  /** Show user-facing information at the appropriate prominence. */
+  async function notifyUser(level, message) {
+    if (level === "info") {
+      setStatus(message);
+      return;
+    }
+    pendingProblemStatus = message;
+    await appDialog({
+      kind: level,
+      title: t(level === "warning" ? "modal.warning" : "modal.error"),
+      message,
+      buttons: [{ id: "ok", label: t("modal.ok"), primary: true }],
+    });
   }
 
   /**
@@ -348,6 +369,7 @@
    * When ``opts.input`` is set, Enter confirms the primary button and the
    * caller should read ``opts.input``'s field via ``promptText``.
    * @param {{
+   *   kind?: "warning"|"error",
    *   title?: string,
    *   message?: string,
    *   input?: { label?: string, value?: string, placeholder?: string },
@@ -372,6 +394,7 @@
     return new Promise((resolve) => {
       titleEl.textContent = opts.title || "HouseWire";
       msgEl.textContent = opts.message || "";
+      modal.dataset.kind = opts.kind || "";
       actions.innerHTML = "";
       const wantsInput = Boolean(opts.input);
       if (inputWrap && inputEl) {
@@ -393,6 +416,7 @@
       function finish(result) {
         modal.classList.add("hidden");
         modal.setAttribute("aria-hidden", "true");
+        delete modal.dataset.kind;
         document.removeEventListener("keydown", onKey);
         modal
           .querySelectorAll("[data-modal-dismiss]")
@@ -1121,7 +1145,9 @@
     });
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(apiErrorMessage(body, res.statusText));
+      const message = apiErrorMessage(body, res.statusText);
+      await notifyUser(res.status >= 500 ? "error" : "warning", message);
+      throw new Error(message);
     }
     return res.json();
   }

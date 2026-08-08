@@ -237,13 +237,18 @@ def delete_cables(doc: dict[str, Any], names: list[str]) -> list[str]:
             raise ValueError(f"Unknown id: {name}") from None
         cables = _ensure_cables(owner)
         kind = resolve_link_kind(entry, catalog)
+        contains = [str(c) for c in (entry.get("contains") or [])]
+        if kind in {"conduit", "cable"} and contains:
+            raise ValueError(
+                f"No se puede borrar el conector contenedor no vacío: {name}"
+            )
         # Drop references from siblings in the same map.
         for other_name, other in list(cables.items()):
             if other_name == name or not isinstance(other, dict):
                 continue
-            contains = [str(c) for c in (other.get("contains") or [])]
-            if name in contains:
-                other["contains"] = [c for c in contains if c != name]
+            other_contains = [str(c) for c in (other.get("contains") or [])]
+            if name in other_contains:
+                other["contains"] = [c for c in other_contains if c != name]
                 if not other["contains"]:
                     try:
                         other_kind = resolve_link_kind(other, catalog)

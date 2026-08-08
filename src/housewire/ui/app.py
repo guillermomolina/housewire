@@ -1,7 +1,10 @@
 """FastAPI app: interactive physical location canvas."""
 
 import copy
+import logging
+import os
 from contextvars import ContextVar
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +23,43 @@ from housewire.ui.workspace import Workspace, create_workspace
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 _request_locale: ContextVar[str] = ContextVar("housewire_request_locale", default="en")
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+
+
+def _default_log_file() -> Path:
+    state_home = Path(
+        os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")
+    )
+    return state_home / "housewire" / "housewire.log"
+
+
+def configure_logging(
+    *,
+    level: str = "INFO",
+    log_file: Path | None = None,
+) -> tuple[logging.Logger, Path]:
+    """Configure HouseWire console and rotating file logs."""
+    level_name = str(level).upper()
+    if level_name not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
+        raise ValueError(f"Unsupported log level: {level}")
+    target = (log_file or _default_log_file()).expanduser().resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    formatter = logging.Formatter(LOG_FORMAT)
+    logger = logging.getLogger("housewire")
+    logger.setLevel(level_name)
+    logger.propagate = False
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+        handler.close()
+    file_handler = RotatingFileHandler(
+        target, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    )
+    file_handler.setFormatter(formatter)
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    return logger, target
 
 try:
     from fastapi import FastAPI, HTTPException, Request
@@ -43,6 +83,37 @@ def create_app(site_root: Path | None = None) -> Any:
 
     workspace: Workspace = create_workspace(site_root)
     app = FastAPI(title=f"{__title__} UI", version=__version__)
+    logger = logging.getLogger("housewire")
+
+    @app.middleware("http")
+    async def log_failed_requests(request: Request, call_next: Any) -> Any:
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception("%s %s failed", request.method, request.url.path)
+            raise
+        if response.status_code >= 500:
+            logger.error(
+                "%s %s returned %s",
+                request.method,
+                request.url.path,
+                response.status_code,
+            )
+        elif response.status_code >= 400:
+            logger.warning(
+                "%s %s returned %s",
+                request.method,
+                request.url.path,
+                response.status_code,
+            )
+        else:
+            logger.debug(
+                "%s %s returned %s",
+                request.method,
+                request.url.path,
+                response.status_code,
+            )
+        return response
 
     def _session():
         try:
@@ -1381,6 +1452,8 @@ def run_serve(
     *,
     host: str = "127.0.0.1",
     port: int = 8765,
+    log_level: str = "INFO",
+    log_file: Path | None = None,
 ) -> None:
     """Run uvicorn for the UI.
 
@@ -1393,6 +1466,9 @@ def run_serve(
         raise RuntimeError(
             "UI extras not installed. Run: pip install 'housewire[ui]'"
         ) from exc
+    logger, resolved_log_file = configure_logging(
+        level=log_level, log_file=log_file
+    )
     app = create_app(site_root)
     site_note = (
         f"site: {site_root.expanduser().resolve()}"
@@ -1400,4 +1476,11 @@ def run_serve(
         else "empty workspace"
     )
     print(f"{__title__} UI → http://{host}:{port}/  ({site_note})")
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    logger.info(
+        "Starting UI on http://%s:%s (%s); log file: %s",
+        host,
+        port,
+        site_note,
+        resolved_log_file,
+    )
+    uvicorn.run(app, host=host, port=port, log_level=log_level.lower())

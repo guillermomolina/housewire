@@ -80,6 +80,19 @@ def _build_parser() -> argparse.ArgumentParser:
         default=8765,
         help="Bind port (default: 8765)",
     )
+    serve_p.add_argument(
+        "--log-level",
+        type=str.upper,
+        choices=("DEBUG", "INFO", "WARNING", "ERROR"),
+        default="INFO",
+        help="Minimum recorded log level (default: INFO)",
+    )
+    serve_p.add_argument(
+        "--log-file",
+        type=Path,
+        default=None,
+        help="Log file (default: $XDG_STATE_HOME/housewire/housewire.log)",
+    )
 
     ls_p = sub.add_parser("ls", help="List locations (cd) and elements")
     ls_p.add_argument("site_path")
@@ -252,7 +265,13 @@ def _dispatch_subcommand(args: argparse.Namespace) -> int:
 
         site_path = Path(args.site_path) if args.site_path else None
         try:
-            run_serve(site_path, host=args.host, port=args.port)
+            run_serve(
+                site_path,
+                host=args.host,
+                port=args.port,
+                log_level=args.log_level,
+                log_file=args.log_file,
+            )
         except (RuntimeError, FileNotFoundError, ValueError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
