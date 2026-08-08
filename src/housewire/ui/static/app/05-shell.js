@@ -2155,12 +2155,41 @@
     el.classList.toggle("is-error", Boolean(isError && text));
   }
 
+  /** Merge type + subtype catalog defaults (mirrors server apply). */
+  function catalogEffectiveDefaults(typeId, subtype) {
+    const row = (paletteCatalog && typeId && paletteCatalog[typeId]) || null;
+    if (!row || typeof row !== "object") return {};
+    /** @type {Record<string, unknown>} */
+    const out = { ...(row.defaults || {}) };
+    let sub = String(subtype || "").trim();
+    if (!sub && out.subtype != null) sub = String(out.subtype).trim();
+    const hit = (row.subtypes || []).find(
+      (x) => catalogSubtypeKey(x) === sub
+    );
+    if (hit && hit.defaults && typeof hit.defaults === "object") {
+      Object.assign(out, hit.defaults);
+    }
+    return out;
+  }
+
   async function beginCatalogPlacement(draft) {
     if (draft && draft.kind === "ElementType") {
       try {
         await ensureElectricalForElementInsert();
       } catch {
         return;
+      }
+    }
+    if (draft && draft.kind === "PlaceType") {
+      try {
+        await loadPaletteCatalog();
+      } catch {
+        /* proceed without defaults */
+      }
+      const defs = catalogEffectiveDefaults(draft.type_id, draft.subtype);
+      if (Array.isArray(defs.openings)) draft.openings = defs.openings;
+      if (defs.opening_grid && typeof defs.opening_grid === "object") {
+        draft.opening_grid = defs.opening_grid;
       }
     }
     pendingCatalogPlacement = draft;
@@ -2363,26 +2392,115 @@
     document.getElementById("placement-ghost")?.remove();
   }
 
+  /** Sync opening marks on the placement ghost (same geometry as paintNode). */
+  function syncPlacementGhostOpenings(g, ghostNode) {
+    const want = openingCellsForNode(ghostNode);
+    const wantSet = new Set(want);
+    g.querySelectorAll("[data-opening]").forEach((elOp) => {
+      const oid = elOp.getAttribute("data-opening");
+      if (!oid || !wantSet.has(oid)) elOp.remove();
+    });
+    const placeMap = {};
+    const ordered = [...want].sort((a, b) => {
+      const ma = openingMarkLocal(ghostNode, a, placeMap);
+      const mb = openingMarkLocal(ghostNode, b, placeMap);
+      if (ma.near !== mb.near) return ma.near ? 1 : -1;
+      return 0;
+    });
+    for (const oid of ordered) {
+      const mark = openingMarkLocal(ghostNode, oid, placeMap);
+      const nearFar = mark.near ? "opening-near" : "opening-far";
+      const faceClass = `opening-face-${mark.face || "X"}`;
+      let circle = g.querySelector(
+        `circle[data-opening="${CSS.escape(String(oid))}"]`
+      );
+      if (!circle) {
+        circle = el("circle", {
+          class: `opening-mark ${nearFar} ${faceClass}`,
+          "data-opening": oid,
+          cx: mark.x,
+          cy: mark.y,
+          r: OPENING_MARK_R,
+        });
+        circle.appendChild(el("title", null, oid));
+        g.appendChild(circle);
+      } else {
+        circle.setAttribute("class", `opening-mark ${nearFar} ${faceClass}`);
+        circle.setAttribute("cx", String(mark.x));
+        circle.setAttribute("cy", String(mark.y));
+      }
+      let text = g.querySelector(
+        `text.opening-label[data-opening="${CSS.escape(String(oid))}"]`
+      );
+      if (!text) {
+        text = el(
+          "text",
+          {
+            class: `opening-label ${nearFar} ${faceClass}`,
+            "data-opening": oid,
+            x: mark.x,
+            y: mark.y + 3,
+            "text-anchor": "middle",
+          },
+          oid
+        );
+        g.appendChild(text);
+      } else {
+        text.setAttribute("class", `opening-label ${nearFar} ${faceClass}`);
+        text.setAttribute("x", String(mark.x));
+        text.setAttribute("y", String(mark.y + 3));
+        text.textContent = oid;
+      }
+    }
+  }
+
   function updatePlacementGhost(x, y, w, h, draft) {
     if (!worldEl || !draft) return;
     const isElem = draft.kind === "ElementType";
+    const bw = Math.max(1, w);
+    const bh = Math.max(1, h);
+    const ghostNode = {
+      w: bw,
+      h: bh,
+      openings: Array.isArray(draft.openings) ? draft.openings : [],
+      opening_grid:
+        draft.opening_grid && typeof draft.opening_grid === "object"
+          ? draft.opening_grid
+          : null,
+    };
+    const showOpenings = !isElem && nodeHasOpeningMarks(ghostNode);
+    const fr = showOpenings
+      ? frontRectLocal(ghostNode)
+      : { x: 0, y: 0, w: bw, h: bh };
+    const wantKey = `${isElem ? "e" : "p"}:${showOpenings ? "o" : "n"}`;
     let g = document.getElementById("placement-ghost");
+    if (g && g.getAttribute("data-ghost-key") !== wantKey) {
+      g.remove();
+      g = null;
+    }
     if (!g) {
       g = el("g", {
         id: "placement-ghost",
         class: "placement-ghost" + (isElem ? " element-node" : " node"),
+        "data-ghost-key": wantKey,
       });
+      if (showOpenings) appendNodeIsoBevel(g, bw, bh);
       const box = el("rect", {
         class:
-          (isElem ? "element-box" : "node-box container") +
+          (isElem ? "element-box" : "node-box") +
+          (showOpenings ? " iso-box" : isElem ? "" : " container") +
           " placement-ghost-box selected",
-        x: "0",
-        y: "0",
-        width: String(w),
-        height: String(h),
-        rx: isElem ? "3" : "6",
+        x: String(fr.x),
+        y: String(fr.y),
+        width: String(fr.w),
+        height: String(fr.h),
+        rx: isElem ? "3" : showOpenings ? "0" : "6",
       });
       g.appendChild(box);
+      if (showOpenings) {
+        const wireLayer = g.querySelector("g.node-iso-wires");
+        if (wireLayer) g.appendChild(wireLayer);
+      }
       const label = String(
         draft.label || draft.name || draft.type_id || ""
       ).trim();
@@ -2391,11 +2509,13 @@
           el(
             "text",
             {
-              class: isElem ? "element-label" : "node-label",
-              x: isElem ? "4" : "8",
-              y: isElem ? "12" : "18",
+              class:
+                (isElem ? "element-label" : "node-label") +
+                " placement-ghost-label",
+              x: String(isElem ? 4 : fr.x + 8),
+              y: String(isElem ? 12 : fr.y + 18),
             },
-            fitLabel(label, w - (isElem ? 4 : 16))
+            fitLabel(label, (isElem ? bw : fr.w) - (isElem ? 4 : 16))
           )
         );
       }
@@ -2404,14 +2524,24 @@
     g.setAttribute("transform", `translate(${x},${y})`);
     const box = g.querySelector("rect.placement-ghost-box");
     if (box) {
-      box.setAttribute("width", String(Math.max(1, w)));
-      box.setAttribute("height", String(Math.max(1, h)));
+      box.setAttribute("x", String(fr.x));
+      box.setAttribute("y", String(fr.y));
+      box.setAttribute("width", String(Math.max(1, fr.w)));
+      box.setAttribute("height", String(Math.max(1, fr.h)));
     }
-    const text = g.querySelector("text");
+    if (showOpenings) {
+      syncNodeIsoBevel(g, bw, bh);
+      const wireLayer = g.querySelector("g.node-iso-wires");
+      if (wireLayer) g.appendChild(wireLayer);
+      syncPlacementGhostOpenings(g, ghostNode);
+    }
+    const text = g.querySelector("text.placement-ghost-label");
     if (text) {
+      text.setAttribute("x", String(isElem ? 4 : fr.x + 8));
+      text.setAttribute("y", String(isElem ? 12 : fr.y + 18));
       text.textContent = fitLabel(
         String(draft.label || draft.name || draft.type_id || "").trim(),
-        w - (isElem ? 4 : 16)
+        (isElem ? bw : fr.w) - (isElem ? 4 : 16)
       );
     }
   }

@@ -1,5 +1,6 @@
 """FastAPI app: interactive physical location canvas."""
 
+import copy
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
@@ -368,43 +369,56 @@ def create_app(site_root: Path | None = None) -> Any:
         cat = load_catalog(root)
         locale = _locale_from_request(request)
         _set_request_locale(locale)
-        types = {
-            type_id: {
+        types = {}
+        for type_id, data in sorted(cat.items()):
+            if not isinstance(data, dict):
+                continue
+            raw_defaults = data.get("defaults")
+            type_defaults = (
+                copy.deepcopy(raw_defaults) if isinstance(raw_defaults, dict) else {}
+            )
+            subtypes_map = data.get("subtypes")
+            subtype_rows = []
+            if isinstance(subtypes_map, dict):
+                for sub_id in sorted(subtypes_map.keys(), key=lambda s: str(s)):
+                    sub = subtypes_map.get(sub_id)
+                    sub_defaults = (
+                        copy.deepcopy(sub.get("defaults"))
+                        if isinstance(sub, dict)
+                        and isinstance(sub.get("defaults"), dict)
+                        else {}
+                    )
+                    row = {
+                        "subtype": str(sub_id),
+                        "label": catalog_type_label(
+                            type_id,
+                            catalog=cat,
+                            subtype=str(sub_id),
+                            locale=locale,
+                        ),
+                        "description": catalog_type_description(
+                            type_id,
+                            catalog=cat,
+                            subtype=str(sub_id),
+                            locale=locale,
+                        ),
+                    }
+                    if sub_defaults:
+                        row["defaults"] = sub_defaults
+                    subtype_rows.append(row)
+            entry = {
                 "type": type_id,
                 "kind": data.get("kind"),
                 "label": catalog_type_label(type_id, catalog=cat, locale=locale),
                 "description": catalog_type_description(
                     type_id, catalog=cat, locale=locale
                 ),
-                "subtypes": (
-                    [
-                        {
-                            "subtype": str(sub_id),
-                            "label": catalog_type_label(
-                                type_id,
-                                catalog=cat,
-                                subtype=str(sub_id),
-                                locale=locale,
-                            ),
-                            "description": catalog_type_description(
-                                type_id,
-                                catalog=cat,
-                                subtype=str(sub_id),
-                                locale=locale,
-                            ),
-                        }
-                        for sub_id in sorted(
-                            (data.get("subtypes") or {}).keys(), key=lambda s: str(s)
-                        )
-                    ]
-                    if isinstance(data.get("subtypes"), dict)
-                    else []
-                ),
+                "subtypes": subtype_rows,
                 "icon": data.get("icon") or "circle",
             }
-            for type_id, data in sorted(cat.items())
-            if isinstance(data, dict)
-        }
+            if type_defaults:
+                entry["defaults"] = type_defaults
+            types[type_id] = entry
         return {"types": types, "lang": locale}
 
     @app.get("/api/physical")

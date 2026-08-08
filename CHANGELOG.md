@@ -12,6 +12,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - Las rutas B↔B prueban desvíos U compactos por sus cajas de extremo antes del
   fallback de contorno, evitando seis segmentos en Route_28.
 
+## [0.90.0] — 2026-08-08
+
+### Fixed
+
+- La vista previa al colocar un contenedor del catálogo muestra el mismo dibujo
+  isométrico y las aberturas (``opening_grid`` / ``openings``) que el nodo
+  insertado, en lugar de un rectángulo genérico sin bocas.
+
 ## [0.89.4] — 2026-08-08
 
 ### Fixed
