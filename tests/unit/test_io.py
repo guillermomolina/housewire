@@ -9,7 +9,7 @@ from housewire.site.io import (
     require_house_document,
     save_yaml,
 )
-from tests.helpers import make_site
+from tests.unit.helpers import make_site
 
 
 # ---------------------------------------------------------------------------

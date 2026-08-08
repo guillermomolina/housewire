@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml as _yaml
 
-from fixtures import add_place, init_site, save_site
+from tests.unit.fixtures import add_place, init_site, save_site
 from housewire.house import is_place_type, load_catalog, validate_house_tree, _walk_locations
 from housewire.site import abm
 from housewire.site.io import HOUSEWIRE_YAML, create_empty_house_file

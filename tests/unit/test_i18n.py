@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import unittest
 
-from fixtures import add_place
+from tests.unit.fixtures import add_place
 from housewire.house import catalog_type_description, catalog_type_label
 from housewire.i18n import about_description_for, normalize_locale, unlabeled_for, unnamed_for
 from housewire.site import abm
 from housewire.site.clipboard import pack_selection, paste_payload
 from housewire.site.tree import get_place_node
-from tests.helpers import make_site
+from tests.unit.helpers import make_site
 
 
 class TestNormalizeLocale(unittest.TestCase):

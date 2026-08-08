@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import unittest
 
-from fixtures import add_place
+from tests.unit.fixtures import add_place
 from housewire.site import abm
 from housewire.site.clipboard import (
     display_name_from_id,
@@ -16,7 +16,7 @@ from housewire.site.clipboard import (
 from housewire.site.delete_selection import delete_selection
 from housewire.site.natural_sort import natural_sort_key
 from housewire.site.tree import get_place_node
-from tests.helpers import make_site
+from tests.unit.helpers import make_site
 
 
 class TestNaturalSort(unittest.TestCase):

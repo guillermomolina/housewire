@@ -9,7 +9,7 @@ from housewire.site.delete_selection import (
     suggest_location_after_delete,
 )
 from housewire.site.tree import get_place_node
-from tests.helpers import make_site
+from tests.unit.helpers import make_site
 
 
 class TestDeleteSelection(unittest.TestCase):
@@ -24,7 +24,7 @@ class TestDeleteSelection(unittest.TestCase):
         from housewire.site.tree import add_place  # type: ignore
 
         # Prefer session helpers used elsewhere
-        from tests.fixtures import add_place as fix_add
+        from tests.unit.fixtures import add_place as fix_add
 
         fix_add(self.doc, "Room", type_id="Room", label="Room")
         fix_add(self.doc, "Box_A", under=("Room",), type_id="JunctionBox")
@@ -43,7 +43,7 @@ class TestDeleteSelection(unittest.TestCase):
         self.assertIn("MT", result.deleted)
 
     def test_delete_internal_cable_with_place(self) -> None:
-        from tests.fixtures import add_place
+        from tests.unit.fixtures import add_place
 
         add_place(self.doc, "Room", type_id="Room")
         add_place(self.doc, "Box", under=("Room",), type_id="JunctionBox")
@@ -59,7 +59,7 @@ class TestDeleteSelection(unittest.TestCase):
         self.assertIn("Room/Box", result.deleted)
 
     def test_sever_cross_cable_and_delete_conduit(self) -> None:
-        from tests.fixtures import add_place
+        from tests.unit.fixtures import add_place
 
         add_place(self.doc, "Room", type_id="Room")
         add_place(self.doc, "Box_A", under=("Room",), type_id="JunctionBox")

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fixtures import add_place, init_site, save_site
+from tests.unit.fixtures import add_place, init_site, save_site
 from housewire.site.openings import list_grid_cell_ids
 from housewire.site.recipe_actions import place_detail, update_place_properties
 from housewire.site.session import SiteSession

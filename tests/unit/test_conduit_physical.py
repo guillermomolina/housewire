@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fixtures import add_place, init_site, save_site
+from tests.unit.fixtures import add_place, init_site, save_site
 from housewire.house.conduit_ref import (
     conduit_endpoints,
     resolve_location_ref,

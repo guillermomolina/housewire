@@ -4,7 +4,7 @@ from __future__ import annotations
 import unittest
 
 from housewire.site import abm
-from tests.helpers import make_site
+from tests.unit.helpers import make_site
 
 
 # ---------------------------------------------------------------------------
